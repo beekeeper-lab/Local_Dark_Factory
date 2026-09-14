@@ -471,7 +471,11 @@ The only situation in which a frontier model interacts with line artifacts after
       pytest-cov 7.1.0, ortools 9.15.6755, python 3.12 — resolved by asking pip, not from memory.
       `gates.lock.yaml` names it by digest and sets `verify_versions_at_startup: true`; the startup
       assertion itself belongs to the controller and is not written yet.
-- [ ] Sandbox contract implemented (read-only outside editable tree, no sockets/SSH/creds/git, caps dropped, no-net-by-default, resource limits)
+- [~] Sandbox contract implemented — `factory/pipeline/sandbox.sh` + `sync-tree.sh`, every
+      clause asserted by attempting the escape (36 cases). Gates and task verifies run inside
+      it. **The worker session does not yet**: that needs a `pi` image and an allow-listed
+      proxy for the model endpoint, since `--network=model` today also permits general
+      outbound.
 - [ ] Hardened systemd unit; podman storage relocated under StateDirectory; integration-tested
 - [ ] Human owner records baseline approval (flip status)
 
@@ -504,10 +508,29 @@ not yet do that the spec requires:
    own attempt" — no new attempt line was written and the previous attempt's verdict
    was reused as the new one's. Fixed by comparing against a snapshot taken before the
    child starts, and pinned by two cases in `tests/test-role-routing.sh`.
-2. **No sandbox / no containment.** The worker has a full `git` binary and writes
-   straight into the worktree. §08 requires a podman-contained editable tree with no
-   `.git`, no credentials, and out-of-scope edits **rejected, not stripped**, at both
-   task and whole-diff granularity.
+2. **Sandbox: half closed, 2026-09-14.** `factory/pipeline/sandbox.sh` runs a command
+   under the §08 contract and **refuses** rather than degrading: read-only rootfs with the
+   editable tree as the only writable mount, no network, all capabilities dropped,
+   no-new-privileges, memory/cpu/pids/wall-clock/output limits, an environment with nothing
+   from the host, and an image that must be pinned by digest and must still match that
+   digest. "No git" is structural on both sides — the image has no git binary (asserted at
+   startup) and `sync-tree.sh` mirrors the worktree without `.git` (asserted after every
+   sync). 36 cases in `tests/test-sandbox.sh`, each one *attempting* the escape rather than
+   checking that a flag was passed.
+
+   **What is contained now:** every task `verify` under `build-loop.sh --sandbox`, which is
+   where §06 step 5 puts it. A test is code the developer model wrote, and a test that
+   writes outside the tree or opens a socket is now stopped rather than noticed afterwards.
+   The result records `ran_in: sandbox|host`, so a verdict cannot be silently uncontained.
+
+   **What is not:** the worker session itself. It still edits the real worktree and can see
+   `.git`, so its containment remains after-the-fact (reject the attempt, reset the tree).
+   Closing it needs an image with `pi` inside and a network story — §08 wants no network,
+   the worker needs exactly one endpoint, and `--network=model` currently reaches the host
+   loopback *and* general outbound, which the script says out loud when used. An
+   allow-listed proxy is the missing piece.
+
+   Whole-diff containment at the bean level is also still to do; the task level is done.
 3. **The model declares its own tier.** `orchestrate.sh` reads `**Pipeline Tier**`
    from the bean's markdown. §08 requires the controller to compute
    `max(policy, judge, bean)` from the actual diff — a model that under-reads its

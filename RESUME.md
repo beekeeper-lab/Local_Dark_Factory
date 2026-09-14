@@ -33,6 +33,22 @@ by the owner — recorded as such in `bean-sets/v1/manifest.json`, because a set
 approval is not the per-bean human read §04 describes). Run order is bean id order, which
 is a checked topological order.
 
+## Sandbox — what is contained, and what is not
+
+`factory/pipeline/sandbox.sh` implements the §08 contract and refuses rather than degrades.
+Proven by attempting each escape (`tests/test-sandbox.sh`, 36 cases): read-only outside the
+one writable tree, no network, no capabilities, no host environment, no container socket, no
+SSH agent, limits on memory/cpu/pids/wall-clock/output, image pinned by digest and checked
+against it, no git binary in the image, no `.git` in the tree.
+
+**Contained today:** every task `verify`, via `build-loop.sh --sandbox` (§06 step 5). Results
+record `ran_in: sandbox|host` so an uncontained verdict cannot pass for a contained one.
+
+**Not contained today:** the worker session. It edits the real worktree and can see `.git`.
+Two things are missing and neither is small: an image with `pi` in it, and a way to let the
+worker reach *only* the model endpoint — `--network=model` reaches the host loopback and
+general outbound, and says so when used. An allow-listed proxy is the next piece of that.
+
 ## Next action
 
 Phase 1 — one bean, by hand, through all seven stages. Its entry needs three things; the

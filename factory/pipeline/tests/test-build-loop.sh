@@ -394,6 +394,66 @@ want "undefined gate exits non-zero"   "an undefined gate must not pass" test "$
 out="$(bash "$PIPELINE_DIR/verify.sh" '{"kind":"nonsense"}' 2>&1)"
 check "an unknown kind is refused"     "unknown verify kind" "$out"
 
+printf '\n== with --sandbox, the verify runs in the gate container ==\n\n'
+if command -v podman >/dev/null 2>&1 && podman image exists localhost/factory-gate-python:20260914 2>/dev/null; then
+  reset_run
+  act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+  act task-2.1 <<'SH'
+mkdir -p src && printf 'b\n' > src/b.py
+SH
+  export FACTORY_SANDBOX_ROOT="$WORK/sandboxes"
+  out="$(run_loop --sandbox --gates "$PIPELINE_DIR/../scaffold/factory/gates.lock.yaml")"
+  check "the loop announces the sandbox"  "SANDBOX" "$out"
+  check "and still verifies the task"     "PASS   task-1     verified on attempt 1" "$out"
+  check "the verify records where it ran" '"ran_in":"sandbox"' \
+    "$(tr -d ' \n' < "$RUN_DIR/build/task-1/attempt-1/verify-1.json")"
+  tree="$WORK/sandboxes/darkfactory/$(basename "$RUN_DIR")/tree"
+  want "the container's tree exists"      "expected a synced editable tree" test -d "$tree"
+  nope "and it carries no .git"           ".git reached the container — the boundary is open" \
+    test -e "$tree/.git"
+  want "the worker's file reached it"     "the synced tree is missing the change under test" \
+    test -f "$tree/src/a.py"
+
+  # A test is code the model wrote. This one tries to leave the tree.
+  reset_run
+  cat > "$WORK/escape-tasks.yaml" <<'YAML'
+schema_version: tasks/1.0.0
+bean_id: bean-001
+tasks:
+  - id: task-1
+    title: A verify that tries to escape
+    intent: Prove the sandbox stops a test, not just a worker.
+    write_paths: [src/a.py]
+    max_attempts: 1
+    verify:
+      - { kind: command, run: ["sh", "-c", "touch /escaped && echo ESCAPED"] }
+YAML
+  act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD
+' > src/a.py
+SH
+  out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+    bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$REPO/bean.yaml" \
+      --tasks "$WORK/escape-tasks.yaml" --sandbox \
+      --gates "$PIPELINE_DIR/../scaffold/factory/gates.lock.yaml" 2>&1)"
+  # Assert against what the verify actually printed, not against the loop's
+  # transcript: the transcript quotes the failing command back, so the escape
+  # marker appears there whether or not the escape worked.
+  vlog="$(cat "$RUN_DIR/build/task-1/attempt-1/verify-1.log" 2>/dev/null)"
+  if grep -qF "ESCAPED" <<<"$vlog"; then
+    printf '  FAIL  a verify escaped the tree — it wrote outside and said so\n'; FAIL=$((FAIL+1))
+  else
+    printf '  ok    a verify cannot write outside the tree\n'; PASS=$((PASS+1))
+  fi
+  check "and the attempt is told why"     "Read-only file system" "$vlog"
+  check "and the task blocks on it"       "BLOCKED  task-1" "$out"
+  unset FACTORY_SANDBOX_ROOT
+else
+  printf '  SKIP  podman or the gate image is unavailable; sandbox mode not exercised\n'
+fi
+
 printf '\n== containment matcher: * does not cross a slash ==\n\n'
 viol="$(printf 'src/a.py\nsrc/deep/evil.py\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '["src/*.py"]' || true)"
 check "nested path is a violation"     "src/deep/evil.py" "$viol"

@@ -60,8 +60,12 @@ SPEC_JSON="$1"; shift
 OUT_FILE=""
 TIMEOUT_S=""
 TAIL_N=40
+SANDBOX_TREE=""
+GATES_FILE=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --sandbox) SANDBOX_TREE="${2:?--sandbox needs a tree}"; shift 2 ;;
+    --gates)   GATES_FILE="${2:?--gates needs a file}"; shift 2 ;;
     --out)     OUT_FILE="${2:?--out needs a path}"; shift 2 ;;
     --timeout) TIMEOUT_S="${2:?--timeout needs seconds}"; shift 2 ;;
     --tail)    TAIL_N="${2:?--tail needs a line count}"; shift 2 ;;
@@ -97,7 +101,8 @@ emit() {
   jq -cn --arg kind "$KIND" --arg status "$status" --argjson rc "$rc" \
     --arg cmd "$cmd" --arg reason "$reason" --argjson dur "$dur" \
     --argjson tail "$tail_json" --arg out "$OUT_FILE" \
-    '{kind:$kind, status:$status, exit_code:$rc, command:$cmd,
+    --arg where "$([ -n "$SANDBOX_TREE" ] && echo sandbox || echo host)" \
+    '{kind:$kind, status:$status, exit_code:$rc, command:$cmd, ran_in:$where,
       duration_s:$dur, output_file:$out, output_tail:$tail,
       reason:(if $reason == "" then null else $reason end)}'
   case "$status" in
@@ -130,10 +135,21 @@ cmd_string() {
 }
 
 # run_argv <argv...> — execute without a shell and time it.
+#
+# With --sandbox, this runs inside the gate container instead of on the host,
+# which is where §06 step 5 says a task's verify belongs. It matters beyond
+# tidiness: a test is code the developer model wrote, and a test that writes
+# outside the tree, opens a socket or shells out to git is a test the sandbox
+# stops rather than one the audit has to notice afterwards.
 run_argv() {
   local start end
   start="$(date +%s%3N)"
-  if [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
+  if [ -n "$SANDBOX_TREE" ]; then
+    local sb=( "$PIPELINE_DIR/sandbox.sh" --tree "$SANDBOX_TREE" --out "$OUT_FILE" )
+    [ -n "$GATES_FILE" ] && sb+=( --gates "$GATES_FILE" )
+    [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && sb+=( --timeout "$TIMEOUT_S" )
+    "${sb[@]}" -- "$@" 2>>"$OUT_FILE"
+  elif [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
     ( cd "$ROOT" && timeout --signal=TERM --kill-after=10 "$TIMEOUT_S" "$@" ) >"$OUT_FILE" 2>&1
   else
     ( cd "$ROOT" && "$@" ) >"$OUT_FILE" 2>&1
@@ -147,7 +163,12 @@ run_argv() {
 run_shell() { # run_shell <command-string>
   local start end
   start="$(date +%s%3N)"
-  if [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
+  if [ -n "$SANDBOX_TREE" ]; then
+    local sb=( "$PIPELINE_DIR/sandbox.sh" --tree "$SANDBOX_TREE" --out "$OUT_FILE" )
+    [ -n "$GATES_FILE" ] && sb+=( --gates "$GATES_FILE" )
+    [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && sb+=( --timeout "$TIMEOUT_S" )
+    "${sb[@]}" -- sh -c "$1" 2>>"$OUT_FILE"
+  elif [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
     ( cd "$ROOT" && timeout --signal=TERM --kill-after=10 "$TIMEOUT_S" bash -c "$1" ) >"$OUT_FILE" 2>&1
   else
     ( cd "$ROOT" && bash -c "$1" ) >"$OUT_FILE" 2>&1
@@ -163,8 +184,12 @@ case "$KIND" in
     jq -e '.run | type == "array" and length > 0' >/dev/null 2>&1 <<<"$SPEC_JSON" \
       || refuse "kind: command needs a non-empty 'run' argv array (got: $SPEC_JSON)"
     mapfile -t ARGV < <(jq -r '.run[]' <<<"$SPEC_JSON")
-    command -v "${ARGV[0]}" >/dev/null 2>&1 \
-      || refuse "command not found: ${ARGV[0]} — the gate image must provide it (spec §08 pins tool versions)"
+    # Only meaningful when running on the host: what is on this PATH says nothing
+    # about what is in the gate image, and the sandbox reports its own failure.
+    if [ -z "$SANDBOX_TREE" ]; then
+      command -v "${ARGV[0]}" >/dev/null 2>&1 \
+        || refuse "command not found: ${ARGV[0]} — the gate image must provide it (spec §08 pins tool versions)"
+    fi
     CMD_STR="$(cmd_string "${ARGV[@]}")"
     rc=0; run_argv "${ARGV[@]}" || rc=$?
     [ "$rc" -eq 0 ] && emit pass 0 "$CMD_STR" || emit fail "$rc" "$CMD_STR"
@@ -180,8 +205,10 @@ case "$KIND" in
     mapfile -t ARGV < <(jq -r '.[]' <<<"$PREFIX_JSON" 2>/dev/null)
     [ "${#ARGV[@]}" -gt 0 ] || refuse "config test_command is not a non-empty argv array"
     ARGV+=( "$TEST_ID" )
-    command -v "${ARGV[0]}" >/dev/null 2>&1 \
-      || refuse "test runner not found: ${ARGV[0]} (config test_command)"
+    if [ -z "$SANDBOX_TREE" ]; then
+      command -v "${ARGV[0]}" >/dev/null 2>&1 \
+        || refuse "test runner not found: ${ARGV[0]} (config test_command)"
+    fi
     CMD_STR="$(cmd_string "${ARGV[@]}")"
     rc=0; run_argv "${ARGV[@]}" || rc=$?
     [ "$rc" -eq 0 ] && emit pass 0 "$CMD_STR" || emit fail "$rc" "$CMD_STR"

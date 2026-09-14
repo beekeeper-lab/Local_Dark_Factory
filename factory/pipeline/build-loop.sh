@@ -23,13 +23,19 @@
 #
 # The model never marks its own task verified. The controller never writes code.
 #
-# Known gap, deliberately not closed here: there is no sandbox yet. The worker
-# edits the real worktree and can see `.git`, so containment is enforced
-# after the fact (reject + reset) rather than made impossible up front. §08's
-# podman-contained editable tree is the fix, and it is the next piece of work
-# after this one. Until it lands, "the run dir is excluded from containment"
-# below is load-bearing and is a hole: a worker that wrote into the run dir
-# would not be caught.
+# Containment, and what is still open about it. With --sandbox, each task's
+# verify list runs inside the pinned gate container against a copy of the tree
+# with no .git in it (§06 step 5, §08's sandbox contract) — so a test that writes
+# outside the tree, opens a socket, or shells out to git is stopped rather than
+# noticed afterwards by an audit.
+#
+# The WORKER is not yet contained that way. It still edits the real worktree and
+# can see `.git`, so its containment is after the fact: reject the attempt and
+# reset. Closing that needs two things this does not have — an image with `pi` in
+# it, and a network story for reaching the local model, since §08 wants no
+# network and the worker needs exactly one endpoint. Until then, "the run dir is
+# excluded from containment" below is load-bearing and is a hole: a worker that
+# wrote into the run dir would not be caught.
 set -uo pipefail
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -49,6 +55,9 @@ usage: build-loop.sh <run_dir> --bean <bean.yaml> [options]
   --tasks <path>      task list (default: <run_dir>/tasks.yaml, then tasks.json)
   --task <id>         run only this task (its dependencies must already be verified)
   --max-attempts <n>  override every task's max_attempts (default: per task, else 3)
+  --sandbox           run each task's verify list inside the pinned gate container
+                      against a .git-free copy of the tree (spec §06 step 5)
+  --gates <file>      gate manifest naming the image (default: factory/gates.lock.yaml)
   --dry-run           print the plan — order, write paths, verifies — and stop
 
 Exit: 0 every task verified · 4 a task exhausted its attempts (bean blocked,
@@ -67,6 +76,7 @@ esac
 
 # ------------------------------------------------------------------ arguments
 RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; MAX_OVERRIDE=""; DRY_RUN=0
+SANDBOX=0; GATES_FILE=""; SANDBOX_TREE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)        BEAN_FILE="${2:?--bean needs a path}"; shift 2 ;;
@@ -74,6 +84,8 @@ while [ $# -gt 0 ]; do
     --task)        ONLY_TASK="${2:?--task needs a task id}"; shift 2 ;;
     --max-attempts) MAX_OVERRIDE="${2:?--max-attempts needs a number}"; shift 2 ;;
     --dry-run)     DRY_RUN=1; shift ;;
+    --sandbox)     SANDBOX=1; shift ;;
+    --gates)       GATES_FILE="${2:?--gates needs a file}"; shift 2 ;;
     -*)            usage >&2; die "unknown flag: $1" ;;
     *)             [ -z "$RUN_DIR" ] || die "only one run dir (got '$1' after '$RUN_DIR')"
                    RUN_DIR="$1"; shift ;;
@@ -184,6 +196,18 @@ done < <(jq -r '.tasks[] | .id as $i | .write_paths[] | [$i, .] | @tsv' <<<"$TAS
 UNCLAIMED="$(jq -r --argjson t "$(jq -c '[.tasks[].satisfies // []] | flatten' <<<"$TASKS_JSON")" \
   '[(.acceptance_criteria // [])[].id] - $t | join(", ")' <<<"$BEAN_JSON")"
 
+# The editable tree lives OUTSIDE the repository, which is the point: the
+# controller keeps the real worktree on its side of the boundary (§09) and the
+# container only ever sees a copy.
+if [ "$SANDBOX" = 1 ]; then
+  [ -n "$GATES_FILE" ] || GATES_FILE="$ROOT/factory/gates.lock.yaml"
+  [ -f "$GATES_FILE" ] || die "--sandbox needs a gate manifest to name the image; not found: $GATES_FILE"
+  SANDBOX_TREE="${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/darkfactory/$(basename "$RUN_DIR_ABS")/tree"
+  mkdir -p "$SANDBOX_TREE"
+  printf 'SANDBOX %s (verifies run in %s)\n' "$SANDBOX_TREE" \
+    "$("$PIPELINE_DIR/yaml2json.sh" "$GATES_FILE" | jq -r '.image' | sed 's/@.*//')" >&2
+fi
+
 TASKS_LOG="$RUN_DIR/tasks.jsonl"
 [ -f "$TASKS_LOG" ] || : > "$TASKS_LOG"
 
@@ -227,10 +251,22 @@ run_verifies() {
   local t="$1" adir="$2" i=0 n v res rc
   rm -f "$adir/verify-failed.json"
   n="$(jq '.verify | length' <<<"$t")"
+
+  # Sync the tree the container will see. Fresh every attempt: a verify that
+  # passed against a leftover file from the attempt before would be evidence
+  # about nothing.
+  local sb_args=()
+  if [ "$SANDBOX" = 1 ]; then
+    local ex=( --exclude "factory/runs" )
+    [ -n "$RUN_DIR_REL" ] && ex+=( --exclude "$RUN_DIR_REL" )
+    "$PIPELINE_DIR/sync-tree.sh" "$ROOT" "$SANDBOX_TREE" "${ex[@]}" >/dev/null \
+      || { printf 'VERIFY could not sync the editable tree\n' >&2; return 1; }
+    sb_args=( --sandbox "$SANDBOX_TREE" --gates "$GATES_FILE" )
+  fi
   while [ "$i" -lt "$n" ]; do
     v="$(jq -c --argjson i "$i" '.verify[$i]' <<<"$t")"
     rc=0
-    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$adir/verify-$((i+1)).log")" || rc=$?
+    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$adir/verify-$((i+1)).log" ${sb_args+"${sb_args[@]}"})" || rc=$?
     printf '%s\n' "$res" | jq . > "$adir/verify-$((i+1)).json" 2>/dev/null || printf '%s\n' "$res" > "$adir/verify-$((i+1)).json"
     if [ "$rc" -ne 0 ]; then
       printf '%s\n' "$res" > "$adir/verify-failed.json"
