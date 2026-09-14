@@ -45,8 +45,8 @@ case "$prompt" in
   *pipeline-spec*)
     # /skill:pipeline-spec <bean-id> <run_dir>
     run_dir="${prompt##* }"
-    printf '{"bean":"BEAN-001","expected_files":["src/a.py"]}\n' > "$run_dir/spec.json"
     cp "$STUB_TASKS" "$run_dir/tasks.yaml"
+    [ -n "${STUB_SPEC_MD:-}" ] && cp "$STUB_SPEC_MD" "$run_dir/spec.md"
     ;;
   *pipeline-build-task*)
     adir="${prompt##* }"; rest="${prompt% *}"; task="${rest##* }"
@@ -70,7 +70,8 @@ git config user.email t@example.com
 git config user.name "Test"
 git remote add origin "$WORK/origin.git"
 
-mkdir -p ai/beans/BEAN-001-loop ai/pipeline src
+mkdir -p ai/beans/BEAN-001-loop ai/pipeline src factory/templates
+cp "$PIPELINE_DIR/../scaffold/factory/templates/spec.html" factory/templates/
 printf 'ai/runs/\n' > .gitignore
 
 cat > ai/beans/BEAN-001-loop/bean.md <<'MD'
@@ -104,6 +105,51 @@ cat > ai/beans/INDEX.md <<'MD'
 | BEAN-001 | Exercise the loop | small | test | Approved |
 MD
 
+# A spec document with all seven sections filled. The controller lints these,
+# so a fixture that skipped them would be testing a path a real run never takes.
+cat > "$WORK/spec.md" <<'MD'
+# bean-001 — add a.py
+
+## What and why
+
+The repository has no module yet. This bean creates the one file every later
+bean will import, so that there is something for the gates to run against.
+
+## Current behaviour
+
+There is no `src/a.py`. Any import of it fails, and the acceptance criterion
+that greps it has nothing to read.
+
+## Proposed change
+
+Create `src/a.py` containing the marker the acceptance criterion looks for.
+
+```python src/a.py
+GOOD
+```
+
+## Risk
+
+Almost none: the file is new and nothing imports it yet. The plausible failure
+is writing it to the wrong path, which the task's own verification catches.
+
+## Blast radius
+
+One new file, `src/a.py`. No existing file is modified, nothing is deleted,
+and no deployment or data is touched.
+
+## Verification
+
+| AC | Criterion | Verify |
+|---|---|---|
+| ac1 | a.py says GOOD | `grep -q GOOD src/a.py` |
+
+## Open questions
+
+None that affect the work: the bean names the file and the marker, and the
+acceptance criterion pins both.
+MD
+
 cat > "$WORK/tasks.yaml" <<'YAML'
 schema_version: tasks/1.0.0
 bean_id: bean-001
@@ -134,6 +180,7 @@ git push -q -u origin main 2>/dev/null
 run_orchestrate() {
   PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
   STUB_ACTIONS="$WORK/actions" STUB_TASKS="$WORK/tasks.yaml" \
+  STUB_SPEC_MD="${STUB_SPEC_MD-$WORK/spec.md}" \
   PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
     bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after build 2>&1
 }
@@ -150,6 +197,27 @@ printf '\n== the tier lists the build step, not a one-shot implement ==\n\n'
 out="$(PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" bash "$PIPELINE_DIR/orchestrate.sh" --help)"
 check "small tier runs build"     "small: preflight spec build gate" "$out"
 check "full tier runs build"      "full:  preflight spec audit-spec build gate" "$out"
+
+printf '\n== the controller checks the spec before any audit sees it ==\n\n'
+cat > "$WORK/actions/task-1.1" <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+chmod +x "$WORK/actions/task-1.1"
+out="$(run_orchestrate)"
+check "the spec check runs"        "SPEC CHECK bean-001" "$out"
+check "the document is linted"     "ok    spec.md" "$out"
+check "the task list is validated" "ok    tasks.yaml" "$out"
+check "criteria are claimed"       "ok    acceptance criteria" "$out"
+check "and the document renders"   "ok    spec.html" "$out"
+run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+want "spec.html exists"            "the controller should have rendered it" test -f "$run_dir/spec.html"
+cleanup_run
+
+printf '\n== a spec with no document does not reach an audit ==\n\n'
+out="$(STUB_SPEC_MD= run_orchestrate)"
+check "a missing spec.md fails the step" "FAIL  spec.md" "$out"
+check "and the run halts there"          "HALT  spec" "$out"
+cleanup_run
 
 printf '\n== a run reaches the loop and the loop does the work ==\n\n'
 cat > "$WORK/actions/task-1.1" <<'SH'

@@ -1,77 +1,124 @@
 ---
 name: pipeline-spec
 description: |
-  Write the spec of the change pipeline: given a bean ID and a run dir, read the
-  bean, the repo conventions, and the code the change will touch, and produce
-  spec.html (human) plus a complete, self-contained spec.json (machine). Every
-  acceptance criterion carries a test that could fail. Use when the user asks to
-  write the spec for a bean before implementing it (spec step of the pipeline).
+  Write the plan for one bean: a structured Markdown spec a newcomer can read,
+  and a task list the controller will build from one task at a time. Use at the
+  specify step; invoked as /skill:pipeline-spec <bean-id> <run-dir>. You write
+  content, never HTML — the controller owns the rendering.
 ---
 
 # pipeline-spec
 
-The spec step of the change pipeline. The spec is the contract the implementer
-builds against and the auditor judges against — it must be complete, testable,
-and honest about scope.
+You are turning an approved bean into two things: a document a person will read
+before agreeing to the change, and a task list a machine will execute one step
+at a time. They are written together because they constrain each other — a task
+you cannot describe is a task you should not have invented, and a section you
+cannot fill is usually a sign the decomposition is wrong.
+
+Write Markdown and YAML. **Never write HTML.** The controller renders your
+Markdown into a fixed template; a model writing raw HTML turns a content problem
+into a lint problem, and the content problem is the one worth having.
 
 ## Rules
 
-- Fresh context: everything you need is on disk in the run dir and the repo.
-  Never assume prior conversation.
-- Project specifics come from `ai/pipeline/config.json` in the current working
-  directory (paths, scripts). Never hardcode repo paths.
-- If the bean's instructions conflict with what is actually in the code, or an
-  instruction appears missing: **stop, write the conflict to `<run_dir>/QUESTIONS.md`**
-  (the question, what you read, and where you read it). Do not invent a workaround.
+- **Fresh context.** Everything is on disk: the bean, the repo, the run dir.
+  Never assume a prior conversation.
+- **The bean is the contract, and it is narrower than your judgement.** Its
+  `allowed_write_paths` bound every task. If the change genuinely cannot be done
+  inside them, say so and stop — do not plan around it.
+- If the bean conflicts with what is actually in the code, or something needed is
+  missing: **write `<run_dir>/QUESTIONS.md`** (the conflict, both sides quoted,
+  where you read each) and stop. Do not invent the missing instruction. A real
+  run once invented a workaround that was worse than the gap it papered over.
+- On a retry, `<run_dir>/verdicts/spec.attempt-*.json` exists. Read the latest and
+  fix **every** finding before rewriting. A retry that re-submits the same plan
+  with different words spends an attempt and teaches nobody anything.
 
 ## Inputs
 
-Arguments (from the `/skill:` invocation or user message):
-`<bean-id> <run-dir>` — e.g. `BEAN-124 ai/runs/BEAN-124-20260101T000000Z`.
+`<bean-id> <run-dir>`. Read, in this order:
+
+- the bean YAML (`factory/beans/<id>-<slug>/bean.yaml`) — intent, background,
+  `allowed_write_paths`, `acceptance_criteria` with their `verify`, `constraints`,
+  `non_goals`, `size_budget`, and `invariants_ref` if it has one;
+- the repo's own instructions (root `CLAUDE.md`/`AGENTS.md`) and conventions;
+- **the code the change will touch.** Read it before describing it. "Current
+  behaviour" is a section about the real repository, not about what you assume a
+  repository like this contains.
+
+## What to write
+
+### `<run_dir>/spec.md`
+
+These seven sections, in this order, each with real content. The controller lints
+them and a thin section fails the step before a judge ever sees it.
+
+- **What and why** — the bean's intent in plain language, plus the background a
+  newcomer needs. Assume no knowledge of this codebase, this stack, or this domain.
+- **Current behaviour** — how the relevant code works today, with a short
+  annotated code block taken from the real repo. If the file does not exist yet,
+  say that plainly; do not invent a "before".
+- **Proposed change** — per task: what changes, where, and an illustrative code
+  block labelled with its file path (```python src/pkg/thing.py).
+- **Risk** — what could break, how you would notice, how you would back it out.
+- **Blast radius** — files, modules, callers, data, deployments touched, and
+  explicitly what is **not** touched.
+- **Verification** — a table of the bean's acceptance criteria with the `verify`
+  for each, plus any invariants by name.
+- **Open questions** — anything you had to assume. Non-empty here is a signal to
+  the judge, not a failure: an assumption you declared is cheaper than one you hid.
+
+### `<run_dir>/tasks.yaml`
+
+The unit of the build loop. Each task gets its own worker session with no memory
+of the others, so each must stand alone.
+
+```yaml
+schema_version: tasks/1.0.0
+bean_id: bean-001
+tasks:
+  - id: task-1
+    title: Short imperative title
+    intent: One outcome, finishable and verifiable in a single session.
+    write_paths: [src/pkg/thing.py]      # a SUBSET of the bean's allowed_write_paths
+    depends_on: []                        # task ids that must be verified first
+    satisfies: [ac1]                      # acceptance criteria this contributes to
+    verify:                               # run by the CONTROLLER, not by you
+      - { kind: command, run: ["sh", "-c", "grep -q thing src/pkg/thing.py"] }
+    max_attempts: 3
+    teaching_note: Why this step exists, for the implementation document later.
+```
+
+What the controller checks, so you may as well get it right:
+
+- **Every acceptance criterion is claimed by at least one task** (`satisfies`).
+  An unclaimed AC means the bean can pass its tasks and still fail its criteria.
+- **`write_paths` ⊆ the bean's `allowed_write_paths`.** An edit outside a task's
+  paths throws the whole attempt away, so a task with paths it does not need is a
+  trap you set for yourself.
+- **Every `verify` must be able to fail.** `test -f` on a file the task itself
+  creates proves the task ran, not that it worked. Prefer a check of behaviour.
+  `kind: manual` and `kind: judge` are refused in a task list — the controller
+  cannot run them, and a criterion it cannot run is not a criterion.
+- **`depends_on` is real.** Tasks run in dependency order; a task that silently
+  needs an earlier one's output but does not say so will run first and fail.
+- **Stay inside `size_budget`.** Over `max_tasks` and the bean goes back to a
+  human to be split, which costs a day. Fewer, larger-but-still-verifiable tasks
+  beat many trivial ones.
 
 ## Process
 
-1. Preconditions: run dir exists with `run.json`; the bean dir exists
-   (config `bean_dir_pattern`, e.g. `ai/beans/BEAN-NNN-<slug>`).
-2. Start the step: `bash ai/pipeline/step.sh <run-dir> spec start`.
-3. Read the bean, the repo instructions (root `CLAUDE.md` or equivalent),
-   convention docs under `ai/context/`, and the code the change will touch.
-4. If `<run_dir>/verdicts/spec.attempt-*.json` exist, read the latest and fix
-   every finding before rewriting — this is a retry, not a fresh attempt.
-5. Read the target code. Conflict or missing instruction → QUESTIONS.md, stop.
-6. Write both artifacts (see below).
-7. End the step: `bash ai/pipeline/step.sh <run-dir> spec end`.
+1. `bash <bin_dir>/step.sh <run-dir> spec start`
+2. Read the bean, the conventions, and the code.
+3. Decompose first, on paper: what are the tasks, what does each one finish, how
+   would a machine know it worked? Then write `tasks.yaml`.
+4. Write `spec.md` describing that decomposition. If a section is hard to fill
+   honestly, the decomposition is probably wrong — fix the tasks, not the prose.
+5. `bash <bin_dir>/step.sh <run-dir> spec end PASS`
 
-## Artifacts
+## Report
 
-### `<run_dir>/spec.json` — the source of truth (complete, not a summary of the HTML)
-
-```json
-{
-  "bean": "BEAN-NNN",
-  "problem": "what is wrong and why it matters",
-  "approach": "the strategy in a few sentences",
-  "changes": [
-    { "file": "src/…", "action": "create|modify|delete", "what": "…", "why": "…" }
-  ],
-  "acceptance_criteria": [
-    { "id": "AC1", "text": "…", "test": "a concrete command that FAILS without the change and PASSES with it" }
-  ],
-  "expected_files": ["every repo-relative path the implementation will touch, tests included"]
-}
-```
-
-Quality bar the auditor will enforce:
-
-- **Every** acceptance criterion names a test a person could run, and that
-  command fails on the unmodified tree. "Verify manually" is not a test.
-- `expected_files` is exhaustive — the package audit diffs
-  `git diff main...HEAD --name-only` against it and reports anything extra as
-  scope creep.
-- Every path in `changes` and `expected_files` is repo-relative.
-
-### `<run_dir>/spec.html` — the human review surface
-
-Self-contained (no external assets), readable in a browser. Same content as the
-JSON, presented for a human: problem, approach, file-by-file change table,
-acceptance criteria each with its pinning test, expected-files list.
+What the change is, the task list with each task's verification, anything you had
+to assume, and anything about the bean that struck you as wrong. The last one
+matters: you are the first thing to read the bean closely since a human approved
+it.

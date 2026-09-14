@@ -63,7 +63,7 @@ done
 require_cmd jq; require_cmd git
 
 ROOT="$(repo_root)"
-PY="${PIPELINE_PYTHON:-$(command -v python3)}"
+PY="$(factory_python)"
 [ -n "$POLICY" ] || POLICY="$ROOT/factory/risk-policy.yaml"
 [ -n "$GATES" ]  || GATES="$ROOT/factory/gates.lock.yaml"
 [ -f "$POLICY" ] || die "risk policy not found: $POLICY (the tier cannot be computed without it)"
@@ -128,7 +128,10 @@ else
   FINAL_TIER="$(jq -r '.final_tier' <<<"$TIER_JSON")"
   BINDING="$(jq -r '.binding_term | join(", ")' <<<"$TIER_JSON")"
   TOP_PATH="$(jq -r --argjson t "$FINAL_TIER" '[.paths[] | select(.tier == $t)] | first | "\(.path) — \(.reason)"' <<<"$TIER_JSON" 2>/dev/null)"
+  TOP_PATH="$(jq -r --argjson t "$FINAL_TIER" '[.paths[] | select(.tier == $t)] | first | "\(.path) — \(.reason)"' <<<"$TIER_JSON" 2>/dev/null)"
   pass_part "tier" "$FINAL_TIER (set by $BINDING; bean suggested ${BEAN_TIER:-none})"
+  # A tier without its reason is a number to argue with. Name the path that set it.
+  [ -n "$TOP_PATH" ] && [ "$TOP_PATH" != "null" ] && note "" "" "$TOP_PATH"
   # A tier without its reason is a number to argue with. Name the path that set it.
   [ -n "$TOP_PATH" ] && [ "$TOP_PATH" != "null" ] && note "" "" "$TOP_PATH"
   if [ "$(jq -r '.never_auto_merged' <<<"$TIER_JSON")" = "true" ]; then

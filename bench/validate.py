@@ -19,8 +19,10 @@ from pathlib import Path
 try:
     import jsonschema
     import yaml
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
 except ImportError:
-    sys.exit("missing deps: run  .venv/bin/pip install jsonschema pyyaml")
+    sys.exit("missing deps: run  .venv/bin/pip install jsonschema pyyaml referencing")
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS = ROOT / "schemas"
@@ -47,6 +49,27 @@ def load(path: Path):
     if path.suffix in (".yaml", ".yml"):
         return yaml.load(text, Loader=_StringDateLoader)
     return json.loads(text)
+
+
+def local_registry() -> "Registry":
+    """Every schema in schemas/, resolvable by filename and by its own $id.
+
+    task.schema.json says `"$ref": "bean.schema.json#/$defs/verify"`. Without a
+    local registry jsonschema tries to FETCH that over the network — against
+    `https://forge.local/...`, which does not exist — and validation dies with a
+    urllib traceback rather than a finding. The schemas were reported "8 valid"
+    the whole time because checking that a schema is well-formed never follows
+    its references; only validating a payload does. That is exactly the gap the
+    plan flagged as "still to validate against real payloads".
+    """
+    resources = []
+    for path in sorted(SCHEMAS.glob("*.schema.json")):
+        doc = json.loads(path.read_text())
+        resource = Resource.from_contents(doc, default_specification=DRAFT202012)
+        resources.append((path.name, resource))
+        if "$id" in doc:
+            resources.append((doc["$id"], resource))
+    return Registry().with_resources(resources)
 
 
 def resolve_schema(name: str) -> Path:
@@ -76,7 +99,9 @@ def check_all_schemas() -> int:
 
 def validate_payloads(schema_name: str, payloads: list[str]) -> int:
     schema_path = resolve_schema(schema_name)
-    validator = jsonschema.Draft202012Validator(json.loads(schema_path.read_text()))
+    validator = jsonschema.Draft202012Validator(
+        json.loads(schema_path.read_text()), registry=local_registry()
+    )
     failures = 0
     for raw in payloads:
         path = Path(raw)
@@ -107,7 +132,7 @@ def validate_corpus(directory: str) -> int:
         sys.exit(f"no bean files found under {directory}")
 
     validator = jsonschema.Draft202012Validator(
-        json.loads((SCHEMAS / "bean.schema.json").read_text())
+        json.loads((SCHEMAS / "bean.schema.json").read_text()), registry=local_registry()
     )
     failures = 0
     ids: dict[str, Path] = {}

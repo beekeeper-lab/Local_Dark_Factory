@@ -66,6 +66,21 @@ require_config() {
   [ -f "$CONFIG_PATH" ] || die "pipeline config not found: $CONFIG_PATH"
 }
 
+# factory_python — the interpreter the pipeline's own Python tools run under.
+# The factory's venv carries jsonschema and PyYAML; the system python3 may carry
+# neither, and a schema check that silently degrades to "missing deps" is a check
+# that is not happening. PIPELINE_PYTHON overrides for tests and odd hosts.
+factory_python() {
+  local venv="$PIPELINE_DIR/../../.venv/bin/python"
+  if [ -n "${PIPELINE_PYTHON:-}" ]; then
+    printf '%s\n' "$PIPELINE_PYTHON"
+  elif [ -x "$venv" ]; then
+    printf '%s\n' "$venv"
+  else
+    command -v python3 || printf 'python3\n'
+  fi
+}
+
 # Location of Pi's session JSONL files; overridable for tests (PI_SESSIONS_DIR).
 pi_sessions_dir() {
   printf '%s\n' "${PI_SESSIONS_DIR:-$HOME/.pi/agent/sessions}"

@@ -383,6 +383,20 @@ run_step() { # <step> [-- <extra args carried through to the child>]
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
+    spec)
+      local rc=0 sy
+      if [ $# -gt 0 ]; then
+        "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+      else
+        "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" || rc=$?
+      fi
+      [ "$rc" -eq 0 ] || return "$rc"
+      # The controller half: sections, schema, claimed criteria, paths, budget,
+      # and the rendering. A judge should spend its attention on whether the plan
+      # is right, not on whether it is a plan.
+      sy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the spec cannot be checked against the bean"
+      "$PIPELINE_DIR/spec-check.sh" "$RUN_DIR" --bean "$sy" || rc=$?
+      return "$rc" ;;
     gate)
       local gy
       gy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the gate cannot contain a diff without the bean's allowed_write_paths"
