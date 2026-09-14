@@ -120,7 +120,10 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
       per-stage runtimes in minutes. Paying ~10 s per role transition to keep Q8_0 weights is
       the better trade. **Revisit if `swap_overhead_pct` telemetry exceeds ~15%**, at which
       point the Q4 co-resident arm becomes a live alternative rather than a fallback.
-- [ ] Set the final ollama unit config: `OLLAMA_KEEP_ALIVE=-1` (already on the unit),
+- [x] Set the final ollama unit config — applied 2026-09-14 via
+      `/etc/systemd/system/ollama.service.d/zz-factory.conf`; the temporary probe drop-in is
+      gone. Asserted on every audit run (`bench/phase0-audit.sh`: `unit.*`, `unit.probe_dropin_removed`).
+      `OLLAMA_KEEP_ALIVE=-1` (already on the unit),
       `OLLAMA_NUM_PARALLEL=1` (already the running value), and **`OLLAMA_MAX_LOADED_MODELS=1`**.
       The value `1` is now correct for a *measured* reason rather than the original one: the Q8
       pair genuinely cannot co-reside, so permitting 2 only invites load attempts that end in
@@ -185,7 +188,45 @@ phase_0_exit: { residency_recorded: true, swap_time_measured: true, harmony_conf
 - [x] Exit verified — all six `phase_0_exit` predicates hold:
       `residency_recorded: true`, `swap_time_measured: true`, `harmony_conformance: pass`,
       `pi_drives_both_models: pass`, `regime_decision: "serial"`, `figures_have_provenance: true`.
-- [ ] Audit generated   - [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-0-COMPLETE` committed
+- [x] **Audit generated** — `bench/phase0-audit.sh` (re-runnable) + `audits/PHASE-0-AUDIT-20260914.md`.
+      The first finding was the ritual's own first clause: "exit criteria machine-verified" was
+      prose. `grep -rn phase_0_exit` matched this file and `RESUME.md` and nothing else — nothing
+      computed the six predicates. The harness computes them, and checks the machine, the digests,
+      the reproducibility of the evidence and the honesty of the harnesses around it.
+      **10 findings: 2 blocker, 5 major, 3 minor.**
+- [x] **Findings corrected** — all ten:
+      1. *blocker* `bench/results/` was gitignored, so every figure the sections above cite lived
+         only on Forge's disk. `.gitignore` now ignores sweep output but admits cited artifacts by
+         name; the five are committed.
+      2. *blocker* `run-step.sh` stamped `conditions.num_ctx` from `roles.json` and never applied
+         it — pi has no context flag (`pi --help`), so ollama served its 131072 default against a
+         declared 32768. Both `num_ctx` and `thinking` are now read back (ollama `/api/ps`, pi's
+         session file), the declared values kept under `conditions.declared`, with
+         `declared_matches_observed` and a `WARN` line on drift. The identical bug was fixed for
+         `thinking` last session; this was the same lie one field over.
+      3. *major* `preflight.sh`'s thinking tripwire was wrapped in `[ -f "$PI_MODELS" ]` — a pi
+         upgrade that moved the catalog would have deleted the check silently while preflight
+         printed PASS. A missing catalog is now a FAIL.
+      4. *major* `regime_decision` was derived purely from observed co-residency, so under the
+         final `MAX_LOADED_MODELS=1` it could only ever emit `serial` — the unit file wearing a
+         measurement's clothes. It now emits `unknown` with a `regime_evidence` block when
+         co-residency was not attemptable, and provenance carries the scheduler settings.
+      5. *major* the co-residency probe was hand-written with no harness behind it.
+         `phase0.sh --coresidency-probe` regenerates it under the same schema; it refuses (exit 3)
+         unless `MAX_LOADED_MODELS>=2`, printing the drop-in commands rather than editing the unit
+         itself.
+      6. *major* `phase0.sh --provenance-only` logged "writing results to <path>" and wrote
+         nothing there. It writes the file now.
+      7. *major* `harmony-conformance.sh` printed 12/12 and saved nothing, leaving the
+         `harmony_conformance` predicate resting on prose — for the one predicate that is a
+         property of specific weights. It now writes `bench/results/harmony-<stamp>.json` with the
+         judge's digest and quant beside every case.
+      8/9. *minor* `RESUME.md` told the next session to run `python bench/validate.py`: no bare
+         `python` on this box, and the bare invocation validates no bean at all. Both corrected.
+      10. *minor* the unit-config checkbox above was unchecked though the work was done.
+- [x] **Audit re-run green** — `./bench/phase0-audit.sh --with-models` → 0 findings; artifact at
+      `audits/phase0-audit-20260914T182533Z.json`.
+- [ ] `PHASE-0-COMPLETE` committed
 
 ---
 

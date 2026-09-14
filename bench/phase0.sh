@@ -23,6 +23,7 @@ CONTEXTS="${CONTEXTS:-16384 32768 49152}"
 OUT_DIR="${OUT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/results}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="$OUT_DIR/phase0-$STAMP.json"
+OUT_EXPLICIT=0
 
 usage() {
   cat <<'EOF'
@@ -31,6 +32,10 @@ phase0.sh — measure model residency, speed and swap cost on Forge.
 usage: phase0.sh [--quick] [--models "<dev> <judge>"] [--contexts "16384 32768"]
 
   --quick        one context size (32768) and a short prompt; ~5 min smoke test
+  --provenance-only     print and write provenance + current residency; loads nothing
+  --coresidency-probe   measure which model pairs actually co-reside and at what
+                        GTT footprint; requires OLLAMA_MAX_LOADED_MODELS>=2 and
+                        refuses (exit 3) with the commands to set it otherwise
   --models       override the two models under test
   --contexts     override the context sweep
   --out <path>   results file (default: bench/results/phase0-<stamp>.json)
@@ -43,18 +48,24 @@ EOF
 }
 
 QUICK=0
+PROBE_ONLY=0
 PROV_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --provenance-only) PROV_ONLY=1; shift ;;
+    --coresidency-probe) PROBE_ONLY=1; shift ;;
     --quick) QUICK=1; CONTEXTS="32768"; shift ;;
     --models) DEV="${2%% *}"; JUDGE="${2##* }"; shift 2 ;;
     --contexts) CONTEXTS="$2"; shift 2 ;;
-    --out) OUT="$2"; shift 2 ;;
+    --out) OUT="$2"; OUT_EXPLICIT=1; shift 2 ;;
     *) printf 'unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# A provenance record is not a measurement sweep; giving it its own name keeps a
+# cheap --provenance-only run from shadowing the sweep anything reads for figures.
+[ "$PROV_ONLY" = 1 ] && [ "$OUT_EXPLICIT" = 0 ] && OUT="$OUT_DIR/phase0-provenance-$STAMP.json"
 
 for c in curl jq ollama; do
   command -v "$c" >/dev/null 2>&1 || { printf 'phase0: required command not found: %s\n' "$c" >&2; exit 1; }
@@ -89,8 +100,27 @@ model_meta() {
       architecture:$arch, native_context:($native_ctx|tonumber? // null)}'
 }
 
+# GTT actually pinned right now, as opposed to the ceiling. The co-residency
+# question is decided by this number, not by the sum of the model file sizes.
+gtt_used_bytes() {
+  cat /sys/class/drm/card*/device/mem_info_gtt_used 2>/dev/null | sort -rn | head -1 || echo 0
+}
+
+# The scheduler settings are part of the conditions, not background scenery:
+# MAX_LOADED_MODELS=1 makes co-residency impossible by configuration, so a
+# regime "measurement" taken under it is a reading of the unit file.
+unit_env() {
+  systemctl show ollama.service -p Environment 2>/dev/null \
+    | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1
+}
+
 provenance() {
   jq -cn \
+    --arg mlm "$(unit_env OLLAMA_MAX_LOADED_MODELS)" \
+    --arg npar "$(unit_env OLLAMA_NUM_PARALLEL)" \
+    --arg keep "$(unit_env OLLAMA_KEEP_ALIVE)" \
+    --arg ctxlen "$(unit_env OLLAMA_CONTEXT_LENGTH)" \
+    --argjson gtt_used "$(gtt_used_bytes)" \
     --arg host "$(hostname)" \
     --arg kernel "$(uname -r)" \
     --arg ollama "$(ollama --version 2>/dev/null | grep -o '[0-9][0-9.]*' | head -1)" \
@@ -101,7 +131,12 @@ provenance() {
     --argjson judge "$(model_meta "$JUDGE")" \
     '{host:$host, kernel:$kernel, ollama_version:$ollama, measured_at:$ts,
       gtt_bytes:$gtt_bytes, gtt_gb:(($gtt_bytes/1073741824)|floor),
-      ram_total_gb:$ram_total_gb, developer:$dev, judge:$judge}'
+      gtt_used_gib: (($gtt_used/1073741824)*10|round/10),
+      ram_total_gb:$ram_total_gb, developer:$dev, judge:$judge,
+      scheduler: {max_loaded_models: (if $mlm == "" then null else ($mlm|tonumber? // $mlm) end),
+                  num_parallel:      (if $npar == "" then null else ($npar|tonumber? // $npar) end),
+                  keep_alive:        (if $keep == "" then null else $keep end),
+                  context_length:    (if $ctxlen == "" then null else ($ctxlen|tonumber? // $ctxlen) end)}}'
 }
 
 # ------------------------------------------------------------------ residency --
@@ -172,7 +207,6 @@ swap_time() {
 }
 
 # ----------------------------------------------------------------------- main --
-log "writing results to $OUT"
 PROV="$(provenance)"
 log "GTT ceiling: $(jq -r .gtt_gb <<<"$PROV") GB · RAM: $(jq -r .ram_total_gb <<<"$PROV") GB"
 
@@ -180,10 +214,87 @@ log "GTT ceiling: $(jq -r .gtt_gb <<<"$PROV") GB · RAM: $(jq -r .ram_total_gb <
 # loading, stopping or evicting anything. Safe to run while other work is using
 # Ollama — the full harness is not, because it calls `ollama stop`.
 if [ "$PROV_ONLY" = 1 ]; then
+  # Write the file this run announced. Printing to stdout while logging
+  # "writing results to <path>" left the operator believing a provenance record
+  # existed when none did — a small lie of exactly the kind Phase 0 exists to
+  # stop telling.
   jq -n --argjson provenance "$PROV" --argjson residency "$(residency)" \
-    '{schema:"phase0-provenance/1.0.0", provenance:$provenance, residency_now:$residency}'
+    '{schema:"phase0-provenance/1.0.0", provenance:$provenance, residency_now:$residency}' \
+    | tee "$OUT"
+  log "done: $OUT"
   exit 0
 fi
+
+# --------------------------------------------------------- co-residency probe --
+# The 81.4-88.4 GiB effective-budget bracket was originally taken by hand and
+# written straight into JSON, which left the most consequential Phase-0 finding
+# unreproducible: no script emitted it, and the drop-in it needed had been
+# removed. This mode regenerates that artifact under the same schema.
+#
+# It deliberately does not edit the unit itself — a measurement harness that
+# rewrites system configuration is a harness you cannot run casually. It refuses
+# instead, and prints the two commands.
+if [ "$PROBE_ONLY" = 1 ]; then
+  MLM="$(jq -r '.scheduler.max_loaded_models // "unset"' <<<"$PROV")"
+  if [ "$MLM" != "2" ] && [ "$MLM" != "3" ] && [ "$MLM" != "4" ]; then
+    log "refusing: OLLAMA_MAX_LOADED_MODELS is '$MLM'; co-residency cannot be attempted below 2."
+    log "enable it:  printf '[Service]\\nEnvironment=OLLAMA_MAX_LOADED_MODELS=2\\n' | sudo tee /etc/systemd/system/ollama.service.d/zz-phase0-coresidency-test.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama"
+    log "undo it:    sudo rm /etc/systemd/system/ollama.service.d/zz-phase0-coresidency-test.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama"
+    exit 3
+  fi
+
+  PROBE_OUT="${PROBE_OUT:-$OUT_DIR/coresidency-probe-$(date -u +%Y%m%d).json}"
+  # pair-a | pair-b | num_ctx | why this pair is in the list
+  PAIRS="${PAIRS:-$JUDGE|gpt-oss:20b|8192|control: the judge co-resides with something small, so a refusal is not a per-model quirk
+$DEV|qwen3-coder-next:latest|8192|control: highest confirmed-good footprint before the judge is introduced
+$JUDGE|qwen3.8:27b|16384|the Q4 developer arm
+$JUDGE|qwen3.8:27b|49152|the Q4 arm at the largest swept context
+$JUDGE|$DEV|16384|the Q8 pair the regime decision turns on}"
+
+  TRIALS="[]"
+  while IFS='|' read -r a b ctx why; do
+    [ -n "${a:-}" ] || continue
+    missing=""
+    for m in "$a" "$b"; do
+      ollama list 2>/dev/null | awk -v m="$m" '$1 == m {found=1} END {exit !found}' || missing="$missing $m"
+    done
+    if [ -n "$missing" ]; then
+      log "skip $a + $b @ $ctx — not installed:$missing"
+      TRIALS="$(jq -c --arg a "$a" --arg b "$b" --argjson ctx "$ctx" --arg why "$why" --arg miss "$missing" \
+        '. + [{pair:[$a,$b], num_ctx:$ctx, coresident:null, skipped:("not installed:" + $miss), note:$why}]' <<<"$TRIALS")"
+      continue
+    fi
+    log "probe: $a + $b @ num_ctx=$ctx"
+    ollama stop "$a" >/dev/null 2>&1 || true
+    ollama stop "$b" >/dev/null 2>&1 || true
+    sleep 2
+    measure "$a" "$ctx" "$PROMPT_SMALL" >/dev/null
+    measure "$b" "$ctx" "$PROMPT_SMALL" >/dev/null
+    LOADED="$(residency)"
+    used_gib="$(jq -n --argjson u "$(gtt_used_bytes)" '($u/1073741824*10|round)/10')"
+    co="$(jq --arg a "$a" --arg b "$b" 'map(.model) | (index($a) != null) and (index($b) != null)' <<<"$LOADED")"
+    log "  coresident=$co  gtt_used=${used_gib} GiB  loaded: $(jq -r 'map(.model)|join(", ")' <<<"$LOADED")"
+    TRIALS="$(jq -c --arg a "$a" --arg b "$b" --argjson ctx "$ctx" --arg why "$why" \
+      --argjson co "$co" --argjson used "$used_gib" --argjson loaded "$LOADED" \
+      '. + [{pair:[$a,$b], num_ctx:$ctx, gtt_used_gib:$used, coresident:$co, loaded:$loaded, note:$why}]' <<<"$TRIALS")"
+  done <<< "$PAIRS"
+
+  jq -n --argjson provenance "$PROV" --argjson trials "$TRIALS" \
+    --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{schema: "phase0-coresidency-probe/1.0.0",
+      measured_at: $ts,
+      purpose: "Bracket the footprint at which ollama stops granting a second runner, so the regime decision rests on a measured budget rather than on the sum of the model file sizes.",
+      provenance: $provenance,
+      trials: $trials,
+      effective_budget_gib: {
+        highest_coresident: ([$trials[] | select(.coresident == true) | .gtt_used_gib // empty] | max // null),
+        lowest_refused:     ([$trials[] | select(.coresident == false) | .gtt_used_gib // empty] | min // null)}}' \
+    | tee "$PROBE_OUT"
+  log "done: $PROBE_OUT"
+  exit 0
+fi
+
+log "writing results to $OUT"
 
 BIG_PROMPT_TOKENS=$([ "$QUICK" = 1 ] && echo 512 || echo 4000)
 BIG_PROMPT="$(build_prompt "$BIG_PROMPT_TOKENS")"
@@ -226,8 +337,20 @@ jq -r '.[] | "  \(.from) -> \(.to): \(.seconds)s"' <<<"$SWAPS" >&2
 
 # Regime decision: co-resident only if both models appear loaded together at
 # some swept context. The controller reads this; it is not a judgement call.
+#
+# But a derived field is only evidence if it could have come out the other way.
+# Under OLLAMA_MAX_LOADED_MODELS=1 ollama will never hold two runners, so this
+# derivation can only ever emit "serial" — a reading of the unit file wearing a
+# measurement's clothes. Say "unknown" instead, and say why.
+MLM="$(jq -r '.scheduler.max_loaded_models // "unset"' <<<"$PROV")"
 REGIME="$(jq -r '[.[] | select(.scenario == "both") | select((.loaded | length) >= 2) | .num_ctx]
   | if length > 0 then "coresident@\(max)" else "serial" end' <<<"$RESIDENCY_ROWS")"
+REGIME_NOTE="derived from observed co-residency across the swept contexts"
+if [ "$MLM" = "1" ] && [ "$REGIME" = "serial" ]; then
+  REGIME="unknown"
+  REGIME_NOTE="co-residency was not attemptable: OLLAMA_MAX_LOADED_MODELS=1 forbids a second runner, so serial is enforced by configuration and cannot be measured here. Re-run with --coresidency-probe under a MAX_LOADED_MODELS>=2 drop-in to measure it."
+fi
+log "regime: $REGIME ($REGIME_NOTE)"
 
 jq -n \
   --argjson provenance "$PROV" \
@@ -235,12 +358,17 @@ jq -n \
   --argjson residency "$RESIDENCY_ROWS" \
   --argjson swaps "$SWAPS" \
   --arg regime "$REGIME" \
+  --arg regime_note "$REGIME_NOTE" \
+  --arg mlm "$MLM" \
   '{schema: "phase0-measurement/1.0.0",
     provenance: $provenance,
     speed: $speed,
     residency: $residency,
     swaps: $swaps,
     regime_decision: $regime,
+    regime_evidence: {max_loaded_models: $mlm,
+                      coresidency_attemptable: ($mlm != "1"),
+                      note: $regime_note},
     model_load_timeout_suggestion_s: (($swaps | map(.seconds) | max // 60) * 2 | ceil)}' > "$OUT"
 
 log "done: $OUT"

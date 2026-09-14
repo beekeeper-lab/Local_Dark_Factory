@@ -49,6 +49,6 @@
 
   "_known_gaps": [
     "pr is bound to developer because the forked pipeline-pr skill still composes the PR body itself. Spec §06 stage 11 makes push/PR pure controller work with no model at all — the pre-PR audit already drafts the body. Fix when the controller lands.",
-    "num_ctx is declared here but Ollama serves what the systemd unit says; the inference manager must assert them equal (spec §09 healthcheck) rather than trusting this file."
+    "num_ctx is an intent, not a lever: pi exposes no context flag, so Ollama serves what OLLAMA_CONTEXT_LENGTH or the last request set. run-step.sh no longer stamps this number as fact -- conditions.num_ctx is read from /api/ps and this value is recorded under conditions.declared with a declared_matches_observed flag. Control still has to come from the unit (a single global value, so it cannot express a per-role context): spec §09 healthcheck."
   ]
 }

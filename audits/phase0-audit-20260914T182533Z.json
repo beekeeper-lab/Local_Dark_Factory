@@ -1,0 +1,8 @@
+{
+  "schema": "phase0-audit/1.0.0",
+  "audited_at": "2026-09-14T18:26:32Z",
+  "sweep_artifact": "/home/gregg/workspace/Local_Dark_Factory/bench/results/phase0-20260914T173319Z.json",
+  "checks_passed": 29,
+  "findings": [],
+  "green": true
+}

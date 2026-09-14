@@ -33,9 +33,32 @@ git commit -q --allow-empty -m init
 mkdir -p run/verdicts sessions
 echo '{"run_id":"T","bean":"BEAN-001","branch":"bean/BEAN-001-test"}' > run/run.json
 
+# The stub writes a session file in pi's shape, because run-step.sh now reads
+# the conditions back out of it rather than trusting roles.json. A stub that
+# only echoes its arguments would leave the observation path untested — and the
+# thinking level being silently different from the declared one is exactly the
+# bug that path exists to catch.
 cat > stub-pi <<'STUB'
 #!/usr/bin/env bash
 printf 'STUB-PI-ARGS: %s\n' "$*"
+model=""; thinking=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) model="${2#*/}"; shift 2 ;;
+    --thinking) thinking="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+# Emulate the bug this path exists to catch: pi accepting --thinking and running
+# with a different level anyway, recording the truth only in its session file.
+[ -n "${STUB_PI_THINKING_OVERRIDE:-}" ] && thinking="$STUB_PI_THINKING_OVERRIDE"
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+{
+  printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD"
+  [ -n "$model" ]    && printf '{"type":"model_change","model":"%s"}\n' "$model"
+  [ -n "$thinking" ] && printf '{"type":"thinking_level_change","thinkingLevel":"%s"}\n' "$thinking"
+} > "$sess"
 exit 0
 STUB
 chmod +x stub-pi
@@ -68,7 +91,7 @@ fi
 
 # -- conditions are stamped, or runs are not comparable ------------------------
 cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
-for field in role model digest num_ctx thinking; do
+for field in role model digest thinking; do
   if [ "$(jq -r --arg f "$field" '.[$f] // "null"' <<<"$cond")" != "null" ]; then
     printf '  ok    conditions.%s stamped on the step record\n' "$field"; PASS=$((PASS + 1))
   else
@@ -76,6 +99,40 @@ for field in role model digest num_ctx thinking; do
     FAIL=$((FAIL + 1))
   fi
 done
+
+# The declared value is kept, but it is not what `thinking` reports: that comes
+# back from the session pi actually wrote.
+check "conditions.declared retained"    "\"thinking\":\"high\"" "$(jq -c '.declared' <<<"$cond")"
+if [ "$(jq -r '.thinking' <<<"$cond")" = "$(jq -r '.declared.thinking' <<<"$cond")" ]; then
+  printf '  ok    conditions.thinking is the observed level, matching what was asked for\n'; PASS=$((PASS + 1))
+else
+  printf '  FAIL  observed thinking (%s) != declared (%s) and the run was not flagged\n' \
+    "$(jq -r '.thinking' <<<"$cond")" "$(jq -r '.declared.thinking' <<<"$cond")"
+  FAIL=$((FAIL + 1))
+fi
+
+if [ "$(jq -r '.declared_matches_observed' <<<"$cond")" = "true" ]; then
+  printf '  ok    matching conditions are recorded as matching\n'; PASS=$((PASS + 1))
+else
+  printf '  FAIL  declared_matches_observed is false on a run with no drift: %s\n' "$cond"
+  FAIL=$((FAIL + 1))
+fi
+
+# The real case: roles.json asks for "high", the model runs with thinking off,
+# and only the session file knows. That is the bug verbatim — the judge spent a
+# session with its reasoning disabled while the record claimed otherwise.
+out="$(STUB_PI_THINKING_OVERRIDE=off run_step audit-doc)"
+drift_cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
+check "drift is warned about"           "conditions drift" "$out"
+if [ "$(jq -r '.thinking' <<<"$drift_cond")" = "off" ] \
+   && [ "$(jq -r '.declared.thinking' <<<"$drift_cond")" = "high" ] \
+   && [ "$(jq -r '.declared_matches_observed' <<<"$drift_cond")" = "false" ]; then
+  printf '  ok    silent thinking downgrade is recorded as off, not as the declared level\n'
+  PASS=$((PASS + 1))
+else
+  printf '  FAIL  a run that ran with thinking off recorded: %s\n' "$drift_cond"
+  FAIL=$((FAIL + 1))
+fi
 
 # -- a frontier provider must be refused (spec §08) ----------------------------
 jq '.roles.judge.provider = "anthropic" | .roles.judge.model = "claude-opus-5"' \

@@ -1,3 +1,13 @@
 .venv/
-bench/results/
 __pycache__/
+
+# Sweep output is regenerable and noisy, so bench/results is ignored by default.
+# The exception is deliberate: any artifact the ledger cites as the basis of a
+# decision is committed by name. A figure whose evidence exists only on one box
+# is a rumour with a timestamp — and Phase-0 exit asserts figures_have_provenance.
+bench/results/*
+!bench/results/phase0-20260914T173319Z.json
+!bench/results/coresidency-probe-20260914.json
+!bench/results/phase0-eviction-log-20260914.txt
+!bench/results/provenance-post-reboot-20260914T173223Z.json
+!bench/results/harmony-20260914T182045Z.json

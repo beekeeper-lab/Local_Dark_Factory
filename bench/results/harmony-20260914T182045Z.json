@@ -1,0 +1,68 @@
+{
+  "schema": "phase0-harmony-conformance/1.0.0",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-14T18:21:31Z",
+    "judge": {
+      "model": "gpt-oss:120b",
+      "digest": "a951a23b46a1",
+      "quant": "MXFP4"
+    },
+    "num_ctx": 32768
+  },
+  "passed": 12,
+  "failed": 0,
+  "result": "pass",
+  "cases": [
+    {
+      "case": "final channel returns non-empty content",
+      "result": "pass"
+    },
+    {
+      "case": "no Harmony control tokens in content",
+      "result": "pass"
+    },
+    {
+      "case": "analysis channel exposed separately (reasoning field)",
+      "result": "pass"
+    },
+    {
+      "case": "no control tokens in reasoning",
+      "result": "pass"
+    },
+    {
+      "case": "content is exactly the requested token",
+      "result": "pass"
+    },
+    {
+      "case": "'developer' role accepted on the OpenAI endpoint",
+      "result": "pass"
+    },
+    {
+      "case": "native endpoint separates thinking at think=high",
+      "result": "pass"
+    },
+    {
+      "case": "no control tokens in native content",
+      "result": "pass"
+    },
+    {
+      "case": "constrained output parses as JSON",
+      "result": "pass"
+    },
+    {
+      "case": "verdict is a schema-legal enum value (approve)",
+      "result": "pass"
+    },
+    {
+      "case": "required verdict fields present and typed",
+      "result": "pass"
+    },
+    {
+      "case": "no control tokens in constrained JSON",
+      "result": "pass"
+    }
+  ]
+}

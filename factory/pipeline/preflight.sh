@@ -100,21 +100,27 @@ pass "no-branch" "no existing branch matching $glob"
 #    roles.json, so the run record would have asserted a thinking level the run
 #    never used. A false provenance figure is worse than a missing one: it
 #    survives into the telemetry that later decisions are made from.
+#
+#    The check must not be able to skip itself. An earlier version guarded the
+#    whole block with `[ -f "$PI_MODELS" ]`, so a pi upgrade that moved or
+#    rewrote the catalog would have made the tripwire vanish silently while
+#    preflight still printed PASS — the exact scenario it was written for.
 ROLES_JSON="$PIPELINE_DIR/roles.json"
 PI_MODELS="${PI_MODELS_JSON:-$HOME/.pi/agent/models.json}"
-if [ -f "$ROLES_JSON" ] && [ -f "$PI_MODELS" ]; then
-  while IFS=$'\t' read -r rname rprov rmodel; do
-    [ -n "$rmodel" ] || continue
-    declares="$(jq -r --arg p "$rprov" --arg m "$rmodel" \
-      '.providers[$p].models[]? | select(.id == $m) | (.reasoning // false)' "$PI_MODELS" 2>/dev/null)"
-    [ -n "$declares" ] || fail "role-thinking" \
-      "role '$rname' uses $rprov/$rmodel, absent from $PI_MODELS — pi would fall back to a default model"
-    [ "$declares" = "true" ] || fail "role-thinking" \
-      "role '$rname' declares a thinking level but $rprov/$rmodel has reasoning=false in $PI_MODELS; pi will silently run it with thinking off while the run record claims otherwise"
-  done < <(jq -r '.roles | to_entries[]
-             | select((.value.thinking // "") | . != "" and . != "off")
-             | [.key, .value.provider, .value.model] | @tsv' "$ROLES_JSON")
-  pass "role-thinking" "every thinking role maps to a reasoning-capable model in pi's catalog"
-fi
+[ -f "$ROLES_JSON" ] || fail "role-thinking" "roles.json not found at $ROLES_JSON"
+[ -f "$PI_MODELS" ] || fail "role-thinking" \
+  "pi model catalog not found at $PI_MODELS — cannot verify that roles declaring a thinking level map to reasoning-capable models, and pi disables thinking silently when they do not. Set PI_MODELS_JSON if pi has moved its catalog."
+while IFS=$'\t' read -r rname rprov rmodel; do
+  [ -n "$rmodel" ] || continue
+  declares="$(jq -r --arg p "$rprov" --arg m "$rmodel" \
+    '.providers[$p].models[]? | select(.id == $m) | (.reasoning // false)' "$PI_MODELS" 2>/dev/null)"
+  [ -n "$declares" ] || fail "role-thinking" \
+    "role '$rname' uses $rprov/$rmodel, absent from $PI_MODELS — pi would fall back to a default model"
+  [ "$declares" = "true" ] || fail "role-thinking" \
+    "role '$rname' declares a thinking level but $rprov/$rmodel has reasoning=false in $PI_MODELS; pi will silently run it with thinking off while the run record claims otherwise"
+done < <(jq -r '.roles | to_entries[]
+           | select((.value.thinking // "") | . != "" and . != "off")
+           | [.key, .value.provider, .value.model] | @tsv' "$ROLES_JSON")
+pass "role-thinking" "every thinking role maps to a reasoning-capable model in pi's catalog"
 
 echo "PASS  preflight: all checks passed for $BEAN_ID"

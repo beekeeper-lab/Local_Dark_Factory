@@ -169,6 +169,35 @@ if [ -z "$SESSION_FILE" ]; then
   SESSION_FILE="$(printf '%s\n' "$CANDS" | sed -n '1p')"
 fi
 
+# -- observe the conditions, do not declare them ---------------------------------------
+# roles.json says what this step *asked for*. What it got is a separate question,
+# and the answer has been wrong before: pi silently ran the judge with reasoning
+# off while roles.json said "high", and run-step stamped "high" into the record
+# anyway. num_ctx is the same shape of lie — pi has no flag for it (`pi --help`),
+# so ollama serves whatever OLLAMA_CONTEXT_LENGTH or the last request set, which
+# need not be the number in roles.json. A false provenance figure is worse than a
+# missing one: it survives into the telemetry later decisions are made from.
+# So: read both back from the horse's mouth, record the observed value, keep the
+# declared value beside it, and say plainly when they differ.
+OBS_THINKING=""
+OBS_MODEL=""
+if [ -n "$SESSION_FILE" ] && [ -f "$SESSION_FILE" ]; then
+  OBS_THINKING="$(jq -rs '[.[] | select(.type == "thinking_level_change") | .thinkingLevel] | last // empty' "$SESSION_FILE" 2>/dev/null || true)"
+  OBS_MODEL="$(jq -rs '[.[] | select(.type == "model_change") | .model] | last // empty' "$SESSION_FILE" 2>/dev/null || true)"
+fi
+OBS_CTX="$(curl -s --max-time 5 "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null \
+  | jq -r --arg m "$ROLE_MODEL" '[.models[]? | select(.name == $m) | .context_length] | last // empty' 2>/dev/null || true)"
+
+drift=""
+[ -n "$OBS_THINKING" ] && [ -n "$ROLE_THINKING" ] && [ "$OBS_THINKING" != "$ROLE_THINKING" ] \
+  && drift="$drift thinking(declared=$ROLE_THINKING observed=$OBS_THINKING)"
+[ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" != "$ROLE_CTX" ] \
+  && drift="$drift num_ctx(declared=$ROLE_CTX observed=$OBS_CTX)"
+[ -n "$OBS_MODEL" ] && [ "$OBS_MODEL" != "$ROLE_MODEL" ] \
+  && drift="$drift model(declared=$ROLE_MODEL observed=$OBS_MODEL)"
+[ -n "$drift" ] && printf 'WARN   %s   conditions drift:%s — the run record carries the observed values\n' \
+  "$STEP" "$drift" >&2
+
 # -- bookkeeping in steps.jsonl --------------------------------------------------------
 STEPS="$RUN_DIR/steps.jsonl"
 [ -f "$STEPS" ] || : > "$STEPS"
@@ -240,8 +269,17 @@ jq -sc \
   --argjson cond "$(jq -cn \
       --arg role "$ROLE" --arg model "$ROLE_MODEL" --arg digest "$MODEL_DIGEST" \
       --arg thinking "$ROLE_THINKING" --argjson ctx "${ROLE_CTX:-null}" \
-      '{role:$role, model:$model, digest:$digest,
-        num_ctx:$ctx, thinking:(if $thinking == "" then null else $thinking end)}')" \
+      --arg obs_thinking "$OBS_THINKING" --argjson obs_ctx "${OBS_CTX:-null}" \
+      --arg obs_model "$OBS_MODEL" \
+      'def s($v): if $v == "" then null else $v end;
+       {role:$role, model:$model, digest:$digest,
+        num_ctx:($obs_ctx // null), thinking:s($obs_thinking),
+        declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
+        observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
+        declared_matches_observed:
+          ((($obs_ctx == null) or ($ctx == null) or ($obs_ctx == $ctx))
+           and (($obs_thinking == "") or ($thinking == "") or ($obs_thinking == $thinking))
+           and (($obs_model == "") or ($obs_model == $model)))}')" \
   '
   . as $arr
   | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx

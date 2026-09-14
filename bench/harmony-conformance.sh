@@ -23,9 +23,19 @@ HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 JUDGE="${JUDGE_MODEL:-gpt-oss:120b}"
 CTX="${NUM_CTX:-32768}"
 
+OUT_DIR="${OUT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/results}"
+OUT="${OUT:-$OUT_DIR/harmony-$(date -u +%Y%m%dT%H%M%SZ).json}"
+
+# Every case is recorded, not just counted. This suite proves a property of a
+# specific set of weights, so "12 passed" printed to a terminal and then lost is
+# not evidence a later reader can use: the digest and the date are the point.
 pass=0; fail=0
-ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; pass=$((pass+1)); }
-bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
+CASES="[]"
+record() {
+  CASES="$(jq -c --arg n "$1" --arg r "$2" '. + [{case:$n, result:$r}]' <<<"$CASES")"
+}
+ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; pass=$((pass+1)); record "$1" pass; }
+bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); record "$1" fail; }
 
 # Harmony control tokens that must never reach the caller's content field.
 LEAK_RE='<\|channel\|>|<\|start\|>|<\|end\|>|<\|message\|>|<\|constrain\|>|^analysis|^commentary'
@@ -90,4 +100,24 @@ else
 fi
 
 printf '\n%d passed, %d failed\n\n' "$pass" "$fail"
+
+mkdir -p "$(dirname "$OUT")"
+jq -n \
+  --arg model "$JUDGE" \
+  --arg digest "$(ollama list 2>/dev/null | awk -v m="$JUDGE" '$1 == m {print $2; exit}')" \
+  --arg quant "$(ollama show "$JUDGE" 2>/dev/null | sed -n 's/^[[:space:]]*quantization[[:space:]]*//p' | head -1 | tr -d ' ')" \
+  --arg ollama "$(ollama --version 2>/dev/null | grep -o '[0-9][0-9.]*' | head -1)" \
+  --arg kernel "$(uname -r)" \
+  --arg host "$(hostname)" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson ctx "$CTX" \
+  --argjson passed "$pass" --argjson failed "$fail" \
+  --argjson cases "$CASES" \
+  '{schema: "phase0-harmony-conformance/1.0.0",
+    provenance: {host:$host, kernel:$kernel, ollama_version:$ollama, measured_at:$ts,
+                 judge: {model:$model, digest:$digest, quant:$quant}, num_ctx:$ctx},
+    passed:$passed, failed:$failed, result:(if $failed == 0 then "pass" else "fail" end),
+    cases:$cases}' > "$OUT"
+printf '[harmony] wrote %s\n' "$OUT" >&2
+
 [ "$fail" -eq 0 ]

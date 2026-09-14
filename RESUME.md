@@ -1,25 +1,33 @@
 # Resume here — Phase 0
 
-Last session ended 2026-09-14. Branch `factory/phase0-prep-and-bean-set-v1`, pushed, tree clean.
+Last session ended 2026-09-14. Branch `factory/phase0-prep-and-bean-set-v1`, tree clean.
 
-## State: Phase 0 is measured and green; only the audit remains
+## State: Phase 0 is measured, audited, and the audit is green
 
-All six `phase_0_exit` predicates hold:
+All six `phase_0_exit` predicates hold — and, as of the audit, they are *computed*
+rather than asserted (`bench/phase0-audit.sh`), which they were not before:
 
 ```yaml
 residency_recorded: true      swap_time_measured: true     harmony_conformance: pass
 pi_drives_both_models: pass   regime_decision: "serial"    figures_have_provenance: true
 ```
 
+The audit found 10 things (2 blocker, 5 major, 3 minor); all were corrected and the
+re-run is green. Report: `audits/PHASE-0-AUDIT-20260914.md`. The two that matter most
+for anything downstream:
+
+- **Evidence is now committed.** `bench/results/` was gitignored, so every Phase-0
+  figure lived only on Forge's disk. The cited artifacts are tracked by name now.
+- **Run conditions are observed, not declared.** `run-step.sh` used to stamp
+  `conditions.num_ctx` and `conditions.thinking` from `roles.json`. pi has no
+  `num_ctx` flag at all, so that number was fiction whenever the server disagreed.
+  Both are now read back (pi's session file, ollama `/api/ps`), with the declared
+  value kept beside the observed one and a `declared_matches_observed` flag.
+
 ## Next action
 
-**Run the Phase-0 audit** — the last three checklist boxes in
-`DARK_FACTORY_IMPLEMENTATION_PLAN.md` (§ Phase 0, bottom):
-
-- [ ] Audit generated
-- [ ] Findings corrected
-- [ ] Audit re-run green
-- [ ] `PHASE-0-COMPLETE` committed
+- [x] Audit generated   - [x] Findings corrected   - [x] Audit re-run green
+- [ ] `PHASE-0-COMPLETE` committed — the marker convention is yours to set
 
 Then Phase 1 (one bean, by hand, through all seven stages). Phase-1 entry needs a
 throwaway GitHub repo with the `factory/` scaffold and one **approved** bean — all 20 beans
@@ -28,12 +36,22 @@ That approval is yours to give and is the actual gate on starting Phase 1.
 
 ## What to re-run to confirm nothing drifted
 
+There is no bare `python` on this box; the interpreter is the venv's. Run one per line:
+
 ```
-./factory/pipeline/tests/test-role-routing.sh     # expect 15 passed
-python bench/validate.py                           # expect 8 schemas, 0 invalid
-./bench/harmony-conformance.sh                     # expect 12 passed (~2 min, loads the 120b)
-./bench/phase0.sh --provenance-only                # expect GTT 96 GB
+./bench/phase0-audit.sh --with-models
+./factory/pipeline/tests/test-role-routing.sh
+.venv/bin/python bench/validate.py
+.venv/bin/python bench/validate.py --corpus benchmark/seating-planner/bean-sets/v1
+./bench/phase0.sh --provenance-only
 ```
+
+Expected: audit `0 findings (green)`; role routing `15 passed`; `8 schemas, 0 invalid`;
+`20 bean(s) ... 0 invalid`; GTT 96 GB. The audit's `--with-models` flag re-runs the
+12-case Harmony suite (~2 min, loads the 120b) and writes
+`bench/results/harmony-<stamp>.json`; without it that predicate reports as skipped.
+Note that bare `validate.py` validates **no bean at all** — the `--corpus` line is the
+one that checks the 20-bean set.
 
 ## Decisions recorded last session (don't re-litigate, do revisit on trigger)
 
@@ -62,9 +80,19 @@ was the 262144 default context, not model speed.
    `preflight.sh` now refuses a run that would repeat it. **If pi ever updates or rewrites
    its catalog, re-check this** — the backup and the preflight check are the two tripwires.
 
-2. **`roles.json` `num_ctx` is still declared-not-asserted.** Ollama serves what the unit
-   says; nothing yet checks they agree. Same class as the thinking bug above, still open —
-   `roles.json` `_known_gaps` flags it, and spec §09 healthcheck is where it belongs.
+   The guard itself was wrong until the audit: it was wrapped in `[ -f "$PI_MODELS" ]`,
+   so a pi upgrade that *moved* the catalog would have made the tripwire vanish silently
+   while preflight still printed PASS. A missing catalog is now a `FAIL`; set
+   `PI_MODELS_JSON` if pi relocates it.
+
+2. **`roles.json` `num_ctx` is an intent, not a lever — pi has no flag for it.**
+   `pi --help` lists no context option, so ollama serves whatever
+   `OLLAMA_CONTEXT_LENGTH` (unset on the unit → 131072 default) or the last request
+   set. The run record no longer pretends otherwise: `conditions.num_ctx` is read from
+   `/api/ps` and the roles.json number is kept under `conditions.declared`. **The
+   remaining work is control, not honesty** — to actually hold a role at 32768 the unit
+   needs `OLLAMA_CONTEXT_LENGTH`, which is a single global value and cannot express a
+   per-role context. Spec §09's healthcheck is where that belongs.
 
 ## Machine config as left (already applied, survives reboot)
 

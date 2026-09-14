@@ -1,0 +1,40 @@
+{
+  "schema": "phase0-coresidency-probe/1.0.0",
+  "measured_at": "2026-09-14T17:50:00Z",
+  "purpose": "Determine whether the serial regime is a memory fact or a scheduler artifact, after the full sweep derived regime_decision=serial while logging evictions in which predicted < available.",
+  "conditions": {
+    "gtt_ceiling_gib": 96,
+    "ram_total_gib": 125,
+    "ollama_version": "0.32.13",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "device": "ROCm 8060S Graphics (unified-memory iGPU)",
+    "ollama_max_loaded_models": 2,
+    "ollama_num_parallel": 1,
+    "note": "MAX_LOADED_MODELS=2 set via /etc/systemd/system/ollama.service.d/zz-phase0-coresidency-test.conf for this probe only."
+  },
+  "trials": [
+    {"pair": ["qwen3-vl:latest", "gpt-oss:20b"], "num_ctx": 4096, "gtt_used_gib": null, "approx_total_gib": 18, "coresident": true,
+     "note": "Establishes that multi-runner works at all on this backend; MAX_LOADED_MODELS=2 is effective."},
+    {"pair": ["gpt-oss:120b", "gpt-oss:20b"], "num_ctx": 8192, "gtt_used_gib": 72.9, "approx_total_gib": 73, "coresident": true,
+     "note": "The judge is not itself unloadable-with-others; rules out a per-model quirk."},
+    {"pair": ["qwen3.8:27b-mtp-q8_0", "qwen3-coder-next:latest"], "num_ctx": 8192, "gtt_used_gib": 77.4, "approx_total_gib": 77, "coresident": true,
+     "note": "Highest confirmed-good footprint before introducing the judge."},
+    {"pair": ["gpt-oss:120b", "qwen3.8:27b"], "num_ctx": [8192, 16384], "gtt_used_gib": 79.0, "approx_total_gib": 79, "coresident": true,
+     "note": "Q4_K_M developer co-resides with the judge."},
+    {"pair": ["gpt-oss:120b", "qwen3.8:27b"], "num_ctx": [16384, 49152], "gtt_used_gib": 81.4, "approx_total_gib": 81, "coresident": true,
+     "note": "Q4 developer at the top of the swept context range, still co-resident, both 100% GPU."},
+    {"pair": ["qwen3.8:27b-mtp-q8_0", "gpt-oss:120b"], "num_ctx": 16384, "predicted_gib": 61.7, "available_gib": 68.9, "coresident": false,
+     "note": "Q8_0 developer resident, judge refused despite predicted < available."},
+    {"pair": ["qwen3.8:27b-mtp-q8_0", "gpt-oss:120b"], "num_ctx": 8192, "predicted_gib": 61.3, "available_gib": 69.0, "coresident": false,
+     "note": "Lowering context does not help; the refusal tracks total footprint, not KV size."}
+  ],
+  "findings": {
+    "max_loaded_models_was_not_the_cause": true,
+    "effective_coresidency_budget_gib": {"confirmed_good": 81.4, "confirmed_bad": 88.4,
+      "note": "Ollama withholds roughly 8-15 GiB beneath the 96 GiB GTT ceiling; its own 'available' figure overstates what it will actually grant."},
+    "q8_developer_plus_judge": "serial (88.4 GiB exceeds the effective budget)",
+    "q4_developer_plus_judge": "coresident at 79-81 GiB, developer up to 49152 ctx, both 100% GPU"
+  },
+  "regime_decision": "serial",
+  "regime_rationale": "Not a capacity claim about the 96 GiB ceiling, which the Q4 arm disproves, but a quant tradeoff. Co-residency is reachable only by demoting the developer from Q8_0 to Q4_K_M. Measured swap cost is 8.0 s judge->developer and 13.2 s developer->judge, which is small against per-stage runtimes, so paying the swap to keep Q8_0 weights is the better trade. Revisit if swap_overhead_pct telemetry exceeds ~15%."
+}
