@@ -1,10 +1,10 @@
 ---
-name: pipeline-audit
+name: factory-audit
 description: |
   Independently audit one pipeline artifact in a fresh context and write a
   schema-conformant PASS/FAIL verdict with evidence-backed findings. Targets:
   spec, impl, doc, package. Use when a pipeline step's output needs auditing;
-  invoked as /skill:pipeline-audit <target> <run-dir>, typically inside a child
+  invoked as /skill:factory-audit <target> <run-dir>, typically inside a child
   pi process that can see the artifact but not the conversation that produced it.
 ---
 

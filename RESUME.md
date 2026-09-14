@@ -69,7 +69,7 @@ approval is done, and the other two are build work:
    and `INDEX.md`. `preflight.sh bean-001` passes against it. Re-run `scaffold.sh` to update
    the control files; it never touches `factory/specs`, `factory/impl` or `factory/runs`.
 3. ~~The task loop~~ — **built 2026-09-14.** `build-loop.sh` + `verify.sh` + `contain.py`
-   + the `pipeline-build-task` skill, wired into `orchestrate.sh` as the `build` step
+   + the `factory-build-task` skill, wired into `orchestrate.sh` as the `build` step
    (it replaces one-shot `implement` in both tiers). 71 test cases across
    `test-build-loop.sh` and `test-orchestrate-build.sh`, all against a stubbed worker.
    **What is left is the real thing:** the loop has never had the developer model on the

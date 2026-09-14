@@ -1,5 +1,5 @@
 ---
-name: pipeline-implement
+name: factory-implement
 description: |
   Build the change an approved pipeline spec describes: implement it on the
   current branch, prove with revert-checks that the spec's tests pin the change

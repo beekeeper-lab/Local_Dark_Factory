@@ -1,5 +1,5 @@
 ---
-name: pipeline-pr
+name: factory-pr
 description: |
   Push a pipeline run's branch and open the pull request against main via
   gh pr create, with the change summary, test evidence, and audit caveats in

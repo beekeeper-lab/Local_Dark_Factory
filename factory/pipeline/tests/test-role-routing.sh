@@ -160,6 +160,21 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# -- the skill must be the FACTORY's, not a same-named one from pi's global dir --
+# Found on the first real run: ~/.pi/agent/skills belongs to another project and
+# had its own `pipeline-spec`. pi loads both that directory and every explicit
+# --skill path, so the developer model followed the wrong contract and wrote a
+# different pipeline's artifacts. A collision is not an error anywhere in pi — it
+# is a silent substitution, which is why the names are prefixed and why a
+# collision now stops the run.
+out="$(run_step spec)"
+check "the factory's own skill is named"  "/skill:factory-spec" "$out"
+mkdir -p "$WORK/fake-global/factory-spec"
+: > "$WORK/fake-global/factory-spec/SKILL.md"
+out="$(PI_SKILLS_DIR="$WORK/fake-global" run_step spec)"
+check "a name collision stops the run"    "skill name collision" "$out"
+check "and it names both directories"     "fake-global" "$out"
+
 # -- a frontier provider must be refused (spec §08) ----------------------------
 jq '.roles.judge.provider = "anthropic" | .roles.judge.model = "claude-opus-5"' \
   "$PIPELINE_DIR/roles.json" > "$WORK/frontier-roles.json"

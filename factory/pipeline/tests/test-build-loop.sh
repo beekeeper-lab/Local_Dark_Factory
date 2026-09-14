@@ -71,7 +71,7 @@ mkdir -p "$(dirname "$sess")"
   [ -n "$thinking" ] && printf '{"type":"thinking_level_change","thinkingLevel":"%s"}\n' "$thinking"
 } > "$sess"
 
-# /skill:pipeline-build-task <run_dir> <task-id> <attempt-dir>
+# /skill:factory-build-task <run_dir> <task-id> <attempt-dir>
 adir="${prompt##* }"
 rest="${prompt% *}"
 task="${rest##* }"

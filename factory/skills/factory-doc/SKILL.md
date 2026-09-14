@@ -1,5 +1,5 @@
 ---
-name: pipeline-doc
+name: factory-doc
 description: |
   Write the implementation-detail document for a completed pipeline run: what
   was built, why, how the pieces fit, and what changed from the spec and why.

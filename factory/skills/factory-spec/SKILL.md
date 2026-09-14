@@ -1,9 +1,9 @@
 ---
-name: pipeline-spec
+name: factory-spec
 description: |
   Write the plan for one bean: a structured Markdown spec a newcomer can read,
   and a task list the controller will build from one task at a time. Use at the
-  specify step; invoked as /skill:pipeline-spec <bean-id> <run-dir>. You write
+  specify step; invoked as /skill:factory-spec <bean-id> <run-dir>. You write
   content, never HTML — the controller owns the rendering.
 ---
 

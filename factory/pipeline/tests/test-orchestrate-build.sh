@@ -42,13 +42,13 @@ mkdir -p "$(dirname "$sess")"
 printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
 
 case "$prompt" in
-  *pipeline-spec*)
-    # /skill:pipeline-spec <bean-id> <run_dir>
+  *factory-spec*)
+    # /skill:factory-spec <bean-id> <run_dir>
     run_dir="${prompt##* }"
     cp "$STUB_TASKS" "$run_dir/tasks.yaml"
     [ -n "${STUB_SPEC_MD:-}" ] && cp "$STUB_SPEC_MD" "$run_dir/spec.md"
     ;;
-  *pipeline-build-task*)
+  *factory-build-task*)
     adir="${prompt##* }"; rest="${prompt% *}"; task="${rest##* }"
     attempt="$(basename "$adir")"; attempt="${attempt#attempt-}"
     printf 'STUB-PI  task=%s attempt=%s\n' "$task" "$attempt"

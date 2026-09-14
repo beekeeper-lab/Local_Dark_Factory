@@ -269,7 +269,7 @@ re-runnable audit, and a bean set approved to run against.
 - [ ] `factory step audit --stage spec_audit` — judge verdict validates against `verdict.schema.json` (stage-conditional fields present); every AC claimed by a task
 - [ ] `factory step build` — task loop: worker session → sync-back → containment (task `write_paths`) → task `verify` in gate container → next; a forced failure retries with the real output; `max_attempts` exhaustion blocks with evidence
       *(the loop itself is built and tested against a stubbed worker — `build-loop.sh`,
-      `verify.sh`, `contain.py`, `pipeline-build-task`. What Phase 1 still has to prove
+      `verify.sh`, `contain.py`, `factory-build-task`. What Phase 1 still has to prove
       is the loop with the **real** developer model on the other end; "in the gate
       container" waits on the sandbox.)*
 - [ ] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
@@ -466,7 +466,7 @@ The only situation in which a frontier model interacts with line artifacts after
         global `~/.pi/agent/skills` is owned by that project — its `sync-skills.sh`
         treats its own copy as canonical, so editing the installed copies would break
         it silently on its next run. **`developer/build-task` added 2026-09-14**
-        (`factory/skills/pipeline-build-task`): one task, one session, no git, and an
+        (`factory/skills/factory-build-task`): one task, one session, no git, and an
         explicit account of what the controller does next, so the worker can predict
         the consequence of overreaching instead of discovering it.
 - [ ] Controller skeleton: state machine + leases + worktrees + idempotency + reconciliation + GitHub adapter (`gh`/REST, webhook)
@@ -503,7 +503,7 @@ not yet do that the spec requires:
 
 1. ~~**No task loop.**~~ **Built 2026-09-14.** `factory/pipeline/build-loop.sh` is the
    controller-driven loop of spec §06 step 5: tasks in dependency order, one worker
-   session per attempt (`pipeline-build-task`, the prompt pack that was missing),
+   session per attempt (`factory-build-task`, the prompt pack that was missing),
    containment against the task's `write_paths` **and** the bean's — rejected and the
    tree reset, never stripped — then the task's `verify` list run by the controller
    via `verify.sh`, the real failure output fed back as the next prompt, `max_attempts`

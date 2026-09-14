@@ -1,9 +1,9 @@
 ---
-name: pipeline-build-task
+name: factory-build-task
 description: |
   Do exactly one task from a bean's task list, in one session, inside the paths
   that task is allowed to write. Use when the build loop starts a worker session;
-  invoked as /skill:pipeline-build-task <run-dir> <task-id> <attempt-dir>. The
+  invoked as /skill:factory-build-task <run-dir> <task-id> <attempt-dir>. The
   controller — not you — decides whether the task is done.
 ---
 

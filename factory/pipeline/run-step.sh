@@ -25,13 +25,17 @@ run-step.sh — run one pipeline step as a fresh child pi process.
 usage: run-step.sh <run_dir> <step-name> [-- <extra args for the skill>]
 
 Step → child skill mapping (args the child receives):
-  spec            pipeline-spec        <bean-id> <run_dir>
-  implement       pipeline-implement   <run_dir>
-  build-task      pipeline-build-task  <run_dir> <task-id> <attempt-dir>
+  spec            factory-spec         <bean-id> <run_dir>
+  implement       factory-implement    <run_dir>
+  build-task      factory-build-task   <run_dir> <task-id> <attempt-dir>
                   (one task of the build loop; build-loop.sh passes the extras)
-  doc             pipeline-doc         <run_dir>
-  audit-<target>  pipeline-audit       <target> <run_dir>
-  pr              pipeline-pr          <run_dir>
+  doc             factory-doc          <run_dir>
+  audit-<target>  factory-audit        <target> <run_dir>
+  pr              factory-pr           <run_dir>
+
+The `factory-` prefix keeps these from colliding with the identically-named
+skills in the global ~/.pi/agent/skills directory, which belongs to another
+project. A collision is not an error anywhere — it is a silent substitution.
     (<target> ∈ spec impl doc package)
 
 Extra args after `--` are appended to the skill invocation — used for retries,
@@ -76,13 +80,20 @@ fi
 BEAN_ID="$(jq -r '.bean // empty' "$RUN_DIR/run.json")"
 [ -n "$BEAN_ID" ] || die "run.json has no bean id"
 
+# Skill names are prefixed `factory-` and that prefix is load-bearing. pi
+# discovers skills from ~/.pi/agent/skills as well as from every explicit
+# --skill path, and that global directory belongs to another project which also
+# has a `pipeline-spec`. On the first real run of this line, the developer model
+# followed THAT skill: it wrote the artifacts of a different pipeline's contract
+# and the controller refused them. Two skills with one name is a coin toss, and
+# the run record would have said nothing about which one won.
 case "$STEP" in
-  spec)      SKILL="pipeline-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ; TARGET="" ;;
-  implement) SKILL="pipeline-implement"; SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
-  build-task) SKILL="pipeline-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
-  doc)       SKILL="pipeline-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
-  pr)        SKILL="pipeline-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
-  audit-*)   SKILL="pipeline-audit"; TARGET="${STEP#audit-}"
+  spec)      SKILL="factory-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ; TARGET="" ;;
+  implement) SKILL="factory-implement"; SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
+  build-task) SKILL="factory-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
+  doc)       SKILL="factory-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
+  pr)        SKILL="factory-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
+  audit-*)   SKILL="factory-audit"; TARGET="${STEP#audit-}"
              case "$TARGET" in
                spec|impl|doc|package) ;;
                *) die "unknown audit target '$STEP' (expected audit-spec|audit-impl|audit-doc|audit-package)" ;;
@@ -133,6 +144,14 @@ PI_ARGS=( --model "$ROLE_PROVIDER/$ROLE_MODEL" )
 # so editing the installed copies would silently break it on its next run.
 FACTORY_SKILLS="${FACTORY_SKILLS:-$PIPELINE_DIR/../skills}"
 [ -d "$FACTORY_SKILLS" ] && PI_ARGS+=( --skill "$FACTORY_SKILLS" )
+
+# The prefix is the defence; this is the alarm. If a skill of the same name ever
+# appears in pi's global directory, the run must not quietly pick one.
+GLOBAL_SKILLS="${PI_SKILLS_DIR:-$HOME/.pi/agent/skills}"
+if [ -d "$GLOBAL_SKILLS/$SKILL" ]; then
+  die "skill name collision: '$SKILL' exists both in $FACTORY_SKILLS and in $GLOBAL_SKILLS.
+pi loads both and the winner is not recorded anywhere. Rename one of them before running."
+fi
 
 printf 'STEP   %s   role=%s model=%s ctx=%s thinking=%s\n' \
   "$STEP" "$ROLE" "$ROLE_MODEL" "${ROLE_CTX:--}" "${ROLE_THINKING:--}" >&2

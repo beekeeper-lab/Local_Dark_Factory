@@ -1,5 +1,5 @@
 ---
-name: pipeline-run
+name: factory-run
 description: |
   Drives a pipeline run end to end from the user's request: picks the
   BEAN id, optional --resume <run-dir>, and --stop-after <step>, invokes
