@@ -302,7 +302,16 @@ re-runnable audit, and a bean set approved to run against.
       from the diff, and renders `impl-detail.html`. 13 cases. The doc candidate commit is not
       written yet.
 - [ ] `factory step audit --stage pre_pr_audit` — `document_quality` + `artifacts` hashes present; `matches_diff` true
-- [ ] `factory step pr` — exact `candidate_sha` pushed; PR body links both HTML docs and all three verdicts
+- [~] `factory step pr` — **built as controller work with no model in it**
+      (`factory/pipeline/pr.sh`; the `factory-pr` skill is retired to a refusal). It pushes
+      only when an accepting verdict's `candidate_sha` **is** HEAD — a verdict is about one
+      commit, and if HEAD moved the audit never saw what would be pushed — with a clean tree,
+      a passing gate, no outstanding QUESTIONS.md, and never from main. The body leads with
+      the fact that no human wrote it, links both documents, tables every verdict with its
+      tier, lists what the audits saw and did not block on, and carries the provenance. Never
+      merges, never force-pushes, never passes `--auto`, and recognises an existing PR rather
+      than opening a second. 25 cases against a `gh` stub that records the verbs. Not yet run
+      against real GitHub.
 - [ ] A human reads both rendered documents and confirms they teach (risk, blast radius, code blocks, no assumed knowledge)
 - [ ] Allowed-path enforcement verified at task level and bean level (out-of-scope edit → rejected, not stripped)
 - [ ] Independent invariant ran *(the invariants exist and are proven to catch their own
