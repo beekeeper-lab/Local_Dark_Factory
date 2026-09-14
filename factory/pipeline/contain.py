@@ -121,17 +121,32 @@ def compile_patterns(patterns: list[str]) -> list[re.Pattern[str]]:
     return out
 
 
+def normalise(path: str) -> str:
+    """Strip a leading './' — as a PREFIX, not as a set of characters.
+
+    `str.lstrip("./")` removes any leading run of '.' or '/', which turns
+    `.gitignore` into `gitignore` and `.github/workflows/ci.yml` into
+    `github/workflows/ci.yml`. Every dotfile then fails to match its own pattern
+    and reads as a containment violation. Found on the first real run of the
+    line: the developer model correctly listed `.gitignore`, which the bean
+    explicitly allows, and the controller called it an escape.
+    """
+    path = path.strip()
+    while path.startswith("./"):
+        path = path[2:]
+    return path
+
+
 def matches(path: str, pattern: str) -> bool:
     """Does one path match one (possibly brace-containing) pattern?"""
-    path = path.strip().lstrip("./")
-    return any(r.match(path) for r in compile_patterns([pattern]))
+    return any(r.match(normalise(path)) for r in compile_patterns([pattern]))
 
 
 def violations(paths: list[str], patterns: list[str]) -> list[str]:
     regexes = compile_patterns(patterns)
     bad = []
     for path in paths:
-        path = path.strip().lstrip("./")
+        path = normalise(path)
         if not path:
             continue
         if not any(r.match(path) for r in regexes):

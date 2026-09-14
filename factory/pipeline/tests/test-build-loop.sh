@@ -454,6 +454,29 @@ else
   printf '  SKIP  podman or the gate image is unavailable; sandbox mode not exercised\n'
 fi
 
+printf '\n== containment matcher: dotfiles are paths, not prefixes to strip ==\n\n'
+# Found on the first real run. `lstrip("./")` strips CHARACTERS, so `.gitignore`
+# became `gitignore` and failed to match its own pattern — the bean explicitly
+# allowed it and the controller called the model's correct plan an escape.
+viol="$(printf '.gitignore\n.github/workflows/ci.yml\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '[".gitignore",".github/**"]' || true)"
+if [ -z "$viol" ]; then
+  printf '  ok    a dotfile matches its own pattern\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  a dotfile was mangled into a violation: %s\n' "$viol"; FAIL=$((FAIL+1))
+fi
+viol="$(printf './src/a.py\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '["src/**"]' || true)"
+if [ -z "$viol" ]; then
+  printf '  ok    a leading ./ is still stripped\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  ./src/a.py should match src/**\n'; FAIL=$((FAIL+1))
+fi
+viol="$(printf '.secret\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '["src/**"]' || true)"
+if [ -n "$viol" ]; then
+  printf '  ok    and a dotfile outside the paths is still a violation\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  .secret should not match src/**\n'; FAIL=$((FAIL+1))
+fi
+
 printf '\n== containment matcher: * does not cross a slash ==\n\n'
 viol="$(printf 'src/a.py\nsrc/deep/evil.py\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '["src/*.py"]' || true)"
 check "nested path is a violation"     "src/deep/evil.py" "$viol"
