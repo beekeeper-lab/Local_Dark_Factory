@@ -63,6 +63,13 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
   measures, and it feeds `model_load_timeout` and the `swap_overhead_pct` baseline.
   Raising the ceiling later is one command if the swap cost proves brutal and the gate
   containers prove lighter than assumed.
+
+  > **Superseded by measurement (post-reboot, see the checklist below).** The prediction that
+  > 96 GiB "still lets Phase 0 attempt co-residency" held, and the attempt succeeded — but only
+  > for the Q4 developer. The binding limit turned out not to be the GTT ceiling at all: ollama
+  > withholds 8-15 GiB beneath it, putting the effective co-residency budget between 81.4 and
+  > 88.4 GiB. Raising the ceiling further would therefore *not* have bought the Q8 pair, so the
+  > "one command" escape hatch above is not the lever it appears to be.
 - Installed tags differ from spec v5.0 as written: the developer is
   `qwen3.8:27b-mtp-q8_0` (Q8_0, 29 GB, `qwen35`, native ctx 262144); `qwen3.8:27b`
   (Q4_K_M, 17 GB) is the comparison arm. Spec, plan and README corrected.
@@ -77,41 +84,48 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
 - [x] Re-record split after reboot — verified 2026-09-14 post-reboot: `ttm.pages_limit=25165824`
       on the kernel cmdline, `mem_info_gtt_total` = 103079215104 (**96 GiB**), RAM 125 GiB,
       dedicated VRAM 512 MiB. Recorded in `bench/results/provenance-post-reboot-*.json`
-- [~] Confirm the serial conclusion empirically — **measured 2026-09-14, result is ambiguous
-      and the ambiguity is the finding.** `bench/phase0.sh` full sweep at 16384/32768/49152:
-      the co-residency probe never held both models, so the harness derived
-      `regime_decision: serial`. But the scheduler log says that conclusion is not a memory
-      result. Ollama logged `"predicted to exceed available memory, evicting"` **nine times,
-      and in eight of them the predicted size was below the available figure printed on the
-      same line** (`bench/results/phase0-eviction-log-20260914.txt`):
+- [x] Confirm the serial conclusion empirically — **done, and the first answer was wrong twice
+      over.** The sweep's `regime_decision: serial` rested on nine evictions logged as
+      `"predicted to exceed available memory"`, eight of which had predicted *below* the
+      available figure on the same line. Two hypotheses were tested and both failed before the
+      real constraint appeared (`bench/results/coresidency-probe-20260914.json`):
 
-      | ctx | model | predicted | available | genuinely short? |
-      |---|---|---|---|---|
-      | 16384 | developer | 30.4 GiB | 36.0 GiB | no, 5.6 spare |
-      | 16384 | judge     | 61.7 GiB | 68.9 GiB | no, 7.2 spare |
-      | 32768 | developer | 33.8 GiB | 36.0 GiB | no, 2.2 spare |
-      | 32768 | judge     | 62.5 GiB | 68.9 GiB | no, 6.4 spare |
-      | 49152 | developer | 37.2 GiB | 35.8 GiB | **yes, short 1.4 GiB** |
-      | 49152 | judge     | 63.3 GiB | 68.6 GiB | no, 5.3 spare |
+      1. **Not `MAX_LOADED_MODELS`.** Set to `2` and restarted: the Q8 developer was still
+         evicted for the judge at 61.7 GiB predicted vs 68.9 available. Two small models
+         (`qwen3-vl` + `gpt-oss:20b`) co-resided fine under the same setting, so multi-runner
+         works and the setting is effective.
+      2. **Not context, and not the judge.** At 8192 the refusal persisted (61.3 vs 69.0), so
+         KV size is not the lever; and the judge co-resides happily with `gpt-oss:20b` at
+         72.9 GiB, so it is not a per-model quirk.
 
-      `OLLAMA_MAX_LOADED_MODELS=0` (auto) and the device is a unified-memory iGPU
-      (ROCm `8060S Graphics`, `OLLAMA_VULKAN=true`), where ollama's auto policy collapses to a
-      single runner regardless of headroom. So the raised 96 GiB ceiling did its job — the
-      models fit — and a *scheduler default* is now standing in for the measurement, which is
-      the same class of error the reboot was meant to remove, one layer up.
-      **Open:** re-probe with `OLLAMA_MAX_LOADED_MODELS=2` at 16384 before recording the regime.
-- [ ] Re-probe co-residency with `OLLAMA_MAX_LOADED_MODELS=2` at 16384 (needs sudo + restart);
-      arithmetic says 30.4 + 61.7 = 92.1 GiB against a 96 GiB ceiling, so it should hold with
-      ~3.9 GiB spare. If it does, the regime question becomes a headroom judgement (§08 gate
-      containers run while a model is resident) rather than a capacity fact.
-- [ ] Configure `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_MAX_LOADED_MODELS=?`, `OLLAMA_NUM_PARALLEL=1`
-      via `systemctl edit ollama.service`. **Value deliberately left open pending the re-probe
-      above.** The earlier rationale for `1` — "a ceiling that cannot hold both" — is now
-      contradicted by measurement: at 16384 the two models are predicted at 30.4 + 61.7 =
-      92.1 GiB under a 96 GiB ceiling. Whether `1` is still right becomes a headroom argument
-      (~3.9 GiB spare is too thin to also run §08 gate containers), not a capacity one, and it
-      must be recorded as such. `KEEP_ALIVE=-1` is already set on the unit; `NUM_PARALLEL=1`
-      is already the running value, so only `MAX_LOADED_MODELS` actually needs writing.
+      The constraint is **total footprint**, and ollama's own `available` figure overstates
+      what it will grant. Bracketed by measurement:
+
+      | pair | GTT used | co-resident? |
+      |---|---|---|
+      | judge + `gpt-oss:20b` | 72.9 GiB | yes |
+      | Q8 developer + `qwen3-coder-next` | 77.4 GiB | yes |
+      | judge + **Q4** developer @16384 | 79.0 GiB | yes |
+      | judge + **Q4** developer @49152 | 81.4 GiB | yes |
+      | judge + **Q8** developer | ~88.4 GiB predicted | **no** |
+
+      **Effective co-residency budget is between 81.4 and 88.4 GiB — ollama withholds roughly
+      8-15 GiB beneath the 96 GiB ceiling.** So the ceiling raise was not wasted (62 GiB could
+      not have held any of these pairs), but 96 GiB does not buy the Q8 pair.
+- [x] **Decision recorded: regime = `serial`** — and now for a reason that survives scrutiny.
+      It is not a capacity claim about the ceiling, which the Q4 arm disproves: the developer
+      and judge *can* co-reside, at 79-81 GiB, both 100% GPU, developer up to 49152 ctx, if the
+      developer drops from Q8_0 to Q4_K_M. So the real choice is **developer quantisation vs.
+      swap cost**, and swap is cheap — 8.0 s judge->developer, 13.2 s developer->judge, against
+      per-stage runtimes in minutes. Paying ~10 s per role transition to keep Q8_0 weights is
+      the better trade. **Revisit if `swap_overhead_pct` telemetry exceeds ~15%**, at which
+      point the Q4 co-resident arm becomes a live alternative rather than a fallback.
+- [ ] Set the final ollama unit config: `OLLAMA_KEEP_ALIVE=-1` (already on the unit),
+      `OLLAMA_NUM_PARALLEL=1` (already the running value), and **`OLLAMA_MAX_LOADED_MODELS=1`**.
+      The value `1` is now correct for a *measured* reason rather than the original one: the Q8
+      pair genuinely cannot co-reside, so permitting 2 only invites load attempts that end in
+      eviction and a wasted 8-13 s. **Remove the temporary probe drop-in first:**
+      `/etc/systemd/system/ollama.service.d/zz-phase0-coresidency-test.conf`.
 - [x] Benchmark context 16384 / 32768 / 49152, each alone then both, with `ollama ps` residency
       + GPU/CPU split — done via per-request `options.num_ctx` (no unit edit, no restart). Both
       models reported **100% GPU, 0% CPU at every context**; no spill to CPU at any point.
@@ -132,7 +146,6 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
 - [x] Record digest / quant / Ollama version / GPU split / context beside every figure —
       every row in the results JSON carries provenance: developer `8a1582877303` [Q8_0],
       judge `a951a23b46a1` [MXFP4], ollama 0.32.13, kernel 7.2.5-100.fc43.x86_64, GTT 96 GiB.
-- [ ] **Decision recorded:** regime = `coresident` (at which context) or `serial`
 
 **Exit (machine-verified):**
 ```yaml
