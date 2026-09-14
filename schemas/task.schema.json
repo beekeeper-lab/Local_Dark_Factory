@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/task.schema.json",
+  "title": "TaskList",
+  "description": "The developer model's decomposition of one bean, produced in the specifying stage and audited with the spec. Lives at factory/specs/<bean-id>/tasks.yaml. Each task is the unit of the build loop: start -> complete -> verify -> next. The controller drives the loop; the model never marks its own task verified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","bean_id","tasks"],
+  "properties": {
+    "schema_version": { "const": "tasks/1.0.0" },
+    "bean_id": { "type": "string", "pattern": "^bean-[0-9]+$" },
+    "tasks": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id","title","intent","write_paths","verify"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^task-[0-9]+$" },
+          "title": { "type": "string", "minLength": 1 },
+          "intent": { "type": "string", "minLength": 1,
+            "description": "One outcome, small enough to finish and verify in a single worker session." },
+          "write_paths": { "type": "array", "minItems": 1, "items": { "type": "string" },
+            "description": "Must be a subset of the bean's effective write paths; the controller rejects the task list otherwise." },
+          "depends_on": { "type": "array", "items": { "type": "string", "pattern": "^task-[0-9]+$" } },
+          "satisfies": { "type": "array", "items": { "type": "string", "pattern": "^ac[0-9]+$" },
+            "description": "Acceptance criteria this task contributes to. Every AC must be claimed by at least one task." },
+          "verify": {
+            "type": "array", "minItems": 1,
+            "items": { "$ref": "bean.schema.json#/$defs/verify" },
+            "description": "Run by the controller after the worker declares the task complete. All must pass before the next task starts."
+          },
+          "max_attempts": { "type": "integer", "minimum": 1, "default": 3 },
+          "teaching_note": { "type": "string",
+            "description": "Why this step exists, for the implementation-detail document. Written for a reader who does not know the stack." }
+        }
+      }
+    }
+  }
+}

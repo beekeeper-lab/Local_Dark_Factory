@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Dark Factory — build specification v4 (Forge)</title>
+<title>The Dark Factory — build specification v5 (Forge)</title>
 <style>
   :root{
     --floor:#12161c; --panel:#1b212a; --panel2:#232c37; --inset:#0e1319;
     --line:#2c3644; --line-soft:#232c37;
     --ink:#e9eef4; --ink-dim:#9aa7b6; --ink-faint:#67727f;
-    --worker:#f0a92b; --judge:#49c5cb;
+    --worker:#f0a92b; --judge:#49c5cb; --outside:#8fb4ff;
     --ok:#5ec98a; --warn:#e46a43; --blocked:#b8607e; --human:#c9a2e6;
     --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -27,6 +27,7 @@
     padding:.12em .4em;border-radius:4px;border:1px solid var(--line-soft)}
   pre{font-family:var(--mono);font-size:12.6px;line-height:1.55;background:var(--inset);
     color:#d6e2ee;border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow:auto;margin:14px 0}
+  pre code{background:none;border:0;padding:0;font-size:inherit}
   pre .c{color:#6f7d8c} pre .k{color:var(--judge)} pre .w{color:var(--worker)} pre .s{color:#9ecb8a} pre .r{color:var(--warn)}
   h1,h2,h3{line-height:1.15;letter-spacing:-.01em;font-weight:700}
   h2{font-size:26px;margin:0 0 4px}
@@ -51,7 +52,6 @@
   .banner b{color:var(--warn)}
   .banner p{margin:4px 0;font-size:14px;color:var(--ink-dim)}
 
-  /* restored figure styles (regression fix) */
   figure.machine{margin:28px 0 0;padding:22px;background:linear-gradient(180deg,var(--panel),#171d25);
     border:1px solid var(--line);border-radius:14px}
   figure.machine svg{width:100%;height:auto;display:block}
@@ -79,6 +79,7 @@
   .chip.j{color:var(--judge)} .chip.j .dot{background:var(--judge)}
   .chip.c{color:var(--ink-dim)} .chip.c .dot{background:var(--ink-dim)}
   .chip.h{color:var(--human)} .chip.h .dot{background:var(--human)}
+  .chip.o{color:var(--outside)} .chip.o .dot{background:var(--outside)}
 
   table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.2px}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
@@ -87,6 +88,7 @@
   tr:last-child td{border-bottom:0}
   td .t{font-family:var(--mono);font-size:12px;font-weight:700;padding:2px 7px;border-radius:5px;color:var(--floor)}
   .t0{background:var(--ok)} .t1{background:var(--worker)} .t2{background:var(--warn)} .t3{background:var(--blocked)}
+  .tbl{overflow-x:auto}
 
   ol.loop{list-style:none;counter-reset:s;margin:22px 0;padding:0}
   ol.loop>li{counter-increment:s;position:relative;padding:14px 0 14px 56px;border-bottom:1px solid var(--line-soft)}
@@ -97,6 +99,7 @@
   ol.loop>li.w::before{background:var(--worker)}
   ol.loop>li.ctl::before{background:var(--ink-dim)}
   ol.loop>li.h::before{background:var(--human)}
+  ol.loop>li.o::before{background:var(--outside)}
   ol.loop b{color:var(--ink)}
   ol.loop .who{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-left:8px}
 
@@ -113,6 +116,7 @@
   .callout.j{border-left-color:var(--judge)}
   .callout.warn{border-left-color:var(--warn)}
   .callout.h{border-left-color:var(--human)}
+  .callout.o{border-left-color:var(--outside)}
   .callout h4{margin:0 0 4px;font-size:15px}
   .callout p{margin:4px 0;font-size:14.5px;color:var(--ink-dim)}
 
@@ -158,69 +162,106 @@
 
 <header class="hero">
   <div class="wrap">
-    <span class="tag">FORGE build line <b>·</b> Fedora Server, headless, SSH-only</span>
+    <span class="tag">FORGE build line <b>·</b> Framework Desktop · Fedora Server · headless, SSH-only</span>
     <h1>The Dark Factory
-      <span class="sub">A lights-out software line: the judge reviews an immutable candidate commit, deterministic policy classifies it, and only proven low-risk tiers ever ship without a human.</span>
+      <span class="sub">A lights-out software line on local models: humans and AI refine requirements into beans; the line writes the spec, audits it, builds it task by task, audits the build, documents it, audits the documents, and opens the PR. Frontier models build the line — they never run on it.</span>
     </h1>
-    <p class="lede">You define intent and judge output. Between those ends the line decomposes, codes, checks, and reviews on its own. This version closes the review-binding gap (the judge now reviews a real commit SHA), ships the contracts as machine-readable artifacts (JSON Schemas + a checkable implementation plan), restores the full sandbox contract, and specifies the serial model lifecycle that Q8 residency makes likely.</p>
-    <div class="meta">v4.0 · 2026-09-13 · owner: Forge factory · status: <b>candidate for baseline approval</b> (awaiting human owner sign-off) · companions: <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §12</div>
+    <p class="lede">You spend your time at the front — turning meeting transcripts and conversations into approved, ordered beans — and at the back, reading two teaching documents per change: the <b>specification</b> (the plan) and the <b>implementation detail</b> (what was done). Everything between is the line: a Qwen developer driven through Pi, a gpt-oss judge from a different model family, and a deterministic controller that owns every decision with consequences.</p>
+    <div class="meta">v5.0 · 2026-09-14 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · companions: <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
 
     <div class="banner">
-      <p><b>Three standing rules.</b></p>
-      <p>1. <b>No auto-merge to start.</b> The line opens PRs; a human merges. Auto-merge unlocks per risk tier only on numeric evidence (§06, §10).</p>
-      <p>2. <b>A model never sets its own authority.</b> The controller computes the binding risk tier and effective write-paths from deterministic policy on the actual diff; the judge may raise a tier, never lower it (§06).</p>
-      <p>3. <b>The judge reviews an immutable candidate commit</b> — not an uncommitted diff — and that exact SHA is what gets pushed and merged (§05, §07).</p>
+      <p><b>Four standing rules.</b></p>
+      <p>1. <b>A model never sets its own authority.</b> The controller computes the binding risk tier and effective write-paths from deterministic policy on the actual diff; the judge may raise a tier, never lower it (§08).</p>
+      <p>2. <b>The judge reviews immutable candidate commits</b> — at three stages (spec, implementation, pre-PR) — and the exact reviewed SHA is what gets pushed and merged (§06, §09).</p>
+      <p>3. <b>Merging is a per-repo policy, not a global rule.</b> Solo repos may opt into auto-merge and deploy-to-test with a recorded sign-off; shared repos wait for a human reviewer; Tier 3 is never autonomous anywhere (§08).</p>
+      <p>4. <b>Frontier models are outside the line.</b> Opus builds, tunes, and later monitors the orchestration through PRs to this repository. No frontier provider exists in the runtime configuration (§01, §12).</p>
     </div>
 
     <figure class="machine">
-      <svg viewBox="0 0 920 356" role="img" aria-label="Schematic of the autonomous build loop with candidate-commit review and a human merge gate">
+      <svg viewBox="0 0 920 400" role="img" aria-label="Schematic: intake turns transcripts into approved beans; the line alternates developer and judge stages through spec, build, documentation and three audits; a PR is merged per repo policy; an outside builder tunes the line but is not part of it">
         <defs>
           <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6f7d8c"/></marker>
           <marker id="arj" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#49c5cb"/></marker>
           <marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0a92b"/></marker>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e46a43"/></marker>
         </defs>
-        <g font-family="ui-monospace,Menlo,monospace" font-size="12">
-          <rect x="16" y="26" width="120" height="46" rx="9" fill="#0e1319" stroke="#2c3644"/>
-          <text x="76" y="46" fill="#e9eef4" text-anchor="middle" font-size="12.5">Intent</text>
-          <text x="76" y="62" fill="#67727f" text-anchor="middle">human · once</text>
-          <rect x="184" y="18" width="150" height="62" rx="11" fill="#14201f" stroke="#49c5cb"/>
-          <circle cx="205" cy="36" r="5" fill="#49c5cb"/><text x="220" y="40" fill="#49c5cb" font-size="12.5">Architect · Judge</text>
-          <text x="199" y="60" fill="#9aa7b6">gpt-oss-120B</text>
-          <rect x="392" y="26" width="120" height="46" rx="9" fill="#1b212a" stroke="#2c3644"/>
-          <text x="452" y="45" fill="#e9eef4" text-anchor="middle">Bean queue</text>
-          <text x="452" y="61" fill="#67727f" text-anchor="middle">state machine</text>
-          <rect x="570" y="18" width="150" height="62" rx="11" fill="#211b12" stroke="#f0a92b"/>
-          <circle cx="591" cy="36" r="5" fill="#f0a92b"/><text x="606" y="40" fill="#f0a92b" font-size="12.5">Worker</text>
-          <text x="585" y="60" fill="#9aa7b6">Qwen3.8-27B · Pi</text>
-          <text x="645" y="104" fill="#67727f" text-anchor="middle" font-size="10.5">sandbox · no git · no creds</text>
-          <rect x="596" y="150" width="128" height="44" rx="9" fill="#0e1319" stroke="#2c3644"/>
-          <text x="660" y="167" fill="#e9eef4" text-anchor="middle">Gate + commit</text>
-          <text x="660" y="182" fill="#67727f" text-anchor="middle">candidate_sha</text>
-          <rect x="392" y="150" width="150" height="44" rx="9" fill="#14201f" stroke="#49c5cb"/>
-          <text x="467" y="167" fill="#49c5cb" text-anchor="middle">Judge review</text>
-          <text x="467" y="182" fill="#9aa7b6" text-anchor="middle">base..candidate</text>
-          <rect x="196" y="150" width="126" height="44" rx="9" fill="#1c1720" stroke="#c9a2e6"/>
-          <text x="259" y="167" fill="#c9a2e6" text-anchor="middle">Human gate</text>
-          <text x="259" y="182" fill="#9aa7b6" text-anchor="middle">merge (initially)</text>
-          <rect x="16" y="266" width="888" height="54" rx="10" fill="#161c23" stroke="#2c3644" stroke-dasharray="3 4"/>
-          <circle class="pulse" cx="40" cy="293" r="5" fill="#49c5cb"/>
-          <text x="58" y="289" fill="#e9eef4">Telemetry + provenance</text>
-          <text x="58" y="305" fill="#67727f">candidate_sha · diff_sha256 · gate_run_id · verdict · model digest · false-approval taxonomy → SQLite → Grafana</text>
+        <g font-family="ui-monospace,Menlo,monospace" font-size="11.5">
+          <!-- row 1: intake -->
+          <text x="16" y="14" fill="#67727f" font-size="10.5">INTAKE · human + AI, interactive</text>
+          <rect x="16" y="22" width="150" height="48" rx="9" fill="#0e1319" stroke="#2c3644"/>
+          <text x="91" y="42" fill="#e9eef4" text-anchor="middle">Transcripts · notes</text>
+          <text x="91" y="58" fill="#67727f" text-anchor="middle">issues · conversation</text>
+          <rect x="200" y="22" width="190" height="48" rx="9" fill="#1c1720" stroke="#c9a2e6"/>
+          <text x="295" y="42" fill="#c9a2e6" text-anchor="middle">Refine → draft beans</text>
+          <text x="295" y="58" fill="#9aa7b6" text-anchor="middle">review · split · order · approve</text>
+          <rect x="424" y="22" width="190" height="48" rx="9" fill="#0e1319" stroke="#2c3644"/>
+          <text x="519" y="42" fill="#e9eef4" text-anchor="middle">Approved beans</text>
+          <text x="519" y="58" fill="#67727f" text-anchor="middle">factory/beans/*.yaml · PR</text>
+          <rect x="648" y="22" width="256" height="48" rx="9" fill="#1b212a" stroke="#2c3644"/>
+          <text x="776" y="42" fill="#e9eef4" text-anchor="middle">factory go → queue</text>
+          <text x="776" y="58" fill="#67727f" text-anchor="middle">lease · one git worktree per bean</text>
+
+          <!-- row 2: the line, part 1 -->
+          <text x="16" y="108" fill="#67727f" font-size="10.5">THE LINE · lights-out, controller-driven</text>
+          <rect x="16" y="116" width="200" height="56" rx="11" fill="#211b12" stroke="#f0a92b"/>
+          <circle cx="36" cy="134" r="5" fill="#f0a92b"/><text x="48" y="138" fill="#f0a92b">01 Specify</text>
+          <text x="30" y="158" fill="#9aa7b6">spec.md + tasks.yaml → spec.html</text>
+          <rect x="246" y="116" width="200" height="56" rx="11" fill="#14201f" stroke="#49c5cb"/>
+          <circle cx="266" cy="134" r="5" fill="#49c5cb"/><text x="278" y="138" fill="#49c5cb">02 Spec audit</text>
+          <text x="260" y="158" fill="#9aa7b6">verdict · stage=spec_audit</text>
+          <rect x="476" y="116" width="200" height="56" rx="11" fill="#211b12" stroke="#f0a92b"/>
+          <circle cx="496" cy="134" r="5" fill="#f0a92b"/><text x="508" y="138" fill="#f0a92b">03 Build · task loop</text>
+          <text x="490" y="158" fill="#9aa7b6">do → verify → next · self-heal</text>
+          <rect x="706" y="116" width="198" height="56" rx="11" fill="#0e1319" stroke="#2c3644"/>
+          <text x="805" y="138" fill="#e9eef4" text-anchor="middle">04 Contain · gate · commit</text>
+          <text x="805" y="158" fill="#67727f" text-anchor="middle">tier · candidate_sha</text>
+
+          <!-- row 3: the line, part 2 -->
+          <rect x="16" y="212" width="200" height="56" rx="11" fill="#14201f" stroke="#49c5cb"/>
+          <circle cx="36" cy="230" r="5" fill="#49c5cb"/><text x="48" y="234" fill="#49c5cb">05 Impl audit</text>
+          <text x="30" y="254" fill="#9aa7b6">base..candidate + gates</text>
+          <rect x="246" y="212" width="200" height="56" rx="11" fill="#211b12" stroke="#f0a92b"/>
+          <circle cx="266" cy="230" r="5" fill="#f0a92b"/><text x="278" y="234" fill="#f0a92b">06 Document</text>
+          <text x="260" y="254" fill="#9aa7b6">impl-detail.md → .html</text>
+          <rect x="476" y="212" width="200" height="56" rx="11" fill="#14201f" stroke="#49c5cb"/>
+          <circle cx="496" cy="230" r="5" fill="#49c5cb"/><text x="508" y="234" fill="#49c5cb">07 Pre-PR audit</text>
+          <text x="490" y="254" fill="#9aa7b6">doc matches diff · PR text</text>
+          <rect x="706" y="212" width="198" height="56" rx="11" fill="#1c1720" stroke="#c9a2e6"/>
+          <text x="805" y="234" fill="#c9a2e6" text-anchor="middle">PR → merge_mode → deploy</text>
+          <text x="805" y="254" fill="#9aa7b6" text-anchor="middle">human · auto · auto_when_unlocked</text>
+
+          <!-- row 4: telemetry + outside builder -->
+          <rect x="16" y="318" width="600" height="60" rx="10" fill="#161c23" stroke="#2c3644" stroke-dasharray="3 4"/>
+          <circle class="pulse" cx="40" cy="347" r="5" fill="#49c5cb"/>
+          <text x="58" y="343" fill="#e9eef4">Telemetry + provenance</text>
+          <text x="58" y="360" fill="#67727f" font-size="10.5">candidate_sha · verdicts × 3 · doc hashes · task attempts · swap seconds · rejection taxonomy → SQLite</text>
+          <rect x="640" y="318" width="264" height="60" rx="10" fill="#151a26" stroke="#8fb4ff" stroke-dasharray="5 4"/>
+          <circle cx="660" cy="347" r="5" fill="#8fb4ff"/>
+          <text x="672" y="343" fill="#8fb4ff">Outside builder · Opus</text>
+          <text x="656" y="360" fill="#9aa7b6" font-size="10.5">builds · tunes · monitors — via PRs, never in-loop</text>
         </g>
         <g fill="none" stroke="#6f7d8c" stroke-width="1.6">
-          <path d="M136,49 L182,49" marker-end="url(#ar)"/>
-          <path d="M334,49 L390,49" marker-end="url(#arj)" stroke="#49c5cb"/>
-          <path d="M512,49 L568,49" marker-end="url(#ar)"/>
-          <path d="M645,80 L660,148" marker-end="url(#arw)" stroke="#f0a92b"/>
-          <path d="M596,172 L544,172" marker-end="url(#ar)"/>
-          <path d="M392,172 L324,172" marker-end="url(#arj)" stroke="#49c5cb"/>
+          <path d="M166,46 L198,46" marker-end="url(#ar)"/>
+          <path d="M390,46 L422,46" marker-end="url(#ar)"/>
+          <path d="M614,46 L646,46" marker-end="url(#ar)"/>
+          <path d="M776,70 C776,96 116,90 116,114" marker-end="url(#ar)"/>
+          <path d="M216,144 L244,144" marker-end="url(#arj)" stroke="#49c5cb"/>
+          <path d="M446,144 L474,144" marker-end="url(#arw)" stroke="#f0a92b"/>
+          <path d="M676,144 L704,144" marker-end="url(#ar)"/>
+          <path d="M805,172 C805,198 116,186 116,210" marker-end="url(#arj)" stroke="#49c5cb"/>
+          <path d="M216,240 L244,240" marker-end="url(#arw)" stroke="#f0a92b"/>
+          <path d="M446,240 L474,240" marker-end="url(#arj)" stroke="#49c5cb"/>
+          <path d="M676,240 L704,240" marker-end="url(#ar)"/>
         </g>
-        <path d="M467,150 C467,114 520,106 560,80" fill="none" stroke="#e46a43" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#ar)"/>
-        <text x="500" y="120" fill="#e46a43" font-family="ui-monospace,Menlo,monospace" font-size="11">reject / revise ↺</text>
-        <path d="M259,150 C259,114 340,106 392,58" fill="none" stroke="#5ec98a" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#ar)"/>
-        <text x="300" y="114" fill="#5ec98a" font-family="ui-monospace,Menlo,monospace" font-size="11">next bean</text>
+        <path d="M300,116 C300,98 160,98 140,116" fill="none" stroke="#e46a43" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+        <text x="180" y="100" fill="#e46a43" font-family="ui-monospace,Menlo,monospace" font-size="10.5">revise ↺</text>
+        <path d="M120,212 C120,194 520,194 560,172" fill="none" stroke="#e46a43" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+        <text x="300" y="196" fill="#e46a43" font-family="ui-monospace,Menlo,monospace" font-size="10.5">revise → targeted tasks → new candidate ↺</text>
+        <path d="M600,212 C600,198 400,196 360,212" fill="none" stroke="#e46a43" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+        <path d="M772,318 C772,300 772,290 772,270" fill="none" stroke="#8fb4ff" stroke-width="1.2" stroke-dasharray="3 4"/>
+        <text x="782" y="296" fill="#8fb4ff" font-family="ui-monospace,Menlo,monospace" font-size="10">reads telemetry</text>
       </svg>
-      <figcaption>The worker (no git, no creds) proposes edits; the controller gates then creates an immutable <code>candidate_sha</code>; the judge reviews <code>base..candidate</code>; that exact commit is what ships. Human gate lifts per tier only on evidence.</figcaption>
+      <figcaption>Orange stages are the developer (Qwen via Pi, sandboxed, no git); teal stages are the judge (gpt-oss-120B, different family). The controller runs everything grey and stamps every hand-off with a commit SHA. The outside builder reads telemetry and improves the line through reviewed PRs — it is not a runtime participant.</figcaption>
     </figure>
   </div>
 </header>
@@ -229,31 +270,41 @@
   <div class="wrap">
     <p class="kicker">CONTENTS</p><hr class="lead-line">
     <ol class="toc">
-      <li><span class="n">01</span><a href="#principle">The principle, and who holds authority</a></li>
-      <li><span class="n">02</span><a href="#hardware">Hardware truth &amp; Phase-0 measurement</a></li>
-      <li><span class="n">03</span><a href="#stack">The tool stack &amp; gate manifest</a></li>
-      <li><span class="n">04</span><a href="#beans">Beans &amp; independent validation</a></li>
-      <li><span class="n">05</span><a href="#loop">The loop — candidate-commit review</a></li>
-      <li><span class="n">06</span><a href="#security">Security: tiers, boundary, sandbox, thresholds</a></li>
-      <li><span class="n">07</span><a href="#mechanics">State machine, CI, model lifecycle, stop</a></li>
-      <li><span class="n">08</span><a href="#verdict">The verdict schema (real JSON Schema)</a></li>
-      <li><span class="n">09</span><a href="#telemetry">Telemetry &amp; judgement quality</a></li>
-      <li><span class="n">10</span><a href="#start">Rollout &amp; the implementation plan</a></li>
-      <li><span class="n">11</span><a href="#appendix">Config appendix</a></li>
-      <li><span class="n">12</span><a href="#refs">Changelog &amp; references</a></li>
+      <li><span class="n">01</span><a href="#principle">Roles &amp; who holds authority</a></li>
+      <li><span class="n">02</span><a href="#hardware">Forge hardware truth &amp; Phase-0 measurement</a></li>
+      <li><span class="n">03</span><a href="#stack">The tool stack</a></li>
+      <li><span class="n">04</span><a href="#intake">Intake — transcripts to approved beans</a></li>
+      <li><span class="n">05</span><a href="#beans">Beans, tasks &amp; agentic acceptance criteria</a></li>
+      <li><span class="n">06</span><a href="#loop">The line — seven stages, three audits</a></li>
+      <li><span class="n">07</span><a href="#docs">The two documents — spec &amp; implementation detail</a></li>
+      <li><span class="n">08</span><a href="#security">Security: tiers, boundary, sandbox, merge modes</a></li>
+      <li><span class="n">09</span><a href="#mechanics">Mechanics: state machine, worktrees, model lifecycle, stop</a></li>
+      <li><span class="n">10</span><a href="#schemas">The seven contracts (JSON Schemas)</a></li>
+      <li><span class="n">11</span><a href="#telemetry">Telemetry &amp; judgement quality</a></li>
+      <li><span class="n">12</span><a href="#start">Rollout — phases &amp; the outside builder's arc</a></li>
+      <li><span class="n">13</span><a href="#appendix">Config appendix</a></li>
+      <li><span class="n">14</span><a href="#refs">Changelog, open questions &amp; references</a></li>
     </ol>
   </div>
 </section>
 
 <section id="principle">
   <div class="wrap">
-    <p class="kicker">01 — AUTHORITY</p><hr class="lead-line">
-    <h2>Models propose; policy classifies; the controller decides — over a real commit</h2>
-    <p>The worker can edit anything in its worktree and the judge can misread a task, so neither may hold authority over its own blast radius, and neither may be reviewed in a form that can still change afterward. The judge is not the sole source of the risk tier, the effective write-paths, or the acceptance fixtures — and it reviews an <b>immutable candidate commit</b>, whose SHA is recorded in the verdict and is exactly what gets pushed and merged.</p>
+    <p class="kicker">01 — ROLES &amp; AUTHORITY</p><hr class="lead-line">
+    <h2>Models propose; policy classifies; the controller decides — over real commits</h2>
+    <p>Five roles touch a change. Two are models on Forge, one is deterministic code, one is you, and one is a frontier model that works <em>on</em> the line rather than <em>in</em> it. The developer can edit anything in its tree and the judge can misread a task, so neither holds authority over its own blast radius, and neither is ever reviewed in a form that can still change afterward.</p>
     <div class="grid3">
-      <div class="panel"><span class="chip j"><span class="dot"></span>judge · architect</span><p>Proposes beans, a suggested tier, and a suggested human-review flag; reviews <code>base..candidate</code>. All advisory — the controller can only be raised by them, never lowered.</p></div>
-      <div class="panel"><span class="chip w"><span class="dot"></span>worker</span><p>Qwen3.8-27B via Pi in a locked sandbox with <b>no git binary and no credentials</b>. Proposes edits only inside allowed paths.</p></div>
-      <div class="panel"><span class="chip c"><span class="dot"></span>controller</span><p>Deterministic Python. Computes the binding tier and effective paths, gates, creates the candidate commit, owns all git and every merge decision, stamps provenance.</p></div>
+      <div class="panel"><span class="chip w"><span class="dot"></span>developer</span><p><b>Qwen3.8-27B Q8</b> via <b>Pi</b> (<code>--mode rpc</code>) in a locked sandbox — no git binary, no credentials, no network by default. Writes the spec and task list, implements one task at a time, writes the implementation-detail content. Proposes; never commits.</p></div>
+      <div class="panel"><span class="chip j"><span class="dot"></span>judge</span><p><b>gpt-oss-120B</b>, Harmony-verified, deliberately a <b>different model family</b> so its blind spots don't match the developer's. Audits three immutable candidate commits per bean: spec, implementation, pre-PR. Advisory on tier and human review — can raise, never lower.</p></div>
+      <div class="panel"><span class="chip c"><span class="dot"></span>controller</span><p>Deterministic Python under hardened systemd. Owns leases, worktrees, containment, tier computation, gates, every commit, every push, every merge decision, model load/unload, provenance, and the kill switch. The only component with git and credentials.</p></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><span class="chip h"><span class="dot"></span>human (Gregg)</span><p>Refines transcripts into beans with the AI and approves them (§04). Reads the spec and implementation-detail documents. Merges PRs in <code>human_required</code> repos; signs the opt-in for <code>auto</code> repos. Owns the kill switch and every Tier 3 change.</p></div>
+      <div class="panel"><span class="chip o"><span class="dot"></span>outside builder (Opus / Claude Code)</span><p>Builds the controller, prompts, templates and schemas; drives the judge and developer through Pi by hand to prove each stage; later monitors telemetry and proposes adjustments — always as PRs to this repository, which are Tier 3 and human-merged. <b>Structurally absent at runtime</b>: the controller's provider registry contains only <code>ollama</code>, and the <code>factory</code> user holds no frontier API key.</p></div>
+    </div>
+    <div class="callout o">
+      <h4>Why the strongest model stays outside</h4>
+      <p>The end goal is an application built 100% by local models. If Opus judged or wrote code in the loop, the line would quietly depend on it, and "local" would be a label rather than a fact. Keeping the frontier model at the meta level — improving prompts, decomposition rules, gate manifests and the controller itself — means every improvement lands as reviewable code, and the runtime can be audited by reading one config file.</p>
     </div>
   </div>
 </section>
@@ -261,36 +312,45 @@
 <section id="hardware">
   <div class="wrap">
     <p class="kicker">02 — HARDWARE TRUTH</p><hr class="lead-line">
-    <h2>With the Q8 worker, plan for serial loading — and actually set the context</h2>
-    <p>Your worker is <code>qwen3.8:27b-q8_0</code> (≈30&nbsp;GB), not the Q4 build (≈18&nbsp;GB). Against your ≈96&nbsp;GB GPU allocation:</p>
+    <h2>Forge: one 126 GB pool shared by CPU and GPU — measure whether both models fit</h2>
+    <p>Forge is a Framework Desktop running Fedora Server: an AMD Ryzen AI Max+ class APU with <b>128 GB of unified memory (~126 GB usable)</b> shared between CPU and GPU. Unlike a discrete card, the GPU's share is a configurable split (BIOS UMA size, or the <code>amdgpu</code> GTT limits on Linux) — so "does it fit in VRAM" is a question about the split you choose, and the answer must come from Phase 0, not from a spec sheet. Both models are already pulled and have both been run on the machine; what has not been measured is whether they are <em>co-resident at useful context</em>.</p>
     <div class="grid3">
-      <div class="panel"><div class="stat j">~63–65 <span class="est">EST</span></div><div class="unit">GB · gpt-oss-120B (MoE)</div><p>Fast per-token despite its size; few-billion active params per token.</p></div>
-      <div class="panel"><div class="stat w">~30 <span class="est">EST</span></div><div class="unit">GB · Qwen3.8-27B <b>Q8</b></div><p>Q8, not Q4 — the ~18&nbsp;GB figure was the Q4 build.</p></div>
-      <div class="panel"><div class="stat">~93–95 <span class="est">EST</span></div><div class="unit">GB · combined weights</div><p>Before KV cache. Against ~96&nbsp;GB, both fully resident at useful context is improbable → serial (§07).</p></div>
+      <div class="panel"><span class="stat j">~63 <span class="est">EST</span></span><br><span class="unit">GB · gpt-oss-120B (MXFP4, MoE)</span><p>Fast per token despite its size — a few billion active parameters per token. Judge role.</p></div>
+      <div class="panel"><span class="stat w">~30 <span class="est">EST</span></span><br><span class="unit">GB · Qwen3.8-27B Q8</span><p>Q8, not Q4 — the ~18 GB figure was the Q4 build. Developer role; needs the larger context.</p></div>
+      <div class="panel"><span class="stat">~93 <span class="est">EST</span></span><br><span class="unit">GB · both, before KV cache</span><p>Against ~110 GB GPU share this may co-reside at 16–32K; against 96 GB it likely won't. <b>Phase 0 decides.</b></p></div>
     </div>
-
+    <div class="callout warn">
+      <h4>Two regimes; the scheduler supports both</h4>
+      <p><b>Co-resident</b>: both stay loaded; stages run in natural order per bean; swap cost is zero. <b>Serial</b>: one model loaded at a time; the controller batches stages by role across in-flight beans to minimise swaps (§09). Everything downstream — batch sizes, <code>max_inflight</code>, whether the judge is ever loaded mid-bean — is tuned from the swap-time and residency numbers you record here. Until measured, treat every figure above as a hypothesis.</p>
+    </div>
     <h3>Phase 0 — measure through Ollama, at real context sizes</h3>
-    <p>Ollama’s default context is 4096 tokens, so a naïve run measures 4K. Set the context explicitly per run, and don’t launch a second <code>ollama serve</code> if Ollama already runs under systemd (it will fail with <em>address already in use</em>) — reconfigure the service or use a separate port for benchmarking.</p>
-    <pre><span class="c"># Permanent config on Forge (Ollama already under systemd):</span>
-sudo systemctl edit ollama.service      <span class="c"># add to [Service]:</span>
-  <span class="c"># Environment="OLLAMA_KEEP_ALIVE=-1"</span>
+    <p>Ollama's default context is 4096 tokens, so a naïve run measures 4K. Set it explicitly per run. Ollama already runs under systemd on Forge — don't launch a second <code>ollama serve</code> (address already in use); reconfigure the service.</p>
+<pre><code><span class="c"># Record the current GPU/CPU memory split first (varies by BIOS UMA setting and kernel params)</span>
+cat /sys/class/drm/card*/device/mem_info_vram_total 2>/dev/null; free -g
+
+<span class="c"># Permanent Ollama config on Forge:</span>
+sudo systemctl edit ollama.service      <span class="c"># add under [Service]:</span>
+  <span class="c"># Environment="OLLAMA_KEEP_ALIVE=-1"        # residency experiment only; production is controller-managed</span>
   <span class="c"># Environment="OLLAMA_MAX_LOADED_MODELS=2"</span>
   <span class="c"># Environment="OLLAMA_NUM_PARALLEL=1"</span>
 sudo systemctl restart ollama.service
 
-<span class="c"># Benchmark each context size explicitly (memory ≈ parallelism × context):</span>
-<span class="k">for</span> ctx <span class="k">in</span> 16384 32768 49152; <span class="k">do</span>
-  OLLAMA_CONTEXT_LENGTH=$ctx  <span class="c"># set via systemd override or the benchmarking instance</span>
-  <span class="c"># preload both, then read actual residency + GPU/CPU split:</span>
+<span class="c"># For each context size, preload both and read actual residency + GPU/CPU split:</span>
+for ctx in 16384 32768 49152; do
+  <span class="c"># set OLLAMA_CONTEXT_LENGTH=$ctx via the systemd override, restart, then:</span>
   ollama run gpt-oss:120b "" ; ollama run qwen3.8:27b-q8_0 "" ; ollama ps
-<span class="k">done</span></pre>
+done
+
+<span class="c"># Serial regime: time a real switch, both directions</span>
+ollama stop gpt-oss:120b; time ollama run qwen3.8:27b-q8_0 ""
+ollama stop qwen3.8:27b-q8_0; time ollama run gpt-oss:120b ""</code></pre>
     <ul class="check">
-      <li>Record residency and the GPU/CPU split from <code>ollama ps</code> at <b>16K / 32K / 48K</b>.</li>
-      <li>Measure prompt-processing and generation speed <b>separately</b>.</li>
-      <li>If both won’t co-reside: time an actual model switch (this feeds the serial lifecycle in §07).</li>
-      <li>Run the gpt-oss <b>Harmony conformance test</b> before trusting a verdict (references in §12).</li>
+      <li>Record <b>residency and GPU/CPU split</b> from <code>ollama ps</code> at 16K / 32K / 48K, for each model alone and both together.</li>
+      <li>Measure <b>prompt-processing and generation speed</b> separately — a developer session is prompt-heavy, a judge review is both.</li>
+      <li>Record <b>swap time</b> in each direction; this becomes <code>model_load_timeout</code> and the swap-overhead baseline.</li>
+      <li>Run the <b>gpt-oss Harmony conformance test</b> and confirm Pi can drive <b>both</b> models through Ollama's OpenAI-compatible endpoint (developer-role and reasoning fields).</li>
+      <li>Record every figure with model digest, quant, Ollama version, kernel/GPU split, and context length.</li>
     </ul>
-    <p class="dim">Record every figure with model digest, quant, backend version, and context length. Until then, treat the numbers above as hypotheses.</p>
   </div>
 </section>
 
@@ -298,310 +358,489 @@ sudo systemctl restart ollama.service
   <div class="wrap">
     <p class="kicker">03 — TOOL STACK</p><hr class="lead-line">
     <h2>Start from what Forge runs; pin what the line depends on</h2>
-    <table>
+    <div class="tbl"><table>
       <tr><th>Layer</th><th>Tool</th><th>Role</th></tr>
-      <tr><td><b>Inference</b></td><td><b>Ollama</b> (already on Forge), controller-managed serial lifecycle (§07)</td><td>Serves both models, localhost-bound. Migrate to llama.cpp/llama-swap only if Phase-0 numbers justify it.</td></tr>
-      <tr><td><b>Worker harness</b></td><td><span class="chip w"><span class="dot"></span>Pi</span> <code>--mode rpc</code>, explicit context in <code>models.json</code></td><td>Read/write/edit/bash in the sandboxed editable tree. Declared context must match what Ollama serves (§11).</td></tr>
-      <tr><td><b>Judge</b></td><td><span class="chip j"><span class="dot"></span>gpt-oss-120B</span>, Harmony-verified</td><td>Bean authoring and candidate review returning a schema-valid verdict.</td></tr>
-      <tr><td><b>Controller</b></td><td><span class="chip c"><span class="dot"></span>Python service</span> under hardened <code>systemd</code></td><td>Queue state machine, risk policy, path enforcement, gates, candidate commit, git/push/PR, inference lifecycle, provenance, merge policy, kill switch.</td></tr>
-      <tr><td><b>Sandbox</b></td><td><code>podman</code> rootless, pinned image, full contract (§06)</td><td>Worker shell + gates in a hardened container: read-only outside the editable tree, no sockets, no network by default, resource limits.</td></tr>
-      <tr><td><b>Gates</b></td><td>Immutable <code>factory/gates.lock.yaml</code>, argv arrays, pinned versions (§11)</td><td>Run from outside the worktree; expected tool versions verified at gate startup.</td></tr>
-      <tr><td><b>Forge/git host</b></td><td><b>Forgejo</b>/Gitea + remote CI</td><td>Protected <code>main</code>, PRs, a remote CI the worker can’t influence.</td></tr>
-      <tr><td><b>Contracts</b></td><td><code>schemas/*.json</code> — bean, verdict, event, gate-manifest, risk-policy</td><td>Real JSON Schemas (draft 2020-12) validated at every boundary. See §08 + companion files.</td></tr>
-    </table>
+      <tr><td><b>Inference</b></td><td>Ollama (already on Forge), localhost-bound, controller-managed lifecycle (§09)</td><td>Serves both models. Migrate to llama.cpp/llama-swap only if Phase-0 numbers justify it.</td></tr>
+      <tr><td><b>Agent harness</b></td><td><b>Pi</b> <code>--mode rpc</code>, one <code>models.json</code> entry per model with tested context</td><td>Drives the developer for spec, tasks, build and doc stages, and the judge for audits. Declared context must match what Ollama serves (§13).</td></tr>
+      <tr><td><b>Controller</b></td><td>Python service under hardened systemd, <code>factory</code> CLI</td><td>Queue state machine, worktrees, risk policy, containment, gates, candidate commits, GitHub push/PR/merge, inference lifecycle, document rendering, provenance, kill switch.</td></tr>
+      <tr><td><b>Sandbox</b></td><td>podman rootless, pinned image, full contract (§08)</td><td>Developer shell and gates run inside; read-only outside the editable tree, no sockets, no network by default, resource limits.</td></tr>
+      <tr><td><b>Gates</b></td><td>Immutable <code>factory/gates.lock.yaml</code>, argv arrays, pinned versions</td><td>Lint, types, tests, secrets, deps, plus per-AC and per-task <code>verify</code> commands. Run from outside the worktree; versions verified at startup.</td></tr>
+      <tr><td><b>Git host</b></td><td><b>GitHub</b> (<code>beekeeper-lab</code>), <code>gh</code> + REST, GitHub Actions as remote CI</td><td>Protected default branch, PRs, required checks, <code>workflow_dispatch</code> for deploy-to-test. Single host adapter for now.</td></tr>
+      <tr><td><b>Documents</b></td><td>HTML templates rendered by the controller from model-written Markdown</td><td>Spec and implementation-detail documents (§07). The model writes structured content; the controller owns the HTML.</td></tr>
+      <tr><td><b>Contracts</b></td><td><code>schemas/*.json</code> — bean, task, verdict, event, gate-manifest, risk-policy, repo-config</td><td>Draft 2020-12 JSON Schemas validated at every boundary (§10).</td></tr>
+      <tr><td><b>Outside builder</b></td><td>Claude Code on WarDog, SSH to Forge</td><td>Builds and tunes everything above through PRs to this repo. Not installed on the runtime path.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section id="intake">
+  <div class="wrap">
+    <p class="kicker">04 — INTAKE</p><hr class="lead-line">
+    <h2>From a meeting transcript to approved, ordered beans — together, then "go"</h2>
+    <p>Intake is the one part of the process that is deliberately <b>not</b> lights-out. It is a conversation between you and the AI that ends with a set of beans you have read, argued about, split, reordered, and approved. Beans do not self-admit: the controller refuses to queue anything whose <code>status</code> is not <code>approved</code> with an <code>approval</code> block naming a human.</p>
+    <ol class="loop">
+      <li class="h"><b>Ingest.</b><span class="who">human → factory intake</span> Drop a transcript (Markdown from the transcription tool), meeting notes, an issue export, or just talk. <code>factory intake --repo owner/name --source transcript.md</code> opens an interactive session against the target repo's read-only tree.</li>
+      <li><b>Tear apart.</b><span class="who">judge model (strongest local reasoner)</span> Extract candidate work items with the source excerpt that produced each; discard chatter; flag ambiguities as questions, not assumptions. Output: a table of work items with proposed grouping.</li>
+      <li><b>Draft beans.</b><span class="who">judge model</span> For each accepted work item: intent, background for a newcomer, read/write paths from the actual repo, acceptance criteria each with a <code>verify</code>, constraints, non-goals, dependencies, a suggested tier, and a <code>size_budget</code>. Schema-validated before it is shown to you.</li>
+      <li class="h"><b>Review together.</b><span class="who">human + AI</span> Walk the list. Split beans that would exceed <code>max_tasks</code>; merge trivial ones; reject; reorder; fix dependencies. Every AC must be verifiable by a machine or explicitly marked <code>manual</code> (which forces human review of that bean). This is where most of the human's time and judgement goes.</li>
+      <li class="h"><b>Approve.</b><span class="who">human</span> Approved beans get <code>status: approved</code> and an <code>approval</code> block with your name, timestamp and run <code>order</code>. The session commits <code>factory/beans/*.yaml</code> on a <code>factory/intake-&lt;date&gt;</code> branch and opens a PR — you merge it. Beans are Tier 2 paths: the line may read them, never write them.</li>
+      <li class="ctl"><b>Go.</b><span class="who">controller</span> <code>factory go --repo owner/name</code> queues every approved bean whose dependencies are merged, in <code>order</code>. From here the line runs unattended.</li>
+    </ol>
+    <div class="callout h">
+      <h4>Decomposition is the human's highest-leverage act</h4>
+      <p>A 27B developer does not fail because it can't code; it fails because it is asked to hold too much at once. A bean that decomposes into eight or fewer tasks, each finishable and verifiable in one worker session, will get built. A bean that needs thirty will wander. The <code>size_budget</code> is enforced at the specifying stage: if the developer's own task list exceeds it, the bean is bounced back to intake as <code>split_required</code> rather than forced through.</p>
+    </div>
+    <div class="callout o">
+      <h4>During build-out, the outside builder runs intake</h4>
+      <p>Until the local intake session is proven, Opus in Claude Code plays the AI side of steps 2–4 against the same schemas. The artifacts are identical, so nothing downstream changes when the local judge takes over.</p>
+    </div>
   </div>
 </section>
 
 <section id="beans">
   <div class="wrap">
-    <p class="kicker">04 — BEANS</p><hr class="lead-line">
-    <h2>A bean must be able to satisfy its own definition of done</h2>
-    <p>If the DoD requires tests, the test paths must be writable; the <code>risk_tier</code> and <code>allowed_write_paths</code> are proposals the controller intersects with policy. Validated against <code>schemas/bean.schema.json</code>.</p>
-    <pre><span class="k">id</span>: bean-014
-<span class="k">title</span>: Add idempotency keys to the payments POST endpoint
-<span class="k">intent</span>: <span class="s">Prevent duplicate charges when a client retries POST /payments.</span>
-<span class="k">context</span>: { <span class="k">read_paths</span>: [ src/api/payments.py, src/db/models.py, src/util/idem.py ] }
-<span class="k">allowed_write_paths</span>:                 <span class="c"># PROPOSAL — controller intersects with repo policy</span>
+    <p class="kicker">05 — BEANS &amp; TASKS</p><hr class="lead-line">
+    <h2>A bean is an agentic requirement: every criterion says how a machine proves it</h2>
+    <p>The bean is the human-approved packet. The task list is the developer's decomposition of it, written at the specifying stage and audited by the judge. The bean's <code>risk_tier</code> and <code>allowed_write_paths</code> are proposals the controller intersects with repo policy; the task list's <code>write_paths</code> must be a subset of the result.</p>
+<pre><code><span class="c"># factory/beans/bean-014.yaml — validated against schemas/bean.schema.json</span>
+schema_version: bean/2.0.0
+id: bean-014
+repo: beekeeper-lab/payments-svc
+title: Add idempotency keys to the payments POST endpoint
+intent: Prevent duplicate charges when a client retries POST /payments.
+status: approved
+source: { kind: transcript, ref: meetings/2026-09-12-payments-sync.md, date: 2026-09-12,
+          excerpt: "we double-charged twice last week when the mobile client retried" }
+approval: { approved_by: gregg, approved_at: 2026-09-14T15:10:00Z, order: 3 }
+context:
+  read_paths: [ src/api/payments.py, src/db/models.py, src/util/idem.py ]
+  background: >
+    Clients retry failed HTTP calls. Without a key the server can't tell a retry
+    from a new request. An Idempotency-Key header lets it return the first result.
+allowed_write_paths:                   <span class="c"># PROPOSAL — controller intersects with repo policy</span>
   - src/api/payments.py
   - src/db/migrations/**
-  - <span class="r">tests/api/test_payments.py</span>       <span class="c"># DoD requires tests → tests must be writable</span>
-<span class="k">acceptance_criteria</span>:
-  - <span class="s">id: ac1  Repeated Idempotency-Key → one row; both responses match.</span>
-  - <span class="s">id: ac2  Keys expire after 24h.</span>
-<span class="k">constraints</span>: [ no new deps, p95 < 150ms, migrations reversible ]
-<span class="k">suggested_risk_tier</span>: 2               <span class="c"># advisory; controller computes the binding tier</span>
-<span class="k">definition_of_done</span>: [ ac met, tests added &amp; green, mypy clean, migration reversible ]
-<span class="k">non_goals</span>: [ do not touch the refunds path, no client SDK changes ]
-<span class="k">dependencies</span>: [ bean-009 ]
-<span class="k">invariants_ref</span>: factory/invariants/payments.yaml   <span class="c"># independently reviewed source</span></pre>
-    <div class="callout warn"><h4>Independent validation means human or a different model family</h4>
-      <p>Some acceptance fixtures come from an <b>independently reviewed source</b> (<code>invariants_ref</code>) outside the worker’s reach. For important invariants, independence means a <b>human or a genuinely different model family</b> — a second, differently-prompted instance of the same model is not independent. And a generated batch of beans passes a <b>human/independent spec-audit admission</b> before entering the queue; beans do not self-admit.</p></div>
+  - tests/api/test_payments.py         <span class="c"># DoD requires tests → tests must be writable</span>
+acceptance_criteria:
+  - id: ac1
+    text: Repeated Idempotency-Key → one row; both responses match.
+    verify: { kind: test, test_id: "tests/api/test_payments.py::test_idempotent_retry" }
+  - id: ac2
+    text: Keys expire after 24h.
+    verify: { kind: test, test_id: "tests/api/test_payments.py::test_key_expiry" }
+  - id: ac3
+    text: Migration is reversible.
+    verify: { kind: command, run: ["alembic", "downgrade", "-1"] }
+constraints: [ no new dependencies, p95 latency unchanged ]
+suggested_risk_tier: 2                 <span class="c"># advisory; controller computes the binding tier</span>
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done: [ all AC verify pass, gates green, spec and impl-detail docs accepted ]
+non_goals: [ do not touch the refunds path, no client SDK changes ]
+dependencies: [ bean-009 ]
+invariants_ref: factory/invariants/payments.yaml   <span class="c"># independently reviewed source</span></code></pre>
+    <h3>The task list — the unit of the build loop</h3>
+<pre><code><span class="c"># factory/specs/bean-014/tasks.yaml — written by the developer, audited by the judge</span>
+schema_version: tasks/1.0.0
+bean_id: bean-014
+tasks:
+  - id: task-1
+    title: Add idempotency_keys table and migration
+    intent: A table keyed by client key storing the first response and an expiry.
+    write_paths: [ src/db/models.py, src/db/migrations/** ]
+    satisfies: [ ac3 ]
+    verify:
+      - { kind: command, run: ["alembic", "upgrade", "head"] }
+      - { kind: command, run: ["alembic", "downgrade", "-1"] }
+    teaching_note: A migration is a versioned, reversible change to the database shape.
+  - id: task-2
+    title: Look up / store the key in POST /payments
+    depends_on: [ task-1 ]
+    write_paths: [ src/api/payments.py ]
+    satisfies: [ ac1 ]
+    verify: [ { kind: test, test_id: "tests/api/test_payments.py::test_idempotent_retry" } ]
+  - id: task-3
+    title: Expire keys after 24h
+    depends_on: [ task-2 ]
+    write_paths: [ src/api/payments.py, tests/api/test_payments.py ]
+    satisfies: [ ac2 ]
+    verify: [ { kind: test, test_id: "tests/api/test_payments.py::test_key_expiry" } ]</code></pre>
+    <div class="callout j">
+      <h4>Independent validation means human or a different model family</h4>
+      <p>Some acceptance fixtures come from an independently reviewed source (<code>invariants_ref</code>) outside the developer's reach. For important invariants, independence means a human or a genuinely different model family — a second, differently-prompted Qwen is not independent. The judge's family difference is what makes its audits worth something.</p>
+    </div>
   </div>
 </section>
 
 <section id="loop">
   <div class="wrap">
-    <p class="kicker">05 — THE LOOP</p><hr class="lead-line">
-    <h2>The judge reviews a commit, not a floating diff</h2>
+    <p class="kicker">06 — THE LINE</p><hr class="lead-line">
+    <h2>Seven stages, three audits, two documents — every hand-off is a commit</h2>
+    <p>This is your development process, made mechanical: requirement → spec → audit → implement → audit → implementation detail → pre-PR audit → PR. Each audit reviews an immutable candidate commit on the bean's branch; a <code>revise</code> verdict produces a <em>new</em> candidate, never an edit to the reviewed one.</p>
     <ol class="loop">
-      <li class="ctl"><b>Decompose &amp; admit.</b> <span class="who">judge → spec-audit → queue</span> Beans emitted, batch-reviewed, admitted as <code>ready</code>.</li>
-      <li class="ctl"><b>Lease &amp; branch.</b> <span class="who">controller</span> Atomically lease the next <code>ready</code> bean whose deps are <code>merged</code>. Cut <code>bean/&lt;id&gt;</code> from up-to-date <code>main</code>; expose only the editable tree to the worker.</li>
-      <li class="w"><b>Build.</b> <span class="who">worker via Pi RPC, sandboxed</span> Edits only within effective allowed paths. No git, no commit, no credentials.</li>
-      <li class="ctl"><b>Contain — reject, don’t strip.</b> <span class="who">controller</span> Any edit outside allowed paths → reject the whole proposal, record offending paths, reset to last clean state, scoped feedback. Repeats quarantine. Enforce max diff/file count; secret scan.</li>
-      <li class="ctl"><b>Classify &amp; gate against baseline.</b> <span class="who">controller in podman</span> Compute the binding tier (§06). Run gates + independent invariants + hidden tests vs baseline with integrity checks. Failure → feedback, <code>revision++</code>, step 3.</li>
-      <li class="ctl"><b>Create the candidate commit.</b> <span class="who">controller</span> Commit the contained, gated tree as an immutable <code>candidate_sha</code> on the branch (not yet pushed). Record <code>base_sha</code>, <code>candidate_sha</code>, <code>diff_sha256</code>, <code>gate_run_id</code>.</li>
-      <li class="j"><b>Judge the commit.</b> <span class="who">controller → judge</span> The judge reviews <code>base_sha..candidate_sha</code> plus gate results — not the worker’s justification. The verdict records <code>candidate_sha</code> (§08); the controller schema-validates it.</li>
-      <li class="w"><b>Revise if needed.</b> <span class="who">controller → worker</span> On <code>verdict != accept</code>, feedback back, <code>revision++</code>, step 3 (a revision produces a <em>new</em> candidate). Cap/budget → step 10.</li>
-      <li class="ctl h"><b>Push the reviewed commit, CI, propose.</b> <span class="who">controller → remote CI → human</span> Push the <em>exact</em> <code>candidate_sha</code>, open a PR with provenance + verdict, enter the CI protocol (§07). Before any merge, assert <code>verdict.candidate_sha == pr.head_sha</code> and required checks green for that SHA. Human merges unless the tier is a proven auto-merge tier.</li>
-      <li class="ctl"><b>Quarantine, don’t stall.</b> <span class="who">controller</span> On cap/budget/violation, mark <code>blocked</code> with reason + provenance, release the lease, continue.</li>
+      <li class="ctl"><b>Lease &amp; worktree.</b><span class="who">controller</span> Atomically lease the next ready bean whose dependencies are merged. <code>git worktree add worktrees/&lt;bean-id&gt; -b bean/&lt;id&gt;</code> from up-to-date default branch. Sync an editable copy (without <code>.git</code>) into the sandbox mount.</li>
+      <li class="w"><b>Specify.</b><span class="who">developer via Pi</span> Given the bean, its context paths, and the document standard (§07), write <code>factory/specs/&lt;id&gt;/spec.md</code> (structured Markdown with required sections) and <code>tasks.yaml</code>. Controller validates both against schema and section lint, renders <code>spec.html</code>, checks <code>size_budget</code> (over → <code>split_required</code>, back to intake).</li>
+      <li class="ctl"><b>Spec candidate.</b><span class="who">controller</span> Commit spec + tasks + rendered HTML as an immutable candidate on the branch. Record <code>base_sha</code>, <code>candidate_sha</code>, artifact hashes.</li>
+      <li><b>Spec audit.</b><span class="who">judge</span> Verdict <code>stage: spec_audit</code>. Checks: every AC claimed by ≥1 task; tasks within effective paths and each finishable in one session; risk and blast radius honestly stated; code blocks teach; no assumed stack knowledge; nothing in the spec widens scope beyond the bean. <code>revise</code> → step 2 with <code>feedback_to_worker</code>, revision++. Cap → blocked.</li>
+      <li class="w"><b>Build — the task loop.</b><span class="who">developer via Pi · controller drives</span> For each task in dependency order: start a worker session with the spec, the task, and any prior feedback; the worker edits and declares done; the controller syncs back, <b>contains</b> (any edit outside the task's <code>write_paths</code> → reject the whole attempt, reset, scoped feedback), then runs the task's <code>verify</code> list inside the gate container. Fail → the exact failure output goes back as the next prompt, <code>attempt++</code>. <code>max_attempts</code> exhausted → bean blocked with evidence. Verified → next task.</li>
+      <li class="ctl"><b>Contain, classify, gate.</b><span class="who">controller in podman</span> Full containment over the whole diff; compute the binding tier (§08); run all gates from <code>gates.lock.yaml</code>, all AC <code>verify</code>s, independent invariants, hidden tests vs baseline, test-integrity checks, secret scan, diff/file-count limits. Failure → targeted tasks re-open (step 5).</li>
+      <li class="ctl"><b>Implementation candidate.</b><span class="who">controller</span> Commit the contained, gated tree as an immutable <code>candidate_sha</code>. Record <code>diff_sha256</code>, <code>gate_run_id</code>.</li>
+      <li><b>Implementation audit.</b><span class="who">judge</span> Verdict <code>stage: impl_audit</code> over <code>base..candidate</code>, the spec, and gate results — not the developer's justification. <code>revise</code> → step 5 with feedback mapped to specific tasks (a revision produces a new candidate). <code>block</code> → quarantine.</li>
+      <li class="w"><b>Document.</b><span class="who">developer via Pi</span> Given the <em>actual accepted diff</em>, the spec, the tasks' <code>teaching_note</code>s and gate results, write <code>factory/impl/&lt;id&gt;/impl-detail.md</code>. Controller lints sections, renders <code>impl-detail.html</code>, commits a new candidate (code unchanged; document added).</li>
+      <li><b>Pre-PR audit.</b><span class="who">judge</span> Verdict <code>stage: pre_pr_audit</code>: does the document describe what the diff actually does (<code>matches_diff</code>), are risk and blast radius stated, do code blocks teach, final security pass over the complete change, and a draft PR body. <code>revise</code> → step 9 only (the code is already accepted; a doc revision cannot touch code).</li>
+      <li class="ctl"><b>Push, CI, PR.</b><span class="who">controller → GitHub Actions</span> Push the exact <code>candidate_sha</code>; open the PR with links to both HTML documents, all three verdicts, tier, and provenance. Enter the CI protocol (§09). Before any merge: <code>verdict.candidate_sha == pr.head_sha</code> and every <code>required_check</code> green for that SHA.</li>
+      <li class="h"><b>Merge per repo policy; deploy.</b><span class="who">human or controller</span> <code>human_required</code>: you merge. <code>auto</code> / <code>auto_when_unlocked</code>: the controller merges Tier ≤2 when allowed (§08), then runs <code>post_merge</code> actions — typically <code>workflow_dispatch</code> of the deploy-to-test workflow — and records <code>deployed_test</code> or <code>deploy_failed</code>.</li>
+      <li class="ctl"><b>Quarantine, don't stall.</b><span class="who">controller</span> On cap, budget, or violation: <code>blocked</code> with reason and full provenance; lease released; worktree preserved as evidence; next bean.</li>
     </ol>
-    <div class="callout warn"><h4>An unexpected PR-head change is a violation, not a re-review trigger</h4>
-      <p>If <code>pr.head_sha</code> ever differs from the reviewed <code>candidate_sha</code> and the change did not come from the controller’s own rebase path, treat it as a <b>policy violation</b> → <code>blocked</code> + alert, not an automatic re-review. Only the controller’s rebase path (§07) may legitimately produce a new candidate, and that path re-gates and re-reviews.</p></div>
+    <div class="callout warn">
+      <h4>"Does not quit early" is a property of the controller, not the model</h4>
+      <p>The developer cannot end a bean. A worker session that stops emitting edits is re-prompted with the unmet <code>verify</code> output; a session that declares done is checked, not believed. The only exits from the task loop are <em>verified</em> or <em>attempts exhausted with evidence</em>. Self-healing is the same mechanism seen from the model's side: it always gets the real failure, scoped to the task it is on.</p>
+    </div>
+    <div class="callout j">
+      <h4>An unexpected PR-head change is a violation, not a re-review trigger</h4>
+      <p>If <code>pr.head_sha</code> ever differs from the reviewed <code>candidate_sha</code> and the change did not come from the controller's own rebase path, treat it as a policy violation → <code>blocked</code> + alert. Only the controller's rebase path (§09) may legitimately produce a new candidate, and that path re-gates and re-audits.</p>
+    </div>
+  </div>
+</section>
+
+<section id="docs">
+  <div class="wrap">
+    <p class="kicker">07 — THE TWO DOCUMENTS</p><hr class="lead-line">
+    <h2>The spec is the plan; the implementation detail is what was done — both teach</h2>
+    <p>These are the human-consumable outputs of the line and the thing you actually read before approving a plan or accepting a change. They are also how a newcomer learns the codebase, so they never assume the reader knows the stack. The developer writes structured Markdown; the controller renders it into a fixed HTML template (dark, printable, self-contained, no external resources). This split matters: a 27B model writing raw HTML is a lint problem; a 27B model filling required sections is a content problem, which is the one we want.</p>
+    <div class="grid2">
+      <div class="panel">
+        <h4>spec.md — required sections (lint-enforced)</h4>
+        <ul class="tight">
+          <li><b>What and why</b> — the bean's intent in plain language, plus the background a newcomer needs.</li>
+          <li><b>Current behaviour</b> — how the relevant code works today, with a short annotated code block from the real repo.</li>
+          <li><b>Proposed change</b> — per task: what changes, where, and an illustrative code block. Each block labelled with the file path.</li>
+          <li><b>Risk</b> — what could break, how you'd notice, how you'd back out.</li>
+          <li><b>Blast radius</b> — files, modules, callers, data and deployments touched; explicitly what is <em>not</em> touched.</li>
+          <li><b>Verification</b> — the AC table with each <code>verify</code>, and any hidden invariants by name.</li>
+          <li><b>Open questions</b> — anything the developer had to assume. Non-empty here is a signal for the judge.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h4>impl-detail.md — required sections (lint-enforced)</h4>
+        <ul class="tight">
+          <li><b>Summary</b> — what was done, in two sentences, matching the diff.</li>
+          <li><b>Walkthrough by task</b> — for each task: the actual diff hunks that matter, explained line by line as a teaching block, plus the task's <code>teaching_note</code>.</li>
+          <li><b>Deviations from the spec</b> — anything that differs from the plan and why. "None" must be true.</li>
+          <li><b>Risk &amp; blast radius, as built</b> — re-stated against the real change; anything wider than the spec is a judge finding.</li>
+          <li><b>Evidence</b> — gate results, AC <code>verify</code> outcomes, coverage delta, test-integrity counts, provenance (SHAs, digests).</li>
+          <li><b>How to verify locally</b> — commands a human can run.</li>
+          <li><b>Rollback</b> — the concrete steps.</li>
+        </ul>
+      </div>
+    </div>
+    <p>The judge's <code>document_quality</code> block in the verdict (§10) answers five yes/no questions about each document — risk called out, blast radius called out, code blocks teach, no assumed stack knowledge, matches diff — and any <code>false</code> is a <code>revise</code>. The PR body links both HTML files at their committed paths, so the reviewer reads exactly what the judge audited (hash-bound in <code>verdict.artifacts</code>).</p>
+    <div class="callout">
+      <h4>Templates are agent-control files</h4>
+      <p><code>factory/templates/spec.html</code> and <code>impl-detail.html</code> live in the target repo and follow the <code>html-artifact-output</code> standard. They are Tier 3 paths: the line renders with them and never edits them; changes arrive as human-merged PRs, typically from the outside builder.</p>
+    </div>
   </div>
 </section>
 
 <section id="security">
   <div class="wrap">
-    <p class="kicker">06 — SECURITY</p><hr class="lead-line">
-    <h2>Independent classification, a hard boundary, a real sandbox, numeric unlocks</h2>
-
+    <p class="kicker">08 — SECURITY</p><hr class="lead-line">
+    <h2>Independent classification, a hard boundary, a real sandbox, per-repo merge modes</h2>
     <h3>Controller-computed binding tier</h3>
-    <p><code>final_tier = max(policy_tier, model_suggested_tier)</code>, from <code>schemas/risk-policy.schema.json</code>. A model that under-reads its change cannot down-classify it.</p>
-    <table>
+    <p><code>final_tier = max(policy_tier, judge_suggested_tier, bean_suggested_tier)</code>, from <code>schemas/risk-policy.schema.json</code>. A model that under-reads its change cannot down-classify it.</p>
+    <div class="tbl"><table>
       <tr><th>Change touches…</th><th>Minimum tier</th></tr>
-      <tr><td>Docs, comments, internal test data</td><td><span class="t t0">0</span></td></tr>
+      <tr><td>Docs, comments, internal test data, <code>factory/specs/**</code>, <code>factory/impl/**</code></td><td><span class="t t0">0</span></td></tr>
       <tr><td>Small, isolated code within allowed paths</td><td><span class="t t1">1</span></td></tr>
-      <tr><td>DB migrations; auth/authz; CI config; dependency manifests &amp; lockfiles</td><td><span class="t t2">2</span></td></tr>
-      <tr><td><b>Agent-control files</b> — <code>AGENTS.md</code>, <code>CLAUDE.md</code>, <code>.pi/</code>, skills, hooks, prompts, project-instruction files</td><td><span class="t t3">3</span></td></tr>
+      <tr><td>DB migrations; auth/authz; CI config; dependency manifests &amp; lockfiles; <code>factory/beans/**</code></td><td><span class="t t2">2</span></td></tr>
+      <tr><td>Agent-control files — <code>factory/repo.yaml</code>, <code>risk-policy.yaml</code>, <code>gates.lock.yaml</code>, <code>templates/**</code>, <code>prompts/**</code>, <code>AGENTS.md</code>, <code>CLAUDE.md</code>, <code>.pi/</code>, skills, hooks</td><td><span class="t t3">3</span></td></tr>
       <tr><td>Secrets, production infrastructure, destructive ops</td><td><span class="t t3">3</span></td></tr>
-    </table>
-    <p>Actions: <span class="t t0">0</span> auto-merge after gates <em>once demonstrated</em>; <span class="t t1">1</span> auto-merge after remote CI + policy <em>once demonstrated</em>; <span class="t t2">2</span> human approval; <span class="t t3">3</span> never autonomous.</p>
+    </table></div>
+
+    <h3>Merge modes — decided per repository, recorded in <code>factory/repo.yaml</code></h3>
+    <div class="tbl"><table>
+      <tr><th>merge_mode</th><th>Who merges</th><th>Conditions</th><th>Typical use</th></tr>
+      <tr><td><b>human_required</b></td><td>A human, always</td><td>Line opens the PR with documents and verdicts attached; stops at <code>merge_pending</code>.</td><td>Team repos with a required reviewer; the default for every new repo.</td></tr>
+      <tr><td><b>auto_when_unlocked</b></td><td>Controller for unlocked tiers; human otherwise</td><td>A tier is unlocked only after ≥100 human-reviewed PRs in that tier, zero known escapes, ≤1 substantive rejection, all fault-injection green; auto-suspends on 1 critical escape or 2 false approvals in 30 PRs.</td><td>Shared repos earning trust incrementally.</td></tr>
+      <tr><td><b>auto</b></td><td>Controller for Tier 0–2</td><td>Requires <code>merge_mode_signoff</code> by a named human. Pre-PR verdict <code>accept</code>, every required check green for the exact SHA, no <code>manual</code> AC. Then <code>post_merge</code> runs (deploy to test).</td><td>Solo repos where you are the only reviewer and the test server is the real gate.</td></tr>
+    </table></div>
+    <p><b>Tier 3 is never autonomous in any mode.</b> In <code>auto</code> repos the escaped-defect log is the only ground truth, so every post-merge issue must be recorded against its bean (§11) — that is the price of skipping the reviewer.</p>
 
     <h3>The trust boundary</h3>
     <ul class="check">
-      <li>Gate definitions and invariants live outside the writable tree and run from there.</li>
-      <li>Effective write-paths = bean paths ∩ human-approved repo policy; protected paths escalate.</li>
-      <li>The worker holds no credentials and <b>has no git binary</b>; the controller stages, commits (candidate), signs, pushes, opens the PR.</li>
-      <li>Reject, never silently strip, out-of-scope edits.</li>
-      <li>Validate against baseline: hidden tests + independent invariants + integrity checks.</li>
-      <li>Repository content is untrusted input, delimited as data — never expands paths or verdict authority.</li>
+      <li>Gate definitions, invariants, templates and prompts live outside the writable tree and run from there.</li>
+      <li>Effective write-paths = bean paths ∩ human-approved repo policy; task paths ⊆ effective paths; protected paths escalate the tier.</li>
+      <li>The developer holds no credentials and has no git binary; the controller stages, commits, signs, pushes, opens and (where allowed) merges the PR.</li>
+      <li><b>Reject, never silently strip</b>, out-of-scope edits — at task granularity and again over the whole diff.</li>
+      <li>Validate against baseline: hidden tests + independent invariants + integrity checks (deleted tests, new skips, weakened asserts).</li>
+      <li>Repository content, transcripts and model output are untrusted input, delimited as data — they never expand paths or verdict authority.</li>
+      <li>No frontier provider in the runtime registry; the <code>factory</code> user's environment is scrubbed of every API key but Ollama's placeholder.</li>
     </ul>
 
-    <h3>The sandbox contract (restored, enforceable)</h3>
+    <h3>The sandbox contract</h3>
     <ul class="check">
-      <li><b>Read-only filesystem</b> outside the single editable worktree; that tree is the only writable mount.</li>
-      <li><b>No Docker/Podman socket; no SSH agent forwarding; scrubbed environment; no credentials inside.</b></li>
-      <li><b>Dropped Linux capabilities</b> and <code>no-new-privileges</code>; <b>CPU, memory, process, output, and wall-time limits</b>.</li>
-      <li><b>Network disabled by default</b>; an allow-listed proxy only for tasks that genuinely need package access.</li>
-      <li><b>“No git” is enforced structurally</b>: the worker image contains no git executable, <code>.git</code> metadata is never mounted into the worker, and the controller keeps the real worktree outside the worker boundary — only the editable tree is exposed.</li>
+      <li>Read-only filesystem outside the single editable tree; that tree is the only writable mount.</li>
+      <li>No Docker/Podman socket; no SSH agent forwarding; scrubbed environment; no credentials inside.</li>
+      <li>Dropped Linux capabilities and no-new-privileges; CPU, memory, process, output and wall-time limits per worker session.</li>
+      <li>Network disabled by default; an allow-listed proxy only for tasks that genuinely need package access, and only for the gate container.</li>
+      <li>"No git" is structural: the worker image contains no git executable; the editable tree is a synced copy of the worktree <em>without</em> its <code>.git</code> pointer file; the controller keeps the real worktree outside the boundary and diffs after sync-back.</li>
     </ul>
-
-    <h3>Auto-merge unlock — numeric, revocable</h3>
-    <ul class="check">
-      <li>≥ <b>100</b> human-reviewed PRs in that tier; <b>zero</b> known escapes; ≤ <b>1</b> substantive human rejection.</li>
-      <li>All controller fault-injection tests passing; no unresolved high-severity audit findings.</li>
-      <li><b>Auto-suspend</b> on the first critical escape, or two false approvals within any 30 PRs.</li>
-    </ul>
-    <div class="callout warn"><h4>“Human rejected” ≠ “false approval”</h4>
-      <p>Every rejection is classified — <code>defect · requirement_miss · security · preference · stale_branch · unrelated_ci</code> — and only defect/requirement-miss/security rejections of an <code>accept</code> verdict count against the unlock threshold.</p></div>
   </div>
 </section>
 
 <section id="mechanics">
   <div class="wrap">
-    <p class="kicker">07 — MECHANICS</p><hr class="lead-line">
-    <h2>Explicit states, a CI protocol, a model lifecycle, and a real stop</h2>
-
-    <h3>The state machine, with the candidate commit and every side effect</h3>
-    <pre><span class="k">ready → leased → building → containing → gating → committing_candidate → judging</span>
-      → (<span class="s">accepted</span> | <span class="r">revise</span>→building | <span class="r">blocked</span>)
-<span class="k">accepted → pushing → pushed → pr_open → ci_pending</span>
-      → (<span class="r">ci_failed</span>→revise | <span class="r">ci_timeout</span>→retry≤N→blocked
-         | <span class="r">stale</span>→rebase→gating <span class="c">(new candidate → re-review)</span>
-         | <span class="r">merge_conflict</span>→blocked | <span class="k">merge_pending</span>)
-<span class="k">merge_pending → merging → merged</span>            <span class="c"># auto-tier (proven)</span>
-<span class="k">merge_pending → (human merges) → merged</span>     <span class="c"># default</span>
-terminal: <span class="k">merged</span> · <span class="r">blocked</span> · <span class="r">cancelled</span></pre>
+    <p class="kicker">09 — MECHANICS</p><hr class="lead-line">
+    <h2>Explicit states, worktrees, a role-batched model lifecycle, a CI protocol, and a real stop</h2>
+    <h3>The state machine — every hand-off is a candidate commit</h3>
+<pre><code>ready → leased → specifying → spec_committing → spec_auditing
+      → (spec_accepted | revise→specifying | split_required→blocked | blocked)
+spec_accepted → building ⟳ [task_started → task_verified | task_failed→retry≤N]
+      → containing → gating → committing_candidate → impl_auditing
+      → (impl_accepted | revise→building(targeted tasks) | blocked)
+impl_accepted → documenting → doc_committing → pre_pr_auditing
+      → (accepted | revise→documenting | blocked)
+accepted → pushing → pushed → pr_open → ci_pending
+      → (ci_failed→revise(building) | ci_timeout→retry≤N→blocked
+         | stale→rebase→gating (new candidate → re-audit impl + pre-PR)
+         | merge_conflict→blocked | merge_pending)
+merge_pending → merging → merged → deploying_test → (deployed_test | deploy_failed)   <span class="c"># auto modes</span>
+merge_pending → (human merges) → merged → deploying_test → …                          <span class="c"># human_required</span>
+terminal: deployed_test · merged (no post_merge) · deploy_failed · blocked · cancelled</code></pre>
     <ul class="check">
-      <li>Every transition carries an <b>idempotency key</b> (bean-id + candidate_sha); startup reconciliation re-derives true state from Forge (branch, PR, checks, head SHA) and resumes or rolls back.</li>
-      <li><b>Human merge detection</b>: Forge <b>webhook</b> flips <code>merge_pending → merged</code>; poll + reconciliation are fallbacks.</li>
-      <li><b>Rebase</b> (from <code>stale</code>) produces a <em>new</em> <code>candidate_sha</code> → re-gate → re-review; a <b>rebase conflict</b> → <code>merge_conflict</code> → <code>blocked</code>. An out-of-band head change is a violation (§05), not a rebase.</li>
+      <li>Every transition carries an idempotency key (<code>bean_id + stage + candidate_sha</code>, or <code>task_id + attempt</code> inside the loop); startup reconciliation re-derives true state from GitHub (branch, PR, checks, head SHA) and the worktree, then resumes or rolls back.</li>
+      <li>Human merge detection: GitHub webhook flips <code>merge_pending → merged</code>; poll + reconciliation are fallbacks.</li>
+      <li>Rebase (from <code>stale</code>) produces a new <code>candidate_sha</code> → re-gate → re-audit implementation and pre-PR (the spec audit stands); a rebase conflict → <code>merge_conflict → blocked</code>. An out-of-band head change is a violation (§06), not a rebase.</li>
     </ul>
 
-    <h3>The serial model lifecycle (likely production path)</h3>
-    <p>If Q8 + gpt-oss can’t co-reside, switching models is on the critical path and must be an explicit contract, not a side effect. <code>OLLAMA_KEEP_ALIVE=-1</code> is for the Phase-0 residency experiment only; serial production uses controller-driven load/unload.</p>
-    <pre><span class="c"># inference-manager contract (controller owns it)</span>
-ensure_worker_loaded()   <span class="c"># ollama stop &lt;judge&gt; if resident; preload worker; wait ready</span>
-worker_healthcheck()     <span class="c"># /api/tags or a 1-token probe; assert model id + ready</span>
-... worker turn ...
-stop_worker()            <span class="c"># ollama stop qwen3.8:27b-q8_0</span>
-ensure_judge_loaded()    <span class="c"># preload gpt-oss:120b; wait ready</span>
-judge_healthcheck()
-model_load_timeout = 90s      <span class="c"># EST — set from Phase-0 swap measurement</span>
-on model_load_failure: retry ≤ 2 → block bean, alert   <span class="c"># never proceed on the wrong model</span>
-<span class="c"># record load_seconds per switch → telemetry swap-overhead %</span></pre>
+    <h3>Worktrees — one per in-flight bean</h3>
+<pre><code>/var/lib/darkfactory/repos/&lt;owner&gt;/&lt;name&gt;/
+  main/                       <span class="c"># controller's clone; default branch kept current</span>
+  worktrees/bean-014/         <span class="c"># git worktree add … -b bean/bean-014</span>
+  worktrees/bean-017/
+/var/lib/darkfactory/sandbox/bean-014/tree/   <span class="c"># editable copy synced from the worktree, .git excluded</span></code></pre>
+    <p><code>max_inflight</code> (per repo, default 2) bounds concurrent worktrees. Parallelism buys pipelining — one bean in gates while another is in a worker session — not parallel inference: the inference manager serialises model calls. Blocked beans keep their worktree as evidence until a human clears them.</p>
+
+    <h3>The model lifecycle — role-batched when serial, natural order when co-resident</h3>
+    <p>Switching models costs time (Phase 0 tells you how much). The natural switch point is between beans, but a single bean alternates developer and judge four times. The scheduler resolves this by <b>batching by role across in-flight beans</b>: with the developer loaded, run every bean that is waiting on a developer stage; when that queue is empty (or a bean has waited past <code>max_wait</code>), switch and drain every judge stage. In the co-resident regime the same scheduler runs with <code>swap_cost = 0</code> and degenerates to natural order.</p>
+<pre><code><span class="c"># inference-manager contract (controller owns it)</span>
+ensure_loaded(role)          <span class="c"># if serial and other role resident: ollama stop &lt;other&gt;; preload; wait ready</span>
+healthcheck(role)            <span class="c"># /api/tags + 1-token probe; assert model digest + ready — never proceed on the wrong model</span>
+... one or more stage turns for this role ...
+model_load_timeout = 120s    <span class="c"># EST — set from the Phase-0 swap measurement</span>
+on load_failure: retry ≤ 2 → block the waiting bean, alert
+record load_seconds per switch → telemetry swap_overhead_pct
+
+<span class="c"># factory.yaml (global) — scheduler knobs; start here, tune from telemetry</span>
+scheduler:
+  regime: auto               <span class="c"># auto = decide from Phase-0 residency probe at startup; or serial | coresident</span>
+  swap_policy:
+    prefer: bean_boundary    <span class="c"># switch when the current role's queue drains</span>
+    max_wait_minutes: 30     <span class="c"># …or when any bean has waited this long for the other role</span>
+    min_batch: 1</code></pre>
+    <div class="callout o">
+      <h4>Whether the judge is ever loaded mid-bean is an empirical question</h4>
+      <p>The spec audit sits between two developer stages, so strict bean-boundary switching would run spec → (wait) → build across two developer loads anyway. Start with <code>max_wait_minutes: 30</code>, watch <code>swap_overhead_pct</code> and bean cycle time in §11, and let the outside builder tune the policy during Phase 5 — that is exactly the kind of adjustment it exists for.</p>
+    </div>
 
     <h3>The emergency stop — three verbs</h3>
-    <table>
-      <tr><th>Command</th><th>Behavior</th><th>Restart</th></tr>
-      <tr><td><code>factory pause</code> <span class="dim">(SIGINT)</span></td><td>Finish in-flight bean; start no new work.</td><td>Resume pulls next <code>ready</code>.</td></tr>
-      <tr><td><code>factory drain</code> <span class="dim">(SIGTERM)</span></td><td>Finish current model call / gate, then stop.</td><td>Reconcile resumes the leased bean from its persisted state.</td></tr>
-      <tr><td><code>factory stop-now</code> <span class="dim">(control socket)</span></td><td>Terminate the worker container now; preserve evidence.</td><td>Reconcile rolls the bean back to last clean state; lease released.</td></tr>
-    </table>
-    <p>All three are reconciliation-safe mid <code>committing_candidate/pushing/pr_open/merging</code> via idempotency keys.</p>
+    <div class="tbl"><table>
+      <tr><th>Command</th><th>Behaviour</th><th>Restart</th></tr>
+      <tr><td><code>factory pause</code> (SIGINT)</td><td>Finish in-flight stages; start no new work.</td><td>Resume pulls next ready.</td></tr>
+      <tr><td><code>factory drain</code> (SIGTERM)</td><td>Finish the current model call / gate, then stop.</td><td>Reconcile resumes each leased bean from its persisted state.</td></tr>
+      <tr><td><code>factory stop-now</code> (control socket)</td><td>Terminate worker containers now; preserve evidence.</td><td>Reconcile rolls each bean back to its last candidate; leases released.</td></tr>
+    </table></div>
+    <p>All three are reconciliation-safe mid <code>*_committing</code> / <code>pushing</code> / <code>pr_open</code> / <code>merging</code> / <code>deploying_test</code> via idempotency keys. A deploy already dispatched is never cancelled by the factory; it is recorded and left to the deploy workflow.</p>
   </div>
 </section>
 
-<section id="verdict">
+<section id="schemas">
   <div class="wrap">
-    <p class="kicker">08 — VERDICT SCHEMA</p><hr class="lead-line">
-    <h2>A real JSON Schema, bound to the reviewed commit</h2>
-    <p>This is the actual contract (companion: <code>schemas/verdict.schema.json</code>), not an example. It binds the verdict to <code>candidate_sha</code> and the run’s digests, uses enums/ranges, requires fields, and forbids extras. The judge supplies <code>suggested_tier</code> and <code>suggested_human_review</code>; the <b>controller stamps the binding <code>effective_risk_tier</code></b> and the authoritative human-review decision — the judge cannot set its own review requirement.</p>
-    <pre><span class="k">{</span>
-  <span class="k">"$schema"</span>: <span class="s">"https://json-schema.org/draft/2020-12/schema"</span>,
-  <span class="k">"$id"</span>: <span class="s">"https://forge.local/schemas/verdict.schema.json"</span>,
-  <span class="k">"title"</span>: <span class="s">"Verdict"</span>, <span class="k">"type"</span>: <span class="s">"object"</span>, <span class="k">"additionalProperties"</span>: false,
-  <span class="k">"required"</span>: [<span class="s">"schema_version"</span>,<span class="s">"bean_id"</span>,<span class="s">"base_sha"</span>,<span class="s">"candidate_sha"</span>,<span class="s">"diff_sha256"</span>,
-               <span class="s">"gate_run_id"</span>,<span class="s">"gate_manifest_digest"</span>,<span class="s">"invariants_digest"</span>,<span class="s">"policy_version"</span>,
-               <span class="s">"effective_risk_tier"</span>,<span class="s">"model_digest"</span>,<span class="s">"prompt_version"</span>,<span class="s">"criteria"</span>,<span class="s">"verdict"</span>],
-  <span class="k">"properties"</span>: {
-    <span class="k">"schema_version"</span>: {<span class="k">"const"</span>: <span class="s">"verdict/1.4.0"</span>},
-    <span class="k">"bean_id"</span>: {<span class="k">"type"</span>:<span class="s">"string"</span>,<span class="k">"pattern"</span>:<span class="s">"^bean-[0-9]+$"</span>},
-    <span class="k">"base_sha"</span>: {<span class="k">"type"</span>:<span class="s">"string"</span>,<span class="k">"pattern"</span>:<span class="s">"^[0-9a-f]{40}$"</span>},
-    <span class="k">"candidate_sha"</span>: {<span class="k">"type"</span>:<span class="s">"string"</span>,<span class="k">"pattern"</span>:<span class="s">"^[0-9a-f]{40}$"</span>},
-    <span class="k">"diff_sha256"</span>: {<span class="k">"type"</span>:<span class="s">"string"</span>,<span class="k">"pattern"</span>:<span class="s">"^[0-9a-f]{64}$"</span>},
-    <span class="k">"effective_risk_tier"</span>: {<span class="k">"type"</span>:<span class="s">"integer"</span>,<span class="k">"minimum"</span>:0,<span class="k">"maximum"</span>:3},  <span class="c">// controller-stamped</span>
-    <span class="k">"confidence"</span>: {<span class="k">"type"</span>:<span class="s">"number"</span>,<span class="k">"minimum"</span>:0,<span class="k">"maximum"</span>:1},
-    <span class="k">"suggested_tier"</span>: {<span class="k">"type"</span>:<span class="s">"integer"</span>,<span class="k">"minimum"</span>:0,<span class="k">"maximum"</span>:3},
-    <span class="k">"suggested_human_review"</span>: {<span class="k">"type"</span>:<span class="s">"boolean"</span>},              <span class="c">// judge advisory only</span>
-    <span class="k">"verdict"</span>: {<span class="k">"enum"</span>: [<span class="s">"accept"</span>,<span class="s">"revise"</span>,<span class="s">"block"</span>]}
-    <span class="c">// … criteria[], security_findings[], test_integrity{}, gate_manifest_digest,</span>
-    <span class="c">//    invariants_digest, policy_version, model_digest, prompt_version, feedback_to_worker</span>
-  }
-<span class="k">}</span></pre>
-    <p class="dim">Full schema in the companion bundle, alongside <code>bean</code>, <code>event</code>, <code>gate-manifest</code>, and <code>risk-policy</code> schemas — each <code>additionalProperties:false</code> and validated at its boundary.</p>
+    <p class="kicker">10 — CONTRACTS</p><hr class="lead-line">
+    <h2>Seven JSON Schemas, each validated at its boundary</h2>
+    <div class="tbl"><table>
+      <tr><th>Schema</th><th>Instance lives at</th><th>Written by</th><th>Validated when</th></tr>
+      <tr><td><code>bean.schema.json</code> <span class="dim">bean/2.0.0</span></td><td><code>factory/beans/&lt;id&gt;.yaml</code></td><td>Intake (human + AI)</td><td>On save in intake; on <code>factory go</code> (must be <code>approved</code>).</td></tr>
+      <tr><td><code>task.schema.json</code> <span class="dim">tasks/1.0.0</span></td><td><code>factory/specs/&lt;id&gt;/tasks.yaml</code></td><td>Developer</td><td>After specify; paths ⊆ effective paths; every AC claimed.</td></tr>
+      <tr><td><code>verdict.schema.json</code> <span class="dim">verdict/2.0.0</span></td><td>Controller store + PR body</td><td>Judge (advisory fields) + controller (binding fields)</td><td>After each of the three audits; conditional requirements per <code>stage</code>.</td></tr>
+      <tr><td><code>event.schema.json</code></td><td><code>events.jsonl</code> → SQLite</td><td>Controller</td><td>Every transition; source of truth for reconciliation and telemetry.</td></tr>
+      <tr><td><code>gate-manifest.schema.json</code></td><td><code>factory/gates.lock.yaml</code></td><td>Human / outside builder</td><td>At controller startup (versions verified against the pinned image).</td></tr>
+      <tr><td><code>risk-policy.schema.json</code></td><td><code>factory/risk-policy.yaml</code></td><td>Human / outside builder</td><td>At startup and before every tier computation.</td></tr>
+      <tr><td><code>repo-config.schema.json</code> <span class="dim">repo-config/1.0.0</span></td><td><code>factory/repo.yaml</code></td><td>Human (signed for <code>auto</code>)</td><td>At startup; <code>merge_mode: auto</code> without <code>merge_mode_signoff</code> is a startup failure.</td></tr>
+    </table></div>
+    <h3>The verdict, bound to the reviewed commit and the audited documents</h3>
+<pre><code>{
+  "schema_version": "verdict/2.0.0",
+  "stage": "pre_pr_audit",                      <span class="c">// spec_audit | impl_audit | pre_pr_audit</span>
+  "bean_id": "bean-014",
+  "base_sha": "…40 hex…", "candidate_sha": "…40 hex…", "diff_sha256": "…64 hex…",
+  "gate_run_id": "gr-2026-09-14T16:02:11Z-3f1", "gate_manifest_digest": "sha256:…", "invariants_digest": "sha256:…",
+  "policy_version": "risk/2026-09-14",
+  "effective_risk_tier": 2,                     <span class="c">// controller-stamped: max(policy, judge, bean)</span>
+  "model_digest": "gpt-oss:120b@sha256:…", "prompt_version": "judge/pre-pr/1.2.0",
+  "artifacts": [
+    { "kind": "spec",        "path": "factory/specs/bean-014/spec.html",       "sha256": "…" },
+    { "kind": "impl_detail", "path": "factory/impl/bean-014/impl-detail.html", "sha256": "…" }
+  ],
+  "criteria": [ { "id": "ac1", "met": true, "evidence": "test_idempotent_retry passed in gr-…" }, … ],
+  "document_quality": { "risk_called_out": true, "blast_radius_called_out": true, "code_blocks_teach": true,
+                        "no_assumed_stack_knowledge": true, "matches_diff": true },
+  "security_findings": [], "test_integrity": { "deleted_tests": 0, "new_skips": 0, "weakened_asserts": false },
+  "confidence": 0.86, "suggested_tier": 2, "suggested_human_review": false,   <span class="c">// advisory</span>
+  "verdict": "accept"
+}</code></pre>
+    <p>The judge fills the advisory fields; the controller stamps <code>effective_risk_tier</code>, derives the binding human-review requirement, and rejects any verdict that fails schema validation — including one that omits <code>document_quality</code> at a document stage or <code>test_integrity</code> at the implementation stage.</p>
   </div>
 </section>
 
 <section id="telemetry">
   <div class="wrap">
-    <p class="kicker">09 — TELEMETRY</p><hr class="lead-line">
-    <h2>The metrics that gate the unlocks</h2>
-    <ul class="tight">
-      <li><b>False approval rate</b> (accept → human-rejected as defect/requirement-miss/security). Clears the §06 threshold before a tier unlocks; drives auto-suspend.</li>
-      <li><b>Rejection taxonomy</b>: defect · requirement_miss · security · preference · stale_branch · unrelated_ci.</li>
-      <li><b>Escaped defects</b>: issues found after merge — ground truth over everything upstream.</li>
-      <li><b>Revisions/bean &amp; rework</b>: high → under-specified beans or an undersized worker.</li>
-      <li><b>Model swap overhead %</b> (from the inference-manager load times) and <b>blocked rate</b>: operational health; swap overhead informs resident-vs-serial.</li>
+    <p class="kicker">11 — TELEMETRY</p><hr class="lead-line">
+    <h2>The metrics that gate the unlocks and steer the outside builder</h2>
+    <ul class="check">
+      <li><b>False approval rate</b> (judge <code>accept</code> → human rejection as defect / requirement_miss / security / doc_quality). Clears the §08 threshold before a tier unlocks; drives auto-suspend.</li>
+      <li><b>Rejection taxonomy</b>: defect · requirement_miss · security · preference · stale_branch · unrelated_ci · doc_quality. Only the first three (and doc_quality for document stages) count as false approvals.</li>
+      <li><b>Escaped defects</b>: issues found after merge or on the test server — ground truth over everything upstream, and the <em>only</em> truth in <code>auto</code> repos.</li>
+      <li><b>Task attempts per task, revisions per stage, rework rate</b>: high → under-decomposed beans, a weak prompt, or an undersized developer. This is the primary signal the outside builder tunes against in Phase 5.</li>
+      <li><b>Spec-audit revise rate vs impl-audit revise rate</b>: catching problems at the spec is cheap; a high impl revise rate with a low spec revise rate means the spec audit is too lenient.</li>
+      <li><b>Swap overhead %</b>, bean cycle time, and time-waiting-for-other-role: decide the scheduler's <code>swap_policy</code> and whether co-residency is worth lower context.</li>
+      <li><b>Blocked rate and reasons</b>: operational health; a spike in <code>split_required</code> means intake is producing beans that are too large.</li>
     </ul>
+    <p>Everything is one JSONL event per transition (§10), loaded into SQLite on Forge. A dashboard is a nice-to-have; the outside builder's weekly read of these seven numbers is the requirement.</p>
   </div>
 </section>
 
 <section id="start">
   <div class="wrap">
-    <p class="kicker">10 — ROLLOUT</p><hr class="lead-line">
-    <h2>The phases live in a checkable plan, not decorative boxes</h2>
-    <p>The boxes below are a summary; the <b>authoritative, resumable ledger</b> is the companion <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code> with real Markdown tasks. Every phase — including 1, 3, and 4 — requires the same closing ritual: <em>all tasks checked → exit criteria machine-verified → audit report generated → findings corrected → audit re-run → an explicit phase-complete marker committed.</em></p>
+    <p class="kicker">12 — ROLLOUT</p><hr class="lead-line">
+    <h2>Seven phases, and the outside builder's three-act arc</h2>
+    <p>The authoritative, resumable ledger is <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>. Every phase closes with the same ritual: all tasks checked → exit criteria machine-verified → audit report generated → findings corrected → audit re-run → phase-complete marker committed. The outside builder's role shifts across the phases: <b>build</b> (0–4), <b>supervise</b> (5), <b>test changes only</b> (6 onward).</p>
 
-    <div class="phasebox"><div class="ph"><span class="p">Phase 0</span><h4>Measure on Ollama</h4></div>
-      <p class="dim">Set context explicitly (16K/32K/48K); record residency + swap time; Harmony conformance. Exit + audit &amp; correction per the plan.</p></div>
-    <div class="phasebox"><div class="ph"><span class="p">Phase 1</span><h4>One bean, by hand</h4></div>
-      <p class="dim">Candidate-commit review path validated; allowed-path enforcement; schema-valid verdict; independent invariant runs. Exit + audit &amp; correction.</p></div>
-    <div class="phasebox"><div class="ph"><span class="p">Phase 2</span><h4>Controller — worker cannot commit</h4></div>
-      <p class="dim">Full loop + fault injection (restart, unauthorized-path reject, duplicate PR, credential exposure, CI failure, stale branch, wrong-model-loaded). Exit + audit &amp; correction.</p></div>
-    <div class="phasebox"><div class="ph"><span class="p">Phase 3</span><h4>Lights-out to PRs</h4></div>
-      <p class="dim">Queue/leases/idempotency/provenance/kill-switch/telemetry. <b>Exit:</b> ≥ 48 unattended hours <em>and</em> ≥ 25 completed beans, reconciliation-after-crash pass, all three stop verbs verified. Exit + audit &amp; correction.</p></div>
-    <div class="phasebox"><div class="ph"><span class="p">Phase 4</span><h4>Unlock auto-merge by tier, on evidence</h4></div>
-      <p class="dim">Meet §06 numeric thresholds for Tier 0 only; auto-suspend armed; Tiers 2–3 human/never. Exit + audit &amp; correction.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 0</span><h4>Measure on Forge</h4></div><p class="dim">Residency and GPU/CPU split at 16K/32K/48K, alone and together; swap time both directions; Harmony conformance; Pi drives both models through Ollama. Exit: the co-resident vs serial decision is recorded with provenance.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 1</span><h4>One bean, by hand, through all seven stages</h4></div><p class="dim">Throwaway repo. The outside builder runs each stage with <code>factory step</code>: developer writes spec + tasks; judge audits; task loop with verify; gates; impl audit; document; pre-PR audit; PR. Both HTML documents rendered and read by a human. Exit: every artifact schema-valid, every hand-off a commit, containment proven.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 2</span><h4>Controller drives it; the developer cannot commit</h4></div><p class="dim">Full loop unattended for one bean; fault injection — restart mid-stage, out-of-path edit at task and bean level, duplicate PR, credential exposure, CI failure, stale branch, wrong model loaded, doc that doesn't match diff (judge must catch). Exit: all injections pass; human merge required.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 3</span><h4>Intake refinery</h4></div><p class="dim">Transcript → work items → draft beans → joint review → approval PR → <code>factory go</code>, with the local judge model as the AI side. Exit: a real transcript produces ≥5 approved beans that pass the size budget at the specifying stage. Can run alongside Phase 2.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 4</span><h4>Lights-out to PRs</h4></div><p class="dim">Queue, leases, worktrees, role-batched scheduler, kill switch, reconciliation, telemetry. Exit: ≥48 unattended hours, ≥25 completed beans producing PRs only, all three stop verbs verified, reconciliation-after-crash pass.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 5</span><h4>Supervised operation — the outside builder monitors</h4></div><p class="dim">Opus reads telemetry, verdicts and human rejections weekly; proposes prompt, template, decomposition-rule, scheduler and policy changes as PRs to this repo (Tier 3, human-merged). Exit: two consecutive review cycles with no unresolved drift, rework rate and false-approval rate under their thresholds, swap policy settled.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">PHASE 6</span><h4>Merge modes &amp; deploy-to-test</h4></div><p class="dim">Enable <code>auto</code> on a signed solo repo with a <code>post_merge</code> deploy; verify <code>deployed_test</code>/<code>deploy_failed</code> paths and the escaped-defect log. Shared repos stay <code>human_required</code> or earn <code>auto_when_unlocked</code> per tier on evidence. Exit: one repo running lights-out to the test server.</p></div>
+    <div class="phasebox"><div class="ph"><span class="p">STANDING</span><h4>Model-change protocol — the only time a frontier model touches the line</h4></div><p class="dim">To swap the judge or developer: shadow-run the candidate model on the last K beans' recorded stages; compare verdict agreement / task pass rate / doc quality against the incumbent; the frontier model adjudicates disagreements only for the duration of the test. Cut over on evidence; record it in the changelog. The runtime registry still contains only <code>ollama</code>.</p></div>
   </div>
 </section>
 
 <section id="appendix">
   <div class="wrap">
-    <p class="kicker">11 — CONFIG APPENDIX</p><hr class="lead-line">
-    <h2>Corrected, executable templates</h2>
-    <p class="dim">Adapt, don’t paste blindly — verify against current tool versions (§12).</p>
+    <p class="kicker">13 — CONFIG APPENDIX</p><hr class="lead-line">
+    <h2>Executable templates — adapt, don't paste blindly</h2>
 
-    <h3>Pi → the Q8 worker on Ollama, context declared to match</h3>
-    <pre><span class="c">// ~/.pi/agent/models.json — declare tested context; don't inherit Pi's 128K default</span>
-<span class="k">{</span> <span class="k">"providers"</span>: { <span class="k">"ollama"</span>: {
-  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:11434/v1"</span>,
-  <span class="k">"api"</span>: <span class="s">"openai-completions"</span>,
-  <span class="k">"apiKey"</span>: <span class="s">"ollama"</span>,
-  <span class="k">"models"</span>: [ {
-    <span class="k">"id"</span>: <span class="s">"qwen3.8:27b-q8_0"</span>,
-    <span class="k">"name"</span>: <span class="s">"Qwen3.8 27B Q8 on Forge"</span>,
-    <span class="k">"reasoning"</span>: true, <span class="k">"input"</span>: [<span class="s">"text"</span>],
-    <span class="k">"contextWindow"</span>: 32768,          <span class="c">// MATCH what Ollama serves, or overflow/compaction breaks</span>
-    <span class="k">"maxTokens"</span>: 8192
-  } ]
+    <h3>Pi → both models on Ollama, context declared to match</h3>
+<pre><code><span class="c">// ~/.pi/agent/models.json (factory user on Forge) — declare tested context; don't inherit Pi's 128K default</span>
+{ "providers": { "ollama": {
+  "baseUrl": "http://127.0.0.1:11434/v1",
+  "api": "openai-completions",
+  "apiKey": "ollama",
+  "models": [
+    { "id": "qwen3.8:27b-q8_0", "name": "Developer · Qwen3.8 27B Q8",
+      "reasoning": true, "input": ["text"],
+      "contextWindow": 32768, "maxTokens": 8192 },      <span class="c">// MATCH what Ollama serves (Phase 0)</span>
+    { "id": "gpt-oss:120b",     "name": "Judge · gpt-oss 120B",
+      "reasoning": true, "input": ["text"],
+      "contextWindow": 32768, "maxTokens": 8192 }
+  ]
 } } }
-<span class="c"># Test whether the endpoint accepts the developer role + reasoning-effort fields;</span>
-<span class="c"># Pi documents compatibility flags for endpoints that don't. pi --mode rpc --no-extensions</span></pre>
+<span class="c"># No other provider block exists in this file. That absence is the "no frontier at runtime" guarantee.</span>
+<span class="c"># pi --mode rpc --no-extensions ; test developer-role + reasoning-effort compatibility per model.</span></code></pre>
+
+    <h3>Per-repo factory config — <code>factory/repo.yaml</code></h3>
+<pre><code>schema_version: repo-config/1.0.0
+repo: beekeeper-lab/payments-svc
+default_branch: main
+host: github
+merge_mode: auto                          <span class="c"># human_required | auto_when_unlocked | auto</span>
+merge_mode_signoff: { signed_by: gregg, signed_at: 2026-09-20T14:00:00Z,
+                      note: "solo repo; test server is the gate" }
+required_checks: [ "ci / test", "ci / lint" ]
+post_merge:
+  - { id: deploy-test, kind: workflow_dispatch, workflow: deploy-test.yml,
+      inputs: { environment: test }, timeout_seconds: 900 }
+max_inflight: 2
+policy_ref: factory/risk-policy.yaml
+gates_ref:  factory/gates.lock.yaml
+docs:
+  spec_template: factory/templates/spec.html
+  impl_template: factory/templates/impl-detail.html
+  audience_note: "A developer new to this repo and to Python web services."</code></pre>
 
     <h3>Gate manifest — argv arrays, pinned versions, verified at startup</h3>
-    <pre><span class="c"># factory/gates.lock.yaml — image pins tool versions; commands are argv arrays</span>
-<span class="k">image</span>: <span class="s">registry.local/factory-gates@sha256:…</span>   <span class="c"># pinned digest, offline cache</span>
-<span class="k">expect_versions</span>: { ruff: <span class="s">"0.6.9"</span>, mypy: <span class="s">"1.11.2"</span>, pytest: <span class="s">"8.3.3"</span>, gitleaks: <span class="s">"8.18.4"</span> }
-<span class="k">verify_versions_at_startup</span>: true
-<span class="k">gates</span>:
-  - { <span class="k">id</span>: lint,    <span class="k">run</span>: [ <span class="s">"ruff"</span>, <span class="s">"check"</span>, <span class="s">"."</span> ] }
-  - { <span class="k">id</span>: types,   <span class="k">run</span>: [ <span class="s">"mypy"</span>, <span class="s">"."</span> ] }
-  - { <span class="k">id</span>: tests,   <span class="k">run</span>: [ <span class="s">"pytest"</span>, <span class="s">"-q"</span> ], <span class="k">coverage_floor</span>: <span class="s">"baseline"</span> }
-  - { <span class="k">id</span>: secrets, <span class="k">run</span>: [ <span class="s">"gitleaks"</span>, <span class="s">"dir"</span>, <span class="s">"."</span>, <span class="s">"--redact"</span> ] }
-  - { <span class="k">id</span>: deps,    <span class="k">run</span>: [ <span class="s">"pip-audit"</span> ] }</pre>
+<pre><code><span class="c"># factory/gates.lock.yaml — image pins tool versions; commands are argv arrays</span>
+image: registry.local/factory-gates@sha256:…   <span class="c"># pinned digest, offline cache</span>
+expect_versions: { ruff: "0.6.9", mypy: "1.11.2", pytest: "8.3.3", gitleaks: "8.18.4" }
+verify_versions_at_startup: true
+gates:
+  - { id: lint,    run: [ "ruff", "check", "." ] }
+  - { id: types,   run: [ "mypy", "." ] }
+  - { id: tests,   run: [ "pytest", "-q" ], coverage_floor: "baseline" }
+  - { id: secrets, run: [ "gitleaks", "dir", ".", "--redact" ] }
+  - { id: deps,    run: [ "pip-audit" ] }
+  - { id: doclint, run: [ "factory-doclint", "factory/specs", "factory/impl" ] }   <span class="c"># required sections present & non-empty</span></code></pre>
 
     <h3>Hardened systemd unit (with rootless-podman storage note)</h3>
-    <pre><span class="c"># /etc/systemd/system/darkfactory.service</span>
-<span class="k">[Service]</span>
+<pre><code><span class="c"># /etc/systemd/system/darkfactory.service</span>
+[Service]
 User=factory
 Group=factory
 StateDirectory=darkfactory
 RuntimeDirectory=darkfactory
 Environment=CONTAINERS_STORAGE_CONF=/etc/darkfactory/storage.conf   <span class="c"># store under StateDirectory</span>
-EnvironmentFile=/etc/darkfactory/env
+EnvironmentFile=/etc/darkfactory/env        <span class="c"># GitHub token for the factory app; NO frontier keys</span>
 ExecStartPre=/opt/factory/venv/bin/python -m factory.reconcile
 ExecStart=/opt/factory/venv/bin/python -m factory.controller
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true            <span class="c"># NOTE: rootless podman stores under $HOME by default;</span>
-                            <span class="c"># with ProtectHome=true you MUST relocate container storage</span>
-                            <span class="c"># under StateDirectory (see storage.conf above) or podman breaks.</span>
+ProtectHome=true            <span class="c"># rootless podman stores under $HOME by default; relocate storage (above) or podman breaks</span>
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=120
 KillSignal=SIGTERM          <span class="c"># SIGTERM→drain; SIGINT→pause; control socket→stop-now</span>
-<span class="c"># Enable Protect*/sandbox options incrementally WITH integration tests — do not blanket-enable.</span></pre>
+<span class="c"># Enable Protect*/sandbox options incrementally WITH integration tests — do not blanket-enable.</span></code></pre>
   </div>
 </section>
 
 <section id="refs">
   <div class="wrap">
-    <p class="kicker">12 — CHANGELOG &amp; REFERENCES</p><hr class="lead-line">
+    <p class="kicker">14 — CHANGELOG, OPEN QUESTIONS &amp; REFERENCES</p><hr class="lead-line">
     <h3>Changelog</h3>
     <ul class="tight">
-      <li><b>v4.0 · 2026-09-13</b> — Judge now reviews an immutable <code>candidate_sha</code> (commit created before review; exact commit pushed/merged; out-of-band head change = violation). Real JSON Schemas shipped (verdict/bean/event/gate-manifest/risk-policy) with required binding fields, enums, ranges, <code>additionalProperties:false</code>; <code>human_review</code> is controller-derived, judge field renamed <code>suggested_human_review</code>. Phase-0 sets <code>OLLAMA_CONTEXT_LENGTH</code> and handles the systemd address-in-use case; Pi declares matching <code>contextWindow/maxTokens</code>. Gate commands are argv arrays with pinned, startup-verified versions. Full sandbox contract restored, plus structural “no git in worker.” Serial model-lifecycle contract added. Companion checkable implementation plan replaces decorative boxes; Phases 1/3/4 get audit-and-correction language; Phase-3 exit gets concrete hours + bean count. State machine adds <code>committing_candidate</code>, <code>ci_timeout</code>, <code>merge_conflict</code>. Restored figure/SVG/caption styles. Independence clarified (human or different family). Status → candidate for baseline approval. Fixed “§06 references” → §12.</li>
-      <li><b>v3.0</b> — Controller-computed binding tier; reject-not-strip; independent invariants + admission; expanded state machine; CI/stale/SHA handling; Q8 correction; Ollama residency controls; hardened systemd; kill switch; numeric unlocks; print styling; references.</li>
-      <li><b>v2.0</b> — Risk tiers, trust boundary, sandbox contract, provenance, verdict schema, Ollama-first, config corrections, Harmony warning.</li>
+      <li><b>v5.0 · 2026-09-14</b> — Aligned to the owner's process and the Forge/local-model goal. Added the document pipeline (spec → spec audit → build → impl audit → impl-detail → pre-PR audit) with three verdict stages and hash-bound HTML artifacts; the intake refinery (transcript → beans → joint review → approval PR → <code>go</code>); the task loop with per-task <code>verify</code>, containment and attempt caps ("does not quit early" as a controller property); agentic acceptance criteria (<code>verify</code> on every AC); bean <code>repo</code>/<code>status</code>/<code>source</code>/<code>approval</code>/<code>size_budget</code>; new <code>task</code> and <code>repo-config</code> schemas; per-repo <code>merge_mode</code> with signed <code>auto</code> opt-in and <code>post_merge</code> deploy-to-test; git worktrees with <code>max_inflight</code>; role-batched scheduler for the serial regime with co-resident fallback; Forge described as 126 GB unified memory with a configurable GPU split; GitHub as the single host; the outside builder (Opus) defined as structurally absent from the runtime; Phases 3 (intake), 5 (supervised operation) and 6 (merge modes) added; model-change protocol added. Fixed the truncated bean example; schemas moved to <code>schemas/</code>.</li>
+      <li><b>v4.0 · 2026-09-13</b> — Judge reviews an immutable <code>candidate_sha</code>; real JSON Schemas; Phase-0 context handling; argv gates; full sandbox contract; serial model lifecycle; checkable plan.</li>
+      <li><b>v3.0</b> — Controller-computed binding tier; reject-not-strip; independent invariants; expanded state machine; hardened systemd; kill switch; numeric unlocks.</li>
+      <li><b>v2.0</b> — Risk tiers, trust boundary, sandbox contract, provenance, verdict schema, Ollama-first.</li>
       <li><b>v1.0</b> — Architecture vision.</li>
+    </ul>
+    <h3>Open questions for the owner</h3>
+    <ul class="tight">
+      <li><b>First target application.</b> Phases 1–2 use a throwaway repo. Which real application is the first 100%-local build target for Phases 4–6?</li>
+      <li><b>Deploy-to-test mechanism.</b> <code>workflow_dispatch</code> of a GitHub Actions workflow is assumed. If a repo deploys another way (Cloudflare wrangler, systemd on Forge), it needs a <code>post_merge</code> action of <code>kind: command</code> and a runner with those credentials — never the developer sandbox.</li>
+      <li><b>GPU memory split on Forge.</b> Phase 0 records the current BIOS UMA / kernel setting; raising the GPU share is a decision to take with the residency numbers in hand.</li>
+      <li><b>Intake model.</b> The judge is proposed for the AI side of intake (strongest local reasoner). If its interactive latency is poor, the developer model can draft and the judge can review the batch.</li>
     </ul>
     <h3>References</h3>
     <ul class="refs">
-      <li>Pi coding agent — <a href="https://github.com/earendil-works/pi">github.com/earendil-works/pi</a> (<code>docs/models.md</code>, model context defaults, RPC mode).</li>
-      <li>Ollama context length &amp; concurrency (<code>OLLAMA_CONTEXT_LENGTH</code>, <code>OLLAMA_KEEP_ALIVE</code>, <code>OLLAMA_MAX_LOADED_MODELS</code>, <code>OLLAMA_NUM_PARALLEL</code>, <code>ollama stop</code>) — <a href="https://github.com/ollama/ollama">github.com/ollama/ollama</a> (FAQ).</li>
-      <li>Ruff invocation (<code>ruff check</code>) — <a href="https://docs.astral.sh/ruff/">docs.astral.sh/ruff</a>.</li>
-      <li>llama-swap (<code>${PORT}</code>) — <a href="https://github.com/mostlygeek/llama-swap">github.com/mostlygeek/llama-swap</a>.</li>
-      <li>gpt-oss &amp; the Harmony format — <a href="https://huggingface.co/openai/gpt-oss-120b">huggingface.co/openai/gpt-oss-120b</a> model card.</li>
-      <li>Podman rootless storage &amp; security — <a href="https://docs.podman.io">docs.podman.io</a>.</li>
+      <li>Pi coding agent — github.com/earendil-works/pi (docs/models.md, model context defaults, RPC mode).</li>
+      <li>Ollama context length &amp; concurrency (<code>OLLAMA_CONTEXT_LENGTH</code>, <code>OLLAMA_KEEP_ALIVE</code>, <code>OLLAMA_MAX_LOADED_MODELS</code>, <code>OLLAMA_NUM_PARALLEL</code>, <code>ollama stop</code>) — github.com/ollama/ollama (FAQ).</li>
+      <li>gpt-oss &amp; the Harmony format — huggingface.co/openai/gpt-oss-120b model card.</li>
+      <li>GitHub REST: pulls, checks, <code>workflow_dispatch</code>, branch protection — docs.github.com/rest.</li>
+      <li>git worktree — git-scm.com/docs/git-worktree.</li>
+      <li>Ruff invocation (<code>ruff check</code>) — docs.astral.sh/ruff.</li>
+      <li>Podman rootless storage &amp; security — docs.podman.io.</li>
       <li>systemd hardening — <code>man systemd.exec</code>, <code>man systemd.service</code>.</li>
+      <li>HTML artifact standard for the two documents — <code>~/.claude/skills/html-artifact-output</code>.</li>
     </ul>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p>Status: candidate for baseline approval — pending the human owner’s recorded sign-off; a specification does not approve itself. The review-binding gap is closed, the contracts are shipped as schemas, the sandbox is enforceable, and the serial lifecycle is specified. Begin Phase 0, generate the controller skeleton against the schemas, and prove each phase as a checklist before any unattended commit.</p>
+    <p><b>Status: candidate for baseline approval</b> — pending the owner's recorded sign-off; a specification does not approve itself. This version describes the whole process end to end: intake with a human, a seven-stage line with three audits and two teaching documents, per-repo merge policy, and a frontier model that improves the line without ever running on it. Begin with Phase 0 on Forge; the controller skeleton is generated against the seven schemas; every phase is proven as a checklist before any unattended commit.</p>
   </div>
 </footer>
 

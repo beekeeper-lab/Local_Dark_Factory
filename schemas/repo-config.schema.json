@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/repo-config.schema.json",
+  "title": "RepoConfig",
+  "description": "Per-repository factory configuration at factory/repo.yaml. Human-authored, Tier 3 (agent-control) path. Decides how the line finishes a bean in THIS repo: who merges, what happens after merge, how many beans may be in flight.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","repo","default_branch","host","merge_mode","max_inflight","policy_ref","gates_ref"],
+  "properties": {
+    "schema_version": { "const": "repo-config/1.0.0" },
+    "repo": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "default_branch": { "type": "string", "minLength": 1 },
+    "host": { "const": "github" },
+    "merge_mode": {
+      "enum": ["human_required","auto_when_unlocked","auto"],
+      "description": "human_required: the line only opens PRs. auto_when_unlocked: the controller merges tiers that have met the numeric unlock (§06). auto: solo-developer opt-in — the controller merges Tier 0-2 once CI is green and the pre-PR verdict is accept; Tier 3 is never autonomous in any mode."
+    },
+    "merge_mode_signoff": {
+      "type": "object", "additionalProperties": false,
+      "description": "Required when merge_mode is 'auto'. Records the human who accepted that no second reviewer exists.",
+      "required": ["signed_by","signed_at"],
+      "properties": {
+        "signed_by": { "type": "string", "minLength": 1 },
+        "signed_at": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      }
+    },
+    "required_checks": { "type": "array", "items": { "type": "string" },
+      "description": "GitHub check names that must be green for the exact candidate_sha before any merge." },
+    "post_merge": {
+      "type": "array",
+      "description": "Actions the controller runs after merged, in order. Failure -> deploy_failed, alert, never rolled back automatically.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id","kind"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
+          "kind": { "enum": ["workflow_dispatch","command"] },
+          "workflow": { "type": "string", "description": "GitHub Actions workflow file name for kind=workflow_dispatch." },
+          "inputs": { "type": "object", "additionalProperties": { "type": "string" } },
+          "run": { "type": "array", "items": { "type": "string" }, "description": "argv array for kind=command, run by the controller (not the worker)." },
+          "timeout_seconds": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "max_inflight": { "type": "integer", "minimum": 1, "maximum": 8,
+      "description": "Concurrent beans (one git worktree each). Inference is still serialized by the inference manager." },
+    "policy_ref": { "type": "string", "description": "Path to the risk-policy YAML, e.g. factory/risk-policy.yaml" },
+    "gates_ref": { "type": "string", "description": "Path to the gate manifest, e.g. factory/gates.lock.yaml" },
+    "docs": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "spec_template": { "type": "string", "description": "HTML template the controller renders the spec into. Default: factory/templates/spec.html" },
+        "impl_template": { "type": "string", "description": "HTML template for the implementation-detail document. Default: factory/templates/impl-detail.html" },
+        "audience_note": { "type": "string", "description": "Who reads these documents. Injected into the writer prompt so no stack knowledge is assumed." }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "merge_mode": { "const": "auto" } } }, "then": { "required": ["merge_mode_signoff"] } }
+  ]
+}

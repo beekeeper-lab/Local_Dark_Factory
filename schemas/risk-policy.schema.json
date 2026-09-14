@@ -28,14 +28,17 @@
   },
   "examples": [
     {
-      "policy_version": "risk/2026-09-13",
+      "policy_version": "risk/2026-09-14",
       "default_tier": 1,
-      "repo_allowed_paths": ["src/**","tests/**","docs/**"],
+      "repo_allowed_paths": ["src/**","tests/**","docs/**","factory/specs/**","factory/impl/**"],
       "rules": [
+        { "match": "{factory/specs/**,factory/impl/**,docs/**}", "min_tier": 0, "reason": "documents" },
         { "match": "**/migrations/**", "min_tier": 2, "reason": "schema change" },
         { "match": "src/auth/**", "min_tier": 2, "reason": "authn/authz" },
-        { "match": "{.github,ci,.forgejo}/**", "min_tier": 2, "reason": "CI config" },
+        { "match": ".github/**", "min_tier": 2, "reason": "CI config" },
         { "match": "{package.json,pyproject.toml,*.lock,go.mod,Cargo.*}", "min_tier": 2, "reason": "dependencies" },
+        { "match": "factory/beans/**", "min_tier": 2, "reason": "requirements — line reads, never writes" },
+        { "match": "{factory/repo.yaml,factory/risk-policy.yaml,factory/gates.lock.yaml,factory/templates/**,factory/prompts/**,factory/invariants/**}", "min_tier": 3, "reason": "agent-control" },
         { "match": "{AGENTS.md,CLAUDE.md,.pi/**,skills/**,hooks/**,prompts/**}", "min_tier": 3, "reason": "agent-control" },
         { "match": "{deploy/**,terraform/**,k8s/**,*.env,secrets/**}", "min_tier": 3, "reason": "secrets/infra" }
       ]

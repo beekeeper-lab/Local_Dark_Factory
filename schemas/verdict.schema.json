@@ -2,21 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://forge.local/schemas/verdict.schema.json",
   "title": "Verdict",
-  "description": "Judge review of an immutable candidate commit. The judge supplies suggested_* fields; the controller stamps effective_risk_tier and the binding human_review decision.",
+  "description": "Judge review of an immutable candidate commit at one of three audit stages. spec_audit reviews the spec document + task list; impl_audit reviews the code diff + gate results; pre_pr_audit reviews the implementation-detail document against the final diff. The judge supplies suggested_* fields; the controller stamps effective_risk_tier and the binding human_review decision.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version","bean_id","base_sha","candidate_sha","diff_sha256",
+    "schema_version","stage","bean_id","base_sha","candidate_sha","diff_sha256",
     "gate_run_id","gate_manifest_digest","invariants_digest","policy_version",
     "effective_risk_tier","model_digest","prompt_version","criteria","verdict"
   ],
   "properties": {
-    "schema_version": { "const": "verdict/1.4.0" },
+    "schema_version": { "const": "verdict/2.0.0" },
+    "stage": { "enum": ["spec_audit","impl_audit","pre_pr_audit"] },
     "bean_id": { "type": "string", "pattern": "^bean-[0-9]+$" },
     "base_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "candidate_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "diff_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "gate_run_id": { "type": "string", "minLength": 1 },
+    "gate_run_id": { "type": "string", "minLength": 1,
+      "description": "For spec_audit this is the schema/lint run over the spec artifacts, not a code gate run." },
     "gate_manifest_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "invariants_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "policy_version": { "type": "string", "minLength": 1 },
@@ -24,6 +26,19 @@
       "description": "Controller-stamped binding tier = max(policy_tier, suggested_tier)." },
     "model_digest": { "type": "string", "minLength": 1 },
     "prompt_version": { "type": "string", "minLength": 1 },
+    "artifacts": {
+      "type": "array",
+      "description": "Documents the judge reviewed, each bound by hash so the PR can prove which version was audited.",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind","path","sha256"],
+        "properties": {
+          "kind": { "enum": ["spec","tasks","impl_detail"] },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
     "criteria": {
       "type": "array", "minItems": 1,
       "items": {
@@ -34,6 +49,18 @@
           "met": { "type": "boolean" },
           "evidence": { "type": "string", "minLength": 1 }
         }
+      }
+    },
+    "document_quality": {
+      "type": "object", "additionalProperties": false,
+      "description": "Required when stage is spec_audit or pre_pr_audit. Each is a yes/no the judge must answer about the HTML document.",
+      "required": ["risk_called_out","blast_radius_called_out","code_blocks_teach","no_assumed_stack_knowledge","matches_diff"],
+      "properties": {
+        "risk_called_out": { "type": "boolean" },
+        "blast_radius_called_out": { "type": "boolean" },
+        "code_blocks_teach": { "type": "boolean" },
+        "no_assumed_stack_knowledge": { "type": "boolean" },
+        "matches_diff": { "type": "boolean", "description": "For pre_pr_audit: the document describes what the diff actually does. Always true for spec_audit." }
       }
     },
     "affected_files": { "type": "array", "items": { "type": "string" } },
@@ -64,6 +91,17 @@
     "suggested_human_review": { "type": "boolean",
       "description": "Judge advisory; the controller derives the binding human-review requirement." },
     "verdict": { "enum": ["accept","revise","block"] },
-    "feedback_to_worker": { "type": "string" }
-  }
+    "feedback_to_worker": { "type": "string",
+      "description": "On revise: concrete, task-scoped instructions. The controller forwards only this field, never the judge's reasoning." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "stage": { "enum": ["spec_audit","pre_pr_audit"] } } },
+      "then": { "required": ["document_quality","artifacts"] }
+    },
+    {
+      "if": { "properties": { "stage": { "const": "impl_audit" } } },
+      "then": { "required": ["test_integrity"] }
+    }
+  ]
 }
