@@ -28,8 +28,27 @@ RUN_DIR="$1"
 [ -d "$RUN_DIR" ] || die "run directory not found: $RUN_DIR"
 
 require_config
-jq -e '.gates | type == "array" and length > 0' "$CONFIG_PATH" >/dev/null \
-  || die "config must define a non-empty 'gates' array: $CONFIG_PATH"
+
+# Where the gates come from. If the repo has a pinned gate manifest
+# (repo.yaml gates_ref -> factory/gates.lock.yaml), that manifest is the source
+# of truth and the config's own `gates` array is not consulted: two lists of
+# gates is one list that will eventually disagree with itself, and the manifest
+# is the one the image digest and expect_versions belong to.
+GATES_SRC="$CONFIG_PATH"
+GATES_JSON=""
+gates_ref="$(jq -r '.gates_ref // empty' "$CONFIG_PATH")"
+if [ -n "$gates_ref" ] && [ -f "$(resolve_repo_path "$gates_ref")" ]; then
+  GATES_SRC="$(resolve_repo_path "$gates_ref")"
+  GATES_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$GATES_SRC" \
+    | jq -c '[.gates[] | {name: .id, command: (.run | map(@sh) | join(" ")), working_dir: "."}]')"
+  jq -e 'length > 0' >/dev/null <<<"$GATES_JSON" \
+    || die "gate manifest defines no gates: $GATES_SRC"
+else
+  jq -e '.gates | type == "array" and length > 0' "$CONFIG_PATH" >/dev/null \
+    || die "no gates: the config has no 'gates' array and no usable gates_ref ($CONFIG_PATH)"
+  GATES_JSON="$(jq -c '.gates' "$CONFIG_PATH")"
+fi
+printf 'gates from %s\n' "$GATES_SRC" >&2
 
 root="$(repo_root)"
 overall="pass"
@@ -80,7 +99,7 @@ while IFS= read -r gate; do
   rm -f "$out_file"
 
   if [ "$status" = "fail" ]; then break; fi
-done < <(jq -c '.gates[]' "$CONFIG_PATH")
+done < <(jq -c '.[]' <<<"$GATES_JSON")
 
 # Record any gates that were never reached.
 if [ "$overall" = "fail" ]; then
@@ -91,7 +110,7 @@ if [ "$overall" = "fail" ]; then
       append_gate "$(jq -cn --arg n "$name" '{name: $n, status: "skipped", exit_code: null, duration_s: null}')"
       printf 'GATE  %-20s skipped (a previous gate failed)\n' "$name"
     fi
-  done < <(jq -c '.gates[]' "$CONFIG_PATH")
+  done < <(jq -c '.[]' <<<"$GATES_JSON")
 fi
 
 finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

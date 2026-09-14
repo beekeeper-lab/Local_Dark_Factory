@@ -1,0 +1,41 @@
+# The gate container: the only place the line's verdicts are allowed to come from.
+#
+# Two properties matter more than anything in here being modern:
+#
+# 1. **It is pinned.** The base is pinned by digest, every tool is pinned by
+#    version, and the built image's own digest goes into factory/gates.lock.yaml.
+#    "The tests passed" is only a fact about a specific set of tool versions; a
+#    gate whose toolchain drifts turns every historical green into an anecdote.
+#
+# 2. **It needs no network.** The project's runtime dependency (OR-Tools) is
+#    baked in, so a gate run is a pure function of the diff and this image.
+#    §08 runs the sandbox with no network by default, and a gate that quietly
+#    needed pip would fail in a way that looks like a code failure.
+#
+# Rebuild and re-pin with: factory/gate-image/build.sh
+FROM docker.io/library/python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+
+# Tool versions are the gate's contract with every run record that cites it.
+# gates.lock.yaml repeats them in expect_versions and the controller asserts
+# them at startup, so an image swapped underneath the manifest is caught rather
+# than discovered later in a comparison that no longer means anything.
+ARG RUFF_VERSION
+ARG MYPY_VERSION
+ARG PYTEST_VERSION
+ARG PYTEST_COV_VERSION
+ARG ORTOOLS_VERSION
+
+RUN pip install --no-cache-dir \
+      ruff=="${RUFF_VERSION}" \
+      mypy=="${MYPY_VERSION}" \
+      pytest=="${PYTEST_VERSION}" \
+      pytest-cov=="${PYTEST_COV_VERSION}" \
+      ortools=="${ORTOOLS_VERSION}"
+
+# The worker never runs as root inside the sandbox; the gate does not either.
+RUN useradd --create-home --uid 1000 gate
+USER gate
+WORKDIR /work
+
+# No entrypoint: the controller supplies the argv array from gates.lock.yaml.
+CMD ["python", "--version"]

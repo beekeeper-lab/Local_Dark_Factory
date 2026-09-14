@@ -94,7 +94,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -n "$BEAN_ID" ] || { usage >&2; die "missing <BEAN_ID>"; }
-[[ "$BEAN_ID" =~ ^BEAN-[0-9]+$ ]] || die "BEAN-ID must look like BEAN-NNN (got: $BEAN_ID)"
+# bean.schema.json says `^bean-[0-9]+$` and the benchmark corpus uses it; the
+# forked scripts were written against an uppercase BEAN-NNN convention. The
+# schema is the contract, so both spellings are accepted and the id is used as
+# written from here on.
+[[ "$BEAN_ID" =~ ^([Bb][Ee][Aa][Nn])-[0-9]+$ ]] || die "bean id must look like bean-NNN (got: $BEAN_ID)"
 [ "$STOP_AFTER" = "" ] || [[ "$STOP_AFTER" =~ ^[a-z]+(-[a-z]+)*$ ]] \
   || die "--stop-after step name must be lowercase alphanumeric/hyphen (got: $STOP_AFTER)"
 require_cmd jq

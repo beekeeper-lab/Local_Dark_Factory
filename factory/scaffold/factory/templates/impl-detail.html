@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} — Implementation detail</title>
+<!--
+  Implementation detail template — factory/templates/impl-detail.html
+
+  A Tier 3 agent-control file: the line renders documents WITH this template and
+  never edits it. Changes arrive as human-merged pull requests.
+
+  Self-contained by requirement (spec §07): no external stylesheet, font or
+  script, because these documents are read from a PR, from a file:// path, and
+  from an archive years later, and a document that needs the network to be
+  legible is a document that will one day not be.
+-->
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --ink: #e6e8ec; --dim: #9aa3b0;
+    --line: #2b3038; --accent: #8fd18a; --accent-dim: #3c6b39;
+    --code-bg: #0f1115;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 54rem; margin: 0 auto; padding: 2.5rem 1.25rem 6rem; }
+  header.doc { border-bottom: 1px solid var(--line); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .kind {
+    display: inline-block; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent-dim); border-radius: 999px;
+    padding: .2rem .7rem; margin-bottom: .9rem;
+  }
+  h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 1rem; }
+  h2 {
+    font-size: 1.3rem; margin: 2.6rem 0 .8rem; padding-top: .9rem;
+    border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 1.05rem; margin: 1.8rem 0 .5rem; color: var(--accent); }
+  h4, h5, h6 { font-size: .95rem; margin: 1.3rem 0 .4rem; color: var(--dim); }
+  p, li { color: var(--ink); }
+  a { color: var(--accent); }
+  dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1.2rem; margin: 0; }
+  .meta-row { display: contents; }
+  dl.meta dt { color: var(--dim); font-size: .85rem; }
+  dl.meta dd { margin: 0; font-size: .85rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  nav.toc {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.25rem; margin-bottom: 2.5rem;
+  }
+  nav.toc::before {
+    content: "Contents"; display: block; font-size: .72rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: .6rem;
+  }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; }
+  nav.toc li.lvl3 { padding-left: 1.2rem; font-size: .92rem; }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  figure.code { margin: 1.2rem 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  figure.code figcaption {
+    background: var(--panel); color: var(--dim); font-size: .78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: .45rem .8rem; border-bottom: 1px solid var(--line);
+  }
+  pre {
+    margin: 0; padding: .9rem 1rem; background: var(--code-bg); overflow-x: auto;
+    font: .86rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  p code, li code, td code { background: var(--code-bg); padding: .1rem .35rem; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: .92rem; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--panel); color: var(--dim); font-weight: 600; }
+  blockquote {
+    margin: 1.2rem 0; padding: .7rem 1rem; border-left: 3px solid var(--accent-dim);
+    background: var(--panel); color: var(--dim);
+  }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+  footer.doc { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--dim); font-size: .8rem; }
+
+  /* Printable: a reviewer prints this, or saves it to PDF for an approval trail. */
+  @media print {
+    :root { --bg: #fff; --panel: #f4f5f7; --ink: #111; --dim: #555; --line: #ccc; --code-bg: #f7f8fa; }
+    body { font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; }
+    nav.toc { break-after: page; }
+    figure.code, table, blockquote { break-inside: avoid; }
+    h2 { break-after: avoid; }
+    a { color: inherit; text-decoration: underline; }
+  }
+  @media (max-width: 30rem) { .wrap { padding: 1.5rem 1rem 4rem; } h1 { font-size: 1.5rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="doc">
+    <span class="kind">Implementation detail · what was built</span>
+    <h1>{{TITLE}}</h1>
+    <dl class="meta">{{META}}</dl>
+  </header>
+  <nav class="toc">{{TOC}}</nav>
+  <main>
+{{BODY}}
+  </main>
+  <footer class="doc">
+    Written from the accepted diff, not from the plan, and audited against that diff (<code>matches_diff</code>) before the pull request opened. Where it differs from <code>spec.html</code>, the difference is stated in “Deviations from the spec” — silence there is itself a finding.
+  </footer>
+</div>
+</body>
+</html>

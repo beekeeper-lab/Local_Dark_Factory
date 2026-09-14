@@ -1,0 +1,80 @@
+# risk-policy.yaml — which changes need how much scrutiny, decided by path.
+#
+# The controller computes a bean's binding tier as
+#   max(every rule this diff matches, bean.suggested_risk_tier)
+# and the bean's own suggestion can only raise it, never lower it. A model that
+# under-reads its own change cannot talk its way down: the tier comes from the
+# paths the diff actually touched (spec §08).
+#
+# Tiers: 0 documents · 1 ordinary code · 2 needs care · 3 never auto-merged.
+policy_version: risk/2026-09-14
+
+# Ordinary application code is tier 1. Nothing here is tier 0 by default:
+# a change with no risk still has to be right.
+default_tier: 1
+
+# The human-approved writable surface for this repo. A bean's effective write
+# paths are its own paths INTERSECTED with this list, so a bean cannot widen its
+# reach by declaring wider paths — the intersection is what the build loop and
+# the whole-diff containment enforce.
+repo_allowed_paths:
+  - src/**
+  - tests/**
+  - docs/**
+  - pyproject.toml
+  - .gitignore
+  - factory/specs/**
+  - factory/impl/**
+
+rules:
+  # Documents the line writes about its own work. Still reviewed, never merged
+  # without a human here, but they carry no execution risk.
+  - match: "{factory/specs/**,factory/impl/**,docs/**}"
+    min_tier: 0
+    reason: documents the line writes about its own work
+
+  # The solver is the product. A wrong answer here is not a crash, it is a
+  # seating chart that quietly violates a constraint someone cared about, which
+  # is exactly the failure a test suite is worst at catching.
+  - match: "src/**/solver/**"
+    min_tier: 2
+    reason: constraint solving — wrong answers are silent, not loud
+
+  # Dependency changes alter what the gate container is actually running, so a
+  # green gate after one proves less than a green gate before it.
+  - match: "{pyproject.toml,*.lock,uv.lock,poetry.lock,requirements*.txt}"
+    min_tier: 2
+    reason: dependencies change what the gates are running
+
+  # CI decides what "green" means. A change here can make every later check
+  # pass by weakening it.
+  - match: "{.github/**,.gitlab-ci.yml}"
+    min_tier: 2
+    reason: CI config decides what green means
+
+  # Schema and data migrations are the classic irreversible change.
+  - match: "**/migrations/**"
+    min_tier: 2
+    reason: schema change
+
+  # Requirements are an input to the line, never an output of it. If a diff
+  # touches these, something has gone wrong about which direction work flows.
+  - match: "factory/beans/**"
+    min_tier: 2
+    reason: requirements — the line reads these, it does not write them
+
+  # Agent control. This is the line editing the rules that bind the line: the
+  # prompts it runs on, the gates it must pass, the paths it may write, the
+  # tiers themselves. Tier 3 is never auto-merged in any merge mode.
+  - match: "{factory/repo.yaml,factory/risk-policy.yaml,factory/gates.lock.yaml,factory/templates/**,factory/prompts/**,factory/invariants/**}"
+    min_tier: 3
+    reason: agent-control — the rules that bind the line
+
+  - match: "{AGENTS.md,CLAUDE.md,.pi/**,skills/**,hooks/**,prompts/**}"
+    min_tier: 3
+    reason: agent-control — instructions any agent reads
+
+  # Anything that can reach production or hold a credential.
+  - match: "{deploy/**,terraform/**,k8s/**,*.env,secrets/**,.github/workflows/**}"
+    min_tier: 3
+    reason: secrets and infrastructure

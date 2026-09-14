@@ -1,0 +1,43 @@
+# gates.lock.yaml — the gates, pinned. "Lock" is literal: the image is named by
+# digest, not by tag, because a tag can be repointed at new weights the same way
+# a model tag can, and every "the gates passed" in this repo's history is a claim
+# about a specific toolchain.
+#
+# Built by factory/gate-image/build.sh, which refuses to print a digest for an
+# image whose contents disagree with expect_versions below.
+image: "localhost/factory-gate-python:20260914@sha256:b78227887bd97a01bce072f4bc868fa83c1c2cbd44d232d2cbfda0e665deae20"
+
+# Asserted before the first bean of a session runs, not after a failure makes
+# someone suspicious. The controller compares these against what the image
+# actually reports; a mismatch stops the line rather than producing results that
+# cannot be compared with the ones already recorded.
+verify_versions_at_startup: true
+
+expect_versions:
+  ruff: "0.16.7"
+  mypy: "2.3.1"
+  pytest: "9.1.1"
+  pytest-cov: "7.1.0"
+  ortools: "9.15.6755"
+  python: "3.12"
+
+# argv arrays, never shell strings: no quoting to get wrong and nothing for a
+# path or a test id to inject through.
+gates:
+  - id: lint
+    run: ["ruff", "check", "."]
+
+  - id: format
+    run: ["ruff", "format", "--check", "."]
+
+  - id: types
+    run: ["mypy", "src"]
+
+  # The floor is deliberately modest. A high floor on a corpus the line is
+  # building from nothing turns into pressure to write tests that execute lines
+  # without asserting anything — which is exactly the "test integrity" failure
+  # the impl audit is looking for. The audit judging whether tests are real is
+  # the control here; the number is only a backstop.
+  - id: unit
+    run: ["pytest", "-q", "--cov=src", "--cov-report=term-missing", "--cov-fail-under=60"]
+    coverage_floor: "60%"

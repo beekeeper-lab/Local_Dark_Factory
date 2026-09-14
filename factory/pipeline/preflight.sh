@@ -24,7 +24,7 @@ require_args "$#" 1 "$USAGE"
 require_cmd jq
 
 BEAN_ID="$1"
-[[ "$BEAN_ID" =~ ^BEAN-[0-9]+$ ]] || die "BEAN-ID must look like BEAN-NNN (got: $BEAN_ID)"
+[[ "$BEAN_ID" =~ ^([Bb][Ee][Aa][Nn])-[0-9]+$ ]] || die "bean id must look like bean-NNN (got: $BEAN_ID)"
 
 require_config
 root="$(repo_root)"

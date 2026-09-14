@@ -1,0 +1,44 @@
+# repo.yaml — what the line is allowed to do to THIS repository.
+#
+# The one line that matters is merge_mode. `human_required` means the line's
+# last act is opening a pull request: it can spend hours on a bean, pass every
+# gate and all three audits, and it still cannot merge. Spec §06 stage 12 and
+# §08 both hang off this value, and the controller refuses to start in `auto`
+# without a recorded human signoff.
+schema_version: repo-config/1.0.0
+
+repo: beekeeper-lab/seating-planner-py
+default_branch: main
+host: github
+
+# PRs only. This is a benchmark corpus, and the thing being measured is what
+# the line produces unattended — which is only readable if a human sees every
+# change before it lands. Raising this to auto_when_unlocked is Phase 6 work
+# and has thresholds attached (≥100 human-reviewed PRs, 0 escapes).
+merge_mode: human_required
+
+# One bean at a time. The regime is serial (Phase 0: the Q8 developer and the
+# judge cannot co-reside, and swapping costs ~10 s against per-stage runtimes in
+# minutes), so a second concurrent bean would not buy throughput — it would just
+# make two beans wait on the same model and double the worktrees.
+max_inflight: 1
+
+policy_ref: factory/risk-policy.yaml
+gates_ref: factory/gates.lock.yaml
+
+# Checks that must be green on the exact candidate SHA before any merge. The
+# controller compares verdict.candidate_sha against pr.head_sha first: a green
+# check on a different commit is not evidence about this one.
+required_checks:
+  - gates
+
+docs:
+  spec_template: factory/templates/spec.html
+  impl_template: factory/templates/impl-detail.html
+  # Injected into the writer prompt. The documents are the point of the line as
+  # much as the code is: a change nobody can read is a change nobody can own.
+  audience_note: >
+    Write for a competent engineer who does not know this codebase, this stack,
+    or constraint solving. Assume no prior context from the bean or the spec.
+    Name the risk and the blast radius plainly, show the code that matters, and
+    explain why the change is shaped the way it is — not just what it does.
