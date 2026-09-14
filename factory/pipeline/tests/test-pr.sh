@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# test-pr.sh — what has to be true before a pull request exists.
+#
+# The preconditions are the whole value of this step. A PR opened without them is
+# a PR that says "three models agreed" when they did not, and a reviewer has no
+# way to tell the difference from the outside.
+#
+# `gh` is stubbed. The point is not that GitHub works; it is that the controller
+# refuses when it should, opens exactly one PR when it should, and never merges.
+set -uo pipefail
+
+PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+PASS=0; FAIL=0
+check() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
+  else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
+nocheck() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+want() {
+  local n="$1" d="$2"; shift 2
+  if "$@"; then printf '  ok    %s\n' "$n"; PASS=$((PASS+1))
+  else printf '  FAIL  %s — %s\n' "$n" "$d"; FAIL=$((FAIL+1)); fi
+}
+
+# A gh that records what it was asked to do, so the test can assert on the verbs.
+mkdir -p "$WORK/bin"
+cat > "$WORK/bin/gh" <<'GH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GH_CALLS"
+case "$1 $2" in
+  "pr create")
+    if [ -f "$GH_EXISTING" ]; then echo "a pull request for branch already exists"; exit 1; fi
+    : > "$GH_EXISTING"
+    echo "https://github.com/example/x/pull/1"
+    ;;
+  "pr view") echo "https://github.com/example/x/pull/1" ;;
+  *) exit 0 ;;
+esac
+GH
+chmod +x "$WORK/bin/gh"
+export PATH="$WORK/bin:$PATH"
+export GH_CALLS="$WORK/gh-calls.txt"
+export GH_EXISTING="$WORK/gh-existing"
+
+git init -q --bare "$WORK/origin.git"
+REPO="$WORK/repo"; git init -q -b main "$REPO"; cd "$REPO"
+git config user.email t@e.com; git config user.name T
+git remote add origin "$WORK/origin.git"
+mkdir -p factory/beans src factory/runs/R/verdicts
+cat > factory/repo.yaml <<'YAML'
+schema_version: repo-config/1.0.0
+repo: example/x
+default_branch: main
+host: github
+merge_mode: human_required
+max_inflight: 1
+policy_ref: factory/risk-policy.yaml
+gates_ref: factory/gates.lock.yaml
+YAML
+cat > factory/beans/bean.yaml <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: example/x
+title: A bean that reached a pull request
+intent: Prove the last stage refuses when it should.
+status: approved
+allowed_write_paths: ["src/**"]
+acceptance_criteria:
+  - id: ac1
+    text: a exists
+    verify: { kind: command, run: ["true"] }
+definition_of_done: ["ac1"]
+YAML
+echo readme > README.md
+# A scaffolded repo keeps run directories out of the index; the fixture does too,
+# or it would be testing a repo the line never produces.
+printf 'factory/runs/\n' > .gitignore
+git add -A && git commit -q -m init
+git push -q -u origin main
+git checkout -q -b bean/bean-001
+echo 'print(1)' > src/a.py
+git add -A && git commit -q -m work
+HEAD_SHA="$(git rev-parse HEAD)"
+BASE_SHA="$(git rev-parse main)"
+
+R=factory/runs/R
+cat > $R/run.json <<JSON
+{"run_id":"R","bean":"bean-001","branch":"bean/bean-001","status":"running"}
+JSON
+cat > $R/gate.json <<'JSON'
+{"overall":"pass","gates":[{"id":"lint","status":"pass"}],
+ "acceptance_criteria":[{"id":"ac1","status":"pass","command":"true"}],
+ "invariants":null}
+JSON
+verdict() { # verdict <verdict-word> <candidate-sha>
+  cat > $R/verdicts/package.attempt-1.json <<JSON
+{"schema_version":"verdict/2.0.0","stage":"impl_audit","bean_id":"bean-001",
+ "base_sha":"$BASE_SHA","candidate_sha":"$2","diff_sha256":"$(printf a%.0s {1..64})",
+ "gate_run_id":"g","gate_manifest_digest":"sha256:$(printf b%.0s {1..64})",
+ "invariants_digest":"sha256:$(printf c%.0s {1..64})","policy_version":"p/1",
+ "effective_risk_tier":1,"model_digest":"abc","prompt_version":"factory-audit@x",
+ "criteria":[{"id":"ac1","met":true,"evidence":"e"}],"artifacts":[],"verdict":"$1"}
+JSON
+}
+cat > $R/verdicts/package.attempt-1.judgement.json <<'JSON'
+{"verdict":"accept","findings":[{"severity":"minor","summary":"the scaffold test is thin but real"}]}
+JSON
+printf '<html>spec</html>' > $R/spec.html
+printf '<html>impl</html>' > $R/impl-detail.html
+
+pr() { bash "$PIPELINE_DIR/pr.sh" factory/runs/R --bean factory/beans/bean.yaml "$@" 2>&1; }
+
+printf '\n== it refuses without an accepting verdict ==\n\n'
+verdict revise "$HEAD_SHA"
+out="$(pr)"; rc=$?
+check "a revise does not open a PR"  "only an accept opens a PR" "$out"
+want  "and it exits 1"               "expected 1" test "$rc" -eq 1
+want  "nothing was pushed"           "gh must not have been called" test ! -s "$GH_CALLS"
+
+printf '\n== it refuses when the audit judged a different commit ==\n\n'
+verdict accept "$(printf '0%.0s' {1..40})"
+out="$(pr)"
+check "a moved HEAD is caught"       "the audit did not see what would be pushed" "$out"
+
+printf '\n== it refuses on an ungated change, a dirty tree, and open questions ==\n\n'
+verdict accept "$HEAD_SHA"
+mv $R/gate.json "$WORK/gate.away"
+out="$(pr)"
+check "no gate.json is refused"      "the change was never gated" "$out"
+mv "$WORK/gate.away" $R/gate.json
+
+printf 'stray\n' > src/uncommitted.py
+out="$(pr)"
+check "a dirty tree is refused"      "uncommitted changes would not be in the PR" "$out"
+rm -f src/uncommitted.py
+
+printf '# something asked for a human\n' > $R/QUESTIONS.md
+out="$(pr)"
+check "an open QUESTIONS.md is refused" "asked for a human and never got one" "$out"
+rm -f $R/QUESTIONS.md
+
+printf '\n== it refuses to open a PR from main ==\n\n'
+# No `git stash -u` here: the run directory is untracked, and stashing would
+# sweep it away — the test would then be checking that pr.sh rejects a missing
+# run dir, which is a different thing entirely.
+git checkout -q main
+out="$(pr)"
+check "main is refused"              "never from main" "$out"
+git checkout -q bean/bean-001
+
+printf '\n== with every precondition met, it opens exactly one PR ==\n\n'
+out="$(pr)"; rc=$?
+check "the PR is opened"             "PR OPEN" "$out"
+want  "and it exits 0"               "expected 0" test "$rc" -eq 0
+calls="$(cat "$GH_CALLS")"
+check "gh pr create was called"      "pr create" "$calls"
+check "against the default branch"   "--base main" "$calls"
+nocheck "it never merges"            "pr merge" "$calls"
+nocheck "and never auto-merges"      "--auto" "$calls"
+check "the run records the PR"       '"status":"pr_open"' "$(tr -d ' ' < $R/run.json)"
+
+printf '\n== a second run does not open a second PR ==\n\n'
+out="$(pr)"
+check "an existing PR is recognised" "already open — not opening a second one" "$out"
+n="$(grep -c "pr create" "$GH_CALLS")"
+want "only one create was attempted per run" "expected 2 attempts, one per invocation" test "$n" -eq 2
+
+printf '\n== the body carries what a reviewer needs ==\n\n'
+body="$(bash "$PIPELINE_DIR/pr.sh" factory/runs/R --bean factory/beans/bean.yaml --dry-run 2>&1)"
+check "it says no human wrote it"    "Nothing in this pull request was written by a human" "$body"
+check "it links both documents"      "spec.html" "$body"
+check "and the implementation doc"   "impl-detail.html" "$body"
+check "it tables the verdicts"       "| Stage | Verdict | Tier | Findings |" "$body"
+check "it carries non-blocking findings" "the scaffold test is thin but real" "$body"
+check "it records the candidate"     "${HEAD_SHA:0:12}" "$body"
+check "and the gate image"           "gate image" "$body"
+check "and the binding tier"         "binding tier" "$body"
+
+printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]
