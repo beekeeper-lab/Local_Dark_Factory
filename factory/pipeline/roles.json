@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "Role -> model binding. The single reason this file exists: in the pipeline",
+    "this was forked from, every step ran on Pi's default model, so the auditing",
+    "steps and the authoring steps were the same weights. Fresh context is not",
+    "independence. Spec §01 requires the judge to be a different model family so",
+    "its blind spots do not match the developer's.",
+    "",
+    "provider is allow-listed to 'ollama' (spec §08). Startup refuses anything",
+    "else — that absence is the 'no frontier model at runtime' guarantee, and it",
+    "is checked, not assumed."
+  ],
+  "provider_allowlist": ["ollama"],
+
+  "roles": {
+    "developer": {
+      "provider": "ollama",
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 32768,
+      "thinking": "medium",
+      "note": "Q8_0 + MTP. Q4_K_M (qwen3.8:27b) is the comparison arm — quantization damage on a 27B lands hardest on instruction-following under long context, which is what containment and section-lint depend on."
+    },
+    "judge": {
+      "provider": "ollama",
+      "model": "gpt-oss:120b",
+      "num_ctx": 32768,
+      "thinking": "high",
+      "note": "Different family from the developer by design. 65 GB against a 62 GB GTT ceiling before the ttm.pages_limit raise — check `ollama ps` shows 100% GPU, not a CPU split."
+    },
+    "smoke": {
+      "provider": "ollama",
+      "model": "gpt-oss:20b",
+      "num_ctx": 16384,
+      "thinking": "medium",
+      "note": "Cheap stand-in for the judge while iterating on skill text, where loop speed matters more than verdict quality. Never used for a run whose telemetry is kept."
+    }
+  },
+
+  "step_roles": {
+    "spec": "developer",
+    "implement": "developer",
+    "doc": "developer",
+    "audit-spec": "judge",
+    "audit-impl": "judge",
+    "audit-doc": "judge",
+    "audit-package": "judge",
+    "pr": "developer"
+  },
+
+  "_known_gaps": [
+    "pr is bound to developer because the forked pipeline-pr skill still composes the PR body itself. Spec §06 stage 11 makes push/PR pure controller work with no model at all — the pre-PR audit already drafts the body. Fix when the controller lands.",
+    "num_ctx is declared here but Ollama serves what the systemd unit says; the inference manager must assert them equal (spec §09 healthcheck) rather than trusting this file."
+  ]
+}

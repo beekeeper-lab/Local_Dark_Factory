@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-016
+repo: beekeeper-lab/seating-planner-py
+title: Optimization results are proposals until accepted
+intent: >
+  No recalculation reaches the saved chart without the organizer first seeing every
+  guest whose table would change and accepting it.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-072: Before applying any recalculation, the system SHALL display a comparison showing every guest whose table or seat would change. Implementation Guardrails #7: Require confirmation before applying changes; optimization results are proposals until accepted."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/store/
+    - tests/solver/
+  background: >
+    Every mode so far has returned an assignment. This bean makes returning one and
+    committing one different operations: optimize produces a proposal, and a separate
+    accept applies it. The comparison between the saved chart and the proposal is the
+    thing the organizer actually reads, so it must list every changed guest with their
+    old and new table — and be empty, not absent, when nothing would change. Declining
+    a proposal must leave no trace at all in the saved chart.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - src/seating_planner/store/**
+  - tests/solver/**
+  - tests/store/**
+acceptance_criteria:
+  - id: ac1
+    text: Optimizing does not modify the saved chart until the proposal is accepted.
+    verify: { kind: test, test_id: "tests/solver/test_proposals.py::test_optimize_does_not_commit" }
+  - id: ac2
+    text: The comparison lists every guest whose table would change, with old and new table.
+    verify: { kind: test, test_id: "tests/solver/test_proposals.py::test_comparison_lists_every_change" }
+  - id: ac3
+    text: A proposal that changes nothing yields an empty comparison rather than no comparison.
+    verify: { kind: test, test_id: "tests/solver/test_proposals.py::test_no_change_yields_empty_comparison" }
+  - id: ac4
+    text: Declining a proposal leaves the saved chart byte-identical.
+    verify: { kind: test, test_id: "tests/solver/test_proposals.py::test_declined_proposal_changes_nothing" }
+  - id: ac5
+    text: Accepting a proposal writes the new chart and an audit entry naming the actor.
+    verify: { kind: test, test_id: "tests/store/test_proposal_accept.py::test_accept_writes_chart_and_audit" }
+constraints:
+  - optimize and accept are separate operations
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no undo/redo stack
+dependencies: [bean-015]

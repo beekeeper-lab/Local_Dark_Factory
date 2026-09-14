@@ -1,0 +1,59 @@
+schema_version: bean/2.0.0
+id: bean-002
+repo: beekeeper-lab/seating-planner-py
+title: Core domain models for events, tables, guests and groups
+intent: >
+  The vocabulary of the product exists as validated data structures, so that rules and
+  the solver have something concrete to refer to.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-006: Each table SHALL have a unique identifier, display name or number, seating capacity, shape, and position on a two-dimensional room layout. FR-016: Each guest record SHALL contain a unique identifier, display name, RSVP status, and party or household association."
+context:
+  read_paths:
+    - src/seating_planner/__init__.py
+    - pyproject.toml
+  background: >
+    Everything downstream depends on these shapes. An Event holds Tables and Guests; a
+    Table has a capacity, a shape and an (x, y) position; a Guest has an RSVP status and
+    belongs to a household. Table positions are relative canvas coordinates on an
+    arbitrary unit plane, not physical measurements (see the bean set's recorded
+    assumption for PRD §18.2) — proximity in FR-014 is well defined either way.
+    "Eligible" is a derived property, not a stored field: a guest is eligible when
+    Confirmed, or Pending with an explicitly reserved seat (FR-019).
+allowed_write_paths:
+  - src/seating_planner/domain/**
+  - tests/domain/**
+acceptance_criteria:
+  - id: ac1
+    text: A Table rejects a capacity below one and rejects a duplicate identifier within an event.
+    verify: { kind: test, test_id: "tests/domain/test_table.py::test_capacity_and_id_validation" }
+  - id: ac2
+    text: RSVP status accepts exactly Confirmed, Pending, Declined and Cancelled, and rejects anything else.
+    verify: { kind: test, test_id: "tests/domain/test_guest.py::test_rsvp_status_values" }
+  - id: ac3
+    text: A guest is eligible when Confirmed, or Pending with a reserved seat, and not otherwise.
+    verify: { kind: test, test_id: "tests/domain/test_guest.py::test_eligibility_rule" }
+  - id: ac4
+    text: A guest may belong to more than one group.
+    verify: { kind: test, test_id: "tests/domain/test_group.py::test_guest_in_multiple_groups" }
+  - id: ac5
+    text: An event rejects more than 500 guests, 60 tables, or 5000 rules.
+    verify: { kind: test, test_id: "tests/domain/test_event.py::test_production_limits" }
+constraints:
+  - no persistence in this bean
+  - no solver imports
+  - table position is a float pair on an arbitrary unit plane
+suggested_risk_tier: 1
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no seat-level positions (deferred; see PRD §18.3 assumption)
+  - no rule model (bean-003)
+  - no database
+dependencies: [bean-001]

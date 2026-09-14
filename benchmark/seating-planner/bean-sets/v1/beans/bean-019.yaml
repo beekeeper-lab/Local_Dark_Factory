@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-019
+repo: beekeeper-lab/seating-planner-py
+title: Extract constraint construction from the solver module
+intent: >
+  The solver module is split so that building the CP-SAT model is separate from running
+  and interpreting it, with no change in behaviour whatsoever.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "Implementation Guardrails #4: Separate constraint evaluation from user-interface presentation."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    Beans 006 through 016 each added to the same solver module: hard constraints, an
+    objective, results, determinism, locks, three modes, proposals. It now does several
+    jobs at once. This bean separates model construction from solving and from result
+    interpretation.
+
+    The defining property is that nothing observable changes. Every existing test must
+    pass untouched — a refactor that needs its tests edited is not a refactor, it is a
+    behaviour change wearing one as a disguise. If a test genuinely must move because
+    the module it imports has moved, the import line may change and nothing else.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: The whole existing test suite passes with no change to any assertion.
+    verify: { kind: command, run: ["pytest", "-q"] }
+  - id: ac2
+    text: Model construction, solving and result interpretation live in separate modules.
+    verify: { kind: judge, rubric: "The diff moves constraint-building, solve invocation and result interpretation into distinct modules. Confirm no assertion in any test file was modified — only import paths may differ. A changed assertion means behaviour changed and this must FAIL." }
+  - id: ac3
+    text: The public optimization entry point keeps its name and signature.
+    verify: { kind: test, test_id: "tests/solver/test_api_stability.py::test_public_entry_point_unchanged" }
+  - id: ac4
+    text: Optimizing a fixed scenario produces the identical assignment it produced before the refactor.
+    verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_repeat_run_is_identical" }
+constraints:
+  - no behaviour change of any kind
+  - no new dependencies
+  - test assertions must not be edited
+suggested_risk_tier: 1
+size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no new features
+  - no performance work
+dependencies: [bean-018]

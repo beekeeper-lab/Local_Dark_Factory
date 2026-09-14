@@ -1,0 +1,65 @@
+schema_version: bean/2.0.0
+id: bean-020
+repo: beekeeper-lab/seating-planner-py
+title: Adjacent-seat rules report as unevaluable, never as satisfied
+intent: >
+  A rule the system cannot evaluate — because seat positions were never configured — is
+  reported as unevaluable rather than counted among the rules it satisfied.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-012: If seat positions have not been configured, the system SHALL mark adjacent-seat rules as unevaluable and SHALL NOT report them as satisfied. Implementation Guardrails #6: Never claim that an unevaluated rule is satisfied."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/rules/
+    - tests/solver/
+    - tests/rules/
+  background: >
+    Seat-level layout was deferred for v1 (see the bean set's recorded assumption for
+    PRD §18.3), but FR-034 still allows an adjacent-seat rule to be created, and
+    bean-003 makes such a rule constructible. So the system can hold a rule it has no
+    way to evaluate.
+
+    The likely defect is quiet: a rule that generates no constraint contributes nothing
+    to the objective, and code that counts satisfied rules as "active minus violated"
+    will report it satisfied. That is a false success of exactly the kind Principle 5
+    and Guardrail #6 forbid, and it is worse than a visible failure because the
+    organizer has no reason to doubt it. bean-008 already established unevaluable as a
+    third state; this bean makes adjacent-seat rules use it, and makes an adjacent-seat
+    rule that was *asked to matter* refuse to pass silently.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - src/seating_planner/rules/**
+  - tests/solver/**
+  - tests/rules/**
+acceptance_criteria:
+  - id: ac1
+    text: An adjacent-seat rule with no seat positions configured is reported unevaluable, not satisfied.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_adjacent_seat_rule_is_unevaluable" }
+  - id: ac2
+    text: An unevaluable rule contributes nothing to the soft-constraint score.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_unevaluable_scores_zero" }
+  - id: ac3
+    text: Satisfied, violated and unevaluable counts still sum to the number of active rules.
+    verify: { kind: test, test_id: "tests/solver/test_result.py::test_rule_accounting_is_complete" }
+  - id: ac4
+    text: A hard adjacent-seat rule blocks optimization with an explanatory error rather than being ignored.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_hard_unevaluable_rule_blocks" }
+  - id: ac5
+    text: The result distinguishes unevaluable-because-unconfigured from violated.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_unevaluable_reason_is_stated" }
+constraints:
+  - no seat-level layout implementation in this bean
+  - a hard rule that cannot be evaluated is never treated as satisfied
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no seat positions, no seat assignment
+dependencies: [bean-019]

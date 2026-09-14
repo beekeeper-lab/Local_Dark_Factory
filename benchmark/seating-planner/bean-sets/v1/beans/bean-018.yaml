@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-018
+repo: beekeeper-lab/seating-planner-py
+title: Exports exclude private notes unless explicitly and visibly included
+intent: >
+  A guest-to-table export carries no private notes, relationship rules or override
+  explanations, and including them requires a deliberate choice that names what will
+  be exposed.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-084: Private guest notes, relationship notes, rule definitions, and override explanations SHALL be excluded from exports by default. FR-085: If an authorized user elects to include private information in an export, the system SHALL display a privacy warning and identify the included fields before generating the file."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/store/
+    - tests/domain/
+  background: >
+    Private notes are where an organizer records that two guests are not speaking. A
+    leak here is the worst failure this product can have, and it happens by omission —
+    someone adds a field to a guest record and the export picks it up automatically.
+    The defence is to build exports from an explicit allow-list of fields rather than by
+    serializing the guest object, so a new private field is excluded by default rather
+    than included by default. AC-008 in the PRD is the scenario this must satisfy.
+allowed_write_paths:
+  - src/seating_planner/export/**
+  - tests/export/**
+acceptance_criteria:
+  - id: ac1
+    text: The default guest-to-table CSV contains no private note, relationship note, rule definition or override explanation.
+    verify: { kind: test, test_id: "tests/export/test_privacy.py::test_default_export_excludes_private_fields" }
+  - id: ac2
+    text: Adding a new field to the guest model does not cause it to appear in an export.
+    verify: { kind: test, test_id: "tests/export/test_privacy.py::test_export_uses_allowlist_not_serialization" }
+  - id: ac3
+    text: Requesting private fields returns a warning naming each included field before the file is produced.
+    verify: { kind: test, test_id: "tests/export/test_privacy.py::test_private_export_warns_and_names_fields" }
+  - id: ac4
+    text: An export containing private data writes an audit entry recording that it did.
+    verify: { kind: test, test_id: "tests/export/test_privacy.py::test_private_export_is_audited" }
+  - id: ac5
+    text: The table-by-table CSV export lists every assigned guest exactly once.
+    verify: { kind: test, test_id: "tests/export/test_csv.py::test_table_by_table_export_complete" }
+constraints:
+  - exports are built from an explicit field allow-list
+  - CSV only in this bean
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no PDF rendering (excluded from the corpus; see manifest scope_exclusions)
+dependencies: [bean-016]

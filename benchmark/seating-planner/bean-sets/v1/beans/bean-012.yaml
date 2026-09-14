@@ -1,0 +1,54 @@
+schema_version: bean/2.0.0
+id: bean-012
+repo: beekeeper-lab/seating-planner-py
+title: Planning mode as an explicit named mode
+intent: >
+  Optimization is invoked under a named mode, and Planning mode reoptimizes every guest
+  whose assignment is not locked.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-063: In Planning mode, the system MAY move any guest whose assignment is not locked in order to produce the highest-scoring valid arrangement."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    Until now the solver has had one behaviour. The product has three, distinguished
+    only by how they treat assignments that already exist (PRD §12). This bean introduces
+    the mode parameter and implements the least restrictive of the three, which is what
+    the solver already does — so the behaviour is unchanged and the value is the seam.
+    Getting the seam right here is what lets beans 013 and 014 add the other two modes
+    without reshaping the solver each time.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: Optimization requires an explicit mode; omitting it is rejected rather than defaulted.
+    verify: { kind: test, test_id: "tests/solver/test_modes.py::test_mode_is_required" }
+  - id: ac2
+    text: In Planning mode an unlocked guest may be moved to improve the score.
+    verify: { kind: test, test_id: "tests/solver/test_modes.py::test_planning_moves_unlocked_guest" }
+  - id: ac3
+    text: In Planning mode a locked guest is still never moved.
+    verify: { kind: test, test_id: "tests/solver/test_modes.py::test_planning_respects_locks" }
+  - id: ac4
+    text: The mode used is recorded on the result.
+    verify: { kind: test, test_id: "tests/solver/test_modes.py::test_result_records_mode" }
+  - id: ac5
+    text: All existing solver tests still pass.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - mode is an explicit argument with no default
+suggested_risk_tier: 1
+size_budget: { max_tasks: 4, max_files: 3, max_diff_lines: 250 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no low-disruption or event-day behaviour (beans 013, 014)
+dependencies: [bean-011]

@@ -1,0 +1,59 @@
+schema_version: bean/2.0.0
+id: bean-017
+repo: beekeeper-lab/seating-planner-py
+title: CSV guest import with a cancellable dry-run preview
+intent: >
+  A guest list arrives as a spreadsheet, and the organizer sees exactly what the import
+  would do — and can walk away — before any data changes.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-022: Before applying a CSV import, the system SHALL display invalid rows, likely duplicate guests, missing required fields, and the number of records that will be created or updated. FR-023: The user SHALL be able to cancel an import without changing event data."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/store/
+    - tests/domain/
+  background: >
+    Importing is the highest-volume way to get things wrong, so the preview is the
+    feature and the write is the afterthought. The preview reports four things: rows
+    that cannot be parsed, rows missing something required, rows that look like a guest
+    already present, and the counts that would be created or updated. "Likely duplicate"
+    needs a stated rule rather than a guess — matching on normalized name within the
+    same household is enough, and the preview should say that is what it did. Cancelling
+    must leave the event untouched, which is easiest to guarantee by doing the whole
+    preview without opening a write transaction at all.
+allowed_write_paths:
+  - src/seating_planner/importer/**
+  - tests/importer/**
+acceptance_criteria:
+  - id: ac1
+    text: The preview reports invalid rows, rows with missing required fields, likely duplicates, and create/update counts.
+    verify: { kind: test, test_id: "tests/importer/test_preview.py::test_preview_reports_all_four_categories" }
+  - id: ac2
+    text: Generating a preview writes nothing to the event.
+    verify: { kind: test, test_id: "tests/importer/test_preview.py::test_preview_is_read_only" }
+  - id: ac3
+    text: Cancelling after a preview leaves the event byte-identical.
+    verify: { kind: test, test_id: "tests/importer/test_preview.py::test_cancel_changes_nothing" }
+  - id: ac4
+    text: Applying an import creates and updates exactly the counts the preview reported.
+    verify: { kind: test, test_id: "tests/importer/test_apply.py::test_apply_matches_preview_counts" }
+  - id: ac5
+    text: A file with some invalid rows imports the valid ones only when the organizer opts in, never silently.
+    verify: { kind: test, test_id: "tests/importer/test_apply.py::test_partial_import_requires_opt_in" }
+constraints:
+  - duplicate detection uses a stated, testable rule
+  - preview opens no write transaction
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no Excel or Google Sheets formats
+  - no column auto-mapping UI
+dependencies: [bean-004]

@@ -1,0 +1,54 @@
+schema_version: bean/2.0.0
+id: bean-014
+repo: beekeeper-lab/seating-planner-py
+title: Event-day mode seats new guests without moving anyone
+intent: >
+  On the day, every existing assignment is treated as locked, a newly added guest takes
+  an open seat, and a cancellation frees a seat without shuffling anyone.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-067: In Event-day mode, the system SHALL treat every existing table assignment as locked unless the user explicitly unlocks it. FR-071: Removing or cancelling a guest in Event-day mode SHALL free that guest's seat without automatically moving another guest."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    Guests are seated and the room is full of people; moving someone now means walking
+    up to them mid-reception. So the mode inverts the default: everything already
+    assigned is locked whether or not the organizer locked it explicitly, and only the
+    new guest is a free variable. The trap is the cancellation case — freeing a seat
+    creates an opportunity to improve the chart, and the system must decline to take it.
+    An automatic improvement here is a defect, not a feature.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: Adding a guest with an open seat available assigns them and moves nobody else.
+    verify: { kind: test, test_id: "tests/solver/test_event_day.py::test_new_guest_takes_open_seat" }
+  - id: ac2
+    text: Existing assignments are treated as locked even when no explicit lock was set.
+    verify: { kind: test, test_id: "tests/solver/test_event_day.py::test_existing_assignments_implicitly_locked" }
+  - id: ac3
+    text: Cancelling a guest frees their seat and moves no other guest.
+    verify: { kind: test, test_id: "tests/solver/test_event_day.py::test_cancellation_moves_nobody" }
+  - id: ac4
+    text: An explicitly unlocked guest may be moved in Event-day mode.
+    verify: { kind: test, test_id: "tests/solver/test_event_day.py::test_explicit_unlock_permits_move" }
+  - id: ac5
+    text: A new guest is placed only where every hard constraint holds.
+    verify: { kind: test, test_id: "tests/solver/test_event_day.py::test_new_guest_respects_hard_rules" }
+constraints:
+  - no opportunistic reoptimization after a cancellation
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 4, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no ranked alternatives when no seat fits (bean-015)
+dependencies: [bean-013]

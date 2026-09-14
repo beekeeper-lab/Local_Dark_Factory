@@ -1,0 +1,55 @@
+schema_version: bean/2.0.0
+id: bean-015
+repo: beekeeper-lab/seating-planner-py
+title: Ranked alternatives when no valid event-day seat exists
+intent: >
+  When a late guest cannot be seated without breaking something, they are left
+  unassigned and the organizer is offered concrete options ranked by how much they cost.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-069: If no valid seat exists in Event-day mode, the system SHALL leave the new guest unassigned and present alternatives ranked by disruption count and violated-rule weight. FR-070: Event-day alternatives SHALL include applicable options such as adding a table, changing a table's capacity, unlocking a specific assignment, or authorizing a rule exception."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    This is the moment the product exists for: a guest arrives, the room is full, and
+    the organizer has thirty seconds. Refusing to seat them is correct — Principle 5
+    forbids silently breaking a hard rule — but refusing without options is useless.
+    Each alternative is a hypothetical: if you unlocked this guest, or added a table, or
+    authorized this exception, here is what it would cost. Ranking is by disruption
+    count first, then by the weight of any rule the option would violate, so the
+    cheapest honest option is at the top.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: With no valid seat the guest is left unassigned and no existing assignment changes.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_alternatives.py::test_guest_unassigned_nothing_moves" }
+  - id: ac2
+    text: At least one alternative is offered, drawn from adding a table, changing capacity, unlocking, or authorizing an exception.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_alternatives.py::test_alternatives_are_offered" }
+  - id: ac3
+    text: Alternatives are ordered by disruption count, then by violated-rule weight.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_alternatives.py::test_alternatives_ranked_correctly" }
+  - id: ac4
+    text: Each alternative states its disruption count and any rule it would violate.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_alternatives.py::test_alternative_states_its_cost" }
+  - id: ac5
+    text: Generating alternatives changes no saved state.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_alternatives.py::test_alternatives_are_read_only" }
+constraints:
+  - alternatives are proposals; none is applied automatically
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 4, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no automatic selection of an alternative
+dependencies: [bean-014]

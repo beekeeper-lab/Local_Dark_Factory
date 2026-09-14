@@ -1,0 +1,53 @@
+schema_version: bean/2.0.0
+id: bean-007
+repo: beekeeper-lab/seating-planner-py
+title: Soft-constraint scoring and the optimization objective
+intent: >
+  Among assignments that satisfy every hard constraint, the solver returns the one with
+  the highest weighted total of satisfied soft constraints.
+status: draft
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-046: After satisfying hard constraints, the optimizer SHALL maximize the weighted total of satisfied soft constraints."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/rules/
+    - tests/solver/
+  background: >
+    bean-006 finds any valid answer. This bean makes it find a good one. Each soft rule
+    gets an indicator variable that is true when the rule is satisfied, and the solver
+    maximizes the sum of weight times indicator. The ordering matters and is not
+    negotiable: hard constraints remain constraints, not heavily-weighted preferences —
+    a soft rule with weight 100 must never be able to buy its way past a hard rule.
+    This bean modifies the model that bean-006 built rather than adding a separate path.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: Given two valid arrangements, the one with the higher weighted soft score is returned.
+    verify: { kind: test, test_id: "tests/solver/test_objective.py::test_higher_score_preferred" }
+  - id: ac2
+    text: A weight-100 soft rule never causes a hard rule to be violated.
+    verify: { kind: test, test_id: "tests/solver/test_objective.py::test_soft_never_overrides_hard" }
+  - id: ac3
+    text: Soft rules are honoured in weight order when they conflict with each other.
+    verify: { kind: test, test_id: "tests/solver/test_objective.py::test_conflicting_soft_rules_follow_weight" }
+  - id: ac4
+    text: Every hard-constraint test from bean-006 still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver/test_hard_constraints.py"] }
+constraints:
+  - hard constraints stay constraints, never large weights
+  - the bean-006 public entry point keeps its signature
+suggested_risk_tier: 2
+size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 350 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no reporting of which rules were violated (bean-008)
+dependencies: [bean-006]

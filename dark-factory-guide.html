@@ -338,12 +338,12 @@ sudo systemctl restart ollama.service
 <span class="c"># For each context size, preload both and read actual residency + GPU/CPU split:</span>
 for ctx in 16384 32768 49152; do
   <span class="c"># set OLLAMA_CONTEXT_LENGTH=$ctx via the systemd override, restart, then:</span>
-  ollama run gpt-oss:120b "" ; ollama run qwen3.8:27b-q8_0 "" ; ollama ps
+  ollama run gpt-oss:120b "" ; ollama run qwen3.8:27b-mtp-q8_0 "" ; ollama ps
 done
 
 <span class="c"># Serial regime: time a real switch, both directions</span>
-ollama stop gpt-oss:120b; time ollama run qwen3.8:27b-q8_0 ""
-ollama stop qwen3.8:27b-q8_0; time ollama run gpt-oss:120b ""</code></pre>
+ollama stop gpt-oss:120b; time ollama run qwen3.8:27b-mtp-q8_0 ""
+ollama stop qwen3.8:27b-mtp-q8_0; time ollama run gpt-oss:120b ""</code></pre>
     <ul class="check">
       <li>Record <b>residency and GPU/CPU split</b> from <code>ollama ps</code> at 16K / 32K / 48K, for each model alone and both together.</li>
       <li>Measure <b>prompt-processing and generation speed</b> separately — a developer session is prompt-heavy, a judge review is both.</li>
@@ -738,7 +738,7 @@ scheduler:
   "api": "openai-completions",
   "apiKey": "ollama",
   "models": [
-    { "id": "qwen3.8:27b-q8_0", "name": "Developer · Qwen3.8 27B Q8",
+    { "id": "qwen3.8:27b-mtp-q8_0", "name": "Developer · Qwen3.8 27B Q8_0 MTP",
       "reasoning": true, "input": ["text"],
       "contextWindow": 32768, "maxTokens": 8192 },      <span class="c">// MATCH what Ollama serves (Phase 0)</span>
     { "id": "gpt-oss:120b",     "name": "Judge · gpt-oss 120B",
