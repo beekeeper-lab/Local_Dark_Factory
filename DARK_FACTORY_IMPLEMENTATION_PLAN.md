@@ -294,7 +294,13 @@ re-runnable audit, and a bean set approved to run against.
       keeps, which is Phase-2 work.)*
 - [ ] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
 - [ ] `factory step audit --stage impl_audit` — `test_integrity` required and present
-- [ ] `factory step document` — developer writes `impl-detail.md` from the actual diff; controller lints, renders `impl-detail.html`, commits doc candidate
+- [~] `factory step document` — **built, not yet exercised by a model.** `factory-doc` writes
+      `impl-detail.md` from `diff.txt` (the controller puts the accepted diff on disk, because a
+      model asked to describe a change from memory will describe the change it expected).
+      `doc-check.sh` lints the seven sections, requires the **walkthrough** — not the document
+      generally — to cover every changed file, refuses a file shown in the document but absent
+      from the diff, and renders `impl-detail.html`. 13 cases. The doc candidate commit is not
+      written yet.
 - [ ] `factory step audit --stage pre_pr_audit` — `document_quality` + `artifacts` hashes present; `matches_diff` true
 - [ ] `factory step pr` — exact `candidate_sha` pushed; PR body links both HTML docs and all three verdicts
 - [ ] A human reads both rendered documents and confirms they teach (risk, blast radius, code blocks, no assumed knowledge)
