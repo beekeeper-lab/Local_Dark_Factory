@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/risk-policy.schema.json",
+  "title": "RiskPolicy",
+  "description": "Deterministic path/change -> minimum-tier rules. final_tier = max(matched minimums, bean.suggested_risk_tier). First-match-wins ordering within equal specificity resolves to the HIGHEST tier.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_version","default_tier","rules","repo_allowed_paths"],
+  "properties": {
+    "policy_version": { "type": "string", "minLength": 1 },
+    "default_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
+    "repo_allowed_paths": {
+      "type": "array", "items": { "type": "string" },
+      "description": "Human-approved writable globs; effective paths = bean paths INTERSECT this." },
+    "rules": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["match","min_tier"],
+        "properties": {
+          "match": { "type": "string", "minLength": 1,
+            "description": "glob matched against changed paths, e.g. '**/migrations/**'." },
+          "min_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "policy_version": "risk/2026-09-13",
+      "default_tier": 1,
+      "repo_allowed_paths": ["src/**","tests/**","docs/**"],
+      "rules": [
+        { "match": "**/migrations/**", "min_tier": 2, "reason": "schema change" },
+        { "match": "src/auth/**", "min_tier": 2, "reason": "authn/authz" },
+        { "match": "{.github,ci,.forgejo}/**", "min_tier": 2, "reason": "CI config" },
+        { "match": "{package.json,pyproject.toml,*.lock,go.mod,Cargo.*}", "min_tier": 2, "reason": "dependencies" },
+        { "match": "{AGENTS.md,CLAUDE.md,.pi/**,skills/**,hooks/**,prompts/**}", "min_tier": 3, "reason": "agent-control" },
+        { "match": "{deploy/**,terraform/**,k8s/**,*.env,secrets/**}", "min_tier": 3, "reason": "secrets/infra" }
+      ]
+    }
+  ]
+}

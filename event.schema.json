@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/event.schema.json",
+  "title": "TelemetryEvent",
+  "description": "One JSONL event per state transition or measurement. Source of truth for SQLite/Prometheus.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ts","bean_id","from_state","to_state","idempotency_key"],
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "bean_id": { "type": "string", "pattern": "^bean-[0-9]+$" },
+    "from_state": { "$ref": "#/$defs/state" },
+    "to_state": { "$ref": "#/$defs/state" },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "candidate_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "gate_run_id": { "type": "string" },
+    "model": { "type": "string" },
+    "model_load_seconds": { "type": "number", "minimum": 0 },
+    "tokens_prompt": { "type": "integer", "minimum": 0 },
+    "tokens_completion": { "type": "integer", "minimum": 0 },
+    "tokens_per_sec": { "type": "number", "minimum": 0 },
+    "duration_seconds": { "type": "number", "minimum": 0 },
+    "human_rejection_reason": {
+      "enum": ["defect","requirement_miss","security","preference","stale_branch","unrelated_ci"]
+    },
+    "detail": { "type": "object" }
+  },
+  "$defs": {
+    "state": {
+      "enum": [
+        "ready","leased","building","containing","gating","committing_candidate","judging",
+        "accepted","pushing","pushed","pr_open","ci_pending","ci_failed","ci_timeout",
+        "stale","merge_conflict","merge_pending","merging","merged","blocked","cancelled"
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/gate-manifest.schema.json",
+  "title": "GateManifest",
+  "description": "Immutable per-repo gate manifest. Pinned image digest + argv-array commands + startup version verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image","gates","verify_versions_at_startup"],
+  "properties": {
+    "image": { "type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$" },
+    "expect_versions": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "verify_versions_at_startup": { "type": "boolean" },
+    "gates": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id","run"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
+          "run": { "type": "array", "minItems": 1, "items": { "type": "string" },
+            "description": "argv array, not a shell string (avoids injection/quoting)." },
+          "coverage_floor": { "type": "string" }
+        }
+      }
+    }
+  }
+}
