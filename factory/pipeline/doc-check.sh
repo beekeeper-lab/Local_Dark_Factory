@@ -62,15 +62,34 @@ CHANGED="$(git -C "$ROOT" diff --name-only "$MERGE_BASE"...HEAD 2>/dev/null | se
 if [ -z "$CHANGED" ]; then
   printf '  note  %-26s %s\n' "coverage" "no diff against $BASE; nothing to cross-check"
 else
+  # Look in the WALKTHROUGH, not the whole document. §07 asks that section to
+  # show the hunks that matter for each task; a filename that appears only in a
+  # deviations sentence is a mention, not a walkthrough, and counting it would
+  # let a document pass while the reviewer still has no account of the change.
+  WALK="$("$PY" - "$DOC" <<'PY'
+import re, sys
+lines = open(sys.argv[1]).read().split("\n")
+out, inside, fence = [], False, False
+for line in lines:
+    if line.startswith("```"):
+        fence = not fence
+    if not fence and re.match(r"^#{1,6}\s", line):
+        inside = bool(re.match(r"^#{1,6}\s+walkthrough", line.strip(), re.I))
+        continue
+    if inside:
+        out.append(line)
+print("\n".join(out))
+PY
+)"
   missing=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    grep -qF -- "$f" "$DOC" || missing="$missing $f"
+    grep -qF -- "$f" <<<"$WALK" || missing="$missing $f"
   done <<< "$CHANGED"
   if [ -n "$missing" ]; then
-    bad "coverage" "changed files the document never mentions:$missing"
+    bad "coverage" "changed files the walkthrough never covers:$missing"
   else
-    ok "coverage" "every changed file appears in the document ($(wc -l <<<"$CHANGED") file(s))"
+    ok "coverage" "the walkthrough covers all $(wc -l <<<"$CHANGED") changed file(s)"
   fi
   # And the other direction: a file the document walks through that is not in the
   # diff is a paragraph about work that did not happen.
