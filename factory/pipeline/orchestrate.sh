@@ -296,6 +296,7 @@ $dirty"
 halt_on_main() { # <step> — never returns
   local step="$1"
   local cur ts repo
+  preserve_worker_questions "$step" >/dev/null
   repo="$(repo_root)"
   cur="$(git -C "$repo" branch --show-current 2>/dev/null || true)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -392,6 +393,18 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       rc=0
       "$PIPELINE_DIR/audit-check.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$ay" || rc=$?
       return "$rc" ;;
+    doc)
+      local rc=0
+      # The document is written FROM the diff, so put the diff where the skill
+      # can read it. A model asked to describe a change it has to remember will
+      # describe the change it expected.
+      local mb
+      mb="$(git -C "$(repo_root)" merge-base main HEAD 2>/dev/null || echo main)"
+      git -C "$(repo_root)" diff "$mb"...HEAD > "$RUN_DIR/diff.txt" 2>/dev/null || true
+      "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+      [ "$rc" -eq 0 ] || return "$rc"
+      "$PIPELINE_DIR/doc-check.sh" "$RUN_DIR" || rc=$?
+      return "$rc" ;;
     spec)
       local rc=0 sy
       if [ $# -gt 0 ]; then
@@ -427,8 +440,32 @@ run_step() { # <step> [-- <extra args carried through to the child>]
 }
 
 # ------------------------------------------------------------------- halt --
+# preserve_worker_questions <step> — never overwrite what the model wrote.
+#
+# The skills tell a worker that when the bean conflicts with the code, it should
+# stop and write QUESTIONS.md rather than invent a workaround. On the first real
+# run a 27B did exactly that, and correctly: it found that an acceptance
+# criterion could not pass in the gate container. Then halt() wrote its own
+# QUESTIONS.md over the top, and the single most valuable thing the run produced
+# — the model's reasoning, addressed to a human — was gone.
+#
+# A controller that destroys the evidence it asked for is worse than one that
+# never asked.
+preserve_worker_questions() {
+  local step="$1" existing="$RUN_DIR/QUESTIONS.md" kept
+  [ -f "$existing" ] || { printf ''; return 0; }
+  # Our own halt output is recognisable; leave it to be replaced.
+  if head -1 "$existing" | grep -q 'pipeline halted'; then printf ''; return 0; fi
+  mkdir -p "$RUN_DIR/questions-from-worker"
+  kept="questions-from-worker/${step}-$(date -u +%Y%m%dT%H%M%SZ).md"
+  mv "$existing" "$RUN_DIR/$kept"
+  printf '%s' "$kept"
+}
+
 halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Never returns.
   local step="$1" ec="${2:-?}"
+  local worker_questions
+  worker_questions="$(preserve_worker_questions "$step")"
   local n target f att v summary authoring ts
   n="$(failed_count "$step")"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -438,6 +475,12 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
     printf -- '- Run directory: `%s`\n' "$RUN_DIR"
     printf -- '- Tier: %s\n' "$TIER"
     printf -- '- Stopped: %s\n' "$ts"
+    if [ -n "$worker_questions" ]; then
+      printf '\n> **The model stopped and wrote its own questions first: `%s`.**\n' "$worker_questions"
+      printf '> Read that before anything below it. It is the account of someone who had the\n'
+      printf '> bean and the code in front of it; this file is only what the controller could\n'
+      printf '> see from outside.\n'
+    fi
     if is_audit_step "$step"; then
       target="${step#audit-}"
       printf '\n## Failed audit attempts on `%s` (%s recorded)\n\n' "$step" "$n"

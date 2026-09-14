@@ -62,9 +62,11 @@ TIMEOUT_S=""
 TAIL_N=40
 SANDBOX_TREE=""
 GATES_FILE=""
+SANDBOX_ENV=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --sandbox) SANDBOX_TREE="${2:?--sandbox needs a tree}"; shift 2 ;;
+    --env)     SANDBOX_ENV+=( "${2:?--env needs K=V}" ); shift 2 ;;
     --gates)   GATES_FILE="${2:?--gates needs a file}"; shift 2 ;;
     --out)     OUT_FILE="${2:?--out needs a path}"; shift 2 ;;
     --timeout) TIMEOUT_S="${2:?--timeout needs seconds}"; shift 2 ;;
@@ -148,6 +150,7 @@ run_argv() {
     local sb=( "$PIPELINE_DIR/sandbox.sh" --tree "$SANDBOX_TREE" --out "$OUT_FILE" )
     [ -n "$GATES_FILE" ] && sb+=( --gates "$GATES_FILE" )
     [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && sb+=( --timeout "$TIMEOUT_S" )
+    for kv in ${SANDBOX_ENV+"${SANDBOX_ENV[@]}"}; do sb+=( --env "$kv" ); done
     "${sb[@]}" -- "$@" 2>>"$OUT_FILE"
   elif [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
     ( cd "$ROOT" && timeout --signal=TERM --kill-after=10 "$TIMEOUT_S" "$@" ) >"$OUT_FILE" 2>&1
@@ -167,6 +170,7 @@ run_shell() { # run_shell <command-string>
     local sb=( "$PIPELINE_DIR/sandbox.sh" --tree "$SANDBOX_TREE" --out "$OUT_FILE" )
     [ -n "$GATES_FILE" ] && sb+=( --gates "$GATES_FILE" )
     [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && sb+=( --timeout "$TIMEOUT_S" )
+    for kv in ${SANDBOX_ENV+"${SANDBOX_ENV[@]}"}; do sb+=( --env "$kv" ); done
     "${sb[@]}" -- sh -c "$1" 2>>"$OUT_FILE"
   elif [ -n "$TIMEOUT_S" ] && [ "$TIMEOUT_S" != "0" ] && command -v timeout >/dev/null 2>&1; then
     ( cd "$ROOT" && timeout --signal=TERM --kill-after=10 "$TIMEOUT_S" bash -c "$1" ) >"$OUT_FILE" 2>&1

@@ -219,6 +219,34 @@ if command -v podman >/dev/null 2>&1 && podman image exists localhost/factory-ga
   check "gate.json records the gate"       '"id": "smoke"' "$(cat ai/runs/R/gate.json)"
   check "and where the AC ran"             '"ran_in": "sandbox"' "$(cat ai/runs/R/gate.json)"
 
+  # The defect a real run found: `python -c "import pkg"` cannot pass in a bare
+  # synced tree, because nothing installs the package and the gate has no network.
+  reset_branch
+  mkdir -p src/pkg && printf 'GOOD\n' > src/a.py && : > src/pkg/__init__.py
+  commit_all "a src-layout package"
+  cat > "$WORK/import-bean.yaml" <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: example/x
+title: importable
+intent: i
+status: approved
+allowed_write_paths: ["src/**"]
+acceptance_criteria:
+  - id: ac1
+    text: the package imports
+    verify: { kind: command, run: ["python", "-c", "import pkg"] }
+suggested_risk_tier: 1
+definition_of_done: ["ac1"]
+YAML
+  out="$(PIPELINE_CONFIG=/nonexistent bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/import-bean.yaml" \
+    --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
+  check "without sandbox_env the import fails" "FAIL   ac:ac1" "$out"
+  printf '{"sandbox_env":{"PYTHONPATH":"/work/src"}}\n' > "$WORK/cfg.json"
+  out="$(PIPELINE_CONFIG="$WORK/cfg.json" bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/import-bean.yaml" \
+    --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
+  check "with it, the package imports"        "ok     ac:ac1" "$out"
+
   reset_branch
   mkdir -p src && printf 'BAD\n' > src/a.py
   commit_all "bad"

@@ -1,63 +1,82 @@
 ---
 name: factory-doc
 description: |
-  Write the implementation-detail document for a completed pipeline run: what
-  was built, why, how the pieces fit, and what changed from the spec and why.
-  Produces implementation.html (human) and implementation.json (machine). Use
-  when the user asks to document an implementation (doc step of the pipeline).
+  Write the implementation-detail document from the diff that was actually
+  accepted — what was built, not what was planned. Invoked as
+  /skill:factory-doc <run-dir>. Markdown only; the controller renders it.
 ---
 
-# pipeline-doc
+# factory-doc
 
-The doc step. This document teaches the change. The section that keeps this
-step worth its runtime is **"what changed from the spec, and why"** — if it is
-consistently empty across runs, this step gets cut. An honest
-"nothing changed" is a finding in itself. Do not pad.
+You are writing the document a person reads to understand a change they did not
+make. It is the last thing between this work and a reviewer's attention, and it
+is judged against the diff — not against the spec, and not against how sensible
+it sounds.
 
-## Rules
+The one rule that matters: **describe what was built.** The spec is what someone
+intended. You have the actual diff. Where they differ, the diff is what happened,
+and saying so is the job rather than an embarrassment.
 
-- Fresh context: describe what is actually in the diff, not what the spec
-  promised and not what any conversation claimed. Fresh context means you have
-  no conversation — the diff is what you have.
-- Project specifics come from `ai/pipeline/config.json` in the current working
-  directory. Never hardcode repo paths.
+Write Markdown. Never HTML — the controller renders it.
 
 ## Inputs
 
-Arguments: `<run-dir>`.
+`<run-dir>`. Read:
+
+- `<run-dir>/diff.txt` — **the accepted change**. Read this first and read it
+  properly. Everything you write is a claim about this file.
+- `<run-dir>/spec.md` and `<run-dir>/tasks.yaml` — what was planned, and each
+  task's `teaching_note`, which exists for exactly this moment.
+- `<run-dir>/gate.json` — gate results, acceptance criteria outcomes, the binding
+  tier, invariants. Your Evidence section comes from here, not from memory.
+- `<run-dir>/tasks.jsonl` — how many attempts each task took, and what failed on
+  the way. A task that took three attempts is worth a sentence.
+
+## The seven sections
+
+The controller lints these. A thin one fails the step before a judge sees it.
+
+- **Summary** — what was done, in two sentences, matching the diff.
+- **Walkthrough by task** — per task: the diff hunks that matter, explained line
+  by line as a teaching block, plus that task's `teaching_note`. This is the bulk
+  of the document and the part a reviewer actually uses.
+- **Deviations from the spec** — anything that differs from the plan, and why.
+  If nothing differs, say what you compared and how you checked, not just "None":
+  the pre-PR audit's `matches_diff` needs a claim it can agree or disagree with,
+  and a bare "None" gives it nothing.
+- **Risk & blast radius, as built** — restate both against the real change.
+  Anything wider than the spec said is a finding; write it down yourself rather
+  than leaving it to be discovered.
+- **Evidence** — gate results, each acceptance criterion's outcome, coverage if
+  recorded, test-integrity counts, and provenance: base and candidate SHAs, the
+  gate image digest, the tier. Copy these from `gate.json`; do not retype them
+  from memory and do not round them.
+- **How to verify locally** — the commands a human can run, exactly as a human
+  would type them.
+- **Rollback** — the concrete steps. "Revert the commit" is only a rollback if
+  nothing else happened; say what else happened.
+
+## What makes this document good
+
+- **Code blocks teach.** A hunk pasted without explanation is not a walkthrough.
+  Say what the code does and why it is shaped that way; a reader who does not know
+  this stack should still follow it.
+- **No assumed knowledge.** Not of the codebase, the stack, or the domain.
+- **Honest about what you do not know.** If a task failed twice before passing and
+  you cannot tell why from the record, say that. It is more useful than a tidy
+  narrative, and the judge is reading the same record you are.
 
 ## Process
 
-1. Read `<run_dir>/run.json` and `<run_dir>/spec.json` (what was promised).
-2. Start the step: `bash ai/pipeline/step.sh <run-dir> doc start`.
-3. Read what was actually built: `git diff main...HEAD --stat` and the changed
-   files (use the file list in spec.json plus the diff to find anything else).
-4. Write both artifacts (see below).
-5. End the step: `bash ai/pipeline/step.sh <run-dir> doc end`.
+1. Read the diff.
+2. Read the spec, the tasks and the gate results.
+3. Write `<run-dir>/impl-detail.md`.
 
-## Artifacts
+That is the whole job. Do not run git, do not commit, do not render anything, do
+not touch the code — the change is already accepted and the document must not
+alter what it describes.
 
-### `<run_dir>/implementation.json` — the source of truth
+## Report
 
-```json
-{
-  "bean": "BEAN-NNN",
-  "what_built": "what the change does, verified against the diff",
-  "why": "why it is wanted; why this approach over the alternatives",
-  "how_it_fits": "how the new/changed pieces fit into the existing structure",
-  "changes_from_spec": [
-    { "spec_said": "…quote or paraphrase spec.json…", "it_did": "…what the diff shows…", "why": "…" }
-  ]
-}
-```
-
-- `changes_from_spec` is an empty array **only** if the diff actually matches
-  the spec. Every deviation goes here with its reason. Omitting a real
-  deviation is a blocker the audit will look for.
-
-### `<run_dir>/implementation.html` — the human review surface
-
-Self-contained (no external assets). Same content as the JSON, plus enough
-code-level detail (the important functions/queries/routes) that a reviewer who
-never saw the diff lands on it, gets the point, and can trust the
-"changes from spec" section.
+What you wrote, anything in the diff you could not explain, and any place the
+implementation and the spec disagree that you had to write up as a deviation.

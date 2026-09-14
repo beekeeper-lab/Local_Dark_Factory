@@ -208,6 +208,19 @@ if [ "$SANDBOX" = 1 ]; then
     "$("$PIPELINE_DIR/yaml2json.sh" "$GATES_FILE" | jq -r '.image' | sed 's/@.*//')" >&2
 fi
 
+# How this project becomes importable/runnable inside the container. Found the
+# hard way: bean-001's acceptance criterion is `python -c "import
+# seating_planner"`, and a src-layout package is not importable in a bare synced
+# tree — there is no install step and §08 gives the gate no network to do one.
+# The developer model spotted that and refused to write a spec around it, which
+# was the correct call: it is a hole in the controller, not in the bean.
+SANDBOX_ENV_ARGS=()
+if [ -f "$CONFIG_PATH" ]; then
+  while IFS= read -r kv; do
+    [ -n "$kv" ] && SANDBOX_ENV_ARGS+=( --env "$kv" )
+  done < <(jq -r '(.sandbox_env // {}) | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_PATH" 2>/dev/null)
+fi
+
 TASKS_LOG="$RUN_DIR/tasks.jsonl"
 [ -f "$TASKS_LOG" ] || : > "$TASKS_LOG"
 
@@ -266,7 +279,7 @@ run_verifies() {
   while [ "$i" -lt "$n" ]; do
     v="$(jq -c --argjson i "$i" '.verify[$i]' <<<"$t")"
     rc=0
-    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$adir/verify-$((i+1)).log" ${sb_args+"${sb_args[@]}"})" || rc=$?
+    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$adir/verify-$((i+1)).log" ${sb_args+"${sb_args[@]}"} ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"})" || rc=$?
     printf '%s\n' "$res" | jq . > "$adir/verify-$((i+1)).json" 2>/dev/null || printf '%s\n' "$res" > "$adir/verify-$((i+1)).json"
     if [ "$rc" -ne 0 ]; then
       printf '%s\n' "$res" > "$adir/verify-failed.json"

@@ -213,6 +213,37 @@ run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
 want "spec.html exists"            "the controller should have rendered it" test -f "$run_dir/spec.html"
 cleanup_run
 
+printf '\n== the controller never overwrites what the model wrote ==\n\n'
+# A 27B did exactly this on the first real run: found that an acceptance
+# criterion could not pass in the gate container, stopped, and wrote its
+# reasoning to QUESTIONS.md. halt() then wrote over it.
+cat > "$WORK/stub-questions" <<'STUB'
+#!/usr/bin/env bash
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+case "$prompt" in
+  *factory-spec*)
+    run_dir="${prompt##* }"
+    printf '# QUESTIONS\n\nThe bean asks for something the container cannot do: ac1 imports a package that is never installed.\n' > "$run_dir/QUESTIONS.md"
+    ;;
+esac
+exit 0
+STUB
+chmod +x "$WORK/stub-questions"
+out="$(PI_BIN="$WORK/stub-questions" PI_SESSIONS_DIR="$WORK/sessions" \
+  PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
+  bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after spec 2>&1)"
+run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+kept="$(ls "$run_dir"/questions-from-worker/*.md 2>/dev/null | head -1)"
+want "the model's questions are kept"   "questions-from-worker/ should hold them" test -n "$kept"
+check "with the model's own words"      "never installed" "$(cat "$kept" 2>/dev/null)"
+check "and the halt points at them"     "The model stopped and wrote its own questions first" \
+  "$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
+cleanup_run
+
 printf '\n== a spec with no document does not reach an audit ==\n\n'
 out="$(STUB_SPEC_MD= run_orchestrate)"
 check "a missing spec.md fails the step" "FAIL  spec.md" "$out"

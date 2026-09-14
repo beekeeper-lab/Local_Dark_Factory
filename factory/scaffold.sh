@@ -217,11 +217,20 @@ jq -n --arg tier "$TIER" '{
   gates_ref: "factory/gates.lock.yaml",
   test_command: ["pytest", "-q"],
   verify_timeout_s: 900,
+  sandbox_env: {
+    PYTHONPATH: "/work/src"
+  },
   _comment: [
     "Read by the factory pipeline scripts, which live in the Local_Dark_Factory repo.",
     "Point them at this file: PIPELINE_CONFIG=<this repo>/factory/pipeline-config.json",
     "gates_ref means the gate list comes from the pinned manifest, not from here —",
-    "two lists of gates is one list that will eventually disagree with itself."
+    "two lists of gates is one list that will eventually disagree with itself.",
+    "sandbox_env says how this project becomes importable inside the gate container.",
+    "A src-layout package is not importable in a bare synced tree: there is no",
+    "install step and §08 gives the gate no network to run one. PYTHONPATH=/work/src",
+    "is the honest minimum. It makes the package importable; it is not the same as",
+    "an editable install, and a bean whose criterion really means *installed* is",
+    "asking for something this line cannot currently give it."
   ]
 }' | write "factory/pipeline-config.json"
 

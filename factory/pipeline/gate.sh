@@ -72,6 +72,19 @@ BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bea
 POLICY_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$POLICY")"  || die "cannot read policy: $POLICY"
 BEAN_ID="$(jq -r '.id' <<<"$BEAN_JSON")"
 
+# How this project becomes importable/runnable inside the container. Found the
+# hard way: bean-001's acceptance criterion is `python -c "import
+# seating_planner"`, and a src-layout package is not importable in a bare synced
+# tree — there is no install step and §08 gives the gate no network to do one.
+# The developer model spotted that and refused to write a spec around it, which
+# was the correct call: it is a hole in the controller, not in the bean.
+SANDBOX_ENV_ARGS=()
+if [ -f "$CONFIG_PATH" ]; then
+  while IFS= read -r kv; do
+    [ -n "$kv" ] && SANDBOX_ENV_ARGS+=( --env "$kv" )
+  done < <(jq -r '(.sandbox_env // {}) | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_PATH" 2>/dev/null)
+fi
+
 RESULT="$RUN_DIR/gate.json"
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 FAILED=0
@@ -186,7 +199,7 @@ else
       gid="$(jq -r '.id' <<<"$g")"
       run_json="$(jq -c '{kind:"command", run:.run}' <<<"$g")"
       log="$RUN_DIR/gate-$gid.log"
-      res="$("$PIPELINE_DIR/verify.sh" "$run_json" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} 2>/dev/null)"
+      res="$("$PIPELINE_DIR/verify.sh" "$run_json" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} 2>/dev/null)"
       rc=$?
       GATE_ROWS="$(jq -c --arg id "$gid" --argjson r "${res:-{\}}" '. + [{id:$id} + $r]' <<<"$GATE_ROWS")"
       if [ "$rc" -eq 0 ]; then pass_part "gate:$gid" "$(jq -r '.duration_s' <<<"$res")s"
@@ -201,7 +214,7 @@ else
     acid="$(jq -r '.id' <<<"$ac")"
     v="$(jq -c '.verify' <<<"$ac")"
     log="$RUN_DIR/ac-$acid.log"
-    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} 2>/dev/null)"
+    res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} 2>/dev/null)"
     rc=$?
     AC_ROWS="$(jq -c --arg id "$acid" --argjson r "${res:-{\}}" '. + [{id:$id} + $r]' <<<"$AC_ROWS")"
     if [ "$rc" -eq 0 ]; then pass_part "ac:$acid" "$(jq -r '.command' <<<"$res" | cut -c1-48)"
@@ -218,7 +231,7 @@ else
       inv_v="$("$PIPELINE_DIR/yaml2json.sh" "$inv_path" | jq -c '.verify')"
       log="$RUN_DIR/invariants.log"
       # Invariants live outside the package, so they need it importable.
-      res="$("$PIPELINE_DIR/verify.sh" "$inv_v" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} 2>/dev/null)"
+      res="$("$PIPELINE_DIR/verify.sh" "$inv_v" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} 2>/dev/null)"
       rc=$?
       INV_ROW="$(jq -c --arg ref "$INV_REF" --argjson r "${res:-{\}}" '{ref:$ref} + $r' <<<"{}")"
       if [ "$rc" -eq 0 ]; then pass_part "invariants" "$INV_REF"
