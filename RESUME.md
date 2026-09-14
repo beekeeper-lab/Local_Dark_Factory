@@ -49,6 +49,13 @@ Two things are missing and neither is small: an image with `pi` in it, and a way
 worker reach *only* the model endpoint — `--network=model` reaches the host loopback and
 general outbound, and says so when used. An allow-listed proxy is the next piece of that.
 
+## The three ranked gaps in the forked pipeline are now two closed and one half
+
+1. ~~No task loop~~ — built.
+2. **Sandbox — half.** Gates and verifies are contained; the worker session is not.
+3. ~~The model declares its own tier~~ — `tier.py` + `gate.sh`. The tier comes from the
+   paths the diff touched; bean and judge can only raise it.
+
 ## Next action
 
 Phase 1 — one bean, by hand, through all seven stages. Its entry needs three things; the

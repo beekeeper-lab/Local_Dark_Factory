@@ -148,8 +148,8 @@ cleanup_run() {
 
 printf '\n== the tier lists the build step, not a one-shot implement ==\n\n'
 out="$(PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" bash "$PIPELINE_DIR/orchestrate.sh" --help)"
-check "small tier runs build"     "small: preflight spec build checks" "$out"
-check "full tier runs build"      "full:  preflight spec audit-spec build checks" "$out"
+check "small tier runs build"     "small: preflight spec build gate" "$out"
+check "full tier runs build"      "full:  preflight spec audit-spec build gate" "$out"
 
 printf '\n== a run reaches the loop and the loop does the work ==\n\n'
 cat > "$WORK/actions/task-1.1" <<'SH'

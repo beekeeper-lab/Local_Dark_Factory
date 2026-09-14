@@ -9,9 +9,16 @@
 #     which are the authoritative implementation of those steps.
 #
 # Tiers — read from the `**Pipeline Tier**` row of the bean's table; absent → full:
-#   small: preflight → spec → build → checks → audit-impl → audit-package → pr
-#   full:  preflight → spec → audit-spec → build → checks → audit-impl
+#   small: preflight → spec → build → gate → audit-impl → audit-package → pr
+#   full:  preflight → spec → audit-spec → build → gate → audit-impl
 #          → doc → audit-doc → audit-package → pr
+#
+# `gate` is "contain, classify, gate" (§06 step 6): the WHOLE diff checked
+# against the bean's paths intersected with the repo's approved surface, the
+# binding tier computed from the paths the diff actually touched, the size
+# budget, a secret scan, then every gate, acceptance criterion and independent
+# invariant run inside the sandbox. It replaces the older `checks` step, which
+# only ran the gate commands.
 #
 # `build` is the task loop (spec §06 step 5), and it is a CONTROLLER step, not a
 # model step: build-loop.sh drives it, opening one worker session per task and
@@ -62,8 +69,8 @@ usage:
   orchestrate.sh <BEAN_ID> --resume <run_dir>
 
 Tiers (from the bean's `**Pipeline Tier**` table row; absent → full):
-  small: preflight spec build checks audit-impl audit-package pr
-  full:  preflight spec audit-spec build checks audit-impl doc audit-doc audit-package pr
+  small: preflight spec build gate audit-impl audit-package pr
+  full:  preflight spec audit-spec build gate audit-impl doc audit-doc audit-package pr
 
 An audit FAIL re-enters the authoring step with the verdict's findings, then
 re-audits; a second failed attempt on the same step halts the run and writes
@@ -159,8 +166,8 @@ fi
 [ -n "$TIER" ] || TIER="full"
 
 case "$TIER" in
-  small) STEPS=(preflight spec build checks audit-impl audit-package pr) ;;
-  full)  STEPS=(preflight spec audit-spec build checks audit-impl doc audit-doc audit-package pr) ;;
+  small) STEPS=(preflight spec build gate audit-impl audit-package pr) ;;
+  full)  STEPS=(preflight spec audit-spec build gate audit-impl doc audit-doc audit-package pr) ;;
   *) die "unknown pipeline tier '$TIER' in $BEAN_MD (expected small|full)" ;;
 esac
 
@@ -376,6 +383,10 @@ run_step() { # <step> [-- <extra args carried through to the child>]
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
+    gate)
+      local gy
+      gy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the gate cannot contain a diff without the bean's allowed_write_paths"
+      run_script_step "$step" "$PIPELINE_DIR/gate.sh" "$RUN_DIR" --bean "$gy" ;;
     build)
       local by
       by="$(bean_yaml)" || die "no bean YAML for $BEAN_ID (looked for bean_file_pattern in config, then $BEAN_DIR/bean.yaml). The build loop bounds every task by the bean's allowed_write_paths and will not run without them."
@@ -453,6 +464,14 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
         fi
       else
         printf '\n- `checks.json` does not exist — the gates have not run, so they cannot be the cause of this halt.\n'
+      fi
+      if [ -f "$RUN_DIR/gate.json" ] && [ "$(jq -r '.overall // ""' "$RUN_DIR/gate.json" 2>/dev/null)" = "fail" ]; then
+        printf '\n- The gate failed. What it found, in `%s/gate.json`:\n' "$RUN_DIR"
+        jq -r '(if (.containment.contained | not) then "  - containment: " + (.containment.violations | join(", ")) else empty end),
+               (.gates[]? | select(.status != "pass") | "  - gate " + .id + ": exit " + (.exit_code|tostring)),
+               (.acceptance_criteria[]? | select(.status != "pass") | "  - " + .id + ": " + (.reason // .command // "failed")),
+               (if (.invariants != null and .invariants.status != "pass") then "  - invariants: " + (.invariants.reason // .invariants.ref) else empty end)' \
+          "$RUN_DIR/gate.json" 2>/dev/null
       fi
       local blocked
       blocked="$(ls -1 "$RUN_DIR"/build/*/BLOCKED.md 2>/dev/null | head -1 || true)"

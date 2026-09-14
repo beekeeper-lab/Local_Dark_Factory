@@ -28,6 +28,50 @@ import re
 import sys
 
 
+def expand_braces(pattern: str) -> list[str]:
+    """`{a,b}/x` -> ['a/x', 'b/x'].
+
+    The risk policy's own schema uses brace alternatives
+    (`{factory/repo.yaml,factory/risk-policy.yaml,...}`), so a matcher that did
+    not expand them would silently match nothing and every agent-control file
+    would classify as tier 1. Silent under-matching is the dangerous direction
+    here, which is why this exists rather than being left to the caller.
+    """
+    start = pattern.find("{")
+    if start == -1:
+        return [pattern]
+    depth = 0
+    for i in range(start, len(pattern)):
+        if pattern[i] == "{":
+            depth += 1
+        elif pattern[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    else:
+        return [pattern]  # unbalanced: treat literally rather than guess
+
+    head, body, tail = pattern[:start], pattern[start + 1:end], pattern[end + 1:]
+    parts, depth, cur = [], 0, ""
+    for ch in body:
+        if ch == "," and depth == 0:
+            parts.append(cur)
+            cur = ""
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        cur += ch
+    parts.append(cur)
+
+    out = []
+    for part in parts:
+        out.extend(expand_braces(head + part + tail))
+    return out
+
+
 def pattern_to_regex(pattern: str) -> re.Pattern[str]:
     """Translate a gitignore-ish path pattern into an anchored regex.
 
@@ -67,8 +111,24 @@ def pattern_to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("".join(out) + r"\Z")
 
 
+def compile_patterns(patterns: list[str]) -> list[re.Pattern[str]]:
+    out = []
+    for pattern in patterns:
+        if not pattern.strip():
+            continue
+        for expanded in expand_braces(pattern):
+            out.append(pattern_to_regex(expanded))
+    return out
+
+
+def matches(path: str, pattern: str) -> bool:
+    """Does one path match one (possibly brace-containing) pattern?"""
+    path = path.strip().lstrip("./")
+    return any(r.match(path) for r in compile_patterns([pattern]))
+
+
 def violations(paths: list[str], patterns: list[str]) -> list[str]:
-    regexes = [pattern_to_regex(p) for p in patterns if p.strip()]
+    regexes = compile_patterns(patterns)
     bad = []
     for path in paths:
         path = path.strip().lstrip("./")

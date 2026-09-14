@@ -273,6 +273,10 @@ re-runnable audit, and a bean set approved to run against.
       is the loop with the **real** developer model on the other end; "in the gate
       container" waits on the sandbox.)*
 - [ ] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
+      *(built and tested: `gate.sh` does containment, tier, size budget, secret scan, gates,
+      AC verifies and invariants, in the sandbox. **Hidden tests vs baseline and the
+      test-integrity counts are not built** — they need a baseline snapshot the controller
+      keeps, which is Phase-2 work.)*
 - [ ] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
 - [ ] `factory step audit --stage impl_audit` — `test_integrity` required and present
 - [ ] `factory step document` — developer writes `impl-detail.md` from the actual diff; controller lints, renders `impl-detail.html`, commits doc candidate
@@ -545,10 +549,27 @@ not yet do that the spec requires:
    allow-listed proxy is the missing piece.
 
    Whole-diff containment at the bean level is also still to do; the task level is done.
-3. **The model declares its own tier.** `orchestrate.sh` reads `**Pipeline Tier**`
-   from the bean's markdown. §08 requires the controller to compute
-   `max(policy, judge, bean)` from the actual diff — a model that under-reads its
-   change currently down-classifies it.
+3. ~~**The model declares its own tier.**~~ **Closed 2026-09-14.**
+   `factory/pipeline/tier.py` computes `max(policy, bean_suggested, judge_suggested)` from
+   the paths the diff actually touched, and `gate.sh` is the stage that runs it. Every term
+   can raise the tier and none can lower it, so a model that under-reads its change is simply
+   not consulted on the question. The policy term matches the risk policy's glob rules —
+   including its brace alternatives, which the matcher did not handle and which would have
+   silently classified every agent-control file as tier 1.
+
+   `gate.sh` is §06 step 6 entire: whole-diff containment against the bean's paths
+   **intersected** with the repo's approved surface (a bean declaring `**` gets no more reach
+   than the human-approved list), the binding tier with the path and rule that set it, the
+   size budget, a narrow secret scan, then every gate from the pinned manifest, every
+   acceptance criterion, and the independent invariants — all inside the sandbox. It writes
+   `gate.json` and the driver names what failed in QUESTIONS.md. 42 cases in
+   `tests/test-gate.sh`.
+
+   One bug found on the way and worth remembering: a rule whose `min_tier` was *below*
+   `default_tier` never fired, because the maximum was seeded with the default. The policy's
+   own tier-0 documents rule was dead code, and the file read as though it were not. The
+   schema's wording is "max over matched minimums, default only when nothing matches", and
+   that is now what happens.
 
 Carried over and worth keeping: the `package` audit's run-integrity checks (branch
 is not `main`, commits exist, `steps.jsonl` start/end pairs balance, verdict filenames
