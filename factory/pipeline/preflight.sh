@@ -90,4 +90,31 @@ existing="$(git branch --list -- "$glob" 2>/dev/null | sed 's/^[ *]*//' || true)
 [ -z "$existing" ] || fail "no-branch" "a branch for this bean already exists: $existing"
 pass "no-branch" "no existing branch matching $glob"
 
+# 6. Every role that declares a thinking level must be a model pi believes can
+#    think. Measured 2026-09-14: pi accepts `--thinking high` for a model whose
+#    catalog entry lacks `reasoning: true`, silently records `thinkingLevel:
+#    "off"`, and runs it with reasoning disabled. gpt-oss:120b was in exactly
+#    that state, so the judge -- the role whose entire value is careful,
+#    independent review -- had been running with its reasoning off while
+#    roles.json said "high". run-step.sh stamps conditions.thinking from
+#    roles.json, so the run record would have asserted a thinking level the run
+#    never used. A false provenance figure is worse than a missing one: it
+#    survives into the telemetry that later decisions are made from.
+ROLES_JSON="$PIPELINE_DIR/roles.json"
+PI_MODELS="${PI_MODELS_JSON:-$HOME/.pi/agent/models.json}"
+if [ -f "$ROLES_JSON" ] && [ -f "$PI_MODELS" ]; then
+  while IFS=$'\t' read -r rname rprov rmodel; do
+    [ -n "$rmodel" ] || continue
+    declares="$(jq -r --arg p "$rprov" --arg m "$rmodel" \
+      '.providers[$p].models[]? | select(.id == $m) | (.reasoning // false)' "$PI_MODELS" 2>/dev/null)"
+    [ -n "$declares" ] || fail "role-thinking" \
+      "role '$rname' uses $rprov/$rmodel, absent from $PI_MODELS — pi would fall back to a default model"
+    [ "$declares" = "true" ] || fail "role-thinking" \
+      "role '$rname' declares a thinking level but $rprov/$rmodel has reasoning=false in $PI_MODELS; pi will silently run it with thinking off while the run record claims otherwise"
+  done < <(jq -r '.roles | to_entries[]
+             | select((.value.thinking // "") | . != "" and . != "off")
+             | [.key, .value.provider, .value.model] | @tsv' "$ROLES_JSON")
+  pass "role-thinking" "every thinking role maps to a reasoning-capable model in pi's catalog"
+fi
+
 echo "PASS  preflight: all checks passed for $BEAN_ID"

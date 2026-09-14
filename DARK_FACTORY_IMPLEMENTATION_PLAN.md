@@ -141,8 +141,38 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
       developer->judge **13.2 s**. `model_load_timeout` suggestion: **27 s** (2x worst). Swap
       cost is far cheaper than feared, which weakens the case for co-residency independently
       of whether it is possible.
-- [ ] gpt-oss Harmony conformance test passes
-- [ ] Pi drives **both** models through Ollama's OpenAI endpoint (`--mode rpc`; developer-role + reasoning fields OK)
+- [x] gpt-oss Harmony conformance test passes — **12/12**, `bench/harmony-conformance.sh`
+      (re-runnable). Verified on both endpoints: the final channel returns clean content, the
+      analysis channel is exposed separately as `reasoning`/`thinking`, no `<|channel|>`-class
+      control tokens leak into either, the `developer` role is accepted, and constrained
+      decoding still yields schema-legal JSON with a valid `verdict` enum while thinking is on.
+      That last one is the load-bearing case: every verdict is a schema-shaped object, so if
+      Harmony and constrained decoding interfered, every audit step would fail at the end
+      rather than the start.
+- [x] Pi drives **both** models — and finding this out cost the judge its reasoning. The
+      pipeline does not use `--mode rpc` (that checklist wording was wrong; `run-step.sh` calls
+      `pi --model <provider>/<model> --thinking <level> --skill <dir> -p`). Both models answer
+      correctly under the real invocation. **But `--thinking high` was being silently
+      discarded for the judge.** pi gates thinking on its own model catalog
+      (`~/.pi/agent/models.json`), and `gpt-oss:120b` was registered without `reasoning: true`;
+      pi accepted the flag, emitted no warning, and recorded `thinkingLevel: "off"` in the
+      session. The developer, registered with `reasoning: true`, correctly recorded `"medium"`.
+
+      So the judge — the one role whose entire value is careful, independent review (§01) — had
+      been running with reasoning **off**, while `roles.json` declared `"high"`. Worse for the
+      experiment: `run-step.sh` stamps `conditions.thinking` from `roles.json`, not from what
+      pi actually did, so every run record would have asserted a thinking level the run never
+      used. **A false provenance figure is worse than a missing one** — it survives into the
+      telemetry that later decisions get made from, which is the same failure the run-record
+      contract was added to prevent.
+
+      Fixed in two places: `gpt-oss:120b` and `gpt-oss:20b` now declare `reasoning: true`
+      (contextWindow 131072, maxTokens 32768) in pi's catalog — backup at
+      `~/.pi/agent/models.json.bak-20260914-preharmony` — and `preflight.sh` now refuses to
+      start a run if any role declaring a thinking level maps to a model pi believes cannot
+      think. Re-verified: the judge now records `thinkingLevel: "high"`. This is the same class
+      of gap `roles.json` already flagged for `num_ctx` ("declared here but Ollama serves what
+      the unit says; assert, do not trust") — now proven real for `thinking`, and asserted.
 - [x] Record digest / quant / Ollama version / GPU split / context beside every figure —
       every row in the results JSON carries provenance: developer `8a1582877303` [Q8_0],
       judge `a951a23b46a1` [MXFP4], ollama 0.32.13, kernel 7.2.5-100.fc43.x86_64, GTT 96 GiB.
@@ -152,7 +182,10 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
 phase_0_exit: { residency_recorded: true, swap_time_measured: true, harmony_conformance: pass,
                 pi_drives_both_models: pass, regime_decision: "coresident|serial", figures_have_provenance: true }
 ```
-- [ ] Exit verified   - [ ] Audit generated   - [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-0-COMPLETE` committed
+- [x] Exit verified — all six `phase_0_exit` predicates hold:
+      `residency_recorded: true`, `swap_time_measured: true`, `harmony_conformance: pass`,
+      `pi_drives_both_models: pass`, `regime_decision: "serial"`, `figures_have_provenance: true`.
+- [ ] Audit generated   - [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-0-COMPLETE` committed
 
 ---
 
