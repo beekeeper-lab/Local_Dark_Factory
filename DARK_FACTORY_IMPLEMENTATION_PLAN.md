@@ -10,6 +10,12 @@
 > completes. A phase is done only when its closing ritual is complete:
 > **all tasks checked → exit criteria machine-verified → audit report generated →
 > findings corrected → audit re-run → phase-complete marker committed.**
+>
+> **Marker convention** (set 2026-09-14, at Phase 0): the marker is a commit whose subject
+> begins `PHASE-N-COMPLETE`, plus an annotated tag `phase-N-complete` on it. The tag is what
+> makes the boundary findable later — `git log phase-0-complete..HEAD` is the honest answer
+> to "what changed since the line was last known good", and a run record can name the tag it
+> was built under. Tags are local until pushed: `git push origin phase-0-complete`.
 
 ---
 
@@ -226,7 +232,10 @@ phase_0_exit: { residency_recorded: true, swap_time_measured: true, harmony_conf
       10. *minor* the unit-config checkbox above was unchecked though the work was done.
 - [x] **Audit re-run green** — `./bench/phase0-audit.sh --with-models` → 0 findings; artifact at
       `audits/phase0-audit-20260914T182533Z.json`.
-- [ ] `PHASE-0-COMPLETE` committed
+- [x] `PHASE-0-COMPLETE` committed — marker commit + annotated tag `phase-0-complete`.
+
+**Phase 0 is closed.** The line has measured hardware, provenanced figures, a green
+re-runnable audit, and a bean set approved to run against.
 
 ---
 

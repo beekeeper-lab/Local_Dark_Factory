@@ -6,7 +6,11 @@ intent: >
   A guest-to-table export carries no private notes, relationship rules or override
   explanations, and including them requires a deliberate choice that names what will
   be exposed.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 18
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

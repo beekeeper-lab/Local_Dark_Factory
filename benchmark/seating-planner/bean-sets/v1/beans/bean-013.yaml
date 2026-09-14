@@ -5,7 +5,11 @@ title: Low-disruption mode with a movement limit as a hard constraint
 intent: >
   Recalculation shortly before the event improves the chart while moving no more guests
   between tables than the organizer permits.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 13
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

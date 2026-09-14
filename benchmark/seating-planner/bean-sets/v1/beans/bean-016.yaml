@@ -5,7 +5,11 @@ title: Optimization results are proposals until accepted
 intent: >
   No recalculation reaches the saved chart without the organizer first seeing every
   guest whose table would change and accepting it.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 16
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

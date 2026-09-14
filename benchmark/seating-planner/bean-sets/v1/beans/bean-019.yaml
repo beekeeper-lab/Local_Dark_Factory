@@ -5,7 +5,11 @@ title: Extract constraint construction from the solver module
 intent: >
   The solver module is split so that building the CP-SAT model is separate from running
   and interpreting it, with no change in behaviour whatsoever.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 19
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

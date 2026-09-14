@@ -5,7 +5,11 @@ title: Planning mode as an explicit named mode
 intent: >
   Optimization is invoked under a named mode, and Planning mode reoptimizes every guest
   whose assignment is not locked.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 12
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

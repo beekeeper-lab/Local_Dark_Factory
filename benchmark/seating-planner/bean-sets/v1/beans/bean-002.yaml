@@ -5,7 +5,11 @@ title: Core domain models for events, tables, guests and groups
 intent: >
   The vocabulary of the product exists as validated data structures, so that rules and
   the solver have something concrete to refer to.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 2
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

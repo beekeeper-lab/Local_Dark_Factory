@@ -83,4 +83,4 @@ benchmark/
 
 | Name | Source | Status |
 |---|---|---|
-| `seating-planner` | Wedding Seating Optimizer PRD v0.1 — 85 FR, 14 NFR, 8 acceptance scenarios | requirements frozen at `73512dcd…18e5`; bean set v1 not yet drafted |
+| `seating-planner` | Wedding Seating Optimizer PRD v0.1 — 85 FR, 14 NFR, 8 acceptance scenarios | requirements frozen at `73512dcd…18e5`; bean set **v1 drafted and approved** — 20 beans, all `status: approved`, run order 001..020 |

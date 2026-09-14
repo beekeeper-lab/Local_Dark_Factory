@@ -5,7 +5,11 @@ title: Event-day mode seats new guests without moving anyone
 intent: >
   On the day, every existing assignment is treated as locked, a newly added guest takes
   an open seat, and a cancellation frees a seat without shuffling anyone.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 14
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

@@ -5,7 +5,11 @@ title: CP-SAT table assignment satisfying hard constraints
 intent: >
   Eligible guests are assigned to tables such that no hard constraint and no table
   capacity is violated, or the problem is reported infeasible.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 6
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

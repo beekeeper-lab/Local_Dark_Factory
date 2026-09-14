@@ -5,7 +5,11 @@ title: Infeasibility preserves the chart and recommends corrective action
 intent: >
   When no valid assignment exists, the saved seating chart is untouched, the conflicting
   hard constraints are named, and at least one concrete fix is offered.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 10
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

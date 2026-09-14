@@ -5,7 +5,11 @@ title: Locked assignments that automatic recalculation cannot move
 intent: >
   A guest locked to a table stays at that table through every optimization mode, and
   only an explicit unlock releases them.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 11
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

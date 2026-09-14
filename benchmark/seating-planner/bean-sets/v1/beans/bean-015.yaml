@@ -5,7 +5,11 @@ title: Ranked alternatives when no valid event-day seat exists
 intent: >
   When a late guest cannot be seated without breaking something, they are left
   unassigned and the organizer is offered concrete options ranked by how much they cost.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 15
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

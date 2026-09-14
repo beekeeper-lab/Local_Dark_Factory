@@ -5,8 +5,9 @@
   "requirements_path": "benchmark/seating-planner/requirements/REQUIREMENTS.md",
   "drafted_by": "Claude Opus 5 (outside builder, spec §04 build-out clause)",
   "drafted_at": "2026-09-14",
-  "approved_by": null,
-  "approved_at": null,
+  "approved_by": "Gregg Reed — bulk approval of all 20 beans, delegated to Claude Opus 5 on 2026-09-14. Not a per-bean human read: the owner authorised the set as a whole so Phase 1 could start. Spec §04's intent (a human gates what queues) is met at the set level, not the bean level; a production corpus should be approved bean by bean.",
+  "approved_at": "2026-09-14T18:38:56Z",
+  "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
   "target_stack": "python-cpsat",
   "target_repo": "beekeeper-lab/seating-planner-py",
 

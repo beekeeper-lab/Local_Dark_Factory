@@ -5,7 +5,11 @@ title: Structured seating rules with hardness, weight and the wedding template
 intent: >
   Every seating rule exists as inspectable structured data with an explicit type,
   hardness and weight — never as prose and never only inside a prompt.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 3
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

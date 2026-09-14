@@ -1,8 +1,8 @@
-# Resume here — Phase 0
+# Resume here — Phase 1
 
-Last session ended 2026-09-14. Branch `factory/phase0-prep-and-bean-set-v1`, tree clean.
+Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-and-bean-set-v1`.
 
-## State: Phase 0 is measured, audited, and the audit is green
+## State: Phase 0 is CLOSED. Phase 1 is next and is blocked on scaffold, not on approval.
 
 All six `phase_0_exit` predicates hold — and, as of the audit, they are *computed*
 rather than asserted (`bench/phase0-audit.sh`), which they were not before:
@@ -24,15 +24,35 @@ for anything downstream:
   Both are now read back (pi's session file, ollama `/api/ps`), with the declared
   value kept beside the observed one and a `declared_matches_observed` flag.
 
+Marker convention, set here and binding on every later phase: a commit whose subject
+begins `PHASE-N-COMPLETE`, plus an annotated tag `phase-N-complete`. Tags are local until
+pushed.
+
+**All 20 seating-planner beans are `status: approved`** (2026-09-14, bulk approval delegated
+by the owner — recorded as such in `bean-sets/v1/manifest.json`, because a set-level
+approval is not the per-bean human read §04 describes). Run order is bean id order, which
+is a checked topological order.
+
 ## Next action
 
-- [x] Audit generated   - [x] Findings corrected   - [x] Audit re-run green
-- [ ] `PHASE-0-COMPLETE` committed — the marker convention is yours to set
+Phase 1 — one bean, by hand, through all seven stages. Its entry needs three things; the
+approval is done, and the other two are build work:
 
-Then Phase 1 (one bean, by hand, through all seven stages). Phase-1 entry needs a
-throwaway GitHub repo with the `factory/` scaffold and one **approved** bean — all 20 beans
-are still `status: draft`, and §04 requires a human to approve before anything queues.
-That approval is yours to give and is the actual gate on starting Phase 1.
+1. A throwaway GitHub repo for the target (`beekeeper-lab/seating-planner-py` per the bean
+   set) — the developer must never hold a writable tree in *this* repo, which holds the
+   policy governing it (`factory/**` is Tier 3).
+2. The `factory/` scaffold in that repo: `repo.yaml`, `risk-policy.yaml`, `gates.lock`,
+   document templates. None exist yet.
+3. **The task loop** — the largest single piece still to build, and the one that decides
+   whether Phase 1 proves anything. `pipeline-implement` still hands the model the whole
+   spec in one session; spec §06 wants one task at a time with its `verify` and the real
+   failure output fed back. Checking `factory step build` without it would pass the box
+   while testing the wrong thing.
+
+One open owner decision rides along: `manifest.json` `conflicts_found` flags FR-048
+(reproducibility) vs NFR-001 (15 s for 250 guests / 2000 rules) as `needs_owner_decision:
+true`. bean-009 pins the solver configuration so the two can coexist; if real data says they
+cannot, that is yours to settle, not the line's.
 
 ## What to re-run to confirm nothing drifted
 

@@ -5,7 +5,11 @@ title: Soft-constraint scoring and the optimization objective
 intent: >
   Among assignments that satisfy every hard constraint, the solver returns the one with
   the highest weighted total of satisfied soft constraints.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 7
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md

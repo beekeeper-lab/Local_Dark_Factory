@@ -5,7 +5,11 @@ title: Adjacent-seat rules report as unevaluable, never as satisfied
 intent: >
   A rule the system cannot evaluate — because seat positions were never configured — is
   reported as unevaluable rather than counted among the rules it satisfied.
-status: draft
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 20
 source:
   kind: manual
   ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
