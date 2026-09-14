@@ -247,9 +247,22 @@ re-runnable audit, and a bean set approved to run against.
 > `repo.yaml` (`merge_mode: human_required`), `risk-policy.yaml`, `gates.lock.yaml` pinned to a
 > built image digest, both document templates, and all 20 approved beans with a generated
 > `bean.md` and `INDEX.md`. `preflight.sh bean-001` passes against it end to end.
-> **The exception is `invariants_ref`:** no bean has one. An independently-authored invariant is
-> precisely what the developer model must not be able to reach, and adding one to an
-> already-approved bean re-opens that bean's approval — an owner decision, not a build step.
+> **`invariants_ref` closed 2026-09-14**, at the owner's direction.
+> `factory/invariants/seating.yaml` declares six hard guarantees of any seating answer —
+> capacity, one table per guest, eligibility, hard rules, infeasibility being total, and
+> reproducibility — with `test_seating_invariants.py` beside it. They were authored before
+> any implementation existed, by a different model family from the developer, at a path the
+> line can run and cannot write (tier 3, and absent from `repo_allowed_paths`). They are
+> **not human-reviewed**, and `seating.yaml` records that under `reviewed_by: null` rather
+> than implying otherwise. Wired into bean-006, 007, 009 and 013; the amendment is recorded
+> in the bean set's manifest under the rule that an addition which only *narrows* what the
+> line may get away with does not re-open approval.
+>
+> They check the answer through one documented conformance seam
+> (`seating_planner.invariant_api.solve_from_spec`), so they constrain what the solver may
+> produce without dictating how it is built. Nine cases in `tests/test-invariants.sh` prove
+> each invariant catches its own violation and that a correct solver satisfies all six — an
+> invariant nobody has seen fail is a comment.
 
 - [ ] `factory step specify` — developer via Pi writes `spec.md` + `tasks.yaml`; controller lints sections, validates schemas, checks `size_budget`, renders `spec.html`
 - [ ] `factory step commit` — spec candidate commit; artifact hashes recorded
@@ -267,7 +280,8 @@ re-runnable audit, and a bean set approved to run against.
 - [ ] `factory step pr` — exact `candidate_sha` pushed; PR body links both HTML docs and all three verdicts
 - [ ] A human reads both rendered documents and confirms they teach (risk, blast radius, code blocks, no assumed knowledge)
 - [ ] Allowed-path enforcement verified at task level and bean level (out-of-scope edit → rejected, not stripped)
-- [ ] Independent invariant ran
+- [ ] Independent invariant ran *(the invariants exist and are proven to catch their own
+      violations; what Phase 1 has to show is the controller running them against a real build)*
 
 **Exit:**
 ```yaml

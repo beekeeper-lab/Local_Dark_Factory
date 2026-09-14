@@ -63,3 +63,7 @@ non_goals:
   - no seat-level assignment
   - no locks (bean-011)
 dependencies: [bean-005]
+# Added 2026-09-14, after approval. An amendment that only ADDS an independent
+# check does not re-open approval: it narrows what the line may get away with and
+# cannot widen it. Amendments that loosen criteria or widen paths would.
+invariants_ref: factory/invariants/seating.yaml

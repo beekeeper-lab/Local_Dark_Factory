@@ -70,6 +70,12 @@ approval is done, and the other two are build work:
    text — in the skill, and in the loop's rejection messages — gets judged by whether a
    27B can actually act on it.
 
+**Independent invariants exist** (`factory/invariants/seating.yaml` + its pytest file),
+authored before any code, by a different model family from the developer, at a path the line
+cannot write. Six properties, each proven to catch its own violation. They are not
+human-reviewed — if one ever fails and the argument becomes "the invariant is wrong", that
+is yours to settle, not the line's.
+
 One open owner decision rides along: `manifest.json` `conflicts_found` flags FR-048
 (reproducibility) vs NFR-001 (15 s for 250 guests / 2000 rules) as `needs_owner_decision:
 true`. bean-009 pins the solver configuration so the two can coexist; if real data says they

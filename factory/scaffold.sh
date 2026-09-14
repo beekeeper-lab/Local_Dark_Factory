@@ -96,6 +96,16 @@ for f in "$SRC"/templates/*.html; do
   copy "$f" "factory/templates/$(basename "$f")"
 done
 
+# Invariants: acceptance fixtures from outside the developer's reach (§05). They
+# are tier 3 and absent from repo_allowed_paths, so the line can run them and
+# never edit them — which is the only reason their passing means anything.
+if [ -d "$SRC/invariants" ]; then
+  for f in "$SRC"/invariants/*; do
+    [ -e "$f" ] || continue
+    copy "$f" "factory/invariants/$(basename "$f")"
+  done
+fi
+
 # -- beans: approved only -------------------------------------------------------
 BEANS_DIR="$BEAN_SET/beans"
 [ -d "$BEANS_DIR" ] || BEANS_DIR="$BEAN_SET"
@@ -140,6 +150,9 @@ out.append(f"| Approved by | {ap.get('approved_by','—')} |")
 out.append(f"| Run order | {ap.get('order','—')} |")
 deps = bean.get("dependencies") or []
 out.append(f"| Depends on | {', '.join(deps) if deps else 'nothing'} |")
+inv = bean.get("invariants_ref")
+if inv:
+    out.append(f"| Independent invariants | `{inv}` — authored outside this bean, not editable by the line |")
 sb = bean.get("size_budget") or {}
 if sb:
     out.append(f"| Size budget | {sb.get('max_tasks','?')} tasks · {sb.get('max_files','?')} files · {sb.get('max_diff_lines','?')} diff lines |")
@@ -216,7 +229,12 @@ jq -n --arg tier "$TIER" '{
 for d in specs impl invariants runs; do
   if [ "$DRY" = 0 ]; then
     mkdir -p "$TARGET/factory/$d"
-    [ -e "$TARGET/factory/$d/.gitkeep" ] || : > "$TARGET/factory/$d/.gitkeep"
+    # .gitkeep only where there is nothing else to keep the directory alive.
+    if [ -z "$(ls -A "$TARGET/factory/$d" 2>/dev/null | grep -v '^\.gitkeep$')" ]; then
+      [ -e "$TARGET/factory/$d/.gitkeep" ] || : > "$TARGET/factory/$d/.gitkeep"
+    else
+      rm -f "$TARGET/factory/$d/.gitkeep"
+    fi
   fi
   say "mkdir" "factory/$d/"
 done

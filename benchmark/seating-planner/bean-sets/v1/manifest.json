@@ -7,6 +7,16 @@
   "drafted_at": "2026-09-14",
   "approved_by": "Gregg Reed — bulk approval of all 20 beans, delegated to Claude Opus 5 on 2026-09-14. Not a per-bean human read: the owner authorised the set as a whole so Phase 1 could start. Spec §04's intent (a human gates what queues) is met at the set level, not the bean level; a production corpus should be approved bean by bean.",
   "approved_at": "2026-09-14T18:38:56Z",
+  "amendments": [
+    {
+      "date": "2026-09-14",
+      "change": "invariants_ref: factory/invariants/seating.yaml added to bean-006, bean-007, bean-009, bean-013",
+      "by": "Claude Opus 5 (outside builder), at the owner's direction",
+      "reopens_approval": false,
+      "rule": "An amendment that only ADDS an independent check does not re-open approval: it narrows what the line may get away with and cannot widen it. An amendment that loosened an acceptance criterion, widened allowed_write_paths, or removed a dependency would re-open it, because those change what a human agreed the line could do.",
+      "note": "The invariants were authored before any implementation existed, by a different model family from the developer, and live at a tier-3 path the developer cannot write. They are not human-reviewed; seating.yaml records that plainly under reviewed_by: null."
+    }
+  ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
   "target_stack": "python-cpsat",
   "target_repo": "beekeeper-lab/seating-planner-py",
