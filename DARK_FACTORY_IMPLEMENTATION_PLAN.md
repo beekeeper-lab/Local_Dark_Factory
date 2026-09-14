@@ -264,9 +264,24 @@ re-runnable audit, and a bean set approved to run against.
 > each invariant catches its own violation and that a correct solver satisfies all six — an
 > invariant nobody has seen fail is a comment.
 
-- [ ] `factory step specify` — developer via Pi writes `spec.md` + `tasks.yaml`; controller lints sections, validates schemas, checks `size_budget`, renders `spec.html`
+- [~] `factory step specify` — **built and exercised against the real developer model.**
+      `factory-spec` writes `spec.md` + `tasks.yaml` and nothing else (no HTML, no git, no
+      step bookkeeping — three fewer things for a 27B to get wrong). `spec-check.sh` lints the
+      seven sections, validates the task list against the schema, checks every task's paths
+      against the bean's, checks every acceptance criterion is claimed, refuses a `manual` or
+      `judge` verify, resolves dependencies, enforces `max_tasks` (over → exit 6,
+      `split_required`, back to a human) and renders `spec.html`.
+      **A real run passed every one of those checks.** What Phase 1 still needs is the same
+      thing surviving the judge and the build.
 - [ ] `factory step commit` — spec candidate commit; artifact hashes recorded
-- [ ] `factory step audit --stage spec_audit` — judge verdict validates against `verdict.schema.json` (stage-conditional fields present); every AC claimed by a task
+- [~] `factory step audit --stage spec_audit` — **the contract is built.** The judge writes a
+      *judgement* (`JUDGEMENT-CONTRACT.md`): its verdict, criteria with evidence, findings,
+      feedback, suggested tier. `audit-check.sh` stamps the ten provenance fields the judge
+      could only have invented, hash-binds the documents it judged, validates against
+      `verdict.schema.json`, and amends the step's own end line. A blocker inside an `accept`
+      is recorded as `revise`; a judge's tier suggestion may raise and never lower; a
+      provenance fact that cannot be observed stops the verdict rather than taking a
+      placeholder. 33 cases. Not yet seen a real judge produce a valid judgement.
 - [ ] `factory step build` — task loop: worker session → sync-back → containment (task `write_paths`) → task `verify` in gate container → next; a forced failure retries with the real output; `max_attempts` exhaustion blocks with evidence
       *(the loop itself is built and tested against a stubbed worker — `build-loop.sh`,
       `verify.sh`, `contain.py`, `factory-build-task`. What Phase 1 still has to prove

@@ -2,7 +2,7 @@
 
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-and-bean-set-v1`.
 
-## State: Phase 0 is CLOSED. Phase 1 is next and is blocked on scaffold, not on approval.
+## State: Phase 0 closed. Phase 1 is being run, one failure at a time.
 
 All six `phase_0_exit` predicates hold — and, as of the audit, they are *computed*
 rather than asserted (`bench/phase0-audit.sh`), which they were not before:
@@ -56,10 +56,53 @@ general outbound, and says so when used. An allow-listed proxy is the next piece
 3. ~~The model declares its own tier~~ — `tier.py` + `gate.sh`. The tier comes from the
    paths the diff touched; bean and judge can only raise it.
 
+## The stages, as they stand
+
+| Stage | Model half | Controller half | Tested |
+|---|---|---|---|
+| preflight | — | `preflight.sh` | via orchestrate |
+| specify | `factory-spec` writes `spec.md` + `tasks.yaml` | `spec-check.sh`: sections, schema, paths, claimed criteria, budget, renders HTML | 24 |
+| spec audit | `factory-audit` writes a *judgement* | `audit-check.sh` stamps provenance, validates, amends the step | 33 |
+| build | `factory-build-task`, one task per session | `build-loop.sh`: contain → reject+reset → verify in the sandbox → commit | 67 |
+| gate | — | `gate.sh`: whole-diff containment, tier, budget, secrets, gates, ACs, invariants | 42 |
+| document / pre-PR audit / PR | still the forked skills | not yet written | — |
+
+Supporting: `sandbox.sh` (36), `render-doc.py` + `doclint.sh` (33), invariants (9).
+
+## What the first real runs taught
+
+Four runs of bean-001 against the real models. Every one failed, each for a
+different reason, and three of the four were **the line catching itself**:
+
+1. The developer followed **another project's skill** — `~/.pi/agent/skills` has
+   its own `pipeline-spec` and pi loads both. Fixed by prefixing every skill
+   `factory-`, with a collision check that stops the run.
+2. `.gitignore` was called a containment violation. The bean allows it; the
+   matcher used `lstrip("./")`, which strips *characters*. Every dotfile was a
+   false violation.
+3. The judge wrote nothing usable — `factory-audit` was still the forked skill.
+   That is what forced the judgement/verdict split.
+4. (pending) the run in flight.
+
+The conditions record has been the most useful single thing: on run one it
+reported `num_ctx: 262144` observed against `32768` declared, which is true, was
+invisible before, and explains the eight-minute spec step.
+
 ## Next action
 
 Phase 1 — one bean, by hand, through all seven stages. Its entry needs three things; the
 approval is done, and the other two are build work:
+
+**How to run a bean** (from the target repo, with the factory's pipeline):
+
+```
+cd /home/gregg/workspace/seating-planner-py
+PIPELINE_CONFIG=$PWD/factory/pipeline-config.json bash /home/gregg/workspace/Local_Dark_Factory/factory/pipeline/orchestrate.sh bean-001 --stop-after gate
+```
+
+Between runs the repo must be back on `main` with the bean branch deleted —
+preflight refuses otherwise, correctly, and that is the most common way a re-run
+stops in its first ten seconds.
 
 1. ~~A throwaway GitHub repo~~ — `beekeeper-lab/seating-planner-py`, private, created
    2026-09-14. Cloned at `/home/gregg/workspace/seating-planner-py`.
