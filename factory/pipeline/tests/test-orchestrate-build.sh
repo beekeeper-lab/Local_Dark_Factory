@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# test-orchestrate-build.sh — the driver actually reaches the task loop.
+#
+# The unit tests in test-build-loop.sh prove the loop behaves. This proves it is
+# wired: that `build` is a step orchestrate.sh knows, that it runs as a
+# controller step (build-loop.sh drives it, not a single model session), that it
+# finds the bean's YAML for its write paths, and that a blocked task stops the
+# run with the evidence reachable from QUESTIONS.md.
+#
+# It builds a whole miniature repo — bare origin included — because preflight
+# checks the remote, and a test that stubbed preflight would not be testing the
+# path a real run takes.
+set -uo pipefail
+
+PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+PASS=0; FAIL=0
+check() {
+  if grep -qF -- "$2" <<<"$3"; then
+    printf '  ok    %s\n' "$1"; PASS=$((PASS + 1))
+  else
+    printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL + 1))
+  fi
+}
+want() {
+  local name="$1" desc="$2"; shift 2
+  if "$@"; then printf '  ok    %s\n' "$name"; PASS=$((PASS + 1))
+  else printf '  FAIL  %s — %s\n' "$name" "$desc"; FAIL=$((FAIL + 1)); fi
+}
+
+# -- stub pi: plays the spec step, then each build-task attempt ------------------
+cat > "$WORK/stub-pi" <<'STUB'
+#!/usr/bin/env bash
+prompt=""
+while [ $# -gt 0 ]; do
+  case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac
+done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+
+case "$prompt" in
+  *pipeline-spec*)
+    # /skill:pipeline-spec <bean-id> <run_dir>
+    run_dir="${prompt##* }"
+    printf '{"bean":"BEAN-001","expected_files":["src/a.py"]}\n' > "$run_dir/spec.json"
+    cp "$STUB_TASKS" "$run_dir/tasks.yaml"
+    ;;
+  *pipeline-build-task*)
+    adir="${prompt##* }"; rest="${prompt% *}"; task="${rest##* }"
+    attempt="$(basename "$adir")"; attempt="${attempt#attempt-}"
+    printf 'STUB-PI  task=%s attempt=%s\n' "$task" "$attempt"
+    action="$STUB_ACTIONS/$task.$attempt"
+    [ -x "$action" ] && { bash "$action"; exit $?; }
+    ;;
+esac
+exit 0
+STUB
+chmod +x "$WORK/stub-pi"
+mkdir -p "$WORK/actions"
+
+# -- fixture: bare origin + work repo ------------------------------------------
+git init -q --bare "$WORK/origin.git"
+REPO="$WORK/repo"
+git init -q -b main "$REPO"
+cd "$REPO"
+git config user.email t@example.com
+git config user.name "Test"
+git remote add origin "$WORK/origin.git"
+
+mkdir -p ai/beans/BEAN-001-loop ai/pipeline src
+printf 'ai/runs/\n' > .gitignore
+
+cat > ai/beans/BEAN-001-loop/bean.md <<'MD'
+# BEAN-001 — exercise the loop
+
+| Field | Value |
+|---|---|
+| **Pipeline Tier** | small |
+MD
+
+cat > ai/beans/BEAN-001-loop/bean.yaml <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: example/x
+title: Exercise the loop through the driver
+intent: Prove the build step is wired.
+status: approved
+allowed_write_paths:
+  - src/**
+acceptance_criteria:
+  - id: ac1
+    text: a.py says GOOD
+    verify: { kind: command, run: ["sh", "-c", "grep -q GOOD src/a.py"] }
+definition_of_done:
+  - all AC verify pass
+YAML
+
+cat > ai/beans/INDEX.md <<'MD'
+| ID | Title | Tier | Owner | Status |
+|---|---|---|---|---|
+| BEAN-001 | Exercise the loop | small | test | Approved |
+MD
+
+cat > "$WORK/tasks.yaml" <<'YAML'
+schema_version: tasks/1.0.0
+bean_id: bean-001
+tasks:
+  - id: task-1
+    title: Add a.py saying GOOD
+    intent: Create src/a.py containing GOOD.
+    write_paths: [src/a.py]
+    satisfies: [ac1]
+    max_attempts: 2
+    verify:
+      - { kind: command, run: ["sh", "-c", "grep -q GOOD src/a.py"] }
+YAML
+
+cat > ai/pipeline/config.json <<'JSON'
+{
+  "runs_root": "ai/runs",
+  "branch_pattern": "bean/BEAN-NNN-<slug>",
+  "bean_dir_pattern": "ai/beans/BEAN-NNN-<slug>",
+  "bean_index_path": "ai/beans/INDEX.md",
+  "gates": [{ "name": "noop", "command": "true" }]
+}
+JSON
+
+git add -A && git commit -q -m "fixture"
+git push -q -u origin main 2>/dev/null
+
+run_orchestrate() {
+  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+  STUB_ACTIONS="$WORK/actions" STUB_TASKS="$WORK/tasks.yaml" \
+  PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
+    bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after build 2>&1
+}
+cleanup_run() {
+  git -C "$REPO" checkout -q main
+  git -C "$REPO" branch -D bean/BEAN-001-loop >/dev/null 2>&1
+  rm -rf "$REPO/ai/runs"
+  git -C "$REPO" clean -fdq
+  git -C "$REPO" checkout -q -- .
+  rm -f "$WORK/actions"/*
+}
+
+printf '\n== the tier lists the build step, not a one-shot implement ==\n\n'
+out="$(PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" bash "$PIPELINE_DIR/orchestrate.sh" --help)"
+check "small tier runs build"     "small: preflight spec build checks" "$out"
+check "full tier runs build"      "full:  preflight spec audit-spec build checks" "$out"
+
+printf '\n== a run reaches the loop and the loop does the work ==\n\n'
+cat > "$WORK/actions/task-1.1" <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+chmod +x "$WORK/actions/task-1.1"
+out="$(run_orchestrate)"; rc=$?
+check "the build step ran"         "TASK   task-1" "$out"
+check "the task verified"          "PASS   task-1     verified on attempt 1" "$out"
+check "the run completed"          "RUN COMPLETE" "$out"
+check "build is reported as PASS"  "build          PASS" "$out"
+want "exit 0"                      "expected a clean run" test "$rc" -eq 0
+want "the task was committed"      "expected build(task-1) on the run branch" \
+  bash -c "git -C '$REPO' log --oneline | grep -q 'build(task-1)'"
+want "and it is not on main"       "the run must not have committed to main" \
+  bash -c "! git -C '$REPO' log --oneline main | grep -q 'build(task-1)'"
+
+cleanup_run
+
+printf '\n== a blocked task halts the run, with the evidence reachable ==\n\n'
+cat > "$WORK/actions/task-1.1" <<'SH'
+mkdir -p src && printf 'BAD\n' > src/a.py
+SH
+cat > "$WORK/actions/task-1.2" <<'SH'
+mkdir -p src && printf 'STILL BAD\n' > src/a.py
+SH
+chmod +x "$WORK/actions/task-1.1" "$WORK/actions/task-1.2"
+out="$(run_orchestrate)"; rc=$?
+check "the loop blocks"            "BLOCKED  task-1 exhausted its attempts" "$out"
+check "the driver halts"           "HALT  build" "$out"
+want "halt exit code"              "expected 3 (halt)" test "$rc" -eq 3
+run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+want "QUESTIONS.md is written"     "expected QUESTIONS.md at the run root" test -f "$run_dir/QUESTIONS.md"
+q="$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
+check "it points at the task evidence" "BLOCKED.md" "$q"
+want "the evidence it points to exists" "expected build/task-1/BLOCKED.md" \
+  test -f "$run_dir/build/task-1/BLOCKED.md"
+want "nothing was committed for the failed task" "a blocked task must not be committed" \
+  bash -c "! git -C '$REPO' log --oneline | grep -q 'build(task-1)'"
+
+printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

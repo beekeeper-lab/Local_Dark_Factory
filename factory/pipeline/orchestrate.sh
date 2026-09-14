@@ -9,9 +9,15 @@
 #     which are the authoritative implementation of those steps.
 #
 # Tiers — read from the `**Pipeline Tier**` row of the bean's table; absent → full:
-#   small: preflight → spec → implement → checks → audit-impl → audit-package → pr
-#   full:  preflight → spec → audit-spec → implement → checks → audit-impl
+#   small: preflight → spec → build → checks → audit-impl → audit-package → pr
+#   full:  preflight → spec → audit-spec → build → checks → audit-impl
 #          → doc → audit-doc → audit-package → pr
+#
+# `build` is the task loop (spec §06 step 5), and it is a CONTROLLER step, not a
+# model step: build-loop.sh drives it, opening one worker session per task and
+# deciding each task itself. The one-shot `implement` step it replaces handed the
+# whole spec to a single session — the largest single reason a 27B fails work it
+# is otherwise capable of (§04).
 # small still runs `spec` (JSON, no HTML): every audit needs a contract to
 # judge against, and the package audit's scope check needs the spec's file list.
 #
@@ -56,8 +62,8 @@ usage:
   orchestrate.sh <BEAN_ID> --resume <run_dir>
 
 Tiers (from the bean's `**Pipeline Tier**` table row; absent → full):
-  small: preflight spec implement checks audit-impl audit-package pr
-  full:  preflight spec audit-spec implement checks audit-impl doc audit-doc audit-package pr
+  small: preflight spec build checks audit-impl audit-package pr
+  full:  preflight spec audit-spec build checks audit-impl doc audit-doc audit-package pr
 
 An audit FAIL re-enters the authoring step with the verdict's findings, then
 re-audits; a second failed attempt on the same step halts the run and writes
@@ -149,8 +155,8 @@ fi
 [ -n "$TIER" ] || TIER="full"
 
 case "$TIER" in
-  small) STEPS=(preflight spec implement checks audit-impl audit-package pr) ;;
-  full)  STEPS=(preflight spec audit-spec implement checks audit-impl doc audit-doc audit-package pr) ;;
+  small) STEPS=(preflight spec build checks audit-impl audit-package pr) ;;
+  full)  STEPS=(preflight spec audit-spec build checks audit-impl doc audit-doc audit-package pr) ;;
   *) die "unknown pipeline tier '$TIER' in $BEAN_MD (expected small|full)" ;;
 esac
 
@@ -195,9 +201,9 @@ is_audit_step() { case "$1" in audit-*) return 0 ;; *) return 1 ;; esac; }
 authoring_for_audit() {
   case "$1" in
     audit-spec)    printf 'spec' ;;
-    audit-impl)    printf 'implement' ;;
+    audit-impl)    printf 'build' ;;
     audit-doc)     printf 'doc' ;;
-    audit-package) printf 'implement' ;;
+    audit-package) printf 'build' ;;
     *) : ;;
   esac
 }
@@ -345,11 +351,31 @@ run_script_step() {
   return "$rc"
 }
 
+# bean_yaml — the machine-readable bean (bean/2.0.0). The build loop needs its
+# `allowed_write_paths` to bound every task, and refuses to run without them; the
+# fork's `bean.md` carries prose and a tier row, not paths.
+bean_yaml() {
+  local pat cand
+  pat="$(jq -r '.bean_file_pattern // empty' "$CONFIG_PATH")"
+  if [ -n "$pat" ]; then
+    cand="$(resolve_repo_path "${pat//BEAN-NNN/$BEAN_ID}")"
+    [ -f "$cand" ] && { printf '%s\n' "$cand"; return 0; }
+  fi
+  for cand in "$BEAN_DIR/bean.yaml" "$BEAN_DIR/$BEAN_ID.yaml" "$BEAN_DIR/../$BEAN_ID.yaml"; do
+    [ -f "$cand" ] && { printf '%s\n' "$cand"; return 0; }
+  done
+  return 1
+}
+
 run_step() { # <step> [-- <extra args carried through to the child>]
   local step="$1"; shift
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
+    build)
+      local by
+      by="$(bean_yaml)" || die "no bean YAML for $BEAN_ID (looked for bean_file_pattern in config, then $BEAN_DIR/bean.yaml). The build loop bounds every task by the bean's allowed_write_paths and will not run without them."
+      run_script_step "$step" "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$by" ;;
     *)
       local rc=0
       if [ $# -gt 0 ]; then
@@ -424,6 +450,12 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
       else
         printf '\n- `checks.json` does not exist — the gates have not run, so they cannot be the cause of this halt.\n'
       fi
+      local blocked
+      blocked="$(ls -1 "$RUN_DIR"/build/*/BLOCKED.md 2>/dev/null | head -1 || true)"
+      if [ -n "$blocked" ]; then
+        printf '\n- A task exhausted its attempts. Its evidence — every attempt, the '
+        printf 'containment result and the last failure in full — is in `%s`.\n' "$blocked"
+      fi
       printf '\n## Question for a human\n\n'
       printf 'I do not retry `%s` blindly: the failure carries no findings a retry could address. What precondition or fix does `%s` need before this run can continue?\n' "$step" "$step"
     fi
@@ -488,7 +520,7 @@ for STEP in "${STEPS[@]}"; do
       ensure_run_branch
     fi
     case "$STEP" in
-      spec|implement|doc|pr) assert_off_main "$STEP" ;;
+      spec|build|implement|doc|pr) assert_off_main "$STEP" ;;
     esac
   fi
   if step_is_pass "$STEP"; then

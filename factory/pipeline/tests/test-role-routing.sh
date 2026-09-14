@@ -134,6 +134,32 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# -- a retried step is a NEW attempt, not an amendment of the last one ---------
+# Found by the build loop, which invokes the same step name once per attempt.
+# run-step.sh counted starts/ends for the step across the whole run *after* the
+# child ran, so the second invocation saw a matched pair from the first and
+# concluded "the child closed its own attempt": no attempt-2 line was written and
+# the previous attempt's verdict was reused as this one's. Retries after an audit
+# FAIL had the same shape, so a failing retry could inherit a PASS.
+before_ends="$(jq -rs '[.[] | select(.step == "doc" and .event == "end")] | length' run/steps.jsonl)"
+out="$(run_step doc)"
+out="$(run_step doc)"
+after="$(jq -rs '[.[] | select(.step == "doc" and .event == "end")]' run/steps.jsonl)"
+n_ends="$(jq 'length' <<<"$after")"
+if [ "$n_ends" -eq $((before_ends + 2)) ]; then
+  printf '  ok    a second invocation records a second attempt\n'; PASS=$((PASS + 1))
+else
+  printf '  FAIL  two invocations recorded %s end line(s), expected %s — a retry is being folded into the previous attempt\n' \
+    "$n_ends" "$((before_ends + 2))"
+  FAIL=$((FAIL + 1))
+fi
+if [ "$(jq -r '.[-1].attempt' <<<"$after")" -gt "$(jq -r '.[-2].attempt' <<<"$after")" ]; then
+  printf '  ok    the retry is numbered as a later attempt\n'; PASS=$((PASS + 1))
+else
+  printf '  FAIL  the retry did not get a higher attempt number: %s\n' "$(jq -c '[.[-2].attempt, .[-1].attempt]' <<<"$after")"
+  FAIL=$((FAIL + 1))
+fi
+
 # -- a frontier provider must be refused (spec §08) ----------------------------
 jq '.roles.judge.provider = "anthropic" | .roles.judge.model = "claude-opus-5"' \
   "$PIPELINE_DIR/roles.json" > "$WORK/frontier-roles.json"

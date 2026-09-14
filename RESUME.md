@@ -43,11 +43,14 @@ approval is done, and the other two are build work:
    policy governing it (`factory/**` is Tier 3).
 2. The `factory/` scaffold in that repo: `repo.yaml`, `risk-policy.yaml`, `gates.lock`,
    document templates. None exist yet.
-3. **The task loop** — the largest single piece still to build, and the one that decides
-   whether Phase 1 proves anything. `pipeline-implement` still hands the model the whole
-   spec in one session; spec §06 wants one task at a time with its `verify` and the real
-   failure output fed back. Checking `factory step build` without it would pass the box
-   while testing the wrong thing.
+3. ~~The task loop~~ — **built 2026-09-14.** `build-loop.sh` + `verify.sh` + `contain.py`
+   + the `pipeline-build-task` skill, wired into `orchestrate.sh` as the `build` step
+   (it replaces one-shot `implement` in both tiers). 71 test cases across
+   `test-build-loop.sh` and `test-orchestrate-build.sh`, all against a stubbed worker.
+   **What is left is the real thing:** the loop has never had the developer model on the
+   other end of it. That is Phase 1's first real run, and the first place the feedback
+   text — in the skill, and in the loop's rejection messages — gets judged by whether a
+   27B can actually act on it.
 
 One open owner decision rides along: `manifest.json` `conflicts_found` flags FR-048
 (reproducibility) vs NFR-001 (15 s for 250 guests / 2000 rules) as `needs_owner_decision:

@@ -27,6 +27,8 @@ usage: run-step.sh <run_dir> <step-name> [-- <extra args for the skill>]
 Step → child skill mapping (args the child receives):
   spec            pipeline-spec        <bean-id> <run_dir>
   implement       pipeline-implement   <run_dir>
+  build-task      pipeline-build-task  <run_dir> <task-id> <attempt-dir>
+                  (one task of the build loop; build-loop.sh passes the extras)
   doc             pipeline-doc         <run_dir>
   audit-<target>  pipeline-audit       <target> <run_dir>
   pr              pipeline-pr          <run_dir>
@@ -77,6 +79,7 @@ BEAN_ID="$(jq -r '.bean // empty' "$RUN_DIR/run.json")"
 case "$STEP" in
   spec)      SKILL="pipeline-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ; TARGET="" ;;
   implement) SKILL="pipeline-implement"; SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
+  build-task) SKILL="pipeline-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
   doc)       SKILL="pipeline-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
   pr)        SKILL="pipeline-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
   audit-*)   SKILL="pipeline-audit"; TARGET="${STEP#audit-}"
@@ -85,7 +88,7 @@ case "$STEP" in
                *) die "unknown audit target '$STEP' (expected audit-spec|audit-impl|audit-doc|audit-package)" ;;
              esac
              SKILL_ARGS="$TARGET $RUN_DIR" ;;
-  *) die "unknown step '$STEP' (expected spec|implement|doc|pr|audit-<target>)" ;;
+  *) die "unknown step '$STEP' (expected spec|implement|build-task|doc|pr|audit-<target>)" ;;
 esac
 
 PROMPT="/skill:$SKILL $SKILL_ARGS"
@@ -140,6 +143,18 @@ T0="$(date +%s)"
 SNAP="$(mktemp)"; NEW="$(mktemp)"
 trap 'rm -f "$SNAP" "$NEW"' EXIT
 find "$SESS_DIR" -type f -name '*.jsonl' 2>/dev/null | sort > "$SNAP" || true
+
+# -- what steps.jsonl looked like BEFORE this invocation -------------------------------
+# The reconciliation below asks "what did THIS child record?". Counting totals
+# after the fact cannot answer that: on the second invocation of the same step —
+# a retry after an audit FAIL, or any attempt of the build loop — the totals
+# already show a matched start/end pair from the previous attempt, which reads
+# exactly like "the child closed its own attempt". The result was that a retry
+# recorded no new attempt and silently inherited the previous attempt's verdict.
+STEPS="$RUN_DIR/steps.jsonl"
+[ -f "$STEPS" ] || : > "$STEPS"
+STARTS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "start")] | length' "$STEPS")"
+ENDS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | length' "$STEPS")"
 
 # -- launch the child (output streams straight through) ------------------------------
 set +e
@@ -199,9 +214,6 @@ drift=""
   "$STEP" "$drift" >&2
 
 # -- bookkeeping in steps.jsonl --------------------------------------------------------
-STEPS="$RUN_DIR/steps.jsonl"
-[ -f "$STEPS" ] || : > "$STEPS"
-
 is_audit=0
 [ -n "$TARGET" ] && is_audit=1
 
@@ -217,6 +229,9 @@ is_audit=0
 # un-paired line can never reach steps.jsonl from here.
 ENDS="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | length' "$STEPS")"
 STARTS="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "start")] | length' "$STEPS")"
+# What this child recorded, as opposed to what the run has recorded so far.
+CHILD_STARTS=$((STARTS - STARTS_BEFORE))
+CHILD_ENDS=$((ENDS - ENDS_BEFORE))
 
 # End verdict for *this* attempt.
 END_VERDICT=""
@@ -237,8 +252,9 @@ if [ "$is_audit" = 1 ]; then
   else
     END_VERDICT="FAIL"
   fi
-elif [ "$ENDS" -gt 0 ]; then
-  # Honour a verdict the child already stamped; otherwise stamp from rc.
+elif [ "$CHILD_ENDS" -gt 0 ]; then
+  # Honour a verdict THIS child stamped; otherwise stamp from rc. A verdict from
+  # an earlier attempt is not this attempt's result.
   EXISTING="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | last.verdict' "$STEPS")"
   if [ -z "$EXISTING" ] || [ "$EXISTING" = "null" ]; then
     if [ "$RC" -eq 0 ]; then END_VERDICT="PASS"; else END_VERDICT="FAIL"; fi
@@ -249,10 +265,10 @@ else
   if [ "$RC" -eq 0 ]; then END_VERDICT="PASS"; else END_VERDICT="FAIL"; fi
 fi
 
-if [ "$STARTS" -eq "$ENDS" ] && [ "$ENDS" -gt 0 ]; then
-  : # child already closed this attempt: the amend below stamps its end line
+if [ "$CHILD_ENDS" -gt 0 ] && [ "$CHILD_STARTS" -eq "$CHILD_ENDS" ]; then
+  : # this child opened and closed its own attempt: the amend below stamps it
 else
-  if [ "$STARTS" -eq 0 ]; then
+  if [ "$CHILD_STARTS" -eq 0 ]; then
     "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$STEP" start
   fi
   "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$STEP" end "$END_VERDICT"

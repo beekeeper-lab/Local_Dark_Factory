@@ -39,6 +39,7 @@
   "step_roles": {
     "spec": "developer",
     "implement": "developer",
+    "build-task": "developer",
     "doc": "developer",
     "audit-spec": "judge",
     "audit-impl": "judge",

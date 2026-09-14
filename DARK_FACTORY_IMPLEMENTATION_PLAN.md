@@ -246,6 +246,10 @@ re-runnable audit, and a bean set approved to run against.
 - [ ] `factory step commit` — spec candidate commit; artifact hashes recorded
 - [ ] `factory step audit --stage spec_audit` — judge verdict validates against `verdict.schema.json` (stage-conditional fields present); every AC claimed by a task
 - [ ] `factory step build` — task loop: worker session → sync-back → containment (task `write_paths`) → task `verify` in gate container → next; a forced failure retries with the real output; `max_attempts` exhaustion blocks with evidence
+      *(the loop itself is built and tested against a stubbed worker — `build-loop.sh`,
+      `verify.sh`, `contain.py`, `pipeline-build-task`. What Phase 1 still has to prove
+      is the loop with the **real** developer model on the other end; "in the gate
+      container" waits on the sandbox.)*
 - [ ] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
 - [ ] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
 - [ ] `factory step audit --stage impl_audit` — `test_integrity` required and present
@@ -426,7 +430,10 @@ The only situation in which a frontier model interacts with line artifacts after
         doc / audit / pr / run) and loaded explicitly via `pi --skill`, because the
         global `~/.pi/agent/skills` is owned by that project — its `sync-skills.sh`
         treats its own copy as canonical, so editing the installed copies would break
-        it silently on its next run. No `build-task` pack yet (see task loop below).
+        it silently on its next run. **`developer/build-task` added 2026-09-14**
+        (`factory/skills/pipeline-build-task`): one task, one session, no git, and an
+        explicit account of what the controller does next, so the worker can predict
+        the consequence of overreaching instead of discovering it.
 - [ ] Controller skeleton: state machine + leases + worktrees + idempotency + reconciliation + GitHub adapter (`gh`/REST, webhook)
 - [x] **Role → model routing** (`factory/pipeline/roles.json` + `run-step.sh`). The forked
       pipeline passed no `--model`, so authoring *and* auditing ran on Pi's default
@@ -448,11 +455,31 @@ The only situation in which a frontier model interacts with line artifacts after
 The fork inherits a working, battle-tested 7-step pipeline. Three things it does
 not yet do that the spec requires:
 
-1. **No task loop.** `pipeline-implement` hands the model the whole spec in one
-   session. Spec §06 builds task-by-task: one task, its `verify`, the real failure
-   output fed back, `max_attempts` cap. This is the entire answer to "a 27B fails
-   because it is asked to hold too much at once" (§04) — and the largest single
-   piece still to build.
+1. ~~**No task loop.**~~ **Built 2026-09-14.** `factory/pipeline/build-loop.sh` is the
+   controller-driven loop of spec §06 step 5: tasks in dependency order, one worker
+   session per attempt (`pipeline-build-task`, the prompt pack that was missing),
+   containment against the task's `write_paths` **and** the bean's — rejected and the
+   tree reset, never stripped — then the task's `verify` list run by the controller
+   via `verify.sh`, the real failure output fed back as the next prompt, `max_attempts`
+   exhaustion blocking the bean with its evidence. Each verified task is its own commit.
+   Wired into `orchestrate.sh` as the `build` step, replacing one-shot `implement` in
+   both tiers; `audit-impl` and `audit-package` now route their retries to `build`.
+   55 cases in `tests/test-build-loop.sh`, 16 in `tests/test-orchestrate-build.sh`.
+
+   Three things this deliberately does **not** do, so nobody reads more into it:
+   - an unsupported verify (`manual`, `judge`, an undefined gate) is a **failure**,
+     never a pass — a criterion the controller cannot check is not a criterion;
+   - it does not sandbox anything. Containment is after the fact because the worker
+     still edits the real tree (gap 2, below);
+   - it has only ever run against a stubbed worker. The loop is tested; the *models*
+     going round it are Phase 1's job.
+
+   It also turned up a live defect in `run-step.sh`: attempts were counted across the
+   whole run *after* the child ran, so a second invocation of a step (any build-loop
+   attempt, and every retry after an audit FAIL) was mistaken for "the child closed its
+   own attempt" — no new attempt line was written and the previous attempt's verdict
+   was reused as the new one's. Fixed by comparing against a snapshot taken before the
+   child starts, and pinned by two cases in `tests/test-role-routing.sh`.
 2. **No sandbox / no containment.** The worker has a full `git` binary and writes
    straight into the worktree. §08 requires a podman-contained editable tree with no
    `.git`, no credentials, and out-of-scope edits **rejected, not stripped**, at both
