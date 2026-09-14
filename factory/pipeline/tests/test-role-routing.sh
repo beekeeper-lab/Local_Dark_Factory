@@ -111,10 +111,26 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-if [ "$(jq -r '.declared_matches_observed' <<<"$cond")" = "true" ]; then
-  printf '  ok    matching conditions are recorded as matching\n'; PASS=$((PASS + 1))
+# Do not assert that this machine has no drift — it has some, and that is the
+# point of recording it. Assert that the flag TELLS THE TRUTH about whatever the
+# machine is doing: false exactly when something declared differs from what was
+# observed. An earlier version of this test asserted a clean environment and
+# failed the day the environment stopped being clean, which is the wrong thing
+# to learn from a flag whose job is to notice.
+expected_match=true
+for field in num_ctx thinking; do
+  obs="$(jq -r --arg f "$field" '.[$f] // "null"' <<<"$cond")"
+  dec="$(jq -r --arg f "$field" '.declared[$f] // "null"' <<<"$cond")"
+  if [ "$obs" != "null" ] && [ "$dec" != "null" ] && [ "$obs" != "$dec" ]; then
+    expected_match=false
+  fi
+done
+if [ "$(jq -r '.declared_matches_observed' <<<"$cond")" = "$expected_match" ]; then
+  printf '  ok    declared_matches_observed reports the truth (%s here)\n' "$expected_match"
+  PASS=$((PASS + 1))
 else
-  printf '  FAIL  declared_matches_observed is false on a run with no drift: %s\n' "$cond"
+  printf '  FAIL  declared_matches_observed says %s but the fields say %s: %s\n' \
+    "$(jq -r '.declared_matches_observed' <<<"$cond")" "$expected_match" "$cond"
   FAIL=$((FAIL + 1))
 fi
 

@@ -267,7 +267,13 @@ if [ "$is_audit" = 1 ]; then
     if [ "$nfile" -gt "$BEST_N" ]; then BEST_N="$nfile"; VFILE="$f"; fi
   done
   if [ -n "$VFILE" ]; then
-    END_VERDICT="$(jq -r '.verdict // "FAIL"' "$VFILE" 2>/dev/null || echo FAIL)"
+    # accept -> PASS; revise/block -> FAIL. The fork wrote PASS/FAIL directly;
+    # the factory's verdict schema uses the spec's three words (§10).
+    raw="$(jq -r '.verdict // "FAIL"' "$VFILE" 2>/dev/null || echo FAIL)"
+    case "$raw" in
+      accept|PASS) END_VERDICT="PASS" ;;
+      *)           END_VERDICT="FAIL" ;;
+    esac
   else
     END_VERDICT="FAIL"
   fi

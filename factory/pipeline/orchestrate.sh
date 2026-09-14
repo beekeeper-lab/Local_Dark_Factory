@@ -383,6 +383,15 @@ run_step() { # <step> [-- <extra args carried through to the child>]
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
+    audit-*)
+      local rc=0 ay
+      "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+      # The judge wrote a judgement; the controller turns it into a verdict,
+      # stamping the SHAs, digests, tier and versions it must not have invented.
+      ay="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a verdict cannot be stamped without it"
+      rc=0
+      "$PIPELINE_DIR/audit-check.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$ay" || rc=$?
+      return "$rc" ;;
     spec)
       local rc=0 sy
       if [ $# -gt 0 ]; then
