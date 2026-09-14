@@ -108,13 +108,15 @@ What the controller checks, so you may as well get it right:
 
 ## Process
 
-1. `bash <bin_dir>/step.sh <run-dir> spec start`
-2. Read the bean, the conventions, and the code.
-3. Decompose first, on paper: what are the tasks, what does each one finish, how
+1. Read the bean, the conventions, and the code.
+2. Decompose first, on paper: what are the tasks, what does each one finish, how
    would a machine know it worked? Then write `tasks.yaml`.
-4. Write `spec.md` describing that decomposition. If a section is hard to fill
+3. Write `spec.md` describing that decomposition. If a section is hard to fill
    honestly, the decomposition is probably wrong — fix the tasks, not the prose.
-5. `bash <bin_dir>/step.sh <run-dir> spec end PASS`
+
+That is the whole job. Do not record the step, do not run git, do not render
+anything: the controller opens and closes the attempt, validates both artifacts,
+and renders the HTML. Write the two files and finish the session.
 
 ## Report
 
