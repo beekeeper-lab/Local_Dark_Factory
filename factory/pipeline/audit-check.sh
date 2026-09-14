@@ -95,6 +95,72 @@ if [ "$BLOCKERS" -gt 0 ] && [ "$VERDICT" = "accept" ]; then
   VERDICT="revise"
 fi
 
+# ------------------------------------------- did the judge read the artifact? --
+#
+# The first real judge this line asked for a verdict never read the spec. It
+# wrote a fluent, confident audit of a document with sections called Purpose,
+# Architecture, Input, Output and Errors — none of which exist in this pipeline's
+# format — and declared the references in its own instruction file valid. Every
+# sentence was plausible and none of it happened.
+#
+# A schema cannot catch that; the output was well-formed and entirely invented.
+# What catches it is making the judge point at text that exists, and then looking.
+# A judge that read the artifact can quote it without effort. One that did not
+# cannot produce a single line that is really there.
+# One quote per line, JSON-escaped: a quote spanning several lines is one quote,
+# and splitting it on newlines would check fragments instead of the thing said.
+QUOTES="$(jq -r '[(.criteria[]?.quote // empty), (.findings[]?.quote // empty)] | .[] | @json' <<<"$J" 2>/dev/null)"
+NQ="$(printf '%s\n' "$QUOTES" | sed '/^$/d' | wc -l)"
+if [ "$NQ" -eq 0 ]; then
+  printf 'AUDIT %s: the judgement quotes nothing.\n' "$TARGET" >&2
+  printf '      Every criterion needs a `quote` copied verbatim from the artifact. A judge\n' >&2
+  printf '      that read it can do that without effort; one that did not, cannot. See\n' >&2
+  printf '      JUDGEMENT-CONTRACT.md.\n' >&2
+  exit 2
+fi
+
+# Where a quote may legitimately come from: the artifacts under audit, anything
+# else in the run directory (a verify log, a gate log), or any tracked file in
+# the repository — a judge may quote the source it is judging.
+norm() { tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'; }
+HAYSTACK="$(mktemp)"
+trap 'rm -f "$HAYSTACK"' EXIT
+{
+  # NOT the verdicts directory. The judgement is in there, so searching it would
+  # let every quote match itself and the check would pass for any fiction at all.
+  find "$RUN_DIR" -maxdepth 2 -type f \( -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.log' -o -name '*.jsonl' \) \
+    -not -path "$VERDICTS/*" -exec cat {} + 2>/dev/null
+  git -C "$ROOT" ls-files -z 2>/dev/null | xargs -0 -r cat 2>/dev/null
+} | norm > "$HAYSTACK"
+
+UNFOUND=""
+CHECKED=0
+while IFS= read -r qjson; do
+  [ -n "$qjson" ] || continue
+  q="$(jq -r '.' <<<"$qjson" 2>/dev/null)" || continue
+  # Very short quotes prove nothing and match everything.
+  [ "${#q}" -ge 12 ] || continue
+  CHECKED=$((CHECKED + 1))
+  needle="$(printf '%s' "$q" | norm)"
+  grep -qF -- "$needle" "$HAYSTACK" || UNFOUND="$UNFOUND
+  - $(printf '%s' "${q:0:100}" | tr '\n' ' ')"
+done <<< "$QUOTES"
+
+if [ "$CHECKED" -eq 0 ]; then
+  printf 'AUDIT %s: no quote long enough to prove anything (all under 12 characters).\n' "$TARGET" >&2
+  exit 2
+fi
+
+if [ -n "$UNFOUND" ]; then
+  printf 'AUDIT %s: the judgement quotes text that is not on disk anywhere.\n' "$TARGET" >&2
+  printf '%s\n' "$UNFOUND" >&2
+  printf '\n      A quote is not a paraphrase. If the judge cannot point at real text, the\n' >&2
+  printf '      audit did not happen — which is exactly how a confident false accept gets\n' >&2
+  printf '      into a run. Refusing rather than recording it.\n' >&2
+  exit 2
+fi
+printf 'AUDIT %s: %s quote(s) verified against the artifacts\n' "$TARGET" "$CHECKED" >&2
+
 # ------------------------------------------------------ the observable facts --
 BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")"
 BEAN_ID="$(jq -r '.id' <<<"$BEAN_JSON")"
@@ -184,7 +250,9 @@ jq -n \
     gate_run_id: $gate_run, gate_manifest_digest: $gate_digest,
     invariants_digest: $inv, policy_version: $policy,
     effective_risk_tier: $tier, model_digest: $model, prompt_version: $prompt,
-    criteria: ($j.criteria // []), verdict: $verdict, artifacts: $artifacts}
+    criteria: [($j.criteria // [])[] | {id, met,
+      evidence: (.evidence + (if .quote then "  [quoted: " + .quote + "]" else "" end))}],
+    verdict: $verdict, artifacts: $artifacts}
    + (if $j.feedback_to_worker then {feedback_to_worker: $j.feedback_to_worker} else {} end)
    + (if $j.document_quality then {document_quality: $j.document_quality} else {} end)
    + (if $j.test_integrity then {test_integrity: $j.test_integrity} else {} end)

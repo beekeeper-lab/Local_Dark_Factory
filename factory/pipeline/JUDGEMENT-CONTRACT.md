@@ -26,7 +26,9 @@ nothing it cannot see:
   "target": "spec",
   "verdict": "accept | revise | block",
   "criteria": [
-    { "id": "ac1", "met": true, "evidence": "tests/test_scaffold.py::test_package_imports names the import the criterion describes; it fails on the current tree because the package does not exist yet." }
+    { "id": "ac1", "met": true,
+      "evidence": "tests/test_scaffold.py::test_package_imports names the import the criterion describes; it fails on the current tree because the package does not exist yet.",
+      "quote": "verify: { kind: test, test_id: \"tests/test_scaffold.py::test_package_imports\" }" }
   ],
   "findings": [
     { "severity": "blocker | major | minor",
@@ -57,6 +59,27 @@ model digest from ollama, the prompt version from the skill's own content hash �
 validates the result against `verdict.schema.json`, and writes
 `<run-dir>/verdicts/<target>.attempt-<n>.json`. That file is the verdict. The
 judgement beside it is the evidence of what the judge alone said.
+
+## `quote` is not optional, and the controller checks it
+
+Every `quote` must be text **copied verbatim from something on disk** — the
+artifact under audit, a file in the repository, or a log in the run directory.
+`audit-check.sh` searches for each one and refuses the judgement if any cannot be
+found. At least one quote must be present.
+
+This exists because of what happened the first time a real judge was asked for a
+verdict. It never read the spec. It produced a fluent, confident audit of a
+document with sections called Purpose, Architecture, Input, Output, Errors and
+Examples — none of which exist in this pipeline's spec format — and asserted that
+the references in `factory/skills/factory-audit/SKILL.md` were all valid, which is
+its own instruction file, not the artifact. Every sentence was plausible. Had it
+written its verdict to the right path, the run would have carried a confident
+`accept` over an audit that did not happen.
+
+Nothing in a schema can catch that: the output was well-formed, internally
+consistent and entirely invented. What catches it is requiring the judge to point
+at text that exists, and then looking. A judge that read the artifact can quote it
+without effort; one that did not cannot produce a single line that is really there.
 
 ## Rules that survive from the fork, because each was written after a real failure
 

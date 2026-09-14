@@ -21,9 +21,24 @@ confident.
 
 ## What you write, and what you do not
 
-Write **one file**: `<run-dir>/verdicts/<target>.attempt-<n>.judgement.json`,
-where `<n>` is `1 +` the number of existing `<target>.attempt-*.judgement.json`
-files in that directory.
+**Write one file to disk**, using your file-writing tool:
+`<run-dir>/verdicts/<target>.attempt-<n>.judgement.json`, where `<n>` is `1 +`
+the number of existing `<target>.attempt-*.judgement.json` files there.
+
+Printing the file's content in your reply is **not** writing it. Explaining what
+should be written is not writing it. Telling someone else to write it is not
+writing it — nobody else is reading your reply; this is a batch process and your
+session ends when you stop. If the file is not on disk when you finish, the run
+halts and your work is discarded. The first judge ever asked for a verdict here
+did exactly that: it printed a well-formed judgement and wrote nothing, and the
+whole audit was thrown away.
+
+**Every criterion needs a `quote`**: a string copied verbatim out of the file you
+are judging. The controller searches for each one and refuses the judgement if it
+cannot find it. This is not bureaucracy — it is the one check that separates an
+audit from a plausible essay about an audit, and the reason it exists is that the
+first real judge wrote a confident review of a document with sections that do not
+exist in this pipeline at all. Quote, do not paraphrase.
 
 Do not write the verdict itself. Do not invent SHAs, digests, tier numbers or
 versions — the controller stamps every one of those from what it can observe, and
@@ -35,6 +50,11 @@ before writing — do not reconstruct it from memory.
 
 ## Rules
 
+- **Read the artifact before judging it.** Open the files named below. If you find
+  yourself writing about a section, a function or a file you have not actually
+  seen in this run, stop and go read it. A fluent review of something you did not
+  read is the most expensive output you can produce here: it looks exactly like a
+  real one.
 - **No evidence, no finding.** Every finding carries a command's output, a quote,
   or a `file:line` that proves it. A finding you cannot evidence costs the run a
   retry and teaches the developer nothing; it is worse than saying nothing.

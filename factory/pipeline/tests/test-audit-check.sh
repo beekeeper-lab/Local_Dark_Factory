@@ -72,7 +72,8 @@ judgement() { cat > "$V/spec.attempt-${2:-1}.judgement.json" <<<"$1"; }
 run_check() { bash "$PIPELINE_DIR/audit-check.sh" factory/runs/R --target spec --bean factory/beans/bean.yaml 2>&1; }
 
 BASE='{"schema_version":"judgement/1.0.0","stage":"spec_audit","target":"spec",
- "criteria":[{"id":"ac1","met":true,"evidence":"the named test fails on the unmodified tree"}],
+ "criteria":[{"id":"ac1","met":true,"evidence":"the named test fails on the unmodified tree",
+              "quote":"allowed_write_paths: [\"src/**\"]"}],
  "document_quality":{"risk_called_out":true,"blast_radius_called_out":true,"code_blocks_teach":true,"no_assumed_stack_knowledge":true,"matches_diff":true}}'
 
 printf '\n== no judgement is not a silent pass ==\n\n'
@@ -139,6 +140,29 @@ rm -f "$V"/spec.attempt-*
 judgement "$(jq -c '. + {verdict:"accept", suggested_tier:0}' <<<"$BASE")"
 run_check >/dev/null
 check "a lower suggestion is ignored" '"effective_risk_tier": 1' "$(cat "$V/spec.attempt-1.json")"
+
+printf '\n== a judgement that quotes nothing, or quotes fiction, is refused ==\n\n'
+# The failure this exists for: a real judge produced a fluent audit of a document
+# it never read, describing sections that do not exist in this format at all.
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept"} | .criteria[0] |= del(.quote)' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+check "quoting nothing is refused"   "the judgement quotes nothing" "$out"
+want  "and it exits 2"               "expected 2" test "$rc" -eq 2
+
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept"} | .criteria[0].quote = "## Architecture\n\nThe pipeline reads from the Input section"' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+check "a fabricated quote is caught"  "quotes text that is not on disk anywhere" "$out"
+check "and the text is shown back"    "Architecture" "$out"
+want  "and it exits 2"                "expected 2" test "$rc" -eq 2
+want  "with no verdict written"       "a fabricated audit must leave nothing behind" \
+  test ! -f "$V/spec.attempt-1.json"
+
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
+out="$(run_check)"
+check "a real quote is verified"      "quote(s) verified against the artifacts" "$out"
 
 printf '\n== provenance that cannot be observed stops the verdict ==\n\n'
 rm -f "$V"/spec.attempt-*
