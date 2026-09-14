@@ -69,6 +69,16 @@ general outbound, and says so when used. An allow-listed proxy is the next piece
 
 Supporting: `sandbox.sh` (36), `render-doc.py` + `doclint.sh` (33), invariants (9).
 
+## To apply when no run is in flight
+
+Editing a bash script while bash is executing it is unsafe — the interpreter
+reads incrementally and can resume at a byte offset in different text. These are
+queued rather than done:
+
+- `orchestrate.sh` should `mkdir -p "$RUN_DIR/verdicts"` before an audit step, so
+  the judge only has to write a file, not create a directory first. Every
+  instruction a small model does not need is one it cannot get wrong.
+
 ## What the first real runs taught
 
 Four runs of bean-001 against the real models. Every one failed, each for a
@@ -82,7 +92,15 @@ different reason, and three of the four were **the line catching itself**:
    false violation.
 3. The judge wrote nothing usable — `factory-audit` was still the forked skill.
    That is what forced the judgement/verdict split.
-4. (pending) the run in flight.
+4. `ac1` could never have passed: it imports a package the gate container never
+   installs. **The developer model found this, refused to write a spec around it,
+   and said so** — then `halt()` overwrote its report with a generic one. Fixed
+   both: `sandbox_env`, and worker questions are now preserved.
+5. The judge audited a document it never read — a fluent review of sections that
+   do not exist in this format — and printed it instead of writing it. Forced the
+   `quote` requirement: every criterion cites text the controller then looks for.
+
+Six runs, six halts, nothing false let through. The halts are the product.
 
 The conditions record has been the most useful single thing: on run one it
 reported `num_ctx: 262144` observed against `32768` declared, which is true, was
