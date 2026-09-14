@@ -74,18 +74,64 @@ to run while other work is using Ollama; the full harness is not (it calls `olla
   16–48K sweep is the relevant range and 262144 is pure overhead.
 
 - [x] Record current GPU/CPU memory split (`amdgpu` params, `free -g`) — see above
-- [ ] Re-record split after reboot (`bench/phase0.sh --provenance-only`; expect GTT **96 GiB**)
-- [ ] Confirm the serial conclusion empirically: load both at 16K and record the failure/spill
-- [ ] Configure `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_NUM_PARALLEL=1`
-      via `systemctl edit ollama.service` — `MAX_LOADED_MODELS=1` (not 2, as spec v5.0 says)
-      follows from the serial conclusion: allowing 2 invites an eviction storm under a
-      ceiling that cannot hold both
-- [ ] Benchmark `OLLAMA_CONTEXT_LENGTH` = 16384 / 32768 / 49152: each model alone, then both; capture `ollama ps` residency + GPU/CPU split
-- [ ] Record prompt-processing vs generation speed separately, per model
-- [ ] Time a real model switch in both directions (feeds `model_load_timeout` and `swap_overhead_pct` baseline)
+- [x] Re-record split after reboot — verified 2026-09-14 post-reboot: `ttm.pages_limit=25165824`
+      on the kernel cmdline, `mem_info_gtt_total` = 103079215104 (**96 GiB**), RAM 125 GiB,
+      dedicated VRAM 512 MiB. Recorded in `bench/results/provenance-post-reboot-*.json`
+- [~] Confirm the serial conclusion empirically — **measured 2026-09-14, result is ambiguous
+      and the ambiguity is the finding.** `bench/phase0.sh` full sweep at 16384/32768/49152:
+      the co-residency probe never held both models, so the harness derived
+      `regime_decision: serial`. But the scheduler log says that conclusion is not a memory
+      result. Ollama logged `"predicted to exceed available memory, evicting"` **nine times,
+      and in eight of them the predicted size was below the available figure printed on the
+      same line** (`bench/results/phase0-eviction-log-20260914.txt`):
+
+      | ctx | model | predicted | available | genuinely short? |
+      |---|---|---|---|---|
+      | 16384 | developer | 30.4 GiB | 36.0 GiB | no, 5.6 spare |
+      | 16384 | judge     | 61.7 GiB | 68.9 GiB | no, 7.2 spare |
+      | 32768 | developer | 33.8 GiB | 36.0 GiB | no, 2.2 spare |
+      | 32768 | judge     | 62.5 GiB | 68.9 GiB | no, 6.4 spare |
+      | 49152 | developer | 37.2 GiB | 35.8 GiB | **yes, short 1.4 GiB** |
+      | 49152 | judge     | 63.3 GiB | 68.6 GiB | no, 5.3 spare |
+
+      `OLLAMA_MAX_LOADED_MODELS=0` (auto) and the device is a unified-memory iGPU
+      (ROCm `8060S Graphics`, `OLLAMA_VULKAN=true`), where ollama's auto policy collapses to a
+      single runner regardless of headroom. So the raised 96 GiB ceiling did its job — the
+      models fit — and a *scheduler default* is now standing in for the measurement, which is
+      the same class of error the reboot was meant to remove, one layer up.
+      **Open:** re-probe with `OLLAMA_MAX_LOADED_MODELS=2` at 16384 before recording the regime.
+- [ ] Re-probe co-residency with `OLLAMA_MAX_LOADED_MODELS=2` at 16384 (needs sudo + restart);
+      arithmetic says 30.4 + 61.7 = 92.1 GiB against a 96 GiB ceiling, so it should hold with
+      ~3.9 GiB spare. If it does, the regime question becomes a headroom judgement (§08 gate
+      containers run while a model is resident) rather than a capacity fact.
+- [ ] Configure `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_MAX_LOADED_MODELS=?`, `OLLAMA_NUM_PARALLEL=1`
+      via `systemctl edit ollama.service`. **Value deliberately left open pending the re-probe
+      above.** The earlier rationale for `1` — "a ceiling that cannot hold both" — is now
+      contradicted by measurement: at 16384 the two models are predicted at 30.4 + 61.7 =
+      92.1 GiB under a 96 GiB ceiling. Whether `1` is still right becomes a headroom argument
+      (~3.9 GiB spare is too thin to also run §08 gate containers), not a capacity one, and it
+      must be recorded as such. `KEEP_ALIVE=-1` is already set on the unit; `NUM_PARALLEL=1`
+      is already the running value, so only `MAX_LOADED_MODELS` actually needs writing.
+- [x] Benchmark context 16384 / 32768 / 49152, each alone then both, with `ollama ps` residency
+      + GPU/CPU split — done via per-request `options.num_ctx` (no unit edit, no restart). Both
+      models reported **100% GPU, 0% CPU at every context**; no spill to CPU at any point.
+      Full rows in `bench/results/phase0-20260914T173319Z.json`.
+- [x] Record prompt-processing vs generation speed separately, per model — measured, and the
+      prompt/generation asymmetry is stark. Developer `qwen3.8:27b-mtp-q8_0`: ~325 prompt tok/s,
+      ~20 gen tok/s. Judge `gpt-oss:120b`: ~861-1052 prompt tok/s, ~35 gen tok/s. The 120B MoE
+      is **~3x faster at prompt processing and ~1.75x faster at generation than the 27B dense
+      Q8_0**, which inverts the usual size intuition and matters for scheduling: the judge is
+      not the expensive stage. Context had almost no effect on throughput across 16K-49K, so
+      the earlier 39-minute InvTrac spec step was the 262144 default context, not model speed.
+- [x] Time a real model switch in both directions — judge->developer **8.0 s**,
+      developer->judge **13.2 s**. `model_load_timeout` suggestion: **27 s** (2x worst). Swap
+      cost is far cheaper than feared, which weakens the case for co-residency independently
+      of whether it is possible.
 - [ ] gpt-oss Harmony conformance test passes
 - [ ] Pi drives **both** models through Ollama's OpenAI endpoint (`--mode rpc`; developer-role + reasoning fields OK)
-- [ ] Record digest / quant / Ollama version / GPU split / context beside every figure
+- [x] Record digest / quant / Ollama version / GPU split / context beside every figure —
+      every row in the results JSON carries provenance: developer `8a1582877303` [Q8_0],
+      judge `a951a23b46a1` [MXFP4], ollama 0.32.13, kernel 7.2.5-100.fc43.x86_64, GTT 96 GiB.
 - [ ] **Decision recorded:** regime = `coresident` (at which context) or `serial`
 
 **Exit (machine-verified):**
