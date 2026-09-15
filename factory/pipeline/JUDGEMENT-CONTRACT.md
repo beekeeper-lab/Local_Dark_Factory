@@ -39,7 +39,7 @@ nothing it cannot see:
   "feedback_to_worker": "what to change, addressed to the model that will do it",
   "suggested_tier": 1,
   "suggested_human_review": false,
-  "confidence": 0.8,
+  "confidence": 0.8,          // a fraction between 0 and 1 — NOT a percentage
   "document_quality": {
     "risk_called_out": true, "blast_radius_called_out": true,
     "code_blocks_teach": true, "no_assumed_stack_knowledge": true,
@@ -51,6 +51,15 @@ nothing it cannot see:
 ```
 
 Written to `<run-dir>/verdicts/<target>.attempt-<n>.judgement.json`.
+
+**`confidence` is a fraction from 0 to 1.** A real judgement came back with
+`confidence: 100`, which the schema forbids and constrained decoding did not
+catch — a grammar knows the field must be a number, not that the number must be
+in range. It was stamped into a verdict and sailed past the confidence floor,
+because 100 is not below 0.4, so a judge that had answered a different question
+read as a certain one. audit-check now refuses a value outside the range rather
+than clamping it: 100 read as "certain" and 100 read as "percent" are not
+reconcilable by guessing, and clamping would invent a claim the model never made.
 
 **The controller writes the verdict.** `audit-check.sh` takes that judgement,
 stamps every provenance field from what it can observe — the SHAs from git, the

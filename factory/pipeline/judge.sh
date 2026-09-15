@@ -270,7 +270,10 @@ Your entire reply is ONE JSON object with exactly these top-level keys:
   criteria    [ { "id", "met", "evidence", "quote" } ]  — one per acceptance criterion,
               where "quote" is text copied VERBATIM from an artifact above
   findings    [ { "severity", "summary", "evidence" } ]  — [] if you found nothing
-  confidence  a number from 0 to 1
+  confidence  a FRACTION from 0 to 1 — 0.9 means very confident. Not a
+              percentage: a judgement saying 100 is refused, because "certain"
+              and "percent" cannot be told apart afterwards and guessing which
+              you meant would invent a claim you did not make.
 
 and optionally: feedback_to_worker, suggested_tier, suggested_human_review,
 document_quality, test_integrity, security_findings.
