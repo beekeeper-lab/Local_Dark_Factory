@@ -77,7 +77,7 @@ jq -e --arg p "$PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >/dev/
 # fifteen minutes and bounds nothing useful. 2000 is about five minutes, which is
 # long for one audit and short enough that a stuck one is noticed rather than
 # waited on.
-NUM_PREDICT="${JUDGE_NUM_PREDICT:-2000}"
+NUM_PREDICT="${JUDGE_NUM_PREDICT:-4000}"
 MODEL="$(jq -r '.roles.judge.model' "$ROLES_FILE")"
 NUM_CTX="$(jq -r '.roles.judge.num_ctx // 32768' "$ROLES_FILE")"
 # The thinking level is a measurable trade, not a preference. The judge's value is
@@ -145,6 +145,11 @@ esac
 # Measured: without this the judge invents its own — "C001: the spec must be valid
 # JSON" — and then reports against criteria nobody asked about. It was not being
 # careless; nothing in the prompt said which criteria existed.
+# BEAN_JSON is parsed here. It exists in audit-check.sh and I reached for it out
+# of habit; under `set -u` that is an unbound variable and the whole judge died
+# before its first token — which the kept log showed on line 1, and which nothing
+# else would have.
+BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bean: $BEAN_FILE"
 CRITERIA_LIST="$(jq -r '(.acceptance_criteria // [])[] | "  \(.id): \(.text)"' <<<"$BEAN_JSON")"
 [ -n "$CRITERIA_LIST" ] || CRITERIA_LIST="  (this bean declares none)"
 
