@@ -563,5 +563,37 @@ out="$(run_loop --task task-1 --no-sandbox)"
 check "the run says it is uncontained" "UNCONTAINED" "$out"
 check "and says why it matters"        "environment the pinned toolchain lives in" "$out"
 
+printf '\n== every task runs, even when the worker reads stdin ==\n\n'
+#
+# bean-001 built task-1, verified it, committed it, and announced "BUILD COMPLETE
+# 1 task(s) verified" with two tasks never attempted. The spec was fine and the
+# ordering was fine: the loop read its task list from stdin, and the worker
+# session inside the loop reads stdin too, so pi consumed the remaining ids.
+#
+# A silent, plausible success is the worst failure this line can produce, so the
+# stub here deliberately drains stdin the way a real agent does.
+reset_run
+cat > "$WORK/stub-drains-stdin" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true   # what pi does, and what ate the task list
+exec "$STUB_REAL" "$@"
+STUB
+chmod +x "$WORK/stub-drains-stdin"
+
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+act task-2.1 <<'SH'
+mkdir -p src && printf 'b\n' > src/b.py
+SH
+out="$(PI_BIN="$WORK/stub-drains-stdin" STUB_REAL="$WORK/stub-pi" \
+       PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+       FACTORY_CONTAIN_WORKER=0 \
+       bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" \
+         --bean "$REPO/bean.yaml" --tasks "$REPO/tasks.yaml" --no-sandbox 2>&1)"
+check "the first task runs"   "PASS   task-1" "$out"
+check "and so does the second" "PASS   task-2" "$out"
+check "both are counted"      "2 task(s) verified" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

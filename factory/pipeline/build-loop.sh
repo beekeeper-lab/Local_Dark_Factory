@@ -506,7 +506,19 @@ BLOCKED_TASK=""
 VERIFIED_COUNT=0
 SKIPPED_COUNT=0
 
-while IFS= read -r TID; do
+# Read the task order on fd 3, not stdin.
+#
+# bean-001 built task-1, verified it, committed it, and then announced "BUILD
+# COMPLETE 1 task(s) verified" with task-2 and task-3 never attempted. The spec
+# was fine, the ordering was fine, and the loop was fine: the worker session
+# inside it reads stdin, and stdin was the heredoc carrying the remaining task
+# ids. pi consumed them.
+#
+# A loop whose body runs an interactive tool cannot read its own work list from
+# stdin. This is the oldest trap in shell and it produced a silent, plausible
+# success — the worst failure this line can have, because "complete" was written
+# into the record for a bean that was one third built.
+while IFS= read -r TID <&3; do
   [ -n "$TID" ] || continue
   if [ -n "$ONLY_TASK" ] && [ "$TID" != "$ONLY_TASK" ]; then continue; fi
 
@@ -544,7 +556,11 @@ while IFS= read -r TID; do
     ATTEMPT_IN_FLIGHT=1
     rc=0
     # pipefail is set, so PIPESTATUS[0] is the child's status, not tee's.
-    "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" build-task -- "$TID" "$ADIR" 2>&1 | tee "$ADIR/worker.log"
+    # </dev/null, belt to the fd-3 braces. Moving the task list off stdin stops
+    # the worker eating it; this stops the worker blocking on whatever stdin it
+    # inherits instead, which a session waiting on a terminal will do forever.
+    # Nothing in a worker session should be reading stdin at all.
+    "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" build-task -- "$TID" "$ADIR" </dev/null 2>&1 | tee "$ADIR/worker.log"
     rc="${PIPESTATUS[0]}"
     t1="$(date +%s)"
 
@@ -701,7 +717,7 @@ EOF
       --argjson attempts "$prior" '{ts:$ts, event:"task", task:$task, result:"blocked", attempts:$attempts}')"
     break
   fi
-done <<< "$ORDER"
+done 3<<< "$ORDER"
 
 # ------------------------------------------------------------- outcome --
 if [ -n "$BLOCKED_TASK" ]; then
