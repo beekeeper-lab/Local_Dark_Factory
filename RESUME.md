@@ -64,6 +64,48 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
+## Four ways a check goes wrong, all found on 2026-09-15
+
+Every one of these was in code written here, most of it written the same day, and
+each was found by a real run rather than by a test. They are listed because the
+next check written will be able to have one of them.
+
+**1. Measuring something other than what it claims.** doclint reported a
+three-thousand-character section as empty: it started a new section at every
+heading, including deeper ones, so a `## Proposed change` written as `### task-N`
+subsections measured only the empty gap before the first. The comment above the
+code described the correct rule; the code did something else. doc-check had the
+same bug in its walkthrough coverage. Both were refusing the shape the authoring
+skill explicitly asks for, so the only document that could pass was one nothing
+asks for. **The model said so in its own retry report and was right.**
+
+**2. Failing open.** `contain.py || true` swallowed exit 2 — "I could not run" —
+alongside exit 1 — "violations found". Both print nothing, so a crashed
+containment check reported a clean diff and the gate recorded `contained: true`.
+Also: spec-check skipping schema validation with a `note`, preflight's bean lookup
+finding nothing and reporting nothing, sync-tree asserting its no-.git guarantee
+only at the top level. **A check that can decline to run must say so in a way that
+fails, because silence is indistinguishable from a pass and will be read as one.**
+
+**3. Truncating before measuring.** The secret scan's `head -20` sat inside the
+pipeline that produced the match list, so fifty leaked credentials reported as
+twenty. audit-check's quote haystack was `-maxdepth 2`, so a quote from an attempt
+log four levels down was refused as invented — the one accusation that script must
+never make wrongly.
+
+**4. Overruling the thing being measured.** A `definition_of_done` check I wrote
+would have failed all twenty beans for using the field the way the schema
+permits — prose rather than criterion ids. Caught before commit only because the
+corpus was checked first. The claims check went through three versions of this,
+each firing wrongly on a real spec, before the rule was inverted to require
+positive evidence of a claim rather than inferring one from the absence of a
+denial.
+
+A fifth, adjacent: **a diagnostic that points at the wrong cause.** "child exit 1"
+for a doc step that wrote nothing, and a "terminated" line from the container's
+own forwarder that read like an external kill and cost a real diagnosis session
+looking for a signal nobody sent.
+
 ## Deterministic checks — what used to be the judge's job
 
 Four rubric items moved out of the judge into the controller, each with tests. A deliberate
