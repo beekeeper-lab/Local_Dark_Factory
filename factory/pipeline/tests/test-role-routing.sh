@@ -75,6 +75,14 @@ check "spec passes --model to pi"       "--model ollama/qwen3.8:27b-mtp-q8_0" "$
 check "spec passes thinking level"      "--thinking medium" "$out"
 check "factory skills are loaded"       "--skill" "$out"
 
+# -- the harness surface is closed: nothing pi would discover on its own -------
+# ~/.pi/agent on this box holds 24 extensions and a prompt directory. A worker
+# that loads them is running a harness nobody specified.
+check "extension discovery is off"      "--no-extensions" "$out"
+check "prompt-template discovery is off" "--no-prompt-templates" "$out"
+check "context-file injection is off"   "--no-context-files" "$out"
+check "exactly the four tools, by name" "--tools read,write,edit,bash" "$out"
+
 # -- auditing steps run on the judge, and it must be a different model ----------
 out="$(run_step audit-spec)"
 check "audit-spec routes to judge"      "role=judge" "$out"
@@ -91,7 +99,7 @@ fi
 
 # -- conditions are stamped, or runs are not comparable ------------------------
 cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
-for field in role model digest thinking; do
+for field in role model digest thinking harness; do
   if [ "$(jq -r --arg f "$field" '.[$f] // "null"' <<<"$cond")" != "null" ]; then
     printf '  ok    conditions.%s stamped on the step record\n' "$field"; PASS=$((PASS + 1))
   else

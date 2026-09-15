@@ -82,6 +82,52 @@ documents already in the prompt.
 It is also the only place in the line where the declared context is the served
 context, because `/api/chat` takes `options.num_ctx` and pi does not.
 
+## The worker's harness surface is closed
+
+`run-step.sh` passed pi `--model`, `--thinking`, `--skill` and nothing else, so pi
+discovered the rest on its own: every file in `~/.pi/agent/extensions/` — 24 on this
+box, among them `github-mcp.ts`, `trello.ts`, `obsidian.ts`, `team-lead.ts` and two
+`posttooluse-edit-write` hooks — plus the prompt-template directory, plus any
+`AGENTS.md`/`CLAUDE.md` in the target repo, prepended silently. None of it was in the
+run record. That is the skill collision one directory over, on a line whose invariant
+is "no credential near a model".
+
+Now: `--no-extensions --no-prompt-templates --no-context-files --tools read,write,edit,bash`,
+and `conditions.harness` records the flag set and the four tool names, so two runs
+with different surfaces are not mistaken for comparable. `factory-spec` still tells
+the worker to *read* the repo's context files if present — a recorded act — which is
+why turning off the silent injection loses nothing.
+
+Not done, and why: `--no-skills` alongside the explicit `--skill` would make the
+global-skill collision impossible rather than alarmed, but whether pi 0.85.1 still
+honours `--skill` under `--no-skills` needs a live smoke step to prove; the stub
+cannot. The collision check stays as the defence until then.
+
+## Queued for an idle pipeline
+
+The judge setting its own `options.num_ctx` changes what `OLLAMA_CONTEXT_LENGTH` has to
+do: it no longer has to express two roles, only the developer's. These wait for no run
+in flight, and the first one restarts ollama:
+
+- `zz-factory.conf`: add `OLLAMA_CONTEXT_LENGTH=32768` (or 49152, the co-residency
+  probe's figure), `daemon-reload`, restart. Then `conditions.num_ctx` observed should
+  equal declared for the developer too, and the 262144 default that made the spec step
+  take eight minutes cannot recur.
+- Smoke step with `--no-skills --skill "$FACTORY_SKILLS"`; if the skill loads, add
+  `--no-skills` to `HARNESS_FLAGS` and demote the collision check to a regression test.
+- Spike `pi --mode json` on a smoke step. If model, thinking level and tool calls arrive
+  as events on stdout, `run-step.sh` reads them there and the session-directory search
+  (`pi_sessions_dir()`, ~100 lines) goes; a pi update that changes the session format
+  stops being a silent risk.
+- `handle_audit_failure` hands the re-entered authoring step the whole verdict file,
+  which after `audit-check.sh` names the judge's `model_digest`. The worker needs the
+  findings, not the provenance block.
+- One benchmark arm with `--append-system-prompt` for the developer — four lines: scope
+  only what was asked; four tools exist and no others; the controller decides done, do
+  not claim it; if blocked, write `QUESTIONS.md` and stop. `judge.sh` found the system
+  message load-bearing for gpt-oss; whether it moves the 27B's containment-violation or
+  `BLOCKED.md` rate is a measurement, not a prescription.
+
 ## What the first real runs taught
 
 Four runs of bean-001 against the real models. Every one failed, each for a
@@ -164,7 +210,7 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 ./bench/phase0.sh --provenance-only
 ```
 
-Expected: audit `0 findings (green)`; role routing `15 passed`; `8 schemas, 0 invalid`;
+Expected: audit `0 findings (green)`; role routing `29 passed`; `8 schemas, 0 invalid`;
 `20 bean(s) ... 0 invalid`; GTT 96 GB. The audit's `--with-models` flag re-runs the
 12-case Harmony suite (~2 min, loads the 120b) and writes
 `bench/results/harmony-<stamp>.json`; without it that predicate reports as skipped.

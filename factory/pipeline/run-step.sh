@@ -139,6 +139,23 @@ MODEL_DIGEST="$(ollama list 2>/dev/null | awk -v m="$ROLE_MODEL" '$1 == m {d=$2}
 PI_ARGS=( --model "$ROLE_PROVIDER/$ROLE_MODEL" )
 [ -n "$ROLE_THINKING" ] && PI_ARGS+=( --thinking "$ROLE_THINKING" )
 
+# Close the harness surface. Without these, pi discovers everything in
+# ~/.pi/agent — on this box, 24 extensions (github-mcp.ts, trello.ts, obsidian.ts,
+# team-lead.ts, two posttooluse-edit-write hooks, ...) and a directory of prompt
+# templates — and prepends any AGENTS.md/CLAUDE.md it finds in the target repo,
+# into every developer session, and records none of it. That is the skill
+# collision (pi loads both, the winner is not recorded) one directory over. The
+# worker gets the four built-in tools by name and nothing that was not put here.
+#
+# --no-context-files is deliberate, not incidental: factory-spec tells the model
+# to READ the repo's CLAUDE.md/AGENTS.md if present, which is a recorded act;
+# silent injection is not. Skill discovery stays on (the collision check below
+# covers the one directory it reaches) until --no-skills + --skill is proven to
+# still load the explicit path — that needs a live smoke step, not a stub.
+HARNESS_FLAGS=( --no-extensions --no-prompt-templates --no-context-files
+                --tools read,write,edit,bash )
+PI_ARGS+=( "${HARNESS_FLAGS[@]}" )
+
 # Load this repo's skills explicitly. The global ~/.pi/agent/skills directory is
 # owned by another project (its sync-skills.sh treats its own copy as canonical),
 # so editing the installed copies would silently break it on its next run.
@@ -303,6 +320,9 @@ fi
 # JSONL stream out).
 SF_ARG=""
 [ -n "$SESSION_FILE" ] && SF_ARG="$SESSION_FILE"
+# The harness surface is a run condition like thinking and num_ctx: two runs
+# with different flag sets are not comparable, so the set goes in the record.
+HARNESS_JSON="$(printf '%s\n' "${HARNESS_FLAGS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
 jq -sc \
   --arg s "$STEP" \
   --arg sf "$SF_ARG" \
@@ -311,10 +331,11 @@ jq -sc \
       --arg role "$ROLE" --arg model "$ROLE_MODEL" --arg digest "$MODEL_DIGEST" \
       --arg thinking "$ROLE_THINKING" --argjson ctx "${ROLE_CTX:-null}" \
       --arg obs_thinking "$OBS_THINKING" --argjson obs_ctx "${OBS_CTX:-null}" \
-      --arg obs_model "$OBS_MODEL" \
+      --arg obs_model "$OBS_MODEL" --argjson harness "$HARNESS_JSON" \
       'def s($v): if $v == "" then null else $v end;
        {role:$role, model:$model, digest:$digest,
         num_ctx:($obs_ctx // null), thinking:s($obs_thinking),
+        harness:{flags:$harness, tools:["read","write","edit","bash"]},
         declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
         observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
         declared_matches_observed:

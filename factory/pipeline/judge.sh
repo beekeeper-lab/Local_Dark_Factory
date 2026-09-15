@@ -38,13 +38,14 @@ Exit: 0 written · 1 the model gave nothing usable · 2 misconfigured.
 EOF
 }
 
-RUN_DIR=""; TARGET=""; BEAN_FILE=""; ATTEMPT=""; FEEDBACK=""
+RUN_DIR=""; TARGET=""; BEAN_FILE=""; ATTEMPT=""; FEEDBACK=""; THINKING_OVERRIDE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --target)   TARGET="${2:?}"; shift 2 ;;
     --bean)     BEAN_FILE="${2:?}"; shift 2 ;;
     --attempt)  ATTEMPT="${2:?}"; shift 2 ;;
     --feedback) FEEDBACK="${2:?}"; shift 2 ;;
+    --thinking) THINKING_OVERRIDE="${2:?}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     --version)  cat "$PIPELINE_DIR/VERSION"; exit 0 ;;
     -*)         usage >&2; die "unknown flag: $1" ;;
@@ -67,7 +68,10 @@ jq -e --arg p "$PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >/dev/
   || die "provider '$PROVIDER' is not in the allow-list (runtime is local-only)"
 MODEL="$(jq -r '.roles.judge.model' "$ROLES_FILE")"
 NUM_CTX="$(jq -r '.roles.judge.num_ctx // 32768' "$ROLES_FILE")"
-THINKING="$(jq -r '.roles.judge.thinking // "high"' "$ROLES_FILE")"
+# The thinking level is a measurable trade, not a preference. The judge's value is
+# careful reasoning (§01) and Phase 0 fixed it running with reasoning silently
+# off — so it is overridable here to be measured, never lowered quietly.
+THINKING="${THINKING_OVERRIDE:-$(jq -r '.roles.judge.thinking // "high"' "$ROLES_FILE")}"
 DIGEST="$(ollama list 2>/dev/null | awk -v m="$MODEL" '$1 == m {print $2; exit}')"
 [ -n "$DIGEST" ] || die "judge model '$MODEL' is not present in ollama"
 
