@@ -1,0 +1,53 @@
+# The worker container: where a model's edits happen, and the only thing in the
+# line that a model can actually steer.
+#
+# The gate image exists so a verdict is a fact about a pinned toolchain. This one
+# exists for a different reason: the worker is the one stage where a model both
+# writes files and decides what to do next, and until now it did that on the host
+# with the user's home directory, ssh keys, git credentials and the whole
+# internet one tool call away. Containment was after the fact — reject the
+# attempt and reset the tree — which catches a mistake and does nothing about
+# anything deliberate.
+#
+# Two properties:
+#
+# 1. **No network at all.** `--network=none`, so there is no route anywhere. The
+#    model is reached through a single unix socket bind-mounted in, bridged on
+#    the host to exactly one address and port. Not an allow-list that could be
+#    widened by a config change — an absence of routes, plus one file.
+#
+# 2. **Pinned, like the gate.** Node by digest, pi by exact version. The worker's
+#    behaviour is a fact about a specific agent build, and "the 27B could not do
+#    it" means nothing if the harness underneath moved.
+#
+# Rebuild and re-pin with: factory/worker-image/build.sh
+FROM docker.io/library/node:22-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96
+
+# git, because the worker reads the repository it is editing; ca-certificates is
+# deliberately NOT needed — there is nothing to verify a certificate against on a
+# container with no routes.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG PI_VERSION
+RUN test -n "$PI_VERSION" || { echo "PI_VERSION build arg is required — an unpinned agent is not a pinned image" >&2; exit 1; }
+RUN npm install -g "@earendil-works/pi-coding-agent@${PI_VERSION}" \
+ && npm cache clean --force
+
+# The container runs as the invoking user under --userns=keep-id, so the files it
+# writes into the mounted work tree are owned by that user rather than by root.
+# HOME must be somewhere writable that is NOT the work tree: pi keeps its
+# sessions and config under it, and a worker whose agent state landed in the
+# repository would show up as a containment violation it did not commit.
+ENV HOME=/home/worker \
+    PI_CODING_AGENT=true \
+    NODE_OPTIONS=--max-old-space-size=2048
+RUN mkdir -p /home/worker && chmod 0777 /home/worker
+
+COPY model-socket.js /usr/local/lib/model-socket.js
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
