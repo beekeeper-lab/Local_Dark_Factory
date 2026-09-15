@@ -570,6 +570,39 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       mb="$(git -C "$(repo_root)" merge-base main HEAD 2>/dev/null || echo main)"
       git -C "$(repo_root)" diff "$mb"...HEAD > "$RUN_DIR/diff.txt" 2>/dev/null || true
       "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+
+      # A step that wrote nothing gets one retry, with that as the feedback.
+      #
+      # Two real doc sessions ended with the model saying it was about to write
+      # the document — "From now on, I'll create the documentation", "I'm
+      # currently writing the documentation" — and closing without writing it.
+      # Thirty-odd minutes each, and the run halted for a human whose entire job
+      # would have been to say "you did not write the file".
+      #
+      # That is not a judgement call. The file is there or it is not, and "you
+      # produced nothing" is the most actionable feedback in the line. Once, and
+      # only once: a second empty session means something is wrong that saying it
+      # again will not fix.
+      if [ ! -s "$RUN_DIR/impl-detail.md" ] && [ "${DOC_RETRIED:-0}" != 1 ]; then
+        DOC_RETRIED=1
+        printf '\nRETRY  doc produced no document → asking again, with that as the finding\n'
+        cat > "$RUN_DIR/doc-findings.md" <<'FINDINGS'
+# You did not write the document
+
+The session ended with no `impl-detail.md` on disk. If your last message described
+the document you were about to write, that is the failure: describing it is not
+writing it.
+
+Write the file first, with the write tool, before saying anything about it. Then
+say what you did.
+FINDINGS
+        rc=0
+        # `--` before the findings path: run-step treats what follows as EXTRA and
+        # appends it to the prompt. Without it the argument is parsed as a flag,
+        # silently ignored, and the retry asks the identical question again.
+        "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" -- "$RUN_DIR/doc-findings.md" || rc=$?
+      fi
+
       [ "$rc" -eq 0 ] || return "$rc"
       "$PIPELINE_DIR/doc-check.sh" "$RUN_DIR" || rc=$?
       return "$rc" ;;

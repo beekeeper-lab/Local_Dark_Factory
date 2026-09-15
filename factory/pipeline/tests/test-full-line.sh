@@ -439,6 +439,126 @@ check "it lists the run"        "$(basename "${R%/}")" "$runs_out"
 check "with how it ended"       "completed" "$runs_out"
 check "and how long it took"    "ELAPSED" "$runs_out"
 
+printf '\n== a doc step that writes nothing is asked again ==\n\n'
+#
+# Two real doc sessions ended with the model saying it was about to write the
+# document and closing without writing it — thirty-odd minutes each, and the run
+# halted for a human whose whole job would have been to say "you did not write
+# the file". That is not a judgement call: the file is there or it is not.
+cat > "$WORK/bin/pi-nodoc" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+case "$prompt" in
+  *factory-spec*)
+    run_dir="${prompt##* }"
+    cp "$STUB_TASKS" "$run_dir/tasks.yaml"; cp "$STUB_SPEC_MD" "$run_dir/spec.md" ;;
+  *factory-build-task*)
+    adir="${prompt##* }"; rest="${prompt% *}"; task="${rest##* }"
+    case "$task" in
+      task-1) mkdir -p src && printf 'GOOD\n' > src/a.py ;;
+      task-2) mkdir -p src && printf 'second\n' > src/b.py ;;
+    esac ;;
+  *factory-doc*)
+    # First time: narrate and write nothing. On the retry — recognisable by the
+    # findings file in the prompt — actually write it.
+    case "$prompt" in
+      *doc-findings.md*)
+        # Derive the run dir from the findings path, which is inside it. Parsing
+        # by field position is one trailing token away from writing nowhere.
+        findings="$(printf '%s' "$prompt" | tr ' ' '\n' | grep 'doc-findings.md$' | head -1)"
+        run_dir="$(dirname "$findings")"
+        cat > "$run_dir/impl-detail.md" <<'DOC'
+# What was built
+
+## Summary
+
+Two modules under `src/`, one per task, each satisfying one acceptance criterion.
+Nothing else changed, nothing imports them yet, and the whole change is two files
+of one line each.
+
+## What changed and why
+
+Two modules were added under `src/`, one per task, each satisfying one of the
+bean's acceptance criteria. Nothing else in the tree was touched, and neither
+file is imported by anything yet.
+
+## Walkthrough by task
+
+`src/a.py` is new and contains the word GOOD, which is what ac1 greps for:
+
+```python src/a.py
+GOOD
+```
+
+`src/b.py` is new and exists, which is the whole of what ac2 checks:
+
+```python src/b.py
+second
+```
+
+## Deviations from the spec
+
+None. Both tasks did exactly what the task list described, wrote only inside
+their declared paths, and passed their own checks on the first attempt with no
+feedback round needed.
+
+## Risk & blast radius, as built
+
+Two new files that nothing imports. Reverting either restores the previous state
+exactly, no other file refers to them, and no configuration or dependency
+changed, so the blast radius is the two files themselves.
+
+## Evidence
+
+Each task's verify ran in the controller rather than in the session that wrote
+the code, and the bean's two acceptance criteria were re-run against the whole
+diff at the gate. Both passed.
+
+## How to verify locally
+
+Check out the branch and run `grep GOOD src/a.py` and `test -f src/b.py`. Those
+are the bean's acceptance criteria verbatim, which is why they are worth running
+by hand rather than paraphrasing.
+
+## Rollback
+
+Revert the branch's two commits, or delete both files. Nothing else refers to
+them, so there is no ordering to respect and no data to migrate back.
+DOC
+        ;;
+      *) printf 'I am currently writing the documentation.\n' ;;
+    esac ;;
+esac
+exit 0
+STUB
+chmod +x "$WORK/bin/pi-nodoc"
+
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+rm -f "$GH_CALLS"
+cp "$WORK/bin/pi" "$WORK/bin/pi-keep"
+cp "$WORK/bin/pi-nodoc" "$WORK/bin/pi"
+run_line > "$WORK/o-nodoc" 2>&1 || true
+cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
+nodoc="$(cat "$WORK/o-nodoc")"
+
+check "the empty step is noticed"   "doc produced no document" "$nodoc"
+check "and asked again"             "asking again, with that as the finding" "$nodoc"
+check "the second attempt writes it" "DOC CHECK" "$nodoc"
+if grep -qF 'HALT  doc' <<<"$nodoc"; then
+  printf '  --- the doc-retry run, in full ---\n'
+  sed 's/^/  | /' <<<"$nodoc" | tail -24
+  printf '  --- end ---\n'
+fi
+nope  "so the run does not halt on it" "HALT  doc" "$nodoc"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed
