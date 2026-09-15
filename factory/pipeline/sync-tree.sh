@@ -45,7 +45,11 @@ SRC="$(cd "$SRC" && pwd)"
 DEST="$(cd "$DEST" && pwd)"
 [ "$SRC" != "$DEST" ] || die "source and destination are the same directory"
 
-if command -v rsync >/dev/null 2>&1; then
+# SYNC_TREE_NO_RSYNC=1 forces the fallback. It exists so the fallback can be
+# tested: it is the path that had a .git leak, and on any machine with rsync
+# installed nothing would ever run it, so the bug could only have been found by
+# someone's machine lacking rsync on the day it mattered.
+if [ "${SYNC_TREE_NO_RSYNC:-0}" != 1 ] && command -v rsync >/dev/null 2>&1; then
   args=( -a --delete --exclude='.git' --exclude='.git/**' )
   for e in ${EXCLUDES+"${EXCLUDES[@]}"}; do args+=( --exclude="$e" ); done
   rsync "${args[@]}" "$SRC"/ "$DEST"/
@@ -53,13 +57,22 @@ else
   # No rsync: do it with tar, which is everywhere. Still exact — the destination
   # is emptied first rather than merged into.
   find "$DEST" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-  tar_args=( --exclude=./.git )
+  # `--exclude=.git`, not `--exclude=./.git`: the anchored form excludes only the
+  # top-level one, so a nested .git — a submodule, a vendored checkout, anything
+  # someone cloned into a subdirectory — would have been copied into the sandbox
+  # by this path. rsync's unanchored pattern already matched at any depth, so the
+  # two halves of this script disagreed about what "without .git" meant.
+  tar_args=( --exclude=.git )
   for e in ${EXCLUDES+"${EXCLUDES[@]}"}; do tar_args+=( --exclude="./$e" ); done
   ( cd "$SRC" && tar -cf - "${tar_args[@]}" . ) | ( cd "$DEST" && tar -xf - )
 fi
 
-# The guarantee this script exists to provide, asserted rather than assumed.
-if [ -e "$DEST/.git" ]; then
-  die "sync left a .git in $DEST — the sandbox boundary would be open"
+# The guarantee this script exists to provide, asserted rather than assumed — at
+# every depth, because that is what the guarantee says. Checking only the top
+# level would have let the tar path's bug through silently, which is how an
+# assertion becomes decoration.
+STRAY_GIT="$(find "$DEST" -name .git -print -quit 2>/dev/null)"
+if [ -n "$STRAY_GIT" ]; then
+  die "sync left a .git in the tree ($STRAY_GIT) — the sandbox boundary would be open"
 fi
 printf '%s\n' "$DEST"

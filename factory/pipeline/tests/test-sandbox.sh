@@ -142,5 +142,32 @@ check "it names the pinned image"      "@sha256:" "$out"
 check "it asserts git is absent"       "git in image    absent (asserted)" "$out"
 check "it names the limits"            "capabilities    all dropped" "$out"
 
+printf '\n== no .git reaches the sandbox, at any depth ==\n\n'
+#
+# The tar fallback excluded `./.git` — anchored, so only the top-level one. A
+# nested .git from a submodule or a vendored checkout would have been copied in,
+# and the assertion afterwards checked only the top level too, so both halves of
+# the guarantee had the same blind spot.
+SRC="$WORK/src-tree"; DST="$WORK/dst-tree"
+rm -rf "$SRC" "$DST"; mkdir -p "$SRC/.git" "$SRC/vendor/dep/.git" "$DST"
+printf 'x\n' > "$SRC/.git/config"
+printf 'y\n' > "$SRC/vendor/dep/.git/config"
+printf 'code\n' > "$SRC/main.py"
+
+out="$(bash "$PIPELINE_DIR/sync-tree.sh" "$SRC" "$DST" 2>&1)"; rc=$?
+want "the sync succeeds"            "expected 0, got $rc: $out" test "$rc" -eq 0
+want "the code came across"         "main.py should be in the copy" test -f "$DST/main.py"
+want "no top-level .git"            "the top-level .git must not be copied" test ! -e "$DST/.git"
+want "and no nested .git either"    "a submodule's .git must not be copied" test ! -e "$DST/vendor/dep/.git"
+
+# And the same, through the tar fallback, which is where the leak was. On a
+# machine with rsync nothing would otherwise run this path.
+rm -rf "$DST"; mkdir -p "$DST"
+out="$(SYNC_TREE_NO_RSYNC=1 bash "$PIPELINE_DIR/sync-tree.sh" "$SRC" "$DST" 2>&1)"; rc=$?
+want "the fallback succeeds too"     "expected 0, got $rc: $out" test "$rc" -eq 0
+want "it carries the code"           "main.py should be in the copy" test -f "$DST/main.py"
+want "and leaves no nested .git"     "the tar path must exclude .git at any depth" \
+     test ! -e "$DST/vendor/dep/.git"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
