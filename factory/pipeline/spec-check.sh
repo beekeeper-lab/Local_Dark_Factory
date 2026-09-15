@@ -178,7 +178,83 @@ else
   ok "size_budget" "$N_TASKS/${MAX_TASKS:-∞} tasks"
 fi
 
-# ------------------------------------------------------------- 8. render it --
+# --------------------------------- 8. can each verify fail? (run it and see) --
+#
+# A check that already passes on the unmodified tree cannot demonstrate that the
+# task was done. The audit rubric calls that a blocker, and the judge was asked to
+# spot it — and measurably does not: shown a task whose only verify was
+# `test -d .`, it reported a YAML syntax error. So stop asking. This is
+# decidable by running the command, and the controller can run commands.
+#
+# A pass here is not automatically a defect: a refactor's verify may legitimately
+# be "the existing tests still pass". So it is reported, recorded, and handed to
+# the judge as a fact rather than being made a hard failure — the deterministic
+# half done deterministically, and the judgement left where judgement belongs.
+#
+# These commands were written by a model and have been through nothing yet — not
+# the spec audit, not a human. So they run in the sandbox or they do not run: on
+# the host this step would be the one place in the line where model-authored argv
+# executes unconfined, and at the earliest stage, before any of the containment
+# the rest of the line insists on. Without podman the check is skipped and says
+# so, which is a gap in the evidence; running it anyway would be a hole in the
+# containment, and a recorded gap is the cheaper of the two.
+PRECHECK="[]"
+VACUOUS=""
+PRECHECK_RAN=0
+if [ "${SPEC_CHECK_RUN_VERIFIES:-1}" = 1 ]; then
+  SB=()
+  PRE_TREE="${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/darkfactory/$(basename "$RUN_DIR")/precheck-tree"
+  if [ -f "$ROOT/factory/gates.lock.yaml" ] && command -v podman >/dev/null 2>&1 \
+     && "$PIPELINE_DIR/sync-tree.sh" "$ROOT" "$PRE_TREE" --exclude "factory/runs" >/dev/null 2>&1; then
+    SB=( --sandbox "$PRE_TREE" --gates "$ROOT/factory/gates.lock.yaml" )
+    PRECHECK_RAN=1
+  else
+    ok "verify can fail" "not checked — no sandbox available, and these commands are not run on the host"
+  fi
+fi
+if [ "$PRECHECK_RAN" = 1 ]; then
+  ENVA=()
+  while IFS= read -r kv; do [ -n "$kv" ] && ENVA+=( --env "$kv" ); done \
+    < <(jq -r '(.sandbox_env // {}) | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_PATH" 2>/dev/null)
+
+  while IFS=$'\t' read -r tid idx vjson; do
+    [ -n "$tid" ] || continue
+    rc=0
+    res="$("$PIPELINE_DIR/verify.sh" "$vjson" --out "$RUN_DIR/precheck-$tid-$idx.log" \
+      --timeout 120 ${SB+"${SB[@]}"} ${ENVA+"${ENVA[@]}"} 2>/dev/null)" || rc=$?
+    passed=$([ "$rc" -eq 0 ] && echo true || echo false)
+    PRECHECK="$(jq -c --arg t "$tid" --argjson i "$idx" --argjson p "$passed" \
+      --arg c "$(jq -r '.command // .reason // ""' <<<"$res" 2>/dev/null)" \
+      '. + [{task:$t, verify_index:$i, passes_before_the_work:$p, command:$c}]' <<<"$PRECHECK")"
+    [ "$passed" = true ] && VACUOUS="$VACUOUS $tid[$idx]"
+  done < <(jq -r '.tasks[] | .id as $t | (.verify | to_entries[]) | [$t, (.key|tostring), (.value|tojson)] | @tsv' <<<"$TASKS_JSON")
+
+  # The unit that matters is the TASK, not the individual check. The first real
+  # spec this ran against made the distinction for us: task-3's `ruff check .`
+  # passes on a scaffold with no Python in it, but its other three verifies do
+  # not — so the task is still demonstrable, and failing the spec over that one
+  # line would be a false positive on a task list that was fine. A task every one
+  # of whose verifies already passes is the actual defect: nothing about it can
+  # be shown by running it.
+  PRECHECK="$(jq -c 'group_by(.task) | map({task: .[0].task,
+      verifies: .,
+      every_verify_passes_before_the_work: (map(.passes_before_the_work) | all)})' <<<"$PRECHECK")"
+  UNDEMONSTRABLE="$(jq -r '[.[] | select(.every_verify_passes_before_the_work) | .task] | join(", ")' <<<"$PRECHECK")"
+
+  jq -n --argjson p "$PRECHECK" \
+    --arg note "Every verify was run against the tree before any task touched it. A verify that passes here passes on the code as it already is, so it cannot show the task was done. One such verify among several is often legitimate — a lint that is green on an empty directory, or a refactor whose check is that existing tests still pass. A task where every verify passes is not: there is nothing about it that running its checks could demonstrate." \
+    '{schema:"verify-precheck/1.0.0", note:$note, tasks:$p}' > "$RUN_DIR/verify-precheck.json"
+
+  if [ -n "$UNDEMONSTRABLE" ]; then
+    bad "verify can fail" "every verify already passes for: $UNDEMONSTRABLE — nothing these tasks do could be shown by running them"
+  elif [ -n "$VACUOUS" ]; then
+    ok "verify can fail" "each task has a check that fails first; these do not, which may be fine:$VACUOUS"
+  else
+    ok "verify can fail" "every verify fails on the unmodified tree, as it must"
+  fi
+fi
+
+# ------------------------------------------------------------- 9. render it --
 if [ -f "$SPEC_MD" ] && [ -f "$TEMPLATES/spec.html" ]; then
   if "$PY" "$PIPELINE_DIR/render-doc.py" "$SPEC_MD" "$TEMPLATES/spec.html" "$RUN_DIR/spec.html" \
       --meta "bean=$BEAN_ID" \
