@@ -33,9 +33,16 @@
 # can see `.git`, so its containment is after the fact: reject the attempt and
 # reset. Closing that needs two things this does not have — an image with `pi` in
 # it, and a network story for reaching the local model, since §08 wants no
-# network and the worker needs exactly one endpoint. Until then, "the run dir is
-# excluded from containment" below is load-bearing and is a hole: a worker that
-# wrote into the run dir would not be caught.
+# network and the worker needs exactly one endpoint. Until then its containment is
+# after the fact.
+#
+# The run directory used to be the worst of that: excluded from the change scan
+# so the evidence would survive a reset, and therefore the one place a worker
+# could write without being seen — the place where the record of what it did is
+# kept. It is now hashed before each session and compared after. The attempt's
+# own directory is exempt, because that is the worker's channel for BLOCKED.md
+# and QUESTIONS.md; the rest of the run dir is the record, and a session that
+# alters it blocks the bean without a second attempt.
 set -uo pipefail
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -390,6 +397,30 @@ changed_paths() { # paths changed vs HEAD, repo-relative, run dir excluded
       done
 }
 
+# The run directory is excluded from changed_paths above so that the evidence of
+# an attempt survives the reset that throws the attempt away. That exclusion is a
+# blind spot: a worker writing into the run directory would not be caught, and
+# the run directory is where the record of what it did is kept — the one place a
+# model with something to hide would most want to reach.
+#
+# So it is watched instead of ignored. The worker has exactly one legitimate
+# destination in there, its own attempt directory: that is its channel for
+# BLOCKED.md and QUESTIONS.md, and it is evidence of the attempt rather than of
+# the run. Everything else under the run dir is the record, and the only writer
+# that may touch it during a session is the controller appending to steps.jsonl.
+run_dir_manifest() { # run_dir_manifest <attempt-dir> — hash the record, not the channel
+  [ -n "$RUN_DIR_REL" ] || return 0
+  local adir="${1:-}"
+  find "$RUN_DIR_ABS" -type f -print0 2>/dev/null \
+    | while IFS= read -r -d '' f; do
+        case "$f" in
+          "$RUN_DIR_ABS/steps.jsonl") continue ;;
+        esac
+        [ -n "$adir" ] && case "$f" in "$adir"/*|"$adir") continue ;; esac
+        printf '%s  %s\n' "$(sha256sum < "$f" | cut -d' ' -f1)" "${f#"$RUN_DIR_ABS"/}"
+      done | LC_ALL=C sort
+}
+
 dirty="$(changed_paths)"
 [ -z "$dirty" ] || die "working tree is dirty before the loop starts; containment could not tell your changes from the worker's:
 $dirty"
@@ -444,6 +475,7 @@ while IFS= read -r TID; do
 
     # -- worker session -------------------------------------------------------
     printf 'ATTEMPT %s/%s  %s\n' "$ATTEMPT" "$MAXA" "$TID"
+    RECORD_BEFORE="$(run_dir_manifest "$ADIR")"
     rc=0
     # pipefail is set, so PIPESTATUS[0] is the child's status, not tee's.
     "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" build-task -- "$TID" "$ADIR" 2>&1 | tee "$ADIR/worker.log"
@@ -454,7 +486,21 @@ while IFS= read -r TID; do
     CHANGED="$(changed_paths)"
     printf '%s\n' "$CHANGED" | sed '/^$/d' > "$ADIR/changed-paths.txt"
 
-    if [ "$rc" -ne 0 ]; then
+    # Did anything reach the record? This is checked before the exit status is
+    # even looked at: a session that failed and altered the evidence on its way
+    # out is the worse of the two events, and reporting it as "the worker exited
+    # non-zero" would bury it.
+    TOUCHED_RECORD="$(comm -13 <(printf '%s\n' "$RECORD_BEFORE") <(run_dir_manifest "$ADIR") \
+                      | awk '{$1=""; sub(/^ +/, ""); print}' | LC_ALL=C sort -u)"
+    if [ -n "$TOUCHED_RECORD" ]; then
+      printf '%s\n' "$TOUCHED_RECORD" > "$ADIR/touched-the-record.txt"
+      result="tampered"
+      detail="the session wrote into the run's evidence directory, outside its own attempt directory: $(printf '%s' "$TOUCHED_RECORD" | tr '\n' ' ')"
+      printf '\nTAMPERED  %s attempt %s — the run record was altered:\n' "$TID" "$ATTEMPT" >&2
+      printf '%s\n' "$TOUCHED_RECORD" | sed 's/^/  /' >&2
+      reset_tree
+
+    elif [ "$rc" -ne 0 ]; then
       result="worker_error"
       detail="The worker session exited non-zero (status $rc) — it did not finish the task."
       FEEDBACK="$(cat <<EOF
@@ -565,6 +611,12 @@ EOF
         commit_task "$TID" "$TITLE" "$ATTEMPT" "$result"
         VERIFIED=1
         printf 'PASS   %-10s verified on attempt %s\n' "$TID" "$ATTEMPT"
+        break ;;
+      tampered)
+        # No second attempt. Every other failure is a thing to give feedback on;
+        # this one is a session that reached for the record of what it did, and
+        # another go at the same task is not a proportionate answer to it.
+        printf 'FAIL   %-10s attempt %s: the run record was altered — not retrying\n' "$TID" "$ATTEMPT"
         break ;;
       *)
         printf 'FAIL   %-10s attempt %s: %s\n' "$TID" "$ATTEMPT" "$result" ;;

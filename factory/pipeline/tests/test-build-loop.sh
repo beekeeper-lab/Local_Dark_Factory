@@ -484,5 +484,45 @@ nope "shallow path is not"             "src/a.py was wrongly flagged" grep -q "s
 viol="$(printf 'src/deep/evil.py\n' | python3 "$PIPELINE_DIR/contain.py" --patterns '["src/**"]' || true)"
 want "** does cross slashes"           "src/** should match a nested path" test -z "$viol"
 
+printf '\n== a worker that writes into the run record blocks the bean ==\n\n'
+#
+# The run directory is exempt from the change scan so that evidence survives the
+# reset. That exemption is exactly what makes this worth a test: without the
+# hash-and-compare, a session editing the record of its own attempts would leave
+# no trace anywhere — the scan skips it and `git status` never sees it, because
+# the run dir is gitignored.
+reset_run
+printf 'a prior verdict the worker should not be able to reach\n' > "$RUN_DIR/spec.md"
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+# ... and, on the way past, quietly improve the record.
+printf 'a much more flattering account\n' > "$ATTEMPT_DIR/../../../spec.md"
+SH
+out="$(run_loop)"; rc=$?
+
+check "the loop names it"              "TAMPERED" "$out"
+check "and says which file"            "spec.md" "$out"
+check "it does not try again"          "not retrying" "$out"
+want  "the bean is blocked"            "expected exit 4" test "$rc" -eq 4
+want  "the tampering is kept as evidence" "touched-the-record.txt should exist" \
+      test -f "$RUN_DIR/build/task-1/attempt-1/touched-the-record.txt"
+check "the attempt is recorded as tampered" '"result":"tampered"' \
+      "$(tr -d ' ' < "$RUN_DIR/build/task-1/attempt-1/result.json")"
+want  "only one attempt was made"      "expected exactly 1 attempt dir" \
+      test "$(ls -1d "$RUN_DIR"/build/task-1/attempt-* | wc -l)" -eq 1
+nope  "and nothing was committed"      "task-1 should not have been committed" \
+      git -C "$REPO" log --oneline -1 --format=%s | grep -q task-1
+
+printf '\n== but its own attempt directory is its channel, not the record ==\n\n'
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+printf '# I could not tell what this task wanted\n' > "$ATTEMPT_DIR/QUESTIONS.md"
+SH
+out="$(run_loop --task task-1)"
+nope  "writing to its own attempt dir is not tampering" "QUESTIONS.md was treated as tampering" \
+      grep -q TAMPERED <<<"$out"
+check "and the task still verifies"    "PASS   task-1" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
