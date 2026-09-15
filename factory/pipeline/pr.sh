@@ -98,9 +98,49 @@ for target in package impl; do
   [ -n "$VERDICT_FILE" ] && break
 done
 
+# Advisory audits produce no verdict, on purpose and with the reason on disk.
+#
+# The judge is measured as not reproducible on identical input, so this line has
+# been running with its verdicts recorded rather than binding. That is an operator
+# decision, and it collides with the rule directly below: a PR needs an accepting
+# verdict on the exact candidate, and in advisory mode there is none to have.
+#
+# The resolution is not to relax the rule. It is that in advisory mode a
+# DIFFERENT set of things authorises the PR — the deterministic ones, which do
+# not vary between runs: the gate passed on this candidate, the package record is
+# internally consistent, and every audit that reached no verdict left a record
+# saying why. Those are checked below like any other precondition.
+#
+# What must not happen is a pull request that looks the same as one a judge
+# accepted. The body says so first, in its own section, before anything else.
+ADVISORY_TARGETS=""
+for t in spec impl doc package; do
+  for f in "$RUN_DIR/failed-attempts/audit-$t".advisory.* \
+           "$RUN_DIR/failed-attempts/resolved/audit-$t".advisory.*; do
+    [ -e "$f" ] && { ADVISORY_TARGETS="$ADVISORY_TARGETS $t"; break; }
+  done
+done
+
 HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
-if [ -z "$VERDICT_FILE" ]; then
-  bad "verdict" "no package or impl verdict — nothing authorises this PR"
+if [ -z "$VERDICT_FILE" ] && [ -n "$ADVISORY_TARGETS" ]; then
+  # No verdict, and the run says why. The deterministic record has to carry it.
+  ok "verdict" "none — audits ran advisory:$ADVISORY_TARGETS (see below)"
+  if [ -f "$RUN_DIR/package-check.json" ] \
+     && [ "$(jq -r '.internally_consistent' "$RUN_DIR/package-check.json" 2>/dev/null)" = "true" ]; then
+    ok "package record" "internally consistent"
+  else
+    bad "package record" "package-check.json is missing or says the record contradicts itself — with no judge verdict, this is the only thing left that could authorise a PR"
+  fi
+  if [ -f "$RUN_DIR/doc-check.json" ] \
+     && [ "$(jq -r '.status // "fail"' "$RUN_DIR/doc-check.json" 2>/dev/null)" = "pass" ]; then
+    ok "document" "doc-check passed"
+  elif [ -f "$RUN_DIR/impl-detail.html" ]; then
+    ok "document" "rendered"
+  else
+    bad "document" "no implementation document — in advisory mode the documents are most of what a reviewer has"
+  fi
+elif [ -z "$VERDICT_FILE" ]; then
+  bad "verdict" "no package or impl verdict, and no advisory record explaining the absence — nothing authorises this PR"
 else
   V="$(cat "$VERDICT_FILE")"
   vword="$(jq -r '.verdict' <<<"$V")"
@@ -157,7 +197,7 @@ if [ "$FAILED" -ne 0 ]; then
 fi
 
 # -------------------------------------------------------------- the body --
-TIER="$(jq -r '.effective_risk_tier' <<<"$V")"
+TIER="$([ -n "${V:-}" ] && jq -r '.effective_risk_tier // "—"' <<<"$V" || echo "—")"
 BODY="$(mktemp)"
 {
   printf '## %s — %s\n\n' "$BEAN_ID" "$BEAN_TITLE"
@@ -166,6 +206,25 @@ BODY="$(mktemp)"
   printf 'documented and audited by local models under `factory/`, and audited by a\n'
   printf 'different model family than the one that wrote it. Read the two documents\n'
   printf 'before the diff — they are the point.\n\n'
+
+  # The first thing a reviewer sees, when it applies. A pull request opened with
+  # no judge verdict must not look like one a judge accepted.
+  if [ -n "$ADVISORY_TARGETS" ]; then
+    printf -- '---\n\n'
+    printf '### ⚠ No audit verdict authorises this pull request\n\n'
+    printf 'The audits ran in **advisory** mode and reached no verdict for:%s.\n\n' "$ADVISORY_TARGETS"
+    printf 'That is a recorded operator decision, not a failure of this run: the judge\n'
+    printf 'model is measured as not reproducible on identical input at temperature 0\n'
+    printf '(`bench/judge-variance.sh`), so its opinions are recorded rather than used\n'
+    printf 'as a gate. Each absence has a record in `failed-attempts/` saying why.\n\n'
+    printf 'What *did* authorise it is deterministic and is listed below: the pinned\n'
+    printf 'gates and every acceptance criterion passed against this exact commit, the\n'
+    printf 'whole diff stayed inside the paths the bean declares, the tests were shown\n'
+    printf 'to fail without the change, and the run record is internally consistent.\n\n'
+    printf '**Read the two documents and the diff yourself.** On this pull request they\n'
+    printf 'are the review, not a summary of one.\n\n'
+    printf -- '---\n\n'
+  fi
 
   printf '### Documents\n\n'
   for pair in "The plan:spec.html" "What was built:impl-detail.html"; do
@@ -194,7 +253,12 @@ BODY="$(mktemp)"
       [ -n "$line" ] && { printf -- '- %s\n' "$line"; found=1; }
     done < <(jq -r '.findings[]? | select(.severity != "blocker") | "\(.severity): \(.summary)"' "$jf" 2>/dev/null)
   done
-  [ "$found" = 0 ] && printf 'Nothing. Every audit was clean.\n'
+  if [ "$found" = 0 ] && [ -n "$ADVISORY_TARGETS" ]; then
+    printf 'Nothing — and that is an absence of findings, not a clean bill. The audits\n'
+    printf 'for%s reached no verdict at all; see the section at the top.\n' "$ADVISORY_TARGETS"
+  elif [ "$found" = 0 ]; then
+    printf 'Nothing. Every audit was clean.\n'
+  fi
 
   printf '\n### Gates\n\n'
   if [ -f "$RUN_DIR/gate.json" ]; then
@@ -208,13 +272,31 @@ BODY="$(mktemp)"
 
   printf '\n### Provenance\n\n'
   printf '| | |\n|---|---|\n'
-  printf '| base | `%s` |\n' "$(jq -r '.base_sha' <<<"$V")"
-  printf '| candidate | `%s` |\n' "$(jq -r '.candidate_sha' <<<"$V")"
-  printf '| diff sha256 | `%s` |\n' "$(jq -r '.diff_sha256' <<<"$V")"
-  printf '| binding tier | %s |\n' "$TIER"
-  printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest_digest' <<<"$V")"
-  printf '| risk policy | `%s` |\n' "$(jq -r '.policy_version' <<<"$V")"
-  printf '| judge | `%s`, prompt `%s` |\n' "$(jq -r '.model_digest' <<<"$V")" "$(jq -r '.prompt_version' <<<"$V")"
+  # In advisory mode there is no verdict to read these off, so they come from the
+  # run record and the gate — the same facts, stamped by the controller rather
+  # than carried in a judgement.
+  if [ -n "${V:-}" ]; then
+    printf '| base | `%s` |\n' "$(jq -r '.base_sha' <<<"$V")"
+    printf '| candidate | `%s` |\n' "$(jq -r '.candidate_sha' <<<"$V")"
+    printf '| diff sha256 | `%s` |\n' "$(jq -r '.diff_sha256' <<<"$V")"
+    printf '| binding tier | %s |\n' "$TIER"
+    printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest_digest' <<<"$V")"
+  else
+    printf '| base | `%s` |\n' "$(git -C "$ROOT" merge-base HEAD "$DEFAULT_BRANCH_EARLY" 2>/dev/null || echo '—')"
+    printf '| candidate | `%s` |\n' "$HEAD_SHA"
+    printf '| binding tier | %s |\n' "$(jq -r '.tier.final_tier // "—"' "$RUN_DIR/gate.json" 2>/dev/null || echo '—')"
+    printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest_digest // .sandbox.image // "—"' "$RUN_DIR/gate.json" 2>/dev/null || echo '—')"
+    printf '| authorised by | the deterministic record; no judge verdict |\n'
+  fi
+  if [ -n "${V:-}" ]; then
+    printf '| risk policy | `%s` |\n' "$(jq -r '.policy_version' <<<"$V")"
+    printf '| judge | `%s`, prompt `%s` |\n' "$(jq -r '.model_digest' <<<"$V")" "$(jq -r '.prompt_version' <<<"$V")"
+  else
+    printf '| risk policy | `%s` |\n' "$(jq -r '.conditions.risk_policy_version // "—"' "$RUN_DIR/run.json" 2>/dev/null || echo '—')"
+    printf '| judge | `%s` — ran, reached no verdict |\n' "$(jq -r '.conditions.judge.digest // .conditions.judge.model // "—"' "$RUN_DIR/run.json" 2>/dev/null || echo '—')"
+    printf '| developer | `%s` |\n' "$(jq -r '.conditions.developer.digest // .conditions.developer.model // "—"' "$RUN_DIR/run.json" 2>/dev/null || echo '—')"
+    printf '| pipeline | `%s` |\n' "$(jq -r '.conditions.pipeline_version // "—"' "$RUN_DIR/run.json" 2>/dev/null || echo '—')"
+  fi
 
   # The documents, by hash.
   #
@@ -224,7 +306,7 @@ BODY="$(mktemp)"
   # top of this pull request are rendered from Markdown that is not committed
   # anywhere, so without this a reviewer has the judge's word that it audited
   # something, and no way to tell whether it is what they are reading.
-  if [ "$(jq -r '[.artifacts[]?] | length' <<<"$V")" -gt 0 ]; then
+  if [ -n "${V:-}" ] && [ "$(jq -r '[.artifacts[]?] | length' <<<"$V")" -gt 0 ]; then
     printf '\n### What was audited, by hash\n\n'
     printf '| document | sha256 |\n|---|---|\n'
     jq -r '.artifacts[]? | "| `\(.path)` | `\(.sha256[0:16])…` |"' <<<"$V"

@@ -35,6 +35,14 @@ cat > "$WORK/bin/gh" <<'GH'
 printf '%s\n' "$*" >> "$GH_CALLS"
 case "$1 $2" in
   "pr create")
+    # Keep the body. Assertions about what a reviewer will actually see need the
+    # file, not the flag that named it — and the file is a mktemp that pr.sh
+    # removes on its way out.
+    for _i in $(seq 1 $#); do
+      if [ "${!_i}" = "--body-file" ]; then
+        _j=$((_i + 1)); cp "${!_j}" "$GH_BODY" 2>/dev/null || true
+      fi
+    done
     if [ -f "$GH_EXISTING" ]; then echo "a pull request for branch already exists"; exit 1; fi
     : > "$GH_EXISTING"
     echo "https://github.com/example/x/pull/1"
@@ -46,6 +54,7 @@ GH
 chmod +x "$WORK/bin/gh"
 export PATH="$WORK/bin:$PATH"
 export GH_CALLS="$WORK/gh-calls.txt"
+export GH_BODY="$WORK/last-body"
 export GH_EXISTING="$WORK/gh-existing"
 
 git init -q --bare "$WORK/origin.git"
@@ -145,6 +154,68 @@ printf '# something asked for a human\n' > $R/QUESTIONS.md
 out="$(pr)"
 check "an open QUESTIONS.md is refused" "asked for a human and never got one" "$out"
 rm -f $R/QUESTIONS.md
+
+printf '\n== advisory audits: no verdict, and a pull request that says so ==\n\n'
+#
+# The judge is measured as not reproducible on identical input at temperature 0,
+# so this line runs with FACTORY_ADVISORY_AUDITS: verdicts recorded, not binding.
+# That collides with the rule above — a PR needs an accepting verdict on the exact
+# candidate — and in advisory mode there is none to have. The first real run to
+# reach this step halted here, at stage ten of ten.
+#
+# The resolution is not to relax the rule. In advisory mode a DIFFERENT set of
+# things authorises the PR, all of them deterministic: the gate passed on this
+# candidate, the package record is internally consistent, the document exists, and
+# every audit that reached no verdict left a record saying why.
+rm -f $R/verdicts/package.attempt-1.json $R/verdicts/impl.attempt-1.json
+# The judgement too: with no verdict there is nothing that stamped one, and the
+# "what the audits saw" section has to be right about that.
+mv $R/verdicts/package.attempt-1.judgement.json "$WORK/judgement.away"
+rm -f "$GH_CALLS"
+
+printf -- '-- with nothing recorded, it still refuses --\n\n'
+out="$(pr)"; rc=$?
+check "no verdict and no reason refuses" "no advisory record explaining the absence" "$out"
+want  "and nothing was pushed"           "gh must not have been called" test ! -s "$GH_CALLS"
+
+printf -- '\n-- with the advisory records, it opens one, loudly --\n\n'
+mkdir -p $R/failed-attempts
+for t in spec impl doc package; do
+  printf 'step: audit-%s\nmode: advisory — this did NOT stop the run\nnote: the judge produced no judgement\n' \
+    "$t" > "$R/failed-attempts/audit-$t.advisory.1"
+done
+printf '{"internally_consistent":true}\n' > $R/package-check.json
+printf '{"status":"pass"}\n' > $R/doc-check.json
+out="$(pr)"; rc=$?
+if [ "$rc" -ne 0 ]; then
+  printf '  --- pr.sh refused; its output ---\n'
+  sed 's/^/  | /' <<<"$out" | tail -25
+  printf '  --- end ---\n'
+fi
+want  "it opens the pull request"        "expected exit 0, got $rc" test "$rc" -eq 0
+check "the absent verdict is stated"     "audits ran advisory" "$out"
+check "the package record stands in"     "ok    package record" "$out"
+check "and so does the document"         "ok    document" "$out"
+
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "the warning leads the body"       "No audit verdict authorises this pull request" "$body"
+check "it names which audits"            "reached no verdict for" "$body"
+check "and why, without excusing it"     "not reproducible on identical input" "$body"
+check "it says what did authorise it"    "What *did* authorise it is deterministic" "$body"
+check "and tells the reviewer their job" "Read the two documents and the diff yourself" "$body"
+if grep -qF 'Every audit was clean' <<<"$body"; then
+  printf '  FAIL  it must not claim a clean audit when none reached a verdict\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    it does not claim a clean audit\n'; PASS=$((PASS+1))
+fi
+check "an absence is called an absence"  "an absence of findings, not a clean bill" "$body"
+check "provenance says what authorised"  "the deterministic record; no judge verdict" "$body"
+check "and the candidate is still named" "$HEAD_SHA" "$body"
+
+rm -rf $R/failed-attempts $R/package-check.json $R/doc-check.json
+mv "$WORK/judgement.away" $R/verdicts/package.attempt-1.judgement.json
+verdict accept "$HEAD_SHA"
+rm -f "$GH_CALLS"
 
 printf '\n== it refuses to open a PR from main ==\n\n'
 # No `git stash -u` here: the run directory is untracked, and stashing would
