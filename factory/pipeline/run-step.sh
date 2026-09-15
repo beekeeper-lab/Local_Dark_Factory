@@ -102,6 +102,8 @@ case "$STEP" in
   *) die "unknown step '$STEP' (expected spec|implement|build-task|doc|pr|audit-<target>)" ;;
 esac
 
+ROOT="$(repo_root)"
+
 PROMPT="/skill:$SKILL $SKILL_ARGS"
 [ "${#EXTRA[@]}" -gt 0 ] && PROMPT="$PROMPT ${EXTRA[*]}"
 
@@ -193,9 +195,68 @@ STARTS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event ==
 ENDS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | length' "$STEPS")"
 
 # -- launch the child (output streams straight through) ------------------------------
+#
+# Contained, when the repository has a worker manifest. The worker is the one
+# stage a model steers, and on the host it steered it with the user's home
+# directory, keys and the whole internet within reach; worker-sandbox.sh puts it
+# in a pinned image with no routes at all and one unix socket to the model.
+#
+# Two translations are needed and neither is optional. The tree is at /work
+# inside, so every host path in the prompt has to be rewritten or the worker is
+# told to open files that are not there. And pi's sessions land in the mounted
+# agent directory, so PI_SESSIONS_DIR has to point at it — otherwise the
+# reconciliation below looks in $HOME, finds nothing new, and records a step
+# whose observed conditions are blank.
+#
+# FACTORY_CONTAIN_WORKER=0 runs on the host. It exists because the tests stub pi
+# and cannot run a container, not as an operational escape hatch: when a manifest
+# is present and this is unset, containment is the default and its absence is
+# printed rather than assumed.
+CONTAIN="${FACTORY_CONTAIN_WORKER:-auto}"
+WORKER_LOCK="${FACTORY_WORKER_LOCK:-$ROOT/factory/worker.lock.yaml}"
+if [ "$CONTAIN" = auto ]; then
+  if [ -f "$WORKER_LOCK" ] && [ "$ROLE" = developer ] && command -v podman >/dev/null 2>&1; then
+    CONTAIN=1
+  else
+    CONTAIN=0
+  fi
+fi
+
 set +e
-"$BIN" "${PI_ARGS[@]}" -p "$PROMPT"
-RC=$?
+if [ "$CONTAIN" = 1 ]; then
+  GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
+  GW_STARTED=0
+  if [ -z "$GW_DIR" ]; then
+    GW_DIR="$("$PIPELINE_DIR/model-gateway.sh" start)" || die "could not open a model gateway; refusing to run the worker uncontained"
+    GW_STARTED=1
+  fi
+  AGENT_DIR="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fagent.XXXXXX")"
+  mkdir -p "$AGENT_DIR/sessions"
+  cp "$HOME/.pi/agent/models.json" "$AGENT_DIR/models.json" 2>/dev/null \
+    || die "no ~/.pi/agent/models.json to give the contained worker; it would refuse every --model"
+  SESS_DIR="$AGENT_DIR/sessions"
+  : > "$SNAP"
+
+  # Host paths -> container paths. The longest prefix first, so a run directory
+  # inside the tree is rewritten once rather than twice.
+  CPROMPT="${PROMPT//$ROOT/\/work}"
+  CARGS=()
+  for a in "${PI_ARGS[@]}"; do CARGS+=( "${a//$ROOT/\/work}" ); done
+  CARGS=( "${CARGS[@]/#$FACTORY_SKILLS/\/factory\/skills}" )
+
+  "$PIPELINE_DIR/worker-sandbox.sh" \
+    --tree "$ROOT" --agent-dir "$AGENT_DIR" --socket-dir "$GW_DIR" \
+    --skills "$FACTORY_SKILLS" \
+    -- "${CARGS[@]}" -p "$CPROMPT"
+  RC=$?
+  [ "$GW_STARTED" = 1 ] && "$PIPELINE_DIR/model-gateway.sh" stop --dir "$GW_DIR" >/dev/null 2>&1
+  [ "$RC" -eq 5 ] && die "the worker sandbox refused; the step did NOT run on the host instead"
+else
+  [ -f "$WORKER_LOCK" ] && [ "$ROLE" = developer ] \
+    && printf 'STEP   %s   UNCONTAINED — running pi on the host (FACTORY_CONTAIN_WORKER=0)\n' "$STEP" >&2
+  "$BIN" "${PI_ARGS[@]}" -p "$PROMPT"
+  RC=$?
+fi
 set -e
 
 find "$SESS_DIR" -type f -name '*.jsonl' 2>/dev/null | sort > "$NEW" || true
@@ -209,12 +270,13 @@ if [ -z "$CANDS" ]; then
   done
 fi
 CANDS="$(printf '%s\n' "$CANDS" | sed '/^[[:space:]]*$/d' || true)"
-# Prefer a session whose header names this working directory.
-ROOT="$(repo_root)"
+# Prefer a session whose header names this working directory. A contained worker
+# records /work, because that is where the tree is mounted; on the host it records
+# the repository path. Both are this run.
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   cwd="$(jq -r 'select(.type == "session") | .cwd' "$f" 2>/dev/null | head -n 1 || true)"
-  if [ "$cwd" = "$ROOT" ]; then SESSION_FILE="$f"; break; fi
+  if [ "$cwd" = "$ROOT" ] || { [ "$CONTAIN" = 1 ] && [ "$cwd" = "/work" ]; }; then SESSION_FILE="$f"; break; fi
 done <<< "$CANDS"
 if [ -z "$SESSION_FILE" ]; then
   SESSION_FILE="$(printf '%s\n' "$CANDS" | sed -n '1p')"

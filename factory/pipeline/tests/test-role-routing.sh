@@ -220,5 +220,58 @@ jq 'del(.step_roles.doc)' "$PIPELINE_DIR/roles.json" > "$WORK/unbound-roles.json
 out="$(ROLES_FILE="$WORK/unbound-roles.json" run_step doc)"
 check "unbound step refused"            "no role bound to step" "$out"
 
+# -- the worker is contained, and a refusal is not a fallback ------------------
+#
+# The property worth testing is not that the container starts — that needs a
+# container, and these run with a stub. It is what happens when it does not: a
+# step that quietly ran pi on the host after the sandbox refused would still be
+# recorded as contained by everything downstream, and that label is the whole
+# value of the record.
+printf 'schema_version: worker-manifest/1.0.0\nimage: "localhost/x@sha256:0"\n' > "$WORK/worker.lock.yaml"
+mkdir -p "$WORK/bin"
+cat > "$WORK/bin/podman" <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+chmod +x "$WORK/bin/podman"
+
+cat > "$WORK/refusing-sandbox.sh" <<'STUB'
+#!/usr/bin/env bash
+printf 'worker-sandbox: REFUSED — the image is not present
+' >&2
+exit 5
+STUB
+chmod +x "$WORK/refusing-sandbox.sh"
+cp "$PIPELINE_DIR/run-step.sh" "$WORK/run-step-contained.sh"
+# The sandbox and gateway are called by path from $PIPELINE_DIR, so a copy of
+# the pipeline is the way to substitute them without touching the real ones.
+cp -r "$PIPELINE_DIR" "$WORK/pipeline"
+cp "$WORK/refusing-sandbox.sh" "$WORK/pipeline/worker-sandbox.sh"
+cat > "$WORK/pipeline/model-gateway.sh" <<'STUB'
+#!/usr/bin/env bash
+[ "${1:-}" = start ] && { mkdir -p "$TMPDIR_GW"; echo "$TMPDIR_GW"; exit 0; }
+exit 0
+STUB
+chmod +x "$WORK/pipeline/model-gateway.sh"
+
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+       PATH="$WORK/bin:$PATH" TMPDIR_GW="$WORK/gw" \
+       FACTORY_WORKER_LOCK="$WORK/worker.lock.yaml" \
+       bash "$WORK/pipeline/run-step.sh" run spec 2>&1)"
+check "a refused sandbox stops the step"  "did NOT run on the host instead" "$out"
+check "and the refusal itself is shown"   "worker-sandbox: REFUSED" "$out"
+if grep -qF 'STUB-PI-ARGS' <<<"$out"; then
+  printf '  FAIL  it must not fall back to running pi on the host\n'; FAIL=$((FAIL + 1))
+else
+  printf '  ok    it does not fall back to running pi on the host\n'; PASS=$((PASS + 1))
+fi
+
+# -- and running uncontained is said out loud ---------------------------------
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+       FACTORY_CONTAIN_WORKER=0 FACTORY_WORKER_LOCK="$WORK/worker.lock.yaml" \
+       bash "$PIPELINE_DIR/run-step.sh" run spec 2>&1)"
+check "an uncontained developer step says so" "UNCONTAINED" "$out"
+check "and it does then run"                  "STUB-PI-ARGS" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

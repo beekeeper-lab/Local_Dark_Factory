@@ -49,6 +49,7 @@ usage:
   --agent-dir <dir>   pi's HOME/.pi/agent — sessions land here, on the host,
                       where the controller reads back what actually ran
   --socket-dir <dir>  the directory model-gateway.sh printed
+  --skills <dir>      the factory's skills, mounted read-only at /factory/skills
   --image <ref>       override the pinned image (refused unless --unpinned)
   --lock <file>       worker manifest (default: factory/worker.lock.yaml)
   --timeout <s>       wall clock, default 3600
@@ -61,7 +62,7 @@ Exit: pi's own status, or 5 when the sandbox refused to run it.
 EOF
 }
 
-TREE=""; AGENT_DIR=""; SOCKET_DIR=""; IMAGE=""; LOCK=""; CHECK=0
+TREE=""; AGENT_DIR=""; SOCKET_DIR=""; SKILLS_DIR=""; IMAGE=""; LOCK=""; CHECK=0
 TIMEOUT=3600; MEMORY="8g"; CPUS="8"; PIDS="512"; UNPINNED=0
 EXTRA_ENV=(); CMD=()
 
@@ -70,6 +71,7 @@ while [ $# -gt 0 ]; do
     --tree)       TREE="${2:?--tree needs a directory}"; shift 2 ;;
     --agent-dir)  AGENT_DIR="${2:?--agent-dir needs a directory}"; shift 2 ;;
     --socket-dir) SOCKET_DIR="${2:?--socket-dir needs a directory}"; shift 2 ;;
+    --skills)     SKILLS_DIR="${2:?--skills needs a directory}"; shift 2 ;;
     --image)      IMAGE="${2:?--image needs a reference}"; shift 2 ;;
     --lock)       LOCK="${2:?--lock needs a file}"; shift 2 ;;
     --timeout)    TIMEOUT="${2:?--timeout needs seconds}"; shift 2 ;;
@@ -154,6 +156,15 @@ mkdir -p "$AGENT_ABS/sessions"
 
 chcon -R -t container_file_t -l s0 "$AGENT_ABS" 2>/dev/null || true
 
+# "No git" is structural here, as it is for the gate sandbox — but by a different
+# route, because the worker's edits have to land in the real tree rather than in a
+# copy. An empty directory mounted over /work/.git masks it: git inside reports
+# "not a git repository", the history cannot be read or rewritten, and the host's
+# .git is untouched. The worker never needed it — the controller makes every
+# commit, after it has decided the attempt is worth one.
+GIT_MASK="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fgitmask.XXXXXX")"
+trap 'rmdir "$GIT_MASK" 2>/dev/null || true' EXIT
+
 RUN_ARGS=(
   --rm
   --network=none
@@ -162,10 +173,15 @@ RUN_ARGS=(
   --security-opt=no-new-privileges
   --memory "$MEMORY" --cpus "$CPUS" --pids-limit "$PIDS"
   --volume "$TREE_ABS:/work:rw,Z"
+  --volume "$GIT_MASK:/work/.git:ro"
   --volume "$AGENT_ABS:/home/worker/.pi/agent:rw"
   --volume "$SOCK_ABS:/run/model:rw"
   --workdir /work
 )
+if [ -n "$SKILLS_DIR" ]; then
+  [ -d "$SKILLS_DIR" ] || refuse "skills directory not found: $SKILLS_DIR"
+  RUN_ARGS+=( --volume "$(cd "$SKILLS_DIR" && pwd):/factory/skills:ro,Z" )
+fi
 for kv in ${EXTRA_ENV+"${EXTRA_ENV[@]}"}; do RUN_ARGS+=( --env "$kv" ); done
 
 timeout --signal=TERM --kill-after=30 "$TIMEOUT" \

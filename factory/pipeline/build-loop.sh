@@ -29,12 +29,14 @@
 # outside the tree, opens a socket, or shells out to git is stopped rather than
 # noticed afterwards by an audit.
 #
-# The WORKER is not yet contained that way. It still edits the real worktree and
-# can see `.git`, so its containment is after the fact: reject the attempt and
-# reset. Closing that needs two things this does not have — an image with `pi` in
-# it, and a network story for reaching the local model, since §08 wants no
-# network and the worker needs exactly one endpoint. Until then its containment is
-# after the fact.
+# The WORKER is contained too, as of worker-sandbox.sh: a pinned image with pi in
+# it, no routes at all, one unix socket to the model, and an empty directory
+# mounted over `.git` so the history it never needed is not there. Its edits still
+# land in the real worktree, which is what the scan below reads.
+#
+# So the reject-and-reset below is no longer the only containment — but it is
+# still the one that decides what a task may write, and nothing about a container
+# makes it redundant.
 #
 # The run directory used to be the worst of that: excluded from the change scan
 # so the evidence would survive a reset, and therefore the one place a worker
