@@ -272,5 +272,22 @@ check "a spec within budget passes"    "within the 1000000 budget" "$out"
 out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
 check "and with no budget set it just reports" "no budget set" "$out"
 
+printf '\n== a file denied once and mentioned again is still denied ==\n\n'
+#
+# The first spec a contained worker ever wrote, and the first false positive this
+# check produced. It opened with "no `pyproject.toml`, no `src/`, and no `tests/`
+# exist in the repository today" — correct, and exactly what the section is for —
+# then referred to `pyproject.toml` again forty lines later while describing the
+# change. One denial, one neutral mention, and the neutral one won.
+full_spec "There is no current behaviour to describe: no \`pyproject.toml\`, no \`src/\`,
+and no \`tests/\` exist in the repository today. Running the gates now would fail
+at collection.
+
+The change will set test discovery to \`tests/\` in \`pyproject.toml\`, which is
+where the tool configuration belongs."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+nope  "the later mention does not revive the claim" "describes files that are not there" "$out"
+check "and the spec passes"                         "SPEC CHECK PASS" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

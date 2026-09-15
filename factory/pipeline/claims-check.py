@@ -186,7 +186,20 @@ def main() -> int:
         return 0
 
     asserted, denied, symbols = claims(body)
-    missing = [p for p in asserted if not (root / p).exists()]
+
+    # A path denied ANYWHERE in the section is not required to exist, even if it
+    # is also mentioned neutrally elsewhere. The first spec a contained worker
+    # ever wrote opened with "no `pyproject.toml`, no `src/`, and no `tests/`
+    # exist in the repository today" — correct, and exactly what this section is
+    # for — and then referred to `pyproject.toml` again forty lines later while
+    # describing the change. One denial, one neutral mention, and the neutral one
+    # won, so the check called a true sentence a false claim.
+    #
+    # Denial wins, for the same reason negation is read at all: suppressing a
+    # check on a maybe costs a line someone skims, and firing one on a maybe
+    # costs the check its credibility.
+    denied_set = set(denied)
+    missing = [p for p in asserted if p not in denied_set and not (root / p).exists()]
     absent = [s for s in symbols if not grep(root, s)]
     # The reverse check — a path the spec says is absent which is in fact there —
     # was implemented and then removed, and the removal is the point.
@@ -208,7 +221,7 @@ def main() -> int:
     result = {
         "section": args.section,
         "checked": True,
-        "named_paths": asserted,
+        "named_paths": [p for p in asserted if p not in denied_set],
         "missing_paths": missing,
         "paths_said_to_be_absent": denied,
         "said_absent_but_present": denied_and_present,
