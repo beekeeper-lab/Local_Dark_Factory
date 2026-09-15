@@ -62,6 +62,13 @@ into a lint problem, and the content problem is the one worth having.
 These seven sections, in this order, each with real content. The controller lints
 them and a thin section fails the step before a judge ever sees it.
 
+**"Thin" is measured, not judged: under 80 characters of prose fails.** That is a
+low bar and it is not the target — it is the floor below which a section is a
+fragment rather than a paragraph. A real run failed on a Proposed change section
+of 77 characters, which is the kind of near miss that happens when the writer
+does not know the number. Now you do. Two or three sentences per section clears
+it comfortably; aim at the reader, not at the count.
+
 - **What and why** — the bean's intent in plain language, plus the background a
   newcomer needs. Assume no knowledge of this codebase, this stack, or this domain.
 - **Current behaviour** — how the relevant code works today, with a short

@@ -34,6 +34,12 @@ Write Markdown. Never HTML — the controller renders it.
 
 ## The seven sections
 
+**Thin is measured, not judged: under 80 characters of prose fails the check**
+before anyone reads the document. A low floor, not a target — below it a section
+is a fragment rather than a paragraph. The spec step has failed a real run on a
+77-character section, which is the near miss that happens when the writer does
+not know the number.
+
 The controller lints these. A thin one fails the step before a judge sees it.
 
 - **Summary** — what was done, in two sentences, matching the diff.
