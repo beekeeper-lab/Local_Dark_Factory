@@ -420,6 +420,17 @@ check "paths were enforced at both levels" "ok    allowed_path_enforced_task_and
 check "reading the documents is left to a human" "no human has recorded reading them" "$AUDIT"
 check "and it says what to write"                "documents-read-by.txt" "$AUDIT"
 
+printf '\n== the run history is listable ==\n\n'
+#
+# Run directories are the record. They looked like scratch space because nothing
+# showed them together, and they were duly deleted between attempts all through
+# the day this was written — taking every spec a model had produced with them.
+runs_out="$(cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+  bash "$PIPELINE_DIR/../bin/factory" runs 2>&1)"
+check "it lists the run"        "$(basename "${R%/}")" "$runs_out"
+check "with how it ended"       "completed" "$runs_out"
+check "and how long it took"    "ELAPSED" "$runs_out"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed

@@ -32,6 +32,9 @@ factory — run the line against the repository you are standing in.
   factory step <step> <bean-id>
                             one step: specify, build, gate, document, pr,
                             or audit-{spec,impl,doc,package}
+  factory runs              every run this repo has, newest first, and how it
+                            ended — the run directories are the record, not
+                            scratch space
   factory status [<run-dir>]
                             what the newest run did, stage by stage
   factory doctor            is this repository ready to be run against?
@@ -340,6 +343,39 @@ run from the working tree."
     printf '\n'
     [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
     exit "$fail"
+    ;;
+
+  runs)
+    # Every run this repo has, newest first, with how it ended.
+    #
+    # `factory status` shows one run. Nothing showed the history, which made run
+    # directories look like scratch space — and they were duly deleted between
+    # attempts all through 2026-09-15, taking with them every spec a model had
+    # written that day and any chance of asking how often the developer clears
+    # doclint on its first try. They are the record. Preflight objects to a dirty
+    # TREE, never to an old run, so there was never a reason to remove one.
+    require_target
+    runs_root="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
+    [ -d "$runs_root" ] || die "no runs yet under $runs_root"
+    printf '\n%-34s %-12s %-9s %-7s %s\n' RUN STATUS STEPS ELAPSED ENDED-AT
+    for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
+      rj="$d/run.json"; [ -f "$rj" ] || continue
+      st="$(jq -r '.status // "?"' "$rj")"
+      ended="$(jq -r '.finished_at // .halted_at // .blocked_at // .interrupted_at // "—"' "$rj")"
+      nsteps=0; elapsed="—"
+      if [ -f "$d/steps.jsonl" ]; then
+        nsteps="$(jq -rs '[.[] | select(.event == "end")] | length' "$d/steps.jsonl" 2>/dev/null || echo 0)"
+        elapsed="$(jq -rs '
+          def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+          if length < 2 then "—"
+          else ((t(.[-1].ts) - t(.[0].ts)) | floor | tostring) + "s" end' "$d/steps.jsonl" 2>/dev/null || echo "—")"
+      fi
+      # The step it stopped on is the thing a person is looking for.
+      last="$(jq -r '.halted_at_step // .blocked_task // empty' "$rj")"
+      printf '%-34s %-12s %-9s %-7s %s%s\n' "$(basename "${d%/}")" "$st" "$nsteps" "$elapsed" "$ended" \
+        "$([ -n "$last" ] && printf '  (%s)' "$last")"
+    done
+    printf '\n'
     ;;
 
   read)
