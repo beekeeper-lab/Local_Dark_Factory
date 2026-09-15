@@ -2,7 +2,7 @@
 
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-and-bean-set-v1`.
 
-## State: Phase 0 closed. Phase 1 is being run, one failure at a time.
+## State: Phase 0 closed. Phase 1 is built end to end; one real run has not yet finished.
 
 All six `phase_0_exit` predicates hold — and, as of the audit, they are *computed*
 rather than asserted (`bench/phase0-audit.sh`), which they were not before:
@@ -33,26 +33,72 @@ by the owner — recorded as such in `bean-sets/v1/manifest.json`, because a set
 approval is not the per-bean human read §04 describes). Run order is bean id order, which
 is a checked topological order.
 
-## Sandbox — what is contained, and what is not
+## Sandbox — what is contained
 
-`factory/pipeline/sandbox.sh` implements the §08 contract and refuses rather than degrades.
-Proven by attempting each escape (`tests/test-sandbox.sh`, 36 cases): read-only outside the
-one writable tree, no network, no capabilities, no host environment, no container socket, no
-SSH agent, limits on memory/cpu/pids/wall-clock/output, image pinned by digest and checked
-against it, no git binary in the image, no `.git` in the tree.
+`factory/pipeline/sandbox.sh` implements the §08 contract for verification and refuses
+rather than degrades. Proven by attempting each escape (`tests/test-sandbox.sh`, 36 cases):
+read-only outside the one writable tree, no network, no capabilities, no host environment,
+no container socket, no SSH agent, limits on memory/cpu/pids/wall-clock/output, image pinned
+by digest and checked against it, no git binary in the image, no `.git` in the tree.
 
-**Contained today:** every task `verify`, via `build-loop.sh --sandbox` (§06 step 5). Results
-record `ran_in: sandbox|host` so an uncontained verdict cannot pass for a contained one.
+**The worker is contained too, as of 2026-09-15.** `factory/worker-image/` (node pinned by
+digest, pi pinned by version) + `worker-sandbox.sh` + `model-gateway.sh` + `model-bridge.py`,
+pinned in `factory/worker.lock.yaml`.
 
-**Not contained today:** the worker session. It edits the real worktree and can see `.git`.
-Two things are missing and neither is small: an image with `pi` in it, and a way to let the
-worker reach *only* the model endpoint — `--network=model` reaches the host loopback and
-general outbound, and says so when used. An allow-listed proxy is the next piece of that.
+The network story was the easy half once looked at properly. There is no route:
+`--network=none` removes every one, and the model arrives on a unix socket bridged on the
+host to exactly one address and port. Stronger than an allow-list, because there is no
+interface to widen. Two things worth keeping in mind:
 
-## The three ranked gaps in the forked pipeline are now two closed and one half
+- The bridge runs under `runcon -t container_t`. SELinux checks a unix socket connection
+  against the peer *process's* context, not the file's label, so a container may not connect
+  to a socket held by an ordinary user process however the file is relabelled. This took
+  three attempts to see; `factory doctor` now checks `runcon` is present.
+- `.git` is masked with an empty read-only mount rather than removed, so edits land in the
+  real tree where the change scan reads them, while `git` inside reports "not a git
+  repository". The controller makes every commit.
 
-1. ~~No task loop~~ — built.
-2. **Sandbox — half.** Gates and verifies are contained; the worker session is not.
+**Everything that can quietly stop containing now says so.** Not decoration: a pipeline
+snapshot silently turned worker containment off for a whole run, found only by noticing a
+session file path in a log. Every uncontained developer session now prints why,
+`FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
+refuses to start if it is missing anything the line resolves paths against.
+
+## Deterministic checks — what used to be the judge's job
+
+Four rubric items moved out of the judge into the controller, each with tests. A deliberate
+response to measuring the judge, not a tidying exercise:
+
+| check | settles | was |
+|---|---|---|
+| `spec-check.sh` verify precheck | a task whose every check already passes cannot be demonstrated | spec rubric |
+| `claims-check.py` | files the spec says exist, against the filesystem | spec rubric |
+| `test-integrity.sh` | do the tests fail with the source reverted | impl rubric |
+| `package-check.sh` | every arithmetic bullet — pairs, status, naming, tier | the whole package rubric |
+
+`bench/controller-fitness.sh` runs the judge's own six seeded cases through these: 2 of 5
+caught by name, 0 false alarms, 5 seconds a case, no variance. The other 3 are the judge's
+actual job. The audit rubric now states what was measured and asks only for what counting
+cannot reach.
+
+Three lessons are baked into those checks and are worth not relearning:
+
+- **A one-sided check is unsound.** test-integrity first ran the tests only on the reverted
+  tree and called any failure "the tests pin the change" — so a missing binary read as
+  success. It now requires a control run on the unreverted tree first.
+- **A fuzzy signal belongs on the forgiving side.** claims-check reads English negation so
+  "there is no `src/a.py`" is not reported as a false claim. Using the same signal to *fire*
+  a failure was wrong twice in one section of the first real spec it met. Suppress on a
+  maybe; never accuse on one.
+- **Only fail on what is decidable.** test-integrity exits 2 — undecided — for "no tests
+  written" and "the tests do not pass to begin with", because a change with no tests may be
+  a config bump. A check that fails runs on judgement calls gets switched off, and takes the
+  decidable one with it.
+
+## The three ranked gaps in the forked pipeline are closed
+
+1. ~~No task loop~~ — `build-loop.sh`, 83 assertions.
+2. ~~Sandbox — half~~ — the worker is contained as of 2026-09-15; see above.
 3. ~~The model declares its own tier~~ — `tier.py` + `gate.sh`. The tier comes from the
    paths the diff touched; bean and judge can only raise it.
 
@@ -60,49 +106,73 @@ general outbound, and says so when used. An allow-listed proxy is the next piece
 
 | Stage | Model half | Controller half | Tested |
 |---|---|---|---|
-| preflight | — | `preflight.sh` | via orchestrate |
-| specify | `factory-spec` writes `spec.md` + `tasks.yaml` | `spec-check.sh`: sections, schema, paths, claimed criteria, budget, renders HTML | 24 |
-| spec audit | `factory-audit` writes a *judgement* | `audit-check.sh` stamps provenance, validates, amends the step | 33 |
-| build | `factory-build-task`, one task per session | `build-loop.sh`: contain → reject+reset → verify in the sandbox → commit | 67 |
-| gate | — | `gate.sh`: whole-diff containment, tier, budget, secrets, gates, ACs, invariants | 42 |
-| document / pre-PR audit / PR | still the forked skills | not yet written | — |
+| preflight | — | `preflight.sh` | via full-line |
+| specify | `factory-spec` writes `spec.md` + `tasks.yaml` | `spec-check.sh`: sections, schema, paths, claimed criteria, budget, **verify precheck, current-behaviour claims, byte budget**, renders HTML | 31 |
+| spec audit | `factory-audit` writes a *judgement* | `audit-check.sh` stamps provenance, validates, amends the step | 48 |
+| build | `factory-build-task`, one task per session, **contained** | `build-loop.sh`: contain → reject+reset → verify in the sandbox → commit | 83 |
+| gate | — | `gate.sh`: whole-diff containment, tier, budget, secrets, gates, ACs, invariants, **test integrity** | 44 |
+| document | `factory-doc` | `doc-check.sh` + `doclint.sh`: sections, diff coverage both ways, renders HTML | 13 + 33 |
+| pre-PR audit | `factory-audit` | **`package-check.sh`** settles the whole arithmetic rubric first | 24 |
+| PR | — | `pr.sh`: refuses without an accepting verdict, a clean tree, a gated diff | 25 |
 
-Supporting: `sandbox.sh` (36), `render-doc.py` + `doclint.sh` (33), invariants (9).
+Supporting: `sandbox.sh` (36), `test-integrity.sh` (22), invariants (9), role routing (38).
 
-## OPEN: the judge is not yet reliable, and this is where the investigation got to
+**`tests/run-all.sh` runs every suite** — 455 assertions, ~64s; `--fast` skips the
+end-to-end ones. `tests/test-full-line.sh` drives preflight → pull request with pi, the
+judge and gh stubbed, in about twenty seconds. It exists because the two worst bugs this
+project has had both lived past `build` and neither needed a model to reproduce.
 
-`judge.sh` works in principle and has produced one real judgement. It is not yet
-dependable, and the run in `factory/runs/` is halted at `audit-spec` because of it.
+## OPEN: the judge is measured, and the measurement is that it is not reproducible
 
-What is established, by measurement:
+This section previously said the judge "works in principle" and laid out a hypothesis about
+schema complexity. The hypothesis was never the problem. **Ask the same question five times
+with identical input at temperature 0 and you get two different verdicts.**
 
-- gpt-oss:120b under pi calls `repo_browser.*` — a tool namespace from its own
-  training, absent here. Twelve calls, empty args, no result, then a confident
-  audit of a document it never read. **That is the source of every fabricated
-  audit this session.** The developer model has no such problem, so it is the
-  model, not pi.
-- A system message saying plainly that there are no tools removes the tool calls
-  entirely, even against the raw API.
-- `format` (constrained decoding) is honoured under a short prompt and **ignored**
-  under the full 18 KB of artifacts, where the model returns a generic review
-  shape carrying none of the required fields but `verdict`.
-- Latency on the same input has ranged from 21 s to over 15 min. The 21 s run was
-  the one where the schema was **not** applied, which points at grammar-constrained
-  sampling as the cost rather than the thinking level — a `thinking=low` arm was
-  still running after seven minutes.
+`bench/judge-variance.sh`, gpt-oss:120b, one seeded defect, byte-identical input each run:
 
-The hypothesis being tested when this was written: **the schema's complexity is
-the cost.** `factory/pipeline/../scratchpad` is gone with the session, but the
-test is easy to rebuild — same prompt, same thinking level, no schema vs a
-minimal one, compare wall clock and token counts.
+```
+revise   9 findings   confidence 0.99   232s
+revise   1 finding    confidence 0.90   168s
+revise   1 finding    confidence 0.95   137s
+none     —            —                 449s
+revise   4 findings   confidence 0.95   197s
+```
 
-If a minimal schema is fast and holds, the fix is to simplify the judgement
-shape. If not, the next lever is the prompt: the rubric is currently inlined from
-the skill and is large; the artifacts alone may be enough.
+The defect was named in an earlier fitness run and in none of these five.
 
-What is already safe regardless: `judge.sh` refuses a judgement that is not the
-contract, keeps what the model sent as `.rejected`, and the run halts. Nothing
-false has ever been recorded.
+**The consequence lands on this project's own conclusions.** Every judge finding here came
+from comparing single runs: fenced artifacts against unfenced, one message per artifact
+against one blob, gpt-oss against gemma4, 4000 tokens against 12000. One sample per arm
+against a spread at least this wide. Those comparisons are withdrawn.
+
+What survives on other evidence:
+
+- The format fixation was real — "the document is not valid JSON" in several logs across
+  runs. **One message per artifact stopped it appearing at all**, which is a different kind
+  of evidence from a rate moving.
+- **gemma4 is a rubber stamp**: three false accepts in the three cases it judged, 17s each.
+  Strong even at n=1 per case. gpt-oss:120b stays.
+- Two of the five seeded defects in `bench/judge-fitness.sh` were **not the defects they
+  claimed to be** until 2026-09-15. `tautological-verify` mutated the task list with a regex
+  that stopped at a `]` inside a Python string, leaving a syntax error. The judge read it,
+  reported a syntax error, and was scored as having missed the defect — three times. Part of
+  the "format fixation" it was accused of was, on that case, the judge being right.
+
+**So the judge is advisory for now.** `--advisory-audits` lets it run, write a judgement and
+have a verdict stamped, without a verdict short of accept stopping the run. Only the model's
+opinion is softened; every deterministic check stays blocking. The advisory is written into
+`failed-attempts/` with its reason and `pr.sh` lists it in the pull request, so "advisory"
+cannot quietly become "ignored".
+
+**The productive direction is not prompting.** It is moving what is decidable into the
+controller — see the deterministic checks section above — and leaving the judge the part
+counting cannot reach. `bench/judge-fitness.sh --repeat N` exists now; anything you intend
+to compare against another number needs it, and the harness says so in its own output.
+
+Also settled today: `repeat_penalty` 1.1. Two audits in a row hit the token cap, and neither
+was thinking hard — one spent its last few hundred tokens repeating a single sentence inside
+a string it never closed. temperature 0 makes that worse, not better: with no sampling noise
+a model that starts a loop has nothing to break it.
 
 ## The judge does not run as an agent
 
@@ -192,61 +262,78 @@ invisible before, and explains the eight-minute spec step.
 
 ## Next action
 
-Phase 1 — one bean, by hand, through all seven stages. Its entry needs three things; the
-approval is done, and the other two are build work:
-
-**How to run a bean** (from the target repo, with the factory's pipeline):
+**Finish one real run of bean-001 from preflight to pull request.** Everything is built,
+every step has been exercised, and no single real run has yet gone the whole way. Six
+defects stopped the first five attempts; all are fixed and all have tests.
 
 ```
 cd /home/gregg/workspace/seating-planner-py
-PIPELINE_CONFIG=$PWD/factory/pipeline-config.json bash /home/gregg/workspace/Local_Dark_Factory/factory/pipeline/orchestrate.sh bean-001 --stop-after gate
+FACTORY_ADVISORY_AUDITS=1 /home/gregg/workspace/Local_Dark_Factory/factory/bin/factory run bean-001
 ```
 
-Between runs the repo must be back on `main` with the bean branch deleted —
-preflight refuses otherwise, correctly, and that is the most common way a re-run
-stops in its first ten seconds.
+`factory run` is the entry point — it finds the config, snapshots the pipeline and runs from
+the copy, so editing the repository mid-run is safe. `factory doctor` says whether the
+target is ready. `factory status` shows what the newest run did, stage by stage.
 
-1. ~~A throwaway GitHub repo~~ — `beekeeper-lab/seating-planner-py`, private, created
-   2026-09-14. Cloned at `/home/gregg/workspace/seating-planner-py`.
-2. ~~The `factory/` scaffold~~ — generated by `factory/scaffold.sh` and pushed. `repo.yaml`
-   (`merge_mode: human_required`), `risk-policy.yaml`, `gates.lock.yaml` pinned to a real
-   built image digest, both document templates, 20 approved beans with generated `bean.md`
-   and `INDEX.md`. `preflight.sh bean-001` passes against it. Re-run `scaffold.sh` to update
-   the control files; it never touches `factory/specs`, `factory/impl` or `factory/runs`.
-3. ~~The task loop~~ — **built 2026-09-14.** `build-loop.sh` + `verify.sh` + `contain.py`
-   + the `factory-build-task` skill, wired into `orchestrate.sh` as the `build` step
-   (it replaces one-shot `implement` in both tiers). 71 test cases across
-   `test-build-loop.sh` and `test-orchestrate-build.sh`, all against a stubbed worker.
-   **What is left is the real thing:** the loop has never had the developer model on the
-   other end of it. That is Phase 1's first real run, and the first place the feedback
-   text — in the skill, and in the loop's rejection messages — gets judged by whether a
-   27B can actually act on it.
+Between runs the repo must be back on `main` with the bean branch deleted, and
+`factory/runs/` cleared if you want a clean record — preflight refuses a dirty tree,
+correctly, and that is the most common way a re-run stops in its first ten seconds.
 
-**Independent invariants exist** (`factory/invariants/seating.yaml` + its pytest file),
-authored before any code, by a different model family from the developer, at a path the line
-cannot write. Six properties, each proven to catch its own violation. They are not
-human-reviewed — if one ever fails and the argument becomes "the invariant is wrong", that
-is yours to settle, not the line's.
+**Advisory audits are on deliberately** while the judge is unreliable; drop the environment
+variable to make its verdicts blocking again.
 
-One open owner decision rides along: `manifest.json` `conflicts_found` flags FR-048
-(reproducibility) vs NFR-001 (15 s for 250 guests / 2000 rules) as `needs_owner_decision:
-true`. bean-009 pins the solver configuration so the two can coexist; if real data says they
-cannot, that is yours to settle, not the line's.
+### What today's six defects have in common
+
+Worth reading before adding anything to the line, because the pattern will recur. Every one
+was **silent** — no error, no warning, just a plausible record of something that had not
+happened:
+
+| what happened | what it looked like |
+|---|---|
+| a pipeline snapshot omitted `worker.lock.yaml` | a contained run, recorded as contained, running pi on the host |
+| the task loop read its work list from stdin and the worker ate it | `BUILD COMPLETE, 1 task verified` for a bean that was a third built |
+| the verify sandbox was a flag nobody passed | the worker told its code failed, when it had never been run |
+| the tamper check compared an absolute path to a relative one | the controller accused of altering its own `worker.log` |
+| the claims check treated a denied-then-mentioned path as asserted | a true sentence reported as a false claim |
+| `spec.attempt-1.judgement.json` matched a verdict glob | `integer expected` on stderr mid-step, reading like unrelated noise |
+
+Four of the six were in the controller, not in anything a model did. Two were checks I had
+just written, firing wrongly — the worst kind, because a containment check that accuses the
+controller gets switched off and takes the real one with it.
+
+**The lesson that keeps earning its place:** these were found by driving the whole line, and
+none of them needed a model. `tests/test-full-line.sh` now does that in twenty seconds.
+Write the end-to-end test before the next long real run, not after it.
+
+### Still open
+
+- **`risk-policy.yaml` has not had a human read.** Marked `[~]` since Phase 0. It governs
+  what tier a path change lands in, so a wrong rule here is a review that never happens.
+- **The byte budget on audit artifacts is unset.** `spec-check.sh` counts and reports; the
+  number should come from a repeat-measured size sweep, not taste. The first sweep was
+  invalidated by the variance finding.
+- **`OLLAMA_CONTEXT_LENGTH` is system-wide** and affects the user's other projects. Left
+  alone deliberately; the contained worker sets its own context in the mounted
+  `models.json` instead.
+- **Hidden tests** are in the gate's design and not built.
 
 ## What to re-run to confirm nothing drifted
 
 There is no bare `python` on this box; the interpreter is the venv's. Run one per line:
 
 ```
+./factory/pipeline/tests/run-all.sh
 ./bench/phase0-audit.sh --with-models
-./factory/pipeline/tests/test-role-routing.sh
 .venv/bin/python bench/validate.py
 .venv/bin/python bench/validate.py --corpus benchmark/seating-planner/bean-sets/v1
 ./bench/phase0.sh --provenance-only
 ```
 
-Expected: audit `0 findings (green)`; role routing `29 passed`; `8 schemas, 0 invalid`;
-`20 bean(s) ... 0 invalid`; GTT 96 GB. The audit's `--with-models` flag re-runs the
+Expected: `455 assertions, 0 failed` (~64s, and it names any suite that fails);
+audit `0 findings (green)`; `8 schemas, 0 invalid`; `20 bean(s) ... 0 invalid`; GTT 96 GB.
+
+`run-all.sh` replaces naming individual suites — it discovers them, so a suite written
+after this was typed is still covered. `--fast` skips the end-to-end ones. The audit's `--with-models` flag re-runs the
 12-case Harmony suite (~2 min, loads the 120b) and writes
 `bench/results/harmony-<stamp>.json`; without it that predicate reports as skipped.
 Note that bare `validate.py` validates **no bean at all** — the `--corpus` line is the
