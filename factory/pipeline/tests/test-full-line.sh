@@ -410,6 +410,12 @@ if ! grep -q 'ok    seven_stages_completed' <<<"$AUDIT"; then
   printf '  --- end ---\n\n'
 fi
 check "the stages predicate passes"   "ok    seven_stages_completed" "$AUDIT"
+# One attempt per audit, not two. judge.sh used to record its own PENDING
+# boundary as well as the orchestrator's real one, and PENDING sorted first.
+n_audit="$(jq -rs '[.[] | select(.step == "audit-spec" and .event == "end")] | length' "$R/steps.jsonl")"
+want "an audit is recorded once, not twice" "audit-spec has $n_audit end lines, expected 1" \
+     test "$n_audit" -eq 1
+nope "and never as PENDING"  '"verdict":"PENDING"' "$(tr -d ' ' < "$R/steps.jsonl")"
 check "the verdicts validate"         "ok    three_verdicts_schema_valid" "$AUDIT"
 check "every handoff was a commit"    "ok    every_handoff_is_commit" "$AUDIT"
 check "paths were enforced at both levels" "ok    allowed_path_enforced_task_and_bean" "$AUDIT"

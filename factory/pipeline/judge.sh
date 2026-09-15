@@ -505,7 +505,20 @@ printf 'JUDGE  %s  %s  %s finding(s)  %ss  %s\n' \
   "$TARGET" "$(jq -r '.verdict' "$OUT")" "$(jq '[.findings[]?] | length' "$OUT")" \
   "$((T1 - T0))" "$OUT" >&2
 
-# The step's own bookkeeping: this path does not go through run-step.sh, so it
-# records its own attempt rather than leaving a gap in steps.jsonl.
-"$PIPELINE_DIR/step.sh" "$RUN_DIR" "audit-$TARGET" start 2>/dev/null || true
-"$PIPELINE_DIR/step.sh" "$RUN_DIR" "audit-$TARGET" end PENDING 2>/dev/null || true
+# No step bookkeeping here any more.
+#
+# This used to record its own start and an end of PENDING, because the audit path
+# did not go through run-step.sh and would otherwise have left a gap in
+# steps.jsonl. orchestrate.sh now records audit steps itself, with a real verdict,
+# so doing it here as well produced two attempts for every audit — and the
+# PENDING one came first, so `factory status` showed
+#
+#   audit-spec       PENDING  1         186s
+#
+# for an audit the judge had accepted. A second, truthful line existed
+# underneath, which is the worst version of the problem: the record was not
+# wrong, it was ambiguous, and the ambiguity resolved toward the wrong answer.
+#
+# The orchestrator owns step boundaries. A judge run outside it — by hand, or by
+# a bench harness — writes its judgement and nothing else, which is what it is
+# for.
