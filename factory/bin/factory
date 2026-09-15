@@ -182,6 +182,29 @@ case "$cmd" in
       fi
     fi
 
+    WLOCK=""
+    for cand in "$TARGET_ROOT/factory/worker.lock.yaml" "$FACTORY_ROOT/worker.lock.yaml"; do
+      [ -f "$cand" ] && { WLOCK="$cand"; break; }
+    done
+    if [ -n "$WLOCK" ]; then
+      wimg="$("$PIPE/yaml2json.sh" "$WLOCK" | jq -r '.image')"
+      if bash "$PIPE/worker-sandbox.sh" --check --lock "$WLOCK" >/dev/null 2>&1; then
+        good "worker image" "${wimg##*/}"
+      else
+        bad "worker image" "not present or not matching its digest — factory/worker-image/build.sh"
+      fi
+      # The gateway is started per step and torn down after, so what doctor can
+      # check is whether one COULD be started: the pieces it needs, not a socket
+      # that would be stale by the time anyone read this.
+      if command -v runcon >/dev/null 2>&1; then
+        good "model gateway" "runcon present; a gateway can be opened per step"
+      else
+        bad "model gateway" "runcon missing — the bridge cannot run in a context a container may connect to"
+      fi
+    else
+      bad "worker image" "no worker.lock.yaml in this repo or in the factory — the worker would run on the host"
+    fi
+
     branch="$(git -C "$TARGET_ROOT" branch --show-current)"
     [ "$branch" = "main" ] && good "branch" "on main" \
       || bad "branch" "on '$branch' — a run starts from main; check out main and delete the bean branch"

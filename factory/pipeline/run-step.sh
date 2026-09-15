@@ -213,7 +213,19 @@ ENDS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "
 # is present and this is unset, containment is the default and its absence is
 # printed rather than assumed.
 CONTAIN="${FACTORY_CONTAIN_WORKER:-auto}"
-WORKER_LOCK="${FACTORY_WORKER_LOCK:-$ROOT/factory/worker.lock.yaml}"
+# The worker manifest belongs to the FACTORY, not to the repository being built.
+# gates.lock.yaml is per-repo because a project's toolchain is the project's; the
+# worker image is the agent harness, identical for every bean in every repo, and
+# a copy per target would be four copies to drift apart. A target repo may still
+# override it — some project might need a worker with something extra in it —
+# and that override is found first precisely because it is the unusual case.
+WORKER_LOCK="${FACTORY_WORKER_LOCK:-}"
+if [ -z "$WORKER_LOCK" ]; then
+  for cand in "$ROOT/factory/worker.lock.yaml" "$PIPELINE_DIR/../worker.lock.yaml"; do
+    [ -f "$cand" ] && { WORKER_LOCK="$cand"; break; }
+  done
+  [ -n "$WORKER_LOCK" ] || WORKER_LOCK="$PIPELINE_DIR/../worker.lock.yaml"
+fi
 if [ "$CONTAIN" = auto ]; then
   if [ -f "$WORKER_LOCK" ] && [ "$ROLE" = developer ] && command -v podman >/dev/null 2>&1; then
     CONTAIN=1
