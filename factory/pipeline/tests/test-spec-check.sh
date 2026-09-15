@@ -239,14 +239,38 @@ check "and the spec passes"                 "SPEC CHECK PASS" "$out"
 check "it is recorded as a denial"          '"paths_said_to_be_absent"' \
       "$(cat factory/runs/R/claims-check.json)"
 
-printf '\n== but saying a file is absent when it is there is caught ==\n\n'
+printf '\n== saying a file is absent when it is there is reported, never failed ==\n\n'
+#
+# This direction was implemented as a failure and then deliberately demoted.
+# Negation detection exists to suppress a check; asking the same fuzzy signal to
+# fire one needs precision it does not have, and on the first real spec it met it
+# was wrong twice in a single section. A miss here costs a line someone reads.
 mkdir -p src && printf 'x\n' > src/present.py
 full_spec "There is no \`src/present.py\` yet, so this change creates it from
 scratch. Nothing in the package refers to it and no test covers it, which is why
 the work can be done in a single task without touching anything else."
 out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
-check "the contradiction is named" "says these are absent, and they are there: src/present.py" "$out"
-check "and the spec fails"         "SPEC CHECK FAIL" "$out"
+check "it is still mentioned"  "it also calls these absent, and they are not: src/present.py" "$out"
+nope  "but the spec passes"    "SPEC CHECK FAIL" "$out"
+
+printf '\n== how much an audit is asked to read is budgeted in bytes ==\n\n'
+#
+# The existing size budget counts tasks, which bounds the work. This counts
+# bytes, which bounds the reading — a bean with three enormous tasks passes the
+# first and fails the second, and it is the second that has been hurting.
+full_spec "The repository is an empty shell with nothing in \`src/\` yet, and no
+module in it that any test could currently observe."
+printf '{"spec_bytes_budget": 100}\n' > "$REPO/tiny-budget.json"
+out="$(PIPELINE_CONFIG="$REPO/tiny-budget.json" SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "an over-budget spec is refused" "over the 100 budget" "$out"
+check "and it says what to do"         "split the bean" "$out"
+
+printf '{"spec_bytes_budget": 1000000}\n' > "$REPO/big-budget.json"
+out="$(PIPELINE_CONFIG="$REPO/big-budget.json" SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "a spec within budget passes"    "within the 1000000 budget" "$out"
+
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "and with no budget set it just reports" "no budget set" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

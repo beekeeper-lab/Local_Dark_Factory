@@ -178,7 +178,31 @@ else
   ok "size_budget" "$N_TASKS/${MAX_TASKS:-∞} tasks"
 fi
 
-# ------------------------- 8. does the spec's account of the code match it? --
+# ------------------------------------- 8. how much is the audit asked to read --
+#
+# The existing size budget counts tasks, which bounds how much WORK a bean is.
+# This counts bytes, which bounds how much READING an audit is. They are
+# different failures: a bean with three enormous tasks passes the first and fails
+# the second, and it is the second that has actually been hurting.
+#
+# The threshold is `spec_bytes_budget` in the pipeline config and there is no
+# default, because a number invented here would be taste presented as policy.
+# bench/size-sweep.sh measures where this judge stops finding a defect it can
+# otherwise find; that measurement is what the number should come from.
+ARTIFACT_BYTES=$(( $(wc -c < "$SPEC_MD" 2>/dev/null || echo 0) \
+                 + $(wc -c < "$TASKS" 2>/dev/null || echo 0) \
+                 + $(wc -c < "$BEAN_FILE" 2>/dev/null || echo 0) ))
+BYTE_BUDGET="$(jq -r '.spec_bytes_budget // empty' "$CONFIG_PATH" 2>/dev/null)"
+if [ -z "$BYTE_BUDGET" ]; then
+  note_artifacts="$ARTIFACT_BYTES bytes of bean, spec and task list (no budget set)"
+  ok "audit reading" "$note_artifacts"
+elif [ "$ARTIFACT_BYTES" -gt "$BYTE_BUDGET" ]; then
+  bad "audit reading" "$ARTIFACT_BYTES bytes, over the $BYTE_BUDGET budget — split the bean rather than asking one audit to hold all of it"
+else
+  ok "audit reading" "$ARTIFACT_BYTES bytes, within the $BYTE_BUDGET budget"
+fi
+
+# ------------------------- 9. does the spec's account of the code match it? --
 #
 # "Does the spec claim the code does something it does not?" is in the rubric,
 # and one of the seeded defects in bench/judge-fitness.sh is exactly that — a
@@ -217,7 +241,7 @@ if [ -f "$SPEC_MD" ]; then
     > "$RUN_DIR/claims-check.json" 2>/dev/null || true
 fi
 
-# --------------------------------- 9. can each verify fail? (run it and see) --
+# -------------------------------- 10. can each verify fail? (run it and see) --
 #
 # A check that already passes on the unmodified tree cannot demonstrate that the
 # task was done. The audit rubric calls that a blocker, and the judge was asked to
@@ -293,7 +317,7 @@ if [ "$PRECHECK_RAN" = 1 ]; then
   fi
 fi
 
-# ------------------------------------------------------------ 10. render it --
+# ------------------------------------------------------------ 11. render it --
 if [ -f "$SPEC_MD" ] && [ -f "$TEMPLATES/spec.html" ]; then
   if "$PY" "$PIPELINE_DIR/render-doc.py" "$SPEC_MD" "$TEMPLATES/spec.html" "$RUN_DIR/spec.html" \
       --meta "bean=$BEAN_ID" \
