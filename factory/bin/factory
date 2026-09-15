@@ -75,9 +75,34 @@ EOF
 #
 # FACTORY_NO_SNAPSHOT=1 runs from the working tree, for iterating on the pipeline
 # itself where the point is to see a change take effect.
+# prune_snapshots — a snapshot outlives the run that made it, because the run
+# `exec`s into it and cannot delete the ground it is standing on.
+#
+# Every `factory run` therefore left a full copy of the factory, the schemas and
+# bench in the temp directory, forever. Twelve of them had accumulated by the
+# evening of 2026-09-15, which was not the thing that filled a 63G tmpfs but was
+# quietly spending a gigabyte a day on a machine whose temp directory is RAM.
+#
+# Pruned at launch rather than at exit: anything still referenced by a running
+# process is left alone, and so is anything younger than an hour, because a
+# resumed run and a fresh one can overlap.
+prune_snapshots() {
+  local d base
+  for d in "${TMPDIR:-/tmp}"/factory-snap.*; do
+    [ -d "$d" ] || continue
+    base="$(basename "$d")"
+    pgrep -af "$base" >/dev/null 2>&1 && continue
+    # -mmin +60: an hour is longer than the gap between a run halting and someone
+    # resuming it, and shorter than the time it takes for these to matter.
+    [ -n "$(find "$d" -maxdepth 0 -mmin +60 2>/dev/null)" ] || continue
+    rm -rf "$d" 2>/dev/null
+  done
+}
+
 pipeline_snapshot() {
   [ "${FACTORY_NO_SNAPSHOT:-0}" = 1 ] && { printf '%s\n' "$PIPE"; return 0; }
   local base snap parent
+  prune_snapshots
   parent="$(cd "$FACTORY_ROOT/.." && pwd)"
   base="$(mktemp -d "${TMPDIR:-/tmp}/factory-snap.XXXXXX")" || return 1
 
@@ -344,6 +369,26 @@ run from the working tree."
       fi
     else
       bad "worker image" "no worker.lock.yaml in this repo or in the factory — the worker would run on the host"
+    fi
+
+    # Free space where the line actually writes.
+    #
+    # The gate tree, the pipeline snapshot, every worker's agent directory and
+    # the model gateway's socket all live under TMPDIR, which on this box is a
+    # 63G tmpfs — RAM. When it filled, the contained worker's write failed with
+    # "Unknown system error -122", pi exited 1, and the run recorded a doc step
+    # that produced nothing. Nothing in that chain says "the disk is full", and
+    # the obvious reading is that the model failed. It had not.
+    TMPROOT="${TMPDIR:-/tmp}"
+    AVAIL_KB="$(df -Pk "$TMPROOT" 2>/dev/null | awk 'NR==2 {print $4}')"
+    if [ -z "$AVAIL_KB" ]; then
+      bad "temp space" "cannot read free space on $TMPROOT"
+    elif [ "$AVAIL_KB" -lt 2097152 ]; then
+      bad "temp space" "$(( AVAIL_KB / 1024 )) MB free on $TMPROOT — a worker whose write fails reports 'Unknown system error -122', which reads like anything but a full disk"
+    elif [ "$AVAIL_KB" -lt 8388608 ]; then
+      say note "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT — the gate tree, the snapshot and every worker write here"
+    else
+      good "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT"
     fi
 
     # required_checks names checks that must be green before a merge. Nothing in

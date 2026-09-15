@@ -95,6 +95,18 @@ check "the missing corpus is named"  "missing: name bean_set requirements_sha256
 check "with the fix"                 "scaffold.sh" "$out"
 git -C "$REPO" checkout -q -- factory/pipeline-config.json
 
+printf '\n-- free space where the line actually writes --\n\n'
+#
+# The gate tree, the pipeline snapshot, every worker's agent directory and the
+# model gateway all live under TMPDIR. When it filled, a contained worker's write
+# failed with "Unknown system error -122", pi exited 1, and the run recorded a doc
+# step that produced nothing. Nothing in that chain says "the disk is full".
+out="$(fac doctor)"
+check "free space is reported"       "temp space" "$out"
+check "and where it was measured"    "${TMPDIR:-/tmp}" "$out"
+out="$(TMPDIR=/nonexistent-for-df fac doctor 2>&1)"
+check "an unreadable temp root fails" "cannot read free space" "$out"
+
 printf '\n-- required_checks that nothing produces is said out loud --\n\n'
 #
 # A config naming a check that no workflow produces and no step waits on reads
