@@ -170,16 +170,38 @@ run from the working tree."
       "$(jq -r '.status' "$run_dir/run.json")"
 
     if [ -f "$run_dir/steps.jsonl" ]; then
-      printf '%-16s %-8s %-10s %s\n' STEP VERDICT ATTEMPT CONDITIONS
+      # Wall clock per step, joined from the start and end timestamps already in
+      # the log. Not new telemetry — the numbers were always there, unjoined, and
+      # "how long does a bean take" was a thing you found out by watching.
+      #
+      # It matters more than it looks. A spec step that costs an hour on this
+      # hardware makes twenty beans a week of wall clock, and that is a fact
+      # about whether the line is practical, not a curiosity. Anything the line
+      # knows about its own cost should be in the place people already look.
+      printf '%-16s %-8s %-9s %-8s %s\n' STEP VERDICT ATTEMPT ELAPSED CONDITIONS
       # Tab-separated, not NUL: bash cannot hold a NUL in a variable, so a NUL
       # separator silently collapses every field into one line with no gaps.
-      jq -rs '[.[] | select(.event == "end")] | .[] |
-        [(.step), (.verdict // "-"), (.attempt | tostring),
-         (if .conditions then
-            (.conditions.model // "-") +
-            (if .conditions.declared_matches_observed == false then "  (conditions drifted)" else "" end)
-          else "" end)] | @tsv' "$run_dir/steps.jsonl" \
-        | while IFS=$'\t' read -r s v a c; do printf '%-16s %-8s %-10s %s\n' "$s" "$v" "$a" "$c"; done
+      jq -rs '
+        # step.sh writes millisecond precision ("...:25.629Z") and
+        # fromdateiso8601 refuses anything but whole seconds, so the fraction is
+        # trimmed before parsing rather than the writer being changed — the
+        # millisecond is real information and belongs in the log.
+        def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+        def secs($a; $b): (t($b) - t($a));
+        . as $all
+        | [ .[] | select(.event == "end") ]
+        | map(. as $e
+            | ($all | map(select(.event == "start" and .step == $e.step
+                          and (.attempt // 1) == ($e.attempt // 1))) | last) as $s
+            | [ $e.step, ($e.verdict // "-"), ($e.attempt | tostring),
+                (if $s then (secs($s.ts; $e.ts) | floor | tostring) + "s" else "-" end),
+                (if $e.conditions then
+                   ($e.conditions.model // "-")
+                   + (if $e.conditions.declared_matches_observed == false then "  (conditions drifted)" else "" end)
+                   + (if ($e.conditions.compactions // 0) > 0 then "  (COMPACTED \($e.conditions.compactions)×)" else "" end)
+                 else "" end) ])
+        | .[] | @tsv' "$run_dir/steps.jsonl" \
+        | while IFS=$'\t' read -r s v a d c; do printf '%-16s %-8s %-9s %-8s %s\n' "$s" "$v" "$a" "$d" "$c"; done
     fi
 
     if [ -f "$run_dir/tasks.jsonl" ]; then
