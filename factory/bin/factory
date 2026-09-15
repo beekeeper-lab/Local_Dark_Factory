@@ -64,15 +64,19 @@ EOF
 # itself where the point is to see a change take effect.
 pipeline_snapshot() {
   [ "${FACTORY_NO_SNAPSHOT:-0}" = 1 ] && { printf '%s\n' "$PIPE"; return 0; }
-  local snap
-  snap="$(mktemp -d "${TMPDIR:-/tmp}/factory-pipeline.XXXXXX")" || return 1
-  cp -r "$FACTORY_ROOT/pipeline/." "$snap/" 2>/dev/null || return 1
-  # The skills travel with it for the same reason: a skill edited mid-run would
-  # change what a later step asks the model for, inside a run whose record says
-  # one thing was asked.
-  if [ -d "$FACTORY_ROOT/skills" ]; then
-    mkdir -p "$snap/../skills-snap" && cp -r "$FACTORY_ROOT/skills/." "$snap/../skills-snap/" 2>/dev/null || true
-  fi
+  local base snap
+  # The whole factory root is copied, not just pipeline/. The first version took
+  # pipeline/ alone and left worker.lock.yaml behind, so run-step's fallback —
+  # "$PIPELINE_DIR/../worker.lock.yaml" — found nothing, containment fell back to
+  # auto-off, and bean-001 ran its worker on the host. Silently, because the
+  # "running uncontained" warning only fires when a manifest exists.
+  #
+  # A snapshot that changes what the run does is worse than no snapshot. It must
+  # be the whole thing the pipeline resolves paths against.
+  base="$(mktemp -d "${TMPDIR:-/tmp}/factory-snap.XXXXXX")" || return 1
+  cp -r "$FACTORY_ROOT/." "$base/" 2>/dev/null || return 1
+  snap="$base/pipeline"
+  [ -d "$snap" ] || return 1
   printf '%s\n' "$snap"
 }
 
@@ -122,7 +126,15 @@ case "$cmd" in
     SNAP="$(pipeline_snapshot)" || die "could not snapshot the pipeline"
     if [ "$SNAP" != "$PIPE" ]; then
       printf 'pipeline snapshot: %s\n' "$SNAP" >&2
-      [ -d "$SNAP/../skills-snap" ] && export FACTORY_SKILLS="$SNAP/../skills-snap"
+      [ -d "$SNAP/../skills" ] && export FACTORY_SKILLS="$SNAP/../skills"
+      # Assert the snapshot is complete rather than discovering it is not by
+      # reading a run record afterwards and finding the worker ran on the host.
+      for needed in worker.lock.yaml pipeline/roles.json skills; do
+        [ -e "$SNAP/../$needed" ] \
+          || die "the pipeline snapshot is missing $needed — refusing to run a line that would
+quietly behave differently from the one in the repository. Set FACTORY_NO_SNAPSHOT=1 to
+run from the working tree."
+      done
     fi
     exec bash "$SNAP/orchestrate.sh" "$@"
     ;;

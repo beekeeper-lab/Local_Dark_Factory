@@ -212,6 +212,16 @@ ENDS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "
 # and cannot run a container, not as an operational escape hatch: when a manifest
 # is present and this is unset, containment is the default and its absence is
 # printed rather than assumed.
+# Deciding NOT to contain is a decision, and it gets said out loud.
+#
+# The first version only announced an uncontained run when a manifest existed and
+# the user had explicitly opted out. Every other route to CONTAIN=0 — no
+# manifest found, podman missing — was silent, and bean-001 duly ran its worker
+# on the host because a snapshot had left worker.lock.yaml behind. Nothing in the
+# output said so. It was found by noticing a session file path.
+#
+# A pipeline that can quietly stop containing the one thing a model steers is not
+# a contained pipeline, whatever its manifest says.
 CONTAIN="${FACTORY_CONTAIN_WORKER:-auto}"
 # The worker manifest belongs to the FACTORY, not to the repository being built.
 # gates.lock.yaml is per-repo because a project's toolchain is the project's; the
@@ -226,12 +236,22 @@ if [ -z "$WORKER_LOCK" ]; then
   done
   [ -n "$WORKER_LOCK" ] || WORKER_LOCK="$PIPELINE_DIR/../worker.lock.yaml"
 fi
+CONTAIN_WHY=""
 if [ "$CONTAIN" = auto ]; then
-  if [ -f "$WORKER_LOCK" ] && [ "$ROLE" = developer ] && command -v podman >/dev/null 2>&1; then
-    CONTAIN=1
+  if [ "$ROLE" != developer ]; then
+    CONTAIN=0; CONTAIN_WHY="role '$ROLE' is not the developer; only authoring sessions are contained"
+  elif [ ! -f "$WORKER_LOCK" ]; then
+    CONTAIN=0; CONTAIN_WHY="no worker manifest at $WORKER_LOCK"
+  elif ! command -v podman >/dev/null 2>&1; then
+    CONTAIN=0; CONTAIN_WHY="podman is not installed"
   else
-    CONTAIN=0
+    CONTAIN=1
   fi
+elif [ "$CONTAIN" = 0 ]; then
+  CONTAIN_WHY="FACTORY_CONTAIN_WORKER=0"
+fi
+if [ "$CONTAIN" = 0 ] && [ "$ROLE" = developer ]; then
+  printf 'STEP   %s   UNCONTAINED — this session runs pi on the host: %s\n' "$STEP" "$CONTAIN_WHY" >&2
 fi
 
 set +e
@@ -285,8 +305,6 @@ if [ "$CONTAIN" = 1 ]; then
   [ "$GW_STARTED" = 1 ] && "$PIPELINE_DIR/model-gateway.sh" stop --dir "$GW_DIR" >/dev/null 2>&1
   [ "$RC" -eq 5 ] && die "the worker sandbox refused; the step did NOT run on the host instead"
 else
-  [ -f "$WORKER_LOCK" ] && [ "$ROLE" = developer ] \
-    && printf 'STEP   %s   UNCONTAINED — running pi on the host (FACTORY_CONTAIN_WORKER=0)\n' "$STEP" >&2
   "$BIN" "${PI_ARGS[@]}" -p "$PROMPT"
   RC=$?
 fi

@@ -67,6 +67,11 @@ chmod +x stub-pi
 # These run with a stub pi and no container; the factory ships a worker manifest,
 # so without this every one of them would try to start a sandbox and fail for a
 # reason that has nothing to do with what it is testing.
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+
 run_step() {
   PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
     bash "$PIPELINE_DIR/run-step.sh" run "$@" 2>&1
@@ -276,6 +281,31 @@ out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
        bash "$PIPELINE_DIR/run-step.sh" run spec 2>&1)"
 check "an uncontained developer step says so" "UNCONTAINED" "$out"
 check "and it does then run"                  "STUB-PI-ARGS" "$out"
+
+# -- every uncontained developer session says why ------------------------------
+#
+# bean-001 ran its worker on the host because a pipeline snapshot had left
+# worker.lock.yaml behind. Nothing in the output said so; it was found by
+# noticing a session file path in a log. The warning only fired when a manifest
+# existed AND the user had opted out — every other route to uncontained was
+# silent, which is the one thing a containment story cannot afford.
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+       FACTORY_WORKER_LOCK="$WORK/does-not-exist.yaml" \
+       bash "$PIPELINE_DIR/run-step.sh" run spec 2>&1)"
+check "a missing manifest is announced"  "UNCONTAINED" "$out"
+check "and it says which file it wanted" "does-not-exist.yaml" "$out"
+
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+       FACTORY_CONTAIN_WORKER=0 FACTORY_WORKER_LOCK="$WORK/worker.lock.yaml" \
+       bash "$PIPELINE_DIR/run-step.sh" run spec 2>&1)"
+check "an explicit opt-out is announced too" "FACTORY_CONTAIN_WORKER=0" "$out"
+
+# The judge is not a developer session and is not contained; saying "uncontained"
+# about it every time would train everyone to ignore the word.
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+       FACTORY_WORKER_LOCK="$WORK/does-not-exist.yaml" \
+       bash "$PIPELINE_DIR/run-step.sh" run audit-impl 2>&1)"
+nope "an audit step does not claim to be uncontained" "UNCONTAINED" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
