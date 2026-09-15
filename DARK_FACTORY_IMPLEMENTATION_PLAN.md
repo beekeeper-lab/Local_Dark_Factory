@@ -282,18 +282,40 @@ re-runnable audit, and a bean set approved to run against.
       is recorded as `revise`; a judge's tier suggestion may raise and never lower; a
       provenance fact that cannot be observed stops the verdict rather than taking a
       placeholder. 33 cases. Not yet seen a real judge produce a valid judgement.
-- [ ] `factory step build` — task loop: worker session → sync-back → containment (task `write_paths`) → task `verify` in gate container → next; a forced failure retries with the real output; `max_attempts` exhaustion blocks with evidence
+- [~] `factory step build` — task loop: worker session → sync-back → containment (task `write_paths`) → task `verify` in gate container → next; a forced failure retries with the real output; `max_attempts` exhaustion blocks with evidence
+  > **Built and driven end to end, 2026-09-15.** The loop, containment, rejection
+  > with scoped feedback, per-task commits and blocked-with-evidence are all
+  > exercised by `tests/test-build-loop.sh` (83 assertions) and by
+  > `tests/test-full-line.sh`, which drives preflight → pull request with pi, the
+  > judge and gh stubbed. Against the real 27B it has written, verified and
+  > committed a task. Still open: a complete real run of all three tasks, which
+  > is what the current attempt is for.
+  >
+  > Two defects here were found only by running it for real, and both were
+  > silent: the loop read its task list from stdin and the worker consumed it, so
+  > a bean that was a third built recorded BUILD COMPLETE; and the verify sandbox
+  > was a flag nobody passed, so task checks ran on a host with none of the pinned
+  > toolchain and the worker was told its code failed when it had never been run.
       *(the loop itself is built and tested against a stubbed worker — `build-loop.sh`,
       `verify.sh`, `contain.py`, `factory-build-task`. What Phase 1 still has to prove
       is the loop with the **real** developer model on the other end; "in the gate
       container" waits on the sandbox.)*
-- [ ] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
+- [~] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
+  > **Built,** with `tests/test-gate.sh` (44 assertions) and a run through the
+  > full-line test. `test_integrity` is new and real: the source half of the diff
+  > is reverted in a copy of the tree and the tests must stop passing, with a
+  > control run first so a missing binary cannot masquerade as a test doing its
+  > job. Hidden tests are still absent.
       *(built and tested: `gate.sh` does containment, tier, size budget, secret scan, gates,
       AC verifies and invariants, in the sandbox. **Hidden tests vs baseline and the
       test-integrity counts are not built** — they need a baseline snapshot the controller
       keeps, which is Phase-2 work.)*
 - [ ] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
-- [ ] `factory step audit --stage impl_audit` — `test_integrity` required and present
+- [~] `factory step audit --stage impl_audit` — `test_integrity` required and present
+  > `test_integrity` is now measured by the controller rather than asked of the
+  > judge, and handed to it as an artifact. What the judge is asked for is what
+  > running things cannot settle — whether the tests assert the behaviour the bean
+  > wanted, or merely touch it.
 - [~] `factory step document` — **built, not yet exercised by a model.** `factory-doc` writes
       `impl-detail.md` from `diff.txt` (the controller puts the accepted diff on disk, because a
       model asked to describe a change from memory will describe the change it expected).
@@ -301,7 +323,12 @@ re-runnable audit, and a bean set approved to run against.
       generally — to cover every changed file, refuses a file shown in the document but absent
       from the diff, and renders `impl-detail.html`. 13 cases. The doc candidate commit is not
       written yet.
-- [ ] `factory step audit --stage pre_pr_audit` — `document_quality` + `artifacts` hashes present; `matches_diff` true
+- [~] `factory step audit --stage pre_pr_audit` — `document_quality` + `artifacts` hashes present; `matches_diff` true
+  > Reached by the full-line test. The package rubric, which was entirely
+  > arithmetic, is now `package-check.sh`: matching start/end pairs, a status that
+  > agrees with the log, verdict files named so the driver can read them. The run
+  > halts if the record contradicts itself rather than asking a judge for an
+  > opinion about a record already known to be wrong.
 - [~] `factory step pr` — **built as controller work with no model in it**
       (`factory/pipeline/pr.sh`; the `factory-pr` skill is retired to a refusal). It pushes
       only when an accepting verdict's `candidate_sha` **is** HEAD — a verdict is about one
@@ -313,9 +340,35 @@ re-runnable audit, and a bean set approved to run against.
       than opening a second. 25 cases against a `gh` stub that records the verbs. Not yet run
       against real GitHub.
 - [ ] A human reads both rendered documents and confirms they teach (risk, blast radius, code blocks, no assumed knowledge)
-- [ ] Allowed-path enforcement verified at task level and bean level (out-of-scope edit → rejected, not stripped)
+- [x] Allowed-path enforcement verified at task level and bean level (out-of-scope edit → rejected, not stripped)
+  > `tests/test-build-loop.sh` asserts the rejection, the reset, and that the
+  > worker's edits are discarded rather than trimmed — including the dotfile and
+  > `*`-does-not-cross-a-slash cases that a naive matcher gets wrong. The whole
+  > diff is re-checked at the gate against the bean's paths.
 - [ ] Independent invariant ran *(the invariants exist and are proven to catch their own
       violations; what Phase 1 has to show is the controller running them against a real build)*
+
+> **Where Phase 1 actually stands, 2026-09-15.**
+>
+> Every step of the line is built and every one has been driven, but by two
+> different things: `tests/test-full-line.sh` drives all of it with the models
+> stubbed, in twenty seconds, and the real 27B has driven preflight through a
+> committed build task. No single real run has yet gone the whole way.
+>
+> That gap is the honest state of it, and it is smaller than it looks: the six
+> defects that stopped the real runs were all found and fixed today, and four of
+> them were in the controller rather than in anything a model did. The pattern is
+> worth naming, because it will recur — every one was silent. A snapshot that
+> turned containment off. A loop that reported success for a third of a bean. A
+> containment check that accused the controller. Verifies running on a host with
+> none of the pinned toolchain. None of them raised an error; all of them
+> produced a plausible record of something that had not happened.
+>
+> The judge is the remaining known-weak component and is deliberately advisory
+> for now, measured as not reproducible on identical input: five runs of the same
+> question at temperature 0 gave two verdicts and findings counts of 9, 1, 1 and
+> 4. Work has moved out of it rather than into prompting it — see
+> `bench/controller-fitness.sh` for what the deterministic checks now settle.
 
 **Exit:**
 ```yaml
