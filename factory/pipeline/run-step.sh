@@ -136,6 +136,36 @@ jq -e --arg p "$ROLE_PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >
 MODEL_DIGEST="$(ollama list 2>/dev/null | awk -v m="$ROLE_MODEL" '$1 == m {d=$2} END {print d}')"
 [ -n "$MODEL_DIGEST" ] || die "model '$ROLE_MODEL' for role '$ROLE' is not present in ollama"
 
+# And it is the same weights the run started with.
+#
+# new-run.sh records a digest per role in the run record, and every step records
+# the digest it observed. Nothing compared the two, so a tag re-pointed
+# mid-run — `ollama pull` on either model, by this project or by anything else
+# sharing the server — would produce a run whose early steps ran on one set of
+# weights and whose later steps ran on another, with both truthfully recorded and
+# nothing saying they differ. The run record would be internally consistent and
+# describe something that never happened as a single experiment.
+#
+# This is the healthcheck half of the plan's "wrong model loaded → blocked" item.
+# The other half — refusing a model that is absent — is two lines above.
+#
+# Halt, not warn: the comparison arm of every measurement this project makes is
+# another run, and a run that changed models partway through cannot be compared
+# with anything, including itself.
+if [ -n "${RUN_DIR:-}" ] && [ -f "$RUN_DIR/run.json" ]; then
+  DECLARED_DIGEST="$(jq -r --arg r "$ROLE" '.conditions[$r].digest // empty' "$RUN_DIR/run.json" 2>/dev/null || true)"
+  if [ -n "$DECLARED_DIGEST" ] && [ "$DECLARED_DIGEST" != "$MODEL_DIGEST" ]; then
+    printf 'STEP   %s   MODEL CHANGED under this run.\n' "$STEP" >&2
+    printf '       role %s: the run started on %s and ollama now serves %s for %s.\n' \
+      "$ROLE" "$DECLARED_DIGEST" "$MODEL_DIGEST" "$ROLE_MODEL" >&2
+    printf '       Earlier steps of this run used the other weights. Both are recorded\n' >&2
+    printf '       truthfully and the run as a whole is no longer one experiment, so it\n' >&2
+    printf '       stops here rather than finishing something that cannot be compared.\n' >&2
+    printf '       Start a fresh run, or re-pull %s to restore %s.\n' "$ROLE_MODEL" "$DECLARED_DIGEST" >&2
+    exit 1
+  fi
+fi
+
 PI_ARGS=( --model "$ROLE_PROVIDER/$ROLE_MODEL" )
 [ -n "$ROLE_THINKING" ] && PI_ARGS+=( --thinking "$ROLE_THINKING" )
 

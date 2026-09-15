@@ -224,6 +224,37 @@ jq '.roles.judge.model = "definitely-not-pulled:70b"' \
 out="$(ROLES_FILE="$WORK/missing-roles.json" run_step audit-impl)"
 check "absent model refused"            "is not present in ollama" "$out"
 
+# -- the weights must be the ones the run started on ---------------------------
+#
+# new-run.sh records a digest per role; every step records the digest it observed.
+# Nothing compared the two, so a tag re-pointed mid-run — `ollama pull` by this
+# project or by anything else sharing the server — produced a run whose early
+# steps ran on one set of weights and whose later steps ran on another, both
+# recorded truthfully, with nothing anywhere saying they differ.
+DIGEST_NOW="$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.developer.model' "$PIPELINE_DIR/roles.json")" '$1 == m {d=$2} END {print d}')"
+cp run/run.json "$WORK/run.json.bak"
+
+# The agreeing case first, so the check is known to be capable of passing.
+jq --arg d "${DIGEST_NOW:-unknown}" '.conditions = {developer: {digest: $d}}'   "$WORK/run.json.bak" > run/run.json
+out="$(run_step spec)"
+nope "the same digest is not a change"  "MODEL CHANGED" "$out"
+
+jq '.conditions = {developer: {digest: "0000deadbeef"}}' "$WORK/run.json.bak" > run/run.json
+out="$(run_step spec)"
+check "a changed digest stops the run"  "MODEL CHANGED under this run" "$out"
+check "it names the role"               "role developer" "$out"
+check "and both digests"                "0000deadbeef" "$out"
+check "and says why it cannot continue" "no longer one experiment" "$out"
+check "and what to do about it"         "Start a fresh run" "$out"
+
+# A run record with no digest for the role is not a mismatch. Digests are
+# evidence — new-run.sh records them when ollama answers and omits them when it
+# does not — and a missing one must not make every step refuse.
+jq '.conditions = {developer: {model: "x"}}' "$WORK/run.json.bak" > run/run.json
+out="$(run_step spec)"
+nope "a run record with no digest passes" "MODEL CHANGED" "$out"
+cp "$WORK/run.json.bak" run/run.json
+
 # -- an unbound step must not silently pick a default --------------------------
 jq 'del(.step_roles.doc)' "$PIPELINE_DIR/roles.json" > "$WORK/unbound-roles.json"
 out="$(ROLES_FILE="$WORK/unbound-roles.json" run_step doc)"
