@@ -191,6 +191,24 @@ BODY="$(mktemp)"
   printf '| risk policy | `%s` |\n' "$(jq -r '.policy_version' <<<"$V")"
   printf '| judge | `%s`, prompt `%s` |\n' "$(jq -r '.model_digest' <<<"$V")" "$(jq -r '.prompt_version' <<<"$V")"
   [ "$TIER" -ge 3 ] 2>/dev/null && printf '\n> **Tier 3.** Never auto-merged in any merge mode.\n'
+  # A run that continued past a verdict it did not satisfy says so here. This is
+  # the whole difference between "advisory" and "discarded": the reviewer of this
+  # pull request is told which audits did not accept and reads them, instead of
+  # the run having quietly decided they did not matter.
+  ADV=( "$RUN_DIR"/failed-attempts/*.advisory.* )
+  if [ -e "${ADV[0]}" ]; then
+    printf '\n## Audits that did not accept\n\n'
+    printf 'This run was made with **advisory audits**: the judge ran, wrote a judgement\n'
+    printf 'and the controller stamped a verdict from it, but a verdict short of accept\n'
+    printf 'did not stop the run. Every deterministic check stayed blocking.\n\n'
+    printf 'Read these before approving:\n\n'
+    for a in "${ADV[@]}"; do
+      [ -e "$a" ] || continue
+      printf -- '- `%s` — %s\n' "$(basename "$a")" \
+        "$(grep '^note:' "$a" | head -1 | sed 's/^note: *//')"
+    done
+    printf '\n'
+  fi
 } > "$BODY"
 
 TITLE="$BEAN_ID: $BEAN_TITLE"

@@ -83,6 +83,12 @@ EOF
 BEAN_ID=""
 RESUME_DIR=""
 STOP_AFTER=""
+# Advisory audits: the judge still runs, still writes a judgement, and the
+# controller still stamps a verdict from it — but a verdict short of accept does
+# not halt the run. Only the model's opinion is softened; spec-check, gate.sh,
+# package-check and every other deterministic check stay blocking, and a run that
+# used this says so in its record and in its pull request.
+ADVISORY_AUDITS="${FACTORY_ADVISORY_AUDITS:-0}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) cat "$PIPELINE_DIR/VERSION"; exit 0 ;;
@@ -90,6 +96,7 @@ while [ $# -gt 0 ]; do
     --stop-after)
       [ $# -ge 2 ] || die "--stop-after requires a step name"
       STOP_AFTER="$2"; shift ;;
+    --advisory-audits) ADVISORY_AUDITS=1 ;;
     --resume)
       [ $# -ge 2 ] || die "--resume requires a run directory"
       RESUME_DIR="$2"; shift ;;
@@ -223,9 +230,41 @@ failed_count() {
   local s="$1" n=0 f
   for f in "$FAILDIR/${s}".*; do
     [ -e "$f" ] || continue
+    # Advisories live here too, deliberately — they are a record of a verdict the
+    # run went past. They are not failed attempts, and counting them would halt a
+    # run in advisory mode on exactly the attempts it was told to continue past.
+    case "$f" in *".advisory."*) continue ;; esac
     n=$((n+1))
   done
   printf '%s\n' "$n"
+}
+
+# record_advisory — the judge said no and the run went on anyway.
+#
+# This exists so that "advisory" cannot mean "discarded". A run that continued
+# past a verdict it did not satisfy has to say so in its own record, in a file
+# named like a failure, because that is what it is: the difference is only that a
+# person decided in advance to read it afterwards rather than be stopped by it.
+# pr.sh reads this directory, so a PR cannot be opened without the advisories
+# being visible.
+record_advisory() { # <step> <exit-status> [context note...]
+  local s="$1" ec="$2"
+  shift 2
+  ensure_run_dir
+  mkdir -p "$FAILDIR"
+  local n
+  n="$(ls -1 "$FAILDIR/${s}.advisory."* 2>/dev/null | wc -l)"
+  {
+    printf 'recorded:  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'step:      %s\n' "$s"
+    printf 'exit:      %s\n' "$ec"
+    printf 'mode:      advisory — this did NOT stop the run\n'
+    for note in "$@"; do printf 'note:      %s\n' "$note"; done
+    printf 'why:       the judge was measured as not reproducible on identical input\n'
+    printf '           (bench/judge-variance.sh), so its verdict was recorded rather\n'
+    printf '           than used as a gate for this run. Every deterministic check\n'
+    printf '           remained blocking.\n'
+  } > "$FAILDIR/${s}.advisory.$((n+1))"
 }
 
 record_failure() { # <step> <exit-status> [context note...]
@@ -414,7 +453,11 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # model spent its whole token budget reasoning and wrote nothing. That is
       # ours to fix, not the authoring step's, and re-running the spec would be
       # spending an attempt on a problem the spec does not have.
-      if [ "$rc" -eq 8 ]; then
+      if [ "$rc" -ne 0 ] && [ "$ADVISORY_AUDITS" = 1 ]; then
+        printf '\nNO JUDGEMENT  %s (exit %s) — advisory, so the run continues.\n' "$step" "$rc"
+        record_advisory "$step" "$rc" "the judge produced no judgement"
+        return 0
+      elif [ "$rc" -eq 8 ]; then
         printf '\nNO ANSWER  %s — the judge ran out of room before writing one.\n' "$step"
         printf '           Raise JUDGE_NUM_PREDICT and resume; the spec is not what failed.\n'
         record_failure "$step" 8 "the judge exhausted its token budget before answering"
@@ -432,10 +475,16 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # 7 means the judge abstained. There is nothing for the authoring step to
       # act on — "the judge was unsure" is not a finding — so the run stops for a
       # person instead of spending an attempt.
-      if [ "$rc" -eq 7 ]; then
+      if [ "$rc" -eq 7 ] && [ "$ADVISORY_AUDITS" != 1 ]; then
         printf '\nABSTAINED  %s — the judge could not form a judgement. A human decides.\n' "$step"
         record_failure "$step" 7 "the judge abstained; routed to a human rather than retried"
         halt "$step" 7
+      fi
+      if [ "$rc" -ne 0 ] && [ "$ADVISORY_AUDITS" = 1 ]; then
+        printf '\nADVISORY  %s verdict: %s — recorded, not blocking.\n' "$step" \
+          "$(jq -r '.verdict // "none"' "$(ls -1t "$RUN_DIR/verdicts/${step#audit-}".attempt-*.json 2>/dev/null | grep -v judgement | head -1)" 2>/dev/null || echo unknown)"
+        record_advisory "$step" "$rc" "the judge did not accept; advisory mode, so the run continued"
+        return 0
       fi
       return "$rc" ;;
     doc)

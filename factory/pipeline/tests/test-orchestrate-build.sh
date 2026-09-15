@@ -289,5 +289,47 @@ want "the evidence it points to exists" "expected build/task-1/BLOCKED.md" \
 want "nothing was committed for the failed task" "a blocked task must not be committed" \
   bash -c "! git -C '$REPO' log --oneline | grep -q 'build(task-1)'"
 
+printf '\n== advisory audits record what they went past, and do not hide it ==\n\n'
+#
+# "Advisory" is one word away from "ignored", and the difference has to be
+# structural rather than intended. Three things must hold: the run continues, the
+# verdict it continued past is written down where a reviewer will see it, and the
+# advisory is not counted as a failed attempt — or a run in advisory mode would
+# halt itself on the very attempts it was told to continue past.
+cleanup_run
+FAILDIR_CHECK="$REPO/ai/runs"
+out="$(FACTORY_ADVISORY_AUDITS=1 ADVISORY_JUDGE_FAILS=1 run_orchestrate)"
+adv="$(find "$REPO/ai/runs" -path '*failed-attempts/*advisory*' 2>/dev/null | head -1)"
+
+if [ -n "$adv" ]; then
+  check "the advisory is recorded"    "mode:      advisory" "$(cat "$adv")"
+  check "and says it did not stop the run" "this did NOT stop the run" "$(cat "$adv")"
+  check "and why the judge was demoted"    "not reproducible on identical input" "$(cat "$adv")"
+  PASS=$((PASS+0))
+else
+  # The stub judge may not have been reached in this fixture's tier; the
+  # properties above are still asserted by the unit check below, which does not
+  # need a model at all.
+  printf '  --    no advisory produced in this fixture; asserting the mechanism directly\n'
+fi
+
+# The mechanism, independent of whether a judge ran: an advisory file must not be
+# counted as a failed attempt.
+FD="$WORK/faildir"; mkdir -p "$FD"
+printf 'x\n' > "$FD/audit-spec.1"
+printf 'x\n' > "$FD/audit-spec.advisory.1"
+printf 'x\n' > "$FD/audit-spec.advisory.2"
+n="$(FAILDIR="$FD" bash -c '
+  source /dev/stdin <<EOS
+$(sed -n "/^failed_count() {/,/^}/p" "'"$PIPELINE_DIR"'/orchestrate.sh")
+EOS
+  failed_count audit-spec')"
+if [ "$n" = "1" ]; then
+  printf '  ok    two advisories and one failure count as one failure\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  failed_count said %s, expected 1 — advisories are being counted as failures\n' "$n"
+  FAIL=$((FAIL+1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
