@@ -134,6 +134,12 @@ That is the whole job. Do not record the step, do not run git, do not render
 anything: the controller opens and closes the attempt, validates both artifacts,
 and renders the HTML. Write the two files and finish the session.
 
+**Write them with the write tool before describing them.** A real doc session
+ended its turn with "From now on, I'll create the documentation" and stopped,
+having produced nothing after thirty-seven minutes — the announcement replaced
+the act. If you find yourself describing a file you are about to produce, produce
+it instead; the report at the end is where you say what you did.
+
 ## Report
 
 What the change is, the task list with each task's verification, anything you had

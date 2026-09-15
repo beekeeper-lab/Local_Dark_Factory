@@ -76,7 +76,13 @@ The controller lints these. A thin one fails the step before a judge sees it.
 
 1. Read the diff.
 2. Read the spec, the tasks and the gate results.
-3. Write `<run-dir>/impl-detail.md`.
+3. **Write `<run-dir>/impl-detail.md`.** With the write tool, now, before you say
+   anything about what you are going to write. A real run spent thirty-seven
+   minutes reading, ended its turn with "From now on, I'll create the
+   documentation", and stopped — the session closed with no file on disk and the
+   whole step was wasted. Announcing the write is not the write. If you find
+   yourself describing the document you are about to produce, produce it instead;
+   you can say what you did afterwards.
 
 That is the whole job. Do not run git, do not commit, do not render anything, do
 not touch the code — the change is already accepted and the document must not
