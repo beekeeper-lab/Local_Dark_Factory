@@ -64,8 +64,10 @@ usage: build-loop.sh <run_dir> --bean <bean.yaml> [options]
   --tasks <path>      task list (default: <run_dir>/tasks.yaml, then tasks.json)
   --task <id>         run only this task (its dependencies must already be verified)
   --max-attempts <n>  override every task's max_attempts (default: per task, else 3)
-  --sandbox           run each task's verify list inside the pinned gate container
-                      against a .git-free copy of the tree (spec §06 step 5)
+  --sandbox           force the sandbox on (default: on whenever a gate manifest
+                      and podman are both present)
+  --no-sandbox        run task verifies on the host — refuses silently to nothing,
+                      prints that the run is uncontained
   --gates <file>      gate manifest naming the image (default: factory/gates.lock.yaml)
   --dry-run           print the plan — order, write paths, verifies — and stop
 
@@ -85,7 +87,19 @@ esac
 
 # ------------------------------------------------------------------ arguments
 RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; MAX_OVERRIDE=""; DRY_RUN=0
-SANDBOX=0; GATES_FILE=""; SANDBOX_TREE=""
+# Sandboxing the verifies is the default, not an option someone remembers to pass.
+#
+# It was a flag, and orchestrate.sh did not pass it, so bean-001's first real
+# build ran its task verifies on the host — where there is no `python`, because
+# the pinned toolchain lives in the gate image. The task failed with "command not
+# found: python" and the worker was told its code did not verify. It had not been
+# checked at all.
+#
+# Two failures in one: a containment hole (a model-authored verify executing
+# unconfined) and a correctness one (the host is not the environment the answer
+# is supposed to be about). --no-sandbox is still there for tests that cannot run
+# a container, and it prints that it is doing so.
+SANDBOX=auto; GATES_FILE=""; SANDBOX_TREE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)        BEAN_FILE="${2:?--bean needs a path}"; shift 2 ;;
@@ -94,6 +108,7 @@ while [ $# -gt 0 ]; do
     --max-attempts) MAX_OVERRIDE="${2:?--max-attempts needs a number}"; shift 2 ;;
     --dry-run)     DRY_RUN=1; shift ;;
     --sandbox)     SANDBOX=1; shift ;;
+    --no-sandbox)  SANDBOX=0; shift ;;
     --gates)       GATES_FILE="${2:?--gates needs a file}"; shift 2 ;;
     -*)            usage >&2; die "unknown flag: $1" ;;
     *)             [ -z "$RUN_DIR" ] || die "only one run dir (got '$1' after '$RUN_DIR')"
@@ -208,9 +223,22 @@ UNCLAIMED="$(jq -r --argjson t "$(jq -c '[.tasks[].satisfies // []] | flatten' <
 # The editable tree lives OUTSIDE the repository, which is the point: the
 # controller keeps the real worktree on its side of the boundary (§09) and the
 # container only ever sees a copy.
+[ -n "$GATES_FILE" ] || GATES_FILE="$ROOT/factory/gates.lock.yaml"
+if [ "$SANDBOX" = auto ]; then
+  if [ -f "$GATES_FILE" ] && command -v podman >/dev/null 2>&1; then
+    SANDBOX=1
+  else
+    SANDBOX=0
+    printf 'UNCONTAINED  task verifies will run on the host: %s\n' \
+      "$([ -f "$GATES_FILE" ] || echo "no gate manifest at $GATES_FILE"; command -v podman >/dev/null 2>&1 || echo "podman not installed")" >&2
+    printf '             The host is not the environment these answers are about.\n' >&2
+  fi
+elif [ "$SANDBOX" = 0 ]; then
+  printf 'UNCONTAINED  --no-sandbox: task verifies run on the host, which is not the\n' >&2
+  printf '             environment the pinned toolchain lives in.\n' >&2
+fi
 if [ "$SANDBOX" = 1 ]; then
-  [ -n "$GATES_FILE" ] || GATES_FILE="$ROOT/factory/gates.lock.yaml"
-  [ -f "$GATES_FILE" ] || die "--sandbox needs a gate manifest to name the image; not found: $GATES_FILE"
+  [ -f "$GATES_FILE" ] || die "the sandbox needs a gate manifest to name the image; not found: $GATES_FILE"
   SANDBOX_TREE="${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/darkfactory/$(basename "$RUN_DIR_ABS")/tree"
   mkdir -p "$SANDBOX_TREE"
   printf 'SANDBOX %s (verifies run in %s)\n' "$SANDBOX_TREE" \

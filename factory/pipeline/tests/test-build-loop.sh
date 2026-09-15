@@ -547,5 +547,21 @@ nope  "writing to its own attempt dir is not tampering" "QUESTIONS.md was treate
       grep -q TAMPERED <<<"$out"
 check "and the task still verifies"    "PASS   task-1" "$out"
 
+printf '\n== running verifies on the host is announced, never silent ==\n\n'
+#
+# bean-001's first real build ran its task verifies on the host because
+# orchestrate.sh never passed --sandbox, and the host has no `python` — the
+# pinned toolchain lives in the gate image. The task failed with "command not
+# found" and the worker was told its code did not verify. It had not been checked
+# at all. The sandbox is now the default; this asserts that when it cannot be, the
+# run says so rather than quietly producing host-shaped answers.
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1 --no-sandbox)"
+check "the run says it is uncontained" "UNCONTAINED" "$out"
+check "and says why it matters"        "environment the pinned toolchain lives in" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
