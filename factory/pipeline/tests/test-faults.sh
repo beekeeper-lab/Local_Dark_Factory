@@ -337,6 +337,38 @@ R="$(ls -1dt "$REPO"/factory/runs/*/ | head -1)"
 want "and it is recorded as a containment violation" "containment.json should say contained:false" \
      test "$(jq -r '.contained' "$R"/build/task-1/attempt-1/containment.json)" = false
 
+printf '\n== a dangling criterion in definition_of_done is refused at preflight ==\n\n'
+#
+# bean.schema.json requires definition_of_done and nothing read it, so a bean
+# could say "done means ac1, ac2 and ac7" while declaring only ac1 and ac2 — the
+# gate runs the criteria it finds, so ac7 is never missed because nothing ever
+# looks for it.
+#
+# Only entries SHAPED like an id are resolved. The corpus this line builds uses
+# the field for a prose sentence, which the schema permits, and a check that
+# failed those would be imposing a convention the contract never stated.
+reset_repo
+cp "$REPO/factory/beans/bean-001-scaffold/bean.yaml" "$WORK/bean-backup.yaml"
+"$PIPELINE_DIR/yaml2json.sh" "$WORK/bean-backup.yaml" \
+  | jq '.definition_of_done = ["ac1", "ac7"]' \
+  | "$PIPELINE_DIR/../../.venv/bin/python" -c 'import json,sys,yaml; yaml.safe_dump(json.load(sys.stdin), sys.stdout, sort_keys=False)' \
+  > "$REPO/factory/beans/bean-001-scaffold/bean.yaml"
+git -C "$REPO" commit -aqm "a bean whose done-definition names a criterion it lacks"
+o="$(run_line --stop-after preflight)"
+check "the dangling id is named"   "ac7" "$o"
+check "and preflight refuses"      "definition-of-done" "$o"
+
+# Prose in the same field is left alone.
+"$PIPELINE_DIR/yaml2json.sh" "$WORK/bean-backup.yaml" \
+  | jq '.definition_of_done = ["all AC verify pass, gates green, both documents accepted"]' \
+  | "$PIPELINE_DIR/../../.venv/bin/python" -c 'import json,sys,yaml; yaml.safe_dump(json.load(sys.stdin), sys.stdout, sort_keys=False)' \
+  > "$REPO/factory/beans/bean-001-scaffold/bean.yaml"
+git -C "$REPO" commit -aqm "the same field used for prose, which the schema permits"
+o="$(run_line --stop-after preflight)"
+check "prose is not treated as an id" "no dangling criterion references" "$o"
+cp "$WORK/bean-backup.yaml" "$REPO/factory/beans/bean-001-scaffold/bean.yaml"
+git -C "$REPO" add -A >/dev/null 2>&1; git -C "$REPO" commit -q -m "restore bean" >/dev/null 2>&1
+
 printf '\n== a file outside the bean is caught by whole-diff containment ==\n\n'
 #
 # Distinct from the task-level check above, and it exists because the task-level

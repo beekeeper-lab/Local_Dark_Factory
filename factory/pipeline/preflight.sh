@@ -82,6 +82,59 @@ status="$(awk -F'|' -v id="$BEAN_ID" '
 [ "$status" = "Approved" ] || fail "bean-approved" "bean $BEAN_ID status is '$status', expected 'Approved'"
 pass "bean-approved" "bean $BEAN_ID is Approved"
 
+# 4b. The bean's definition_of_done names criteria the bean actually declares.
+#
+# bean.schema.json requires this field and, until now, nothing read it. A bean
+# could say "done means ac1, ac2 and ac7" while declaring only ac1 through ac4,
+# and every check downstream would pass: the gate runs the acceptance_criteria it
+# finds, so ac7 is never missed because nothing ever looks for it. The bean would
+# be built, gated, audited and merged against a definition of done that was
+# partly fiction.
+#
+# Checked here rather than at spec time because it is a property of the bean, and
+# the cheapest moment to refuse a malformed bean is before the line spends a
+# model on it.
+# A plain glob. `compgen -G` inside a command substitution did not resolve here,
+# and a bean lookup that silently finds nothing turns this check into one that
+# never runs — the worst kind, because it reports nothing and looks fine.
+BEAN_YAML=""
+BEANS_DIR="$root/$(dirname "$(jq -r '.bean_dir_pattern // "factory/beans/BEAN-NNN-<slug>"' "$CONFIG_PATH")")"
+for cand in "$BEANS_DIR/$BEAN_ID"-*/bean.yaml "$BEANS_DIR/$BEAN_ID/bean.yaml"; do
+  [ -f "$cand" ] && { BEAN_YAML="$cand"; break; }
+done
+if [ -z "$BEAN_YAML" ]; then
+  fail "definition-of-done" "cannot find a bean.yaml for $BEAN_ID under $BEANS_DIR — the bean is in the index but its machine-readable form is missing"
+fi
+if [ -n "$BEAN_YAML" ] && [ -f "$BEAN_YAML" ]; then
+  BJ="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_YAML" 2>/dev/null)" || BJ=""
+  if [ -n "$BJ" ]; then
+    # Only entries that LOOK like criterion ids are resolved.
+    #
+    # The first version of this check treated every entry as an id and would have
+    # failed all twenty beans in this corpus, because they use the field the way
+    # the schema actually permits — `items: {type: string}`, no pattern — and put
+    # a prose sentence in it: "all AC verify pass, gates green, spec and
+    # impl-detail docs accepted".
+    #
+    # That would have been the exact defect this project spent a day removing: a
+    # check confident enough to overrule the thing it measures, imposing a
+    # convention the contract never stated. So it asks a narrower question, and
+    # one that is unambiguous when it fires: an entry shaped like `ac7` that
+    # names no declared criterion is a dangling reference, whatever the field is
+    # being used for.
+    UNKNOWN="$(jq -r '
+      (.acceptance_criteria // [] | map(.id)) as $have
+      | [ (.definition_of_done // [])[]
+          | select(test("^[a-z]+[0-9]+$"))
+          | select(. as $d | ($have | index($d)) == null) ]
+      | join(", ")' <<<"$BJ" 2>/dev/null)"
+    if [ -n "$UNKNOWN" ]; then
+      fail "definition-of-done" "names criteria the bean does not declare: $UNKNOWN — a dangling reference in the bean's own definition of done"
+    fi
+    pass "definition-of-done" "no dangling criterion references"
+  fi
+fi
+
 # 5. No existing branch for the bean
 pattern="$(jq -r '.branch_pattern' "$CONFIG_PATH")"
 glob="$(printf '%s' "$pattern" \
