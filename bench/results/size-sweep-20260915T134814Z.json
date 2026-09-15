@@ -1,0 +1,37 @@
+{
+  "schema": "size-sweep/1.0.0",
+  "measured_at": "2026-09-15T13:26:32Z",
+  "case": "criterion-not-really-met",
+  "judge": "gpt-oss:120b",
+  "points": [
+    {
+      "padding_bytes": 0,
+      "total_artifact_bytes": 18673,
+      "verdict": "none",
+      "named_the_defect": "-",
+      "seconds": 385
+    },
+    {
+      "padding_bytes": 6000,
+      "total_artifact_bytes": 24673,
+      "verdict": "accept",
+      "named_the_defect": "no",
+      "seconds": 148
+    },
+    {
+      "padding_bytes": 14000,
+      "total_artifact_bytes": 32673,
+      "verdict": "accept",
+      "named_the_defect": "no",
+      "seconds": 38
+    },
+    {
+      "padding_bytes": 26000,
+      "total_artifact_bytes": 44673,
+      "verdict": "none",
+      "named_the_defect": "-",
+      "seconds": 232
+    }
+  ],
+  "note": "One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it."
+}

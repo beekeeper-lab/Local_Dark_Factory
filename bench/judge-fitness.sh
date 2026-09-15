@@ -292,4 +292,10 @@ printf '%s\n' "$OUT"
 printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
 printf 'so costs a retry; a judge that misses and accepts is the failure the line exists\n'
 printf 'to prevent, and it is invisible from the outside.\n'
+printf '\nONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same\n'
+printf 'question five times with identical input at temperature 0 and got two different\n'
+printf 'verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an\n'
+printf 'earlier run and missed in all five. Do not compare a number here against another\n'
+printf 'number here and conclude something changed: establish the spread first, or the\n'
+printf 'comparison is measuring the weather.\n'
 [ "$FALSE_ACCEPT" -eq 0 ]
