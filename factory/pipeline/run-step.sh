@@ -369,6 +369,22 @@ if [ -n "$SESSION_FILE" ] && [ -f "$SESSION_FILE" ]; then
   # minutes instead of twenty and asking why.
   COMPACTIONS="$(jq -rs '[.[] | select(.type == "compaction")] | length' "$SESSION_FILE" 2>/dev/null || echo 0)"
 fi
+# These are two different numbers and calling both "num_ctx" was a mistake.
+#
+# roles.json's num_ctx is PI's window: what the agent believes it may fill before
+# it must compact. The contained worker gets it honoured, because the controller
+# writes the models.json pi reads. That is what stopped a spec session compacting
+# twice.
+#
+# /api/ps reports OLLAMA's: how much context the loaded model actually has, which
+# comes from OLLAMA_CONTEXT_LENGTH or the model's default and is a property of
+# the running server, not of this run. pi does not set it — it speaks the
+# openai-completions API, which has no field for it.
+#
+# So the two differing is normal and is not drift in the sense the other
+# conditions use. Reporting it as drift alongside "the model was not the one we
+# asked for" trains everyone to ignore the word. Recorded as both, named
+# separately.
 OBS_CTX="$(curl -s --max-time 5 "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null \
   | jq -r --arg m "$ROLE_MODEL" '[.models[]? | select(.name == $m) | .context_length] | last // empty' 2>/dev/null || true)"
 
@@ -380,7 +396,17 @@ fi
 drift=""
 [ -n "$OBS_THINKING" ] && [ -n "$ROLE_THINKING" ] && [ "$OBS_THINKING" != "$ROLE_THINKING" ] \
   && drift="$drift thinking(declared=$ROLE_THINKING observed=$OBS_THINKING)"
-[ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" != "$ROLE_CTX" ] \
+# Deliberately NOT part of drift; see above. The server's context is reported in
+# the conditions and shown when it is smaller than what pi was told it may use,
+# which is the only combination that can hurt: pi filling a window the server
+# will truncate.
+if [ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" -lt "$ROLE_CTX" ] 2>/dev/null; then
+  printf 'WARN   %s   pi may use %s tokens but the loaded model only has %s — the server will\n' \
+    "$STEP" "$ROLE_CTX" "$OBS_CTX" >&2
+  printf '       truncate before pi thinks it needs to. Lower num_ctx for role %s, or raise\n' "$ROLE" >&2
+  printf '       OLLAMA_CONTEXT_LENGTH (system-wide, so it is the operator'"'"'s call).\n' >&2
+fi
+false && [ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" != "$ROLE_CTX" ] \
   && drift="$drift num_ctx(declared=$ROLE_CTX observed=$OBS_CTX)"
 [ -n "$OBS_MODEL" ] && [ "$OBS_MODEL" != "$ROLE_MODEL" ] \
   && drift="$drift model(declared=$ROLE_MODEL observed=$OBS_MODEL)"
@@ -480,14 +506,15 @@ jq -sc \
       'def s($v): if $v == "" then null else $v end;
        {role:$role, model:$model, digest:$digest,
         num_ctx:($obs_ctx // null), thinking:s($obs_thinking),
+        pi_window:$ctx,
+        context_note:"num_ctx is the context of the loaded model on the server; pi_window is what the agent was told it may fill. pi does not set the server side.",
         harness:{flags:$harness, tools:["read","write","edit","bash"]},
         compactions:$compactions,
         ran_within_context:($compactions == 0),
         declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
         observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
         declared_matches_observed:
-          ((($obs_ctx == null) or ($ctx == null) or ($obs_ctx == $ctx))
-           and (($obs_thinking == "") or ($thinking == "") or ($obs_thinking == $thinking))
+          ((($obs_thinking == "") or ($thinking == "") or ($obs_thinking == $thinking))
            and (($obs_model == "") or ($obs_model == $model)))}')" \
   '
   . as $arr
