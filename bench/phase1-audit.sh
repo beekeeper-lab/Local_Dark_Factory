@@ -218,9 +218,26 @@ fi
 # ------------------------------------------------- 7. independent_invariant_ran --
 # The invariants are the corpus's only check authored independently of the
 # implementation. "Ran" means the gate executed them, not that the file exists.
+# Whether the bean declares any is the first question, and it changes what the
+# answer means. bean-001 is a scaffold: it has no solver, so there is no seating
+# answer for an invariant to be about, and it correctly declares none. A run of
+# it can never exercise this predicate — which is a fact about which bean can
+# close the phase, not a defect in the run.
+BEAN_YAML=""
+for cand in "$REPO"/factory/beans/*/bean.yaml; do
+  [ -f "$cand" ] || continue
+  [ "$(grep -c "^id: *$(jq -r '.bean' "$RUNJSON")\b" "$cand" 2>/dev/null)" -gt 0 ] && { BEAN_YAML="$cand"; break; }
+done
+DECLARES_INV=0
+[ -n "$BEAN_YAML" ] && grep -q '^invariants_ref:' "$BEAN_YAML" && DECLARES_INV=1
+
 inv="$(jq -r '.invariants // null' "$RUN_DIR/gate.json" 2>/dev/null)"
-if [ "$inv" = null ] || [ -z "$inv" ]; then
-  bad "independent_invariant_ran" major "gate.json records no invariant run (does this bean declare invariants_ref?)"
+if [ "$DECLARES_INV" = 0 ]; then
+  bad "independent_invariant_ran" major \
+    "this bean declares no invariants_ref, so this run cannot exercise the predicate at all. Phase 1 cannot close on it: the phase's entry condition asks for a bean WITH invariants, and in this corpus that is bean-006 onward."
+  pred independent_invariant_ran not_applicable
+elif [ "$inv" = null ] || [ -z "$inv" ]; then
+  bad "independent_invariant_ran" blocker "the bean declares invariants_ref but gate.json records no invariant run — the guarantee was declared and not checked"
   pred independent_invariant_ran fail
 elif [ "$(jq -r '.status' <<<"$inv")" = pass ]; then
   ok "independent_invariant_ran" "$(jq -r '.ref' <<<"$inv") ran in the gate and passed"
