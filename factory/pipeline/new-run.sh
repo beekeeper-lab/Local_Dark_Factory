@@ -103,8 +103,18 @@ role_json() { # role_json <role>
     + (if $c.thinking then {thinking: $c.thinking} else {} end)' "$ROLES" 2>/dev/null
 }
 dev_cond="$(role_json developer)"; judge_cond="$(role_json judge)"
-for pair in "developer:$dev_cond" "judge:$judge_cond"; do
-  [ -n "${pair#*:}" ] && [ "${pair#*:}" != null ]     || die "roles.json has no usable '${pair%%:*}' role; the run record cannot say what this run ran on"
+# The guard has to ask about the model, not about the object.
+#
+# `.roles["judge"]` on a roles file with no judge is null, and the expression
+# above turns null into `{"model":null,"num_ctx":null,"provider":null}` — which is
+# neither empty nor the string "null", so the check it was written for passed
+# every time. A roles.json missing a whole role produced a run record full of
+# nulls, and the only thing that noticed was the schema validator, which said
+# "None is not of type 'string'" about four fields at once and never named the
+# role. Found by the first test ever written against this file.
+for role in developer judge; do
+  case "$role" in developer) c="$dev_cond" ;; judge) c="$judge_cond" ;; esac
+  [ -n "$c" ] && [ "$(jq -r '.model // "null"' <<<"$c" 2>/dev/null)" != "null" ]     || die "roles.json has no usable '$role' role; the run record cannot say what this run ran on"
 done
 # Digests, so a re-pointed tag cannot pass for the weights that were measured.
 dev_model="$(jq -r '.model' <<<"$dev_cond")"
