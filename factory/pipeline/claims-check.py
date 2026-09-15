@@ -120,9 +120,20 @@ NEGATION = re.compile(
 
 # How far from the path a claim still counts. Deliberately small: English puts
 # "already contains" and "does not exist" next to what they are about, and a
-# wider window picks up clauses belonging to other nouns. Measured the hard way —
-# a sentence-wide window read "the package does not exist. The entire working
-# tree (excluding `factory/`...)" as a denial of `factory/`.
+# wider window picks up clauses belonging to other nouns. The case that prompted
+# it was a sentence-wide window reading "the package does not exist. The entire
+# working tree (excluding `factory/`...)" as a denial of `factory/`.
+#
+# Measured, because the first version of this comment claimed more than the
+# numbers deliver: at 48 characters a negation in the *previous sentence* still
+# reaches a path that begins immediately after it, and stops reaching once about
+# ten more characters separate them. So the window bounds the reach; it does not
+# eliminate it, and a denial from a neighbouring clause is still possible.
+#
+# That is survivable only because of what a denial can do. It suppresses a
+# missing-path failure and it is recorded — it never fires one. A stray negation
+# therefore costs at worst a check not run on one path, never a false accusation.
+# If denials ever start failing runs, these numbers stop being adequate.
 BEFORE = 48
 AFTER = 32
 
