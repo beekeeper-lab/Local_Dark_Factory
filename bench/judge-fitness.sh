@@ -125,7 +125,7 @@ unfinishable-task|yes|one task that cannot finish in one session|too large|one s
 criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|annotation|vacuous|does not satisfy|mypy'
 
 RESULTS="[]"
-CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0
+CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0
 
 printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
@@ -154,7 +154,16 @@ while IFS='|' read -r name should_reject description catchwords; do
   cp -f "$RD"/verdicts/* "$KEEP/" 2>/dev/null || true
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
-  if [ ! -f "$J" ]; then
+  if [ "$rc" -eq 8 ]; then
+    # The judge was cut off mid-thought by a cap we chose. That is a fact about
+    # this harness's configuration, not about the judge's fitness, and scoring it
+    # either way would be a lie: counting it as a miss blames the model for our
+    # budget, and dropping it silently shrinks the denominator. So it is its own
+    # column, and any run with one in it is an incomplete measurement.
+    [ "$should_reject" = yes ] && SEEDED=$((SEEDED+1))
+    CUT_OFF=$((CUT_OFF+1))
+    verdict="cut off"; outcome="NOT MEASURED — ran out of token budget before answering"
+  elif [ ! -f "$J" ]; then
     # Count it as seeded and not caught. Excluding a case that produced nothing
     # would divide the catch rate by a denominator that omits its own failures —
     # a metric that flatters itself is worse than no metric.
@@ -200,14 +209,15 @@ done <<< "$CASES"
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
   --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
-  --argjson named "$NAMED" --argjson noans "$NO_ANSWER" \
+  --argjson named "$NAMED" --argjson noans "$NO_ANSWER" --argjson cut "$CUT_OFF" \
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts,
     judge:{model:$model, digest:$digest},
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
-    false_accepts:$fa, abstentions:$ab, no_answer:$noans,
+    false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
+    complete: ($cut == 0),
     reject_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
     named_rate: (if $seeded > 0 then (($named*100/$seeded)|floor) else null end),
     false_accept_rate: (if $seeded > 0 then (($fa*100/$seeded)|floor) else null end),
@@ -215,6 +225,12 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
 
 printf '\nof %s seeded defects: rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$CAUGHT" "$NAMED"
 printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
+if [ "$CUT_OFF" -gt 0 ]; then
+  printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged.\n' "$CUT_OFF"
+  printf 'The rates above are computed over a denominator that includes them, so they are\n'
+  printf 'lower bounds on a judge that was not allowed to finish. Raise JUDGE_NUM_PREDICT\n'
+  printf 'and measure again before comparing this run to another.\n'
+fi
 printf '%s\n' "$OUT"
 printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
 printf 'so costs a retry; a judge that misses and accepts is the failure the line exists\n'

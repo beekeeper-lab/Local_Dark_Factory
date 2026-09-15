@@ -392,6 +392,23 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # answers anyway — a fluent audit of a document it never read. judge.sh
       # puts the artifacts in the question instead. See its header.
       "$PIPELINE_DIR/judge.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$(bean_yaml)" || rc=$?
+      # The judge's own exit code was being captured and then thrown away by an
+      # unconditional reset on the next line, so a judge that never answered was
+      # handed to audit-check, which reported a missing judgement — a true
+      # statement about the wrong thing. 8 is the one worth naming: it means the
+      # model spent its whole token budget reasoning and wrote nothing. That is
+      # ours to fix, not the authoring step's, and re-running the spec would be
+      # spending an attempt on a problem the spec does not have.
+      if [ "$rc" -eq 8 ]; then
+        printf '\nNO ANSWER  %s — the judge ran out of room before writing one.\n' "$step"
+        printf '           Raise JUDGE_NUM_PREDICT and resume; the spec is not what failed.\n'
+        record_failure "$step" 8 "the judge exhausted its token budget before answering"
+        halt "$step" 8
+      elif [ "$rc" -ne 0 ]; then
+        printf '\nNO JUDGEMENT  %s — the judge did not produce one (exit %s).\n' "$step" "$rc"
+        record_failure "$step" "$rc" "the judge produced no judgement"
+        halt "$step" "$rc"
+      fi
       # The judge wrote a judgement; the controller turns it into a verdict,
       # stamping the SHAs, digests, tier and versions it must not have invented.
       ay="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a verdict cannot be stamped without it"

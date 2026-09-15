@@ -328,7 +328,9 @@ phase_1_exit: { seven_stages_completed: pass, three_verdicts_schema_valid: pass,
 ---
 
 ## Phase 2 — Controller drives it; the developer cannot commit
-**Entry:** Phase-1 complete, **and the worker runs contained.**
+**Entry:** Phase-1 complete, **and the worker runs contained.** *(Containment
+landed 2026-09-15 — see the note below. The fault injections it was blocking can
+now be written against a real boundary rather than an after-the-fact check.)*
 
 > **Sequencing, corrected 2026-09-14.** Worker containment was filed as
 > "remaining sandbox work" to be finished sometime after the fault injections.
@@ -344,6 +346,27 @@ phase_1_exit: { seven_stages_completed: pass, three_verdicts_schema_valid: pass,
 > is a route, not a research project. `sandbox.sh` already has the `model`
 > network mode and already warns that it currently permits general outbound —
 > closing that is the actual work, and it is bounded.
+>
+> **Done, 2026-09-15.** `factory/worker-image/` (node pinned by digest, pi pinned
+> by version), `worker-sandbox.sh`, `model-gateway.sh`, `model-bridge.py`, pinned
+> in `factory/worker.lock.yaml` and wired into `run-step.sh` as the default for
+> any developer step.
+>
+> The estimate was right about the image and wrong about the route, in an
+> instructive way. There is no route: the container runs `--network=none`, which
+> removes every route rather than filtering them, and the model arrives on a unix
+> socket bridged to exactly one address and port. That is a stronger property
+> than an allow-list — there is no interface to widen — and it cost less, except
+> for one thing that took three attempts to see. SELinux checks a unix socket
+> connection against the peer *process's* context, not the socket file's label,
+> so a container may not connect to a socket held by an ordinary user process
+> however the file is relabelled. The bridge runs under `runcon -t container_t`
+> for that reason, and `factory doctor` now checks `runcon` is present.
+>
+> `.git` is masked with an empty read-only mount rather than removed, so the
+> worker's edits still land in the real tree where the change scan reads them,
+> while `git` inside reports "not a git repository". The controller makes every
+> commit, after it has decided the attempt is worth one.
 
 - [ ] Full loop unattended for one bean: lease → worktree → specify → spec audit → build loop → gate → impl audit → document → pre-PR audit → push → CI → **human merge**
 - [ ] Fault injection — controller restart mid-stage (each of: specifying, building, committing, pushing, pr_open)
