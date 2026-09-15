@@ -377,13 +377,27 @@ MESSAGES="$(jq -c --arg c "$CLOSING" '. + [{role:"user", content:$c}]' <<<"$MESS
 # measures that gemma4 holds the judgement schema only with thinking OFF (at any
 # level it emits a markdown fence, which a bound grammar cannot produce) while
 # gpt-oss:120b is the exact reverse. So "false" here is the boolean, not the word.
+# Degenerate repetition is why the cap gets hit, not depth of thought. bean-001's
+# spec audit spent its last few hundred tokens emitting "The 'ruff check' command
+# is present but not configured to run." over and over, inside a string it never
+# closed, and the whole judgement was lost to truncation.
+#
+# temperature 0 makes that worse rather than better: with no sampling noise, a
+# model that starts a loop has nothing to knock it out of one. repeat_penalty is
+# the setting for exactly this and costs nothing when there is no repetition.
+# Kept mild — 1.1 — because a judgement legitimately repeats criterion ids and
+# file paths, and penalising those hard would make it paraphrase evidence it is
+# supposed to quote verbatim.
+REPEAT_PENALTY="${JUDGE_REPEAT_PENALTY:-1.1}"
+
 BODY="$(jq -n --arg m "$MODEL" --argjson msgs "$MESSAGES" --arg t "$THINKING" \
   --argjson c "$NUM_CTX" --argjson f "$SCHEMA" --argjson np "$NUM_PREDICT" \
+  --argjson rp "$REPEAT_PENALTY" \
   '{model:$m, stream:false,
     think:(if ($t | ascii_downcase) as $l | $l == "false" or $l == "off" or $l == "none"
            then false else $t end),
     format:$f,
-    options:{num_ctx:$c, temperature:0, num_predict:$np},
+    options:{num_ctx:$c, temperature:0, num_predict:$np, repeat_penalty:$rp},
     messages:$msgs}')"
 
 T0="$(date +%s)"
@@ -481,8 +495,10 @@ fi
 jq --arg sv "judgement/1.0.0" --arg stage "$STAGE" --arg target "$TARGET" \
    --arg model "$MODEL" --arg digest "$DIGEST" --argjson ctx "$NUM_CTX" \
    --arg thinking "$THINKING" --argjson secs "$((T1 - T0))" \
+   --argjson repeat_penalty "$REPEAT_PENALTY" \
   '{schema_version:$sv, stage:$stage, target:$target} + . +
-   {judged_by:{model:$model, digest:$digest, num_ctx:$ctx, thinking:$thinking, seconds:$secs}}' \
+   {judged_by:{model:$model, digest:$digest, num_ctx:$ctx, thinking:$thinking,
+               repeat_penalty:$repeat_penalty, seconds:$secs}}' \
   <<<"$CONTENT" > "$OUT"
 
 printf 'JUDGE  %s  %s  %s finding(s)  %ss  %s\n' \
