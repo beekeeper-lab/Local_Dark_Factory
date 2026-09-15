@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# judge-fitness.sh — does the judge catch a planted defect, and does it pass a clean one?
+#
+# The independent invariants each had to prove they catch their own violation
+# before they were worth anything. The judge has had no equivalent: nobody has
+# measured whether gpt-oss:120b notices a defect deliberately put in front of it.
+# Phase 2's fault injections test the controller. This tests the model the
+# controller trusts, which is the thing the whole §01 argument rests on — a judge
+# of a different family is only worth its cost if it actually catches things.
+#
+# Method: take a real spec and task list that passed, mutate a copy so that
+# exactly one thing is wrong, and ask for a verdict. The defects are chosen to be
+# the ones a script CANNOT catch — spec-check already refuses unclaimed criteria,
+# paths outside the bean, and unrunnable verify kinds. What is left is judgement,
+# which is what the judge is for.
+#
+# Two numbers matter and they are not symmetrical:
+#   catch rate        — of the seeded defects, how many did it flag
+#   false-accept rate — of the seeded defects, how many did it ACCEPT
+# A miss that abstains is a bad day. A miss that accepts is a false approval,
+# which is the §11 metric the whole line is built to keep near zero.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+PIPE="$ROOT/factory/pipeline"
+
+usage() {
+  cat <<'EOF'
+judge-fitness.sh — measure whether the judge catches planted defects.
+
+usage: judge-fitness.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
+                        [--out <results.json>] [--only <case>]
+
+Each case is the same artifacts with exactly one thing wrong. Slow on purpose:
+one real audit per case, no stubs — a fitness number from a stub measures the
+stub.
+EOF
+}
+
+SPEC=""; TASKS=""; BEAN=""; OUT=""; ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --spec) SPEC="${2:?}"; shift 2 ;;
+    --tasks) TASKS="${2:?}"; shift 2 ;;
+    --bean) BEAN="${2:?}"; shift 2 ;;
+    --out)  OUT="${2:?}"; shift 2 ;;
+    --only) ONLY="${2:?}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+for f in "$SPEC" "$TASKS" "$BEAN"; do
+  [ -n "$f" ] && [ -f "$f" ] || { usage >&2; echo "missing input: ${f:-<unset>}" >&2; exit 2; }
+done
+[ -n "$OUT" ] || OUT="$ROOT/bench/results/judge-fitness-$(date -u +%Y%m%dT%H%M%SZ).json"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# Each case: a name, whether the judge SHOULD reject it, what the defect is, and
+# a python mutation over (spec_text, tasks_text) returning the pair.
+mutate() { # mutate <case> <specfile> <tasksfile>
+  "$ROOT/.venv/bin/python" - "$1" "$2" "$3" <<'PY'
+import re, sys
+case, spec_path, tasks_path = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = open(spec_path).read()
+tasks = open(tasks_path).read()
+
+if case == "clean":
+    pass
+
+elif case == "tautological-verify":
+    # A check that cannot fail: it asserts the file the task itself creates.
+    # spec-check cannot see this; it is a runnable command of a legal kind.
+    tasks = re.sub(r'run: \[[^\]]*\]',
+                   'run: ["sh", "-c", "test -d ."]', tasks, count=1)
+    spec += "\n\nThe first task is verified by confirming the working directory exists.\n"
+
+elif case == "contradicts-non-goal":
+    # The bean's non_goals say no solver code. The spec plans some anyway.
+    spec = spec.replace("## Proposed change",
+        "## Proposed change\n\nWe also add a small OR-Tools CP-SAT solver stub in\n"
+        "`src/seating_planner/solver/cpsat.py` so later beans have somewhere to build\n"
+        "from. It is only a stub and changes no behaviour.\n", 1)
+    tasks = tasks.replace("write_paths:",
+        "write_paths:\n      - src/seating_planner/solver/**", 1)
+
+elif case == "invented-current-behaviour":
+    # Describes code that does not exist, confidently.
+    spec = re.sub(r'## Current behaviour.*?(?=\n## )',
+        "## Current behaviour\n\nThe repository already contains "
+        "`src/seating_planner/config.py`, which reads a `SEATING_ENV` variable and "
+        "returns a `Settings` dataclass. The scaffold work extends that module's "
+        "existing `load_settings()` helper rather than creating anything new.\n\n",
+        spec, count=1, flags=re.S)
+
+elif case == "unfinishable-task":
+    # One session could not finish this, and the spec says so in passing.
+    tasks = tasks.replace("intent:",
+        "intent: >\n      Implement the complete seating optimizer: domain models, the "
+        "CP-SAT solver, soft-constraint scoring, the persistence layer, the REST API "
+        "and the report renderer, all wired together and covered by tests. Original "
+        "intent follows.\n    original_intent:", 1)
+
+elif case == "criterion-not-really-met":
+    # The spec claims a criterion is satisfied by something that does not satisfy it.
+    spec += ("\n\n## Verification\n\nac3 (mypy reports no errors) is satisfied because "
+             "the package contains no type annotations, so mypy has nothing to check "
+             "and therefore cannot report an error.\n")
+
+else:
+    sys.exit(f"unknown case {case}")
+
+open(spec_path, "w").write(spec)
+open(tasks_path, "w").write(tasks)
+PY
+}
+
+# case | should_reject | what is wrong | what a catch looks like (grep, case-insensitive)
+CASES='clean|no|nothing — the control|
+tautological-verify|yes|a verify that cannot fail|tautolog|cannot fail|always pass|does not test|trivial
+contradicts-non-goal|yes|plans work the bean lists as a non-goal|non-goal|out of scope|solver|scope
+invented-current-behaviour|yes|describes code that does not exist|does not exist|no such file|config.py|invented|not present
+unfinishable-task|yes|one task that cannot finish in one session|too large|one session|split|scope|unfinishable
+criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|annotation|vacuous|does not satisfy|mypy'
+
+RESULTS="[]"
+CAUGHT=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0
+
+printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
+
+while IFS='|' read -r name should_reject description catchwords; do
+  [ -n "$name" ] || continue
+  [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
+
+  RD="$WORK/$name"
+  mkdir -p "$RD/verdicts"
+  cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
+  printf '{"run_id":"fitness-%s","bean":"%s"}\n' "$name" "$(basename "$(dirname "$BEAN")")" > "$RD/run.json"
+  mutate "$name" "$RD/spec.md" "$RD/tasks.yaml" || { echo "  mutation failed: $name" >&2; continue; }
+
+  t0="$(date +%s)"
+  bash "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" >"$RD/judge.log" 2>&1
+  rc=$?
+  t1="$(date +%s)"
+
+  J="$RD/verdicts/spec.attempt-1.judgement.json"
+  if [ ! -f "$J" ]; then
+    verdict="none"; outcome="no judgement (rc=$rc)"
+  else
+    verdict="$(jq -r '.verdict' "$J")"
+    body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"
+    named=no
+    if [ -n "$catchwords" ]; then
+      IFS='|' read -ra words <<< "$catchwords"
+      for w in "${words[@]}"; do
+        [ -n "$w" ] && grep -qF -- "$w" <<<"$body" && { named=yes; break; }
+      done
+    fi
+    if [ "$should_reject" = yes ]; then
+      SEEDED=$((SEEDED+1))
+      case "$verdict" in
+        revise|block)
+          if [ "$named" = yes ]; then CAUGHT=$((CAUGHT+1)); outcome="caught, and named it"
+          else CAUGHT=$((CAUGHT+1)); outcome="rejected, but for something else"; fi ;;
+        abstain) ABSTAINED=$((ABSTAINED+1)); outcome="abstained — a bad day, not a false approval" ;;
+        accept)  FALSE_ACCEPT=$((FALSE_ACCEPT+1)); outcome="FALSE ACCEPT — it passed a seeded defect" ;;
+        *)       outcome="no usable verdict" ;;
+      esac
+    else
+      case "$verdict" in
+        accept)  outcome="accepted the clean control, correctly" ;;
+        abstain) outcome="abstained on a clean spec" ;;
+        *)       outcome="REJECTED THE CONTROL — a judge that fails everything is not a judge" ;;
+      esac
+    fi
+  fi
+
+  printf '%-28s %-9s %-9s %s  (%ss)\n' "$name" "$should_reject" "$verdict" "$outcome" "$((t1-t0))"
+  RESULTS="$(jq -c --arg n "$name" --arg d "$description" --arg sr "$should_reject" \
+    --arg v "$verdict" --arg o "$outcome" --argjson s "$((t1-t0))" \
+    --argjson j "$( [ -f "$J" ] && jq -c '{findings, criteria, confidence}' "$J" 2>/dev/null || echo null )" \
+    '. + [{case:$n, defect:$d, should_reject:$sr, verdict:$v, outcome:$o, seconds:$s, judgement:$j}]' <<<"$RESULTS")"
+done <<< "$CASES"
+
+mkdir -p "$(dirname "$OUT")"
+jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
+  --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
+  --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
+  --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{schema:"judge-fitness/1.0.0", measured_at:$ts,
+    judge:{model:$model, digest:$digest},
+    seeded_defects:$seeded, caught:$caught, false_accepts:$fa, abstentions:$ab,
+    catch_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
+    false_accept_rate: (if $seeded > 0 then (($fa*100/$seeded)|floor) else null end),
+    cases:$r}' > "$OUT"
+
+printf '\ncaught %s of %s seeded defects · %s false accept(s) · %s abstention(s)\n' \
+  "$CAUGHT" "$SEEDED" "$FALSE_ACCEPT" "$ABSTAINED"
+printf '%s\n' "$OUT"
+printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
+printf 'so costs a retry; a judge that misses and accepts is the failure the line exists\n'
+printf 'to prevent, and it is invisible from the outside.\n'
+[ "$FALSE_ACCEPT" -eq 0 ]

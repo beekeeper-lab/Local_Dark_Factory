@@ -328,7 +328,22 @@ phase_1_exit: { seven_stages_completed: pass, three_verdicts_schema_valid: pass,
 ---
 
 ## Phase 2 — Controller drives it; the developer cannot commit
-**Entry:** Phase-1 complete.
+**Entry:** Phase-1 complete, **and the worker runs contained.**
+
+> **Sequencing, corrected 2026-09-14.** Worker containment was filed as
+> "remaining sandbox work" to be finished sometime after the fault injections.
+> That is backwards: *"out-of-path edit inside a task must reject, not strip"*
+> and the credential-exposure test below are fault classes you cannot inject
+> against a worker that is not contained — today it edits the real worktree with
+> `.git` present and the host network reachable. Testing containment failures
+> without containment tests the after-the-fact check and calls it the boundary.
+>
+> The two missing pieces were called "not small" in RESUME.md, and that was an
+> overestimate worth correcting: an image with `pi` in it is a Containerfile with
+> one static binary added to the gate image, and reaching only the model endpoint
+> is a route, not a research project. `sandbox.sh` already has the `model`
+> network mode and already warns that it currently permits general outbound —
+> closing that is the actual work, and it is bounded.
 
 - [ ] Full loop unattended for one bean: lease → worktree → specify → spec audit → build loop → gate → impl audit → document → pre-PR audit → push → CI → **human merge**
 - [ ] Fault injection — controller restart mid-stage (each of: specifying, building, committing, pushing, pr_open)
@@ -608,6 +623,46 @@ not yet do that the spec requires:
 Carried over and worth keeping: the `package` audit's run-integrity checks (branch
 is not `main`, commits exist, `steps.jsonl` start/end pairs balance, verdict filenames
 match their target) were each written after a real run failed that exact way.
+
+## The pivot trigger — decided in advance, on purpose
+
+Six halts in one evening is a normal Phase 1. The hazard is not the halts; it is
+that each one reopens "is the 27B simply not up to this, should we change the
+harness / the model / the whole approach" — a question that is unanswerable in the
+moment and expensive to re-litigate. So the trigger and the lever order are fixed
+here, now, while nothing is at stake.
+
+**When to evaluate.** After **10 beans attempted** (bean-001 … bean-010, which
+spans a scaffold through the first solver work — enough variety that a result is
+about the line rather than about one bean).
+
+**What counts.** `pass_to_gate` = the bean reached a passing `gate.json` with no
+human touching the artifacts. Not merged, not reviewed — gated.
+
+**The trigger fires if either:**
+- fewer than **5 of 10** beans reach a passing gate, or
+- the **same class of failure** blocks **3 or more** beans (one cause, three
+  beans, is a property of the line and not of the work).
+
+**Lever order, and it is not negotiable in the moment:**
+
+1. **Bean granularity and spec detail.** A plan is a prompt scaled up. The
+   cheapest thing to change is the input, and §04 already says decomposition is
+   the human's highest-leverage act. Re-cut the beans smaller, put more
+   background in them, tighten the acceptance criteria. Re-run the same ten.
+2. **The model.** Only after (1) has been tried and measured. The Q4 arm exists
+   for this, and the standing protocol for changing a model (shadow-run over the
+   last K≥20 beans, compare verdict agreement and task pass rate) is already
+   written. A model swap without (1) is a swap whose result cannot be attributed.
+3. **The harness.** Last. If the line's own mechanics are the problem, the
+   evidence for that will be specific — a stage that fails for the same
+   structural reason regardless of bean or model — and it will be obvious by the
+   time the first two levers have been pulled.
+
+The point of writing this down before it is needed: at the moment a run halts,
+every lever looks equally plausible and the most recent failure looks like the
+most important one. This ordering is a claim about cost and attributability, not
+about which failure is freshest.
 
 ## Open questions (owner)
 - First real target application for Phases 4–6?
