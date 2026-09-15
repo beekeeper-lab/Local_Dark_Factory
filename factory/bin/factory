@@ -36,6 +36,9 @@ factory — run the line against the repository you are standing in.
                             what the newest run did, stage by stage
   factory doctor            is this repository ready to be run against?
   factory beans             the approved beans, in run order
+  factory policy            the tier every bean lands in, and the rule that put
+                            it there — for reviewing risk-policy.yaml by its
+                            consequences rather than by reading globs
 
 Steps in order: preflight specify audit-spec build gate audit-impl
                 document audit-doc audit-package pr
@@ -267,6 +270,11 @@ run from the working tree."
     printf '\n'
     [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
     exit "$fail"
+    ;;
+
+  policy)
+    require_target
+    exec bash "$PIPE/policy-preview.sh" "$@"
     ;;
 
   beans)
