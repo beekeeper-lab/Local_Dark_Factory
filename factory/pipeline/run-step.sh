@@ -256,9 +256,14 @@ if [ "$CONTAIN" = 1 ]; then
   for a in "${PI_ARGS[@]}"; do CARGS+=( "${a//$ROOT/\/work}" ); done
   CARGS=( "${CARGS[@]/#$FACTORY_SKILLS/\/factory\/skills}" )
 
+  # --lock, because run-step is the thing that knows where the manifest is: it
+  # looks in the target repo and then in the factory. worker-sandbox.sh on its
+  # own only knows the repo it was called from, which for every target except
+  # this one is the wrong place — and it refuses rather than guessing, so the
+  # first real run halted on the manifest it had just been told about.
   "$PIPELINE_DIR/worker-sandbox.sh" \
     --tree "$ROOT" --agent-dir "$AGENT_DIR" --socket-dir "$GW_DIR" \
-    --skills "$FACTORY_SKILLS" \
+    --skills "$FACTORY_SKILLS" --lock "$WORKER_LOCK" \
     -- "${CARGS[@]}" -p "$CPROMPT"
   RC=$?
   [ "$GW_STARTED" = 1 ] && "$PIPELINE_DIR/model-gateway.sh" stop --dir "$GW_DIR" >/dev/null 2>&1
