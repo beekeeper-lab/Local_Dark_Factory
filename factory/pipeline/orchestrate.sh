@@ -215,8 +215,8 @@ fi
 [ -n "$TIER" ] || TIER="full"
 
 case "$TIER" in
-  small) STEPS=(preflight spec build gate audit-impl audit-package pr) ;;
-  full)  STEPS=(preflight spec audit-spec build gate audit-impl doc audit-doc audit-package pr) ;;
+  small) STEPS=(preflight spec build gate audit-impl audit-package sync pr) ;;
+  full)  STEPS=(preflight spec audit-spec build gate audit-impl doc audit-doc audit-package sync pr) ;;
   *) die "unknown pipeline tier '$TIER' in $BEAN_MD (expected small|full)" ;;
 esac
 
@@ -485,6 +485,20 @@ run_step() { # <step> [-- <extra args carried through to the child>]
   local step="$1"; shift
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
+    sync)
+      # Exit 9 is sync doing its job rather than failing at it: the branch was
+      # behind, it is not any more, and the step succeeded. What changes is what
+      # comes after it, which sync says in rewind.json and the loop acts on.
+      local src=0
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" start
+      "$PIPELINE_DIR/sync.sh" "$RUN_DIR" || src=$?
+      if [ "$src" -eq 0 ] || [ "$src" -eq 9 ]; then
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end PASS
+        return 0
+      fi
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
+      return "$src"
+      ;;
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
     audit-*)
       local rc=0 ay
@@ -582,7 +596,16 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       local mb
       mb="$(git -C "$(repo_root)" merge-base main HEAD 2>/dev/null || echo main)"
       git -C "$(repo_root)" diff "$mb"...HEAD > "$RUN_DIR/diff.txt" 2>/dev/null || true
+      # What the document looked like before this attempt. A resumed run arrives
+      # with an earlier attempt's file already on disk, and "does the file exist"
+      # then answers yes no matter what this session did — which is how a third
+      # doc attempt that wrote nothing was recorded as a failure *after* the
+      # work, halted the run, and cost an evening.
+      local doc_before="-"
+      [ -s "$RUN_DIR/impl-detail.md" ] && doc_before="$(sha256sum "$RUN_DIR/impl-detail.md" | cut -d' ' -f1)"
       "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+      local doc_after="-"
+      [ -s "$RUN_DIR/impl-detail.md" ] && doc_after="$(sha256sum "$RUN_DIR/impl-detail.md" | cut -d' ' -f1)"
 
       # A step that wrote nothing gets one retry, with that as the feedback.
       #
@@ -592,14 +615,24 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # Thirty-odd minutes each, and the run halted for a human whose entire job
       # would have been to say "you did not write the file".
       #
-      # That is not a judgement call. The file is there or it is not, and "you
-      # produced nothing" is the most actionable feedback in the line. Once, and
-      # only once: a second empty session means something is wrong that saying it
-      # again will not fix.
-      if [ ! -s "$RUN_DIR/impl-detail.md" ] && [ "${DOC_RETRIED:-0}" != 1 ]; then
+      # That is not a judgement call, but "the file is there" is the wrong way to
+      # ask it. A third attempt, on a resumed run, wrote nothing while an earlier
+      # attempt's document sat on disk — so the check said the output was present,
+      # no retry was offered, and the run halted for a human. The question is
+      # whether THIS session wrote it, which is a hash comparison.
+      #
+      # "You produced nothing" is the most actionable feedback in the line. Once,
+      # and only once: a second empty session means something is wrong that saying
+      # it again will not fix.
+      if [ "$doc_after" = "$doc_before" ] && [ "${DOC_RETRIED:-0}" != 1 ]; then
         DOC_RETRIED=1
-        printf '\nRETRY  doc produced no document → asking again, with that as the finding\n'
-        cat > "$RUN_DIR/doc-findings.md" <<'FINDINGS'
+        if [ "$doc_after" = "-" ]; then
+          printf '\nRETRY  doc produced no document → asking again, with that as the finding\n'
+        else
+          printf '\nRETRY  doc left the previous attempt'"'"'s document untouched → asking again\n'
+        fi
+        if [ "$doc_after" = "-" ]; then
+          cat > "$RUN_DIR/doc-findings.md" <<'FINDINGS'
 # You did not write the document
 
 The session ended with no `impl-detail.md` on disk. If your last message described
@@ -609,6 +642,20 @@ writing it.
 Write the file first, with the write tool, before saying anything about it. Then
 say what you did.
 FINDINGS
+        else
+          cat > "$RUN_DIR/doc-findings.md" <<'FINDINGS'
+# You did not write the document
+
+`impl-detail.md` is on disk, but it is byte-for-byte what an earlier attempt
+left there. Your session changed nothing. If your last message described the
+document you were about to write, that is the failure: describing it is not
+writing it, and a file someone else wrote is not your output.
+
+Write the file first, with the write tool, before saying anything about it.
+Overwrite it whole rather than editing around what is already there — the diff it
+has to describe has changed since that version was written.
+FINDINGS
+        fi
         rc=0
         # `--` before the findings path: run-step treats what follows as EXTRA and
         # appends it to the prompt. Without it the argument is parsed as a flag,
@@ -853,8 +900,52 @@ handle_audit_failure() { # audit FAIL: route back to the authoring step with fin
   printf 'PASS   re-audit of %s passed after re-entry\n' "$step"
 }
 
+# apply_rewind — sync rebased the branch, so some steps that passed are about a
+# commit that no longer exists. Go back to the step it names and run the ones it
+# names again, skipping the rest: the spec audit judged the plan and the plan did
+# not change, and the document describes the same implementation.
+#
+# Returns 1 if the rewind cannot be applied, which halts rather than continuing
+# forward past results known to be stale.
+declare -A FORCE_STEP=()
+apply_rewind() { # sets REWIND_INDEX
+  local rj="$RUN_DIR/rewind.json" to reason s idx=-1 n=0
+  to="$(jq -r '.to' "$rj" 2>/dev/null || true)"
+  reason="$(jq -r '.reason // "no reason recorded"' "$rj" 2>/dev/null || true)"
+  for s in "${STEPS[@]}"; do
+    [ "$s" = "$to" ] && { idx="$n"; break; }
+    n=$((n + 1))
+  done
+  if [ "$idx" -lt 0 ]; then
+    printf 'HALT   rewind names step %s, which is not in the %s tier: %s\n' \
+      "${to:-<none>}" "$TIER" "${STEPS[*]}"
+    return 1
+  fi
+  while IFS= read -r s; do
+    [ -n "$s" ] && FORCE_STEP["$s"]=1
+  done < <(jq -r '.force[]?' "$rj" 2>/dev/null || true)
+  printf '\nREWIND to %s — %s\n' "$to" "$reason"
+  printf '       running again: %s\n\n' "${!FORCE_STEP[*]}"
+  rm -f "$rj"
+  REWIND_INDEX="$idx"
+  return 0
+}
+
 # ------------------------------------------------------------------- loop --
-for STEP in "${STEPS[@]}"; do
+# An index, not a `for`, because sync can send the line backwards: a rebase makes
+# a new candidate, and a gate result about the old one is not a gate result about
+# this one.
+STEP_I=0
+while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
+  if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/rewind.json" ]; then
+    REWIND_INDEX=""
+    if apply_rewind; then
+      STEP_I="$REWIND_INDEX"
+      continue
+    fi
+    halt "${STEPS[$STEP_I]}" 1
+  fi
+  STEP="${STEPS[$STEP_I]}"
   # Preflight runs on main (it verifies that). Every step after it — including
   # audits and the run dir's gates — runs on the bean's branch, and the on-main
   # guard is the belt to ensure_run_branch's braces.
@@ -868,7 +959,10 @@ for STEP in "${STEPS[@]}"; do
       spec|build|implement|doc|pr) assert_off_main "$STEP" ;;  # pr is controller work, but still never from main
     esac
   fi
-  if step_is_pass "$STEP"; then
+  # sync is never skipped. It asks a question about the world outside the run —
+  # has the base moved? — and the answer it gave an hour ago is not evidence
+  # about now.
+  if [ "$STEP" != sync ] && [ -z "${FORCE_STEP[$STEP]:-}" ] && step_is_pass "$STEP"; then
     printf 'SKIP   %-14s already PASS\n' "$STEP"
   else
     existing="$(failed_count "$STEP")"
@@ -886,9 +980,11 @@ for STEP in "${STEPS[@]}"; do
       fi
     fi
   fi
+  unset "FORCE_STEP[$STEP]"
   if [ -n "$STOP_AFTER" ] && [ "$STEP" = "$STOP_AFTER" ]; then
     break
   fi
+  STEP_I=$((STEP_I + 1))
 done
 
 # ------------------------------------------------------------------ finish --

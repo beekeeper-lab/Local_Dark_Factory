@@ -256,6 +256,52 @@
     "base": {
       "type": "string",
       "description": "The ref the branch is measured against."
+    },
+    "rebases": {
+      "type": "array",
+      "description": "One entry per time the run branch was rebased onto the default branch because that branch had moved ahead. Present only when it happened. Each rebase invalidates the gate and the implementation audits, which is why the run record has to say it occurred: without this, a run with two gate results looks like a run that was gated twice for no reason.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "at",
+          "base_ref",
+          "from_base",
+          "to_base",
+          "old_head",
+          "new_head"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "base_ref": {
+            "type": "string",
+            "description": "The ref rebased onto, e.g. origin/main."
+          },
+          "from_base": {
+            "type": "string",
+            "description": "The merge-base the candidate was built on."
+          },
+          "to_base": {
+            "type": "string",
+            "description": "The commit the branch was replayed onto."
+          },
+          "old_head": {
+            "type": "string",
+            "description": "The candidate before the rebase. The moved-aside verdicts name this commit."
+          },
+          "new_head": {
+            "type": "string",
+            "description": "The candidate after the rebase."
+          },
+          "base_was_ahead_by": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
     }
   },
   "$defs": {

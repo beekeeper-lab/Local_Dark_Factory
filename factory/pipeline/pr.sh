@@ -116,6 +116,31 @@ else
   fi
 fi
 
+# The verdict binds a candidate to a base. If the base has moved, the merge would
+# produce a third tree that neither the gate nor any audit has seen. sync.sh is
+# the step that fixes this; the check is repeated here because opening the PR is
+# the last moment it can still be caught, and a precondition worth having is
+# worth having at the door as well as up the corridor.
+DEFAULT_BRANCH_EARLY="$([ -f "$REPO_CONFIG" ] && "$PIPELINE_DIR/yaml2json.sh" "$REPO_CONFIG" | jq -r '.default_branch // "main"' || echo main)"
+BASE_REF_EARLY=""
+if git -C "$ROOT" show-ref --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH_EARLY"; then
+  BASE_REF_EARLY="origin/$DEFAULT_BRANCH_EARLY"
+elif git -C "$ROOT" show-ref --verify --quiet "refs/heads/$DEFAULT_BRANCH_EARLY"; then
+  BASE_REF_EARLY="$DEFAULT_BRANCH_EARLY"
+fi
+if [ -n "$BASE_REF_EARLY" ]; then
+  behind_n="$(git -C "$ROOT" rev-list --count "HEAD..$BASE_REF_EARLY" 2>/dev/null || echo '?')"
+  if [ "$behind_n" = "?" ]; then
+    bad "up to date" "could not compare HEAD with $BASE_REF_EARLY"
+  elif [ "$behind_n" != 0 ]; then
+    bad "up to date" "$BASE_REF_EARLY is $behind_n commit(s) ahead — run sync, then gate and the implementation audits again"
+  else
+    ok "up to date" "nothing in $BASE_REF_EARLY that this branch lacks"
+  fi
+else
+  ok "up to date" "no $DEFAULT_BRANCH_EARLY to measure against"
+fi
+
 if [ -f "$RUN_DIR/gate.json" ]; then
   g="$(jq -r '.overall' "$RUN_DIR/gate.json")"
   [ "$g" = "pass" ] && ok "gate" "pass" || bad "gate" "gate.json says '$g'"

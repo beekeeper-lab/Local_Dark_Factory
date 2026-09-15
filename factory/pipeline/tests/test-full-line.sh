@@ -439,6 +439,63 @@ check "it lists the run"        "$(basename "${R%/}")" "$runs_out"
 check "with how it ended"       "completed" "$runs_out"
 check "and how long it took"    "ELAPSED" "$runs_out"
 
+printf '\n== main moving under a finished run sends the line backwards ==\n\n'
+#
+# The quiet version of this fault: someone lands on main while a bean builds,
+# every verdict still names the base it was built on, the PR opens green, and the
+# merge produces a tree that neither the gate nor any audit has ever seen. sync
+# is the step that refuses to let that happen, and a rewind is the orchestrator
+# agreeing to pay for it.
+#
+# This runs against the completed line above, which is the point: every step is
+# PASS, so anything that runs again does so because the rebase made it stale.
+git -C "$REPO" checkout -q main
+printf 'landed while the bean was building\n' > "$REPO/unrelated.txt"
+git -C "$REPO" add -A && git -C "$REPO" commit -q -m "someone else's work"
+git -C "$REPO" push -q origin main
+BEAN_BRANCH="$(jq -r '.branch' "$R/run.json")"
+git -C "$REPO" checkout -q "$BEAN_BRANCH"
+OLD_CANDIDATE="$(git -C "$REPO" rev-parse HEAD)"
+OLD_GATE_TS="$(stat -c %Y "$R/gate.json" 2>/dev/null || echo 0)"
+
+run_line --resume "$R" --stop-after sync > "$WORK/o-sync" 2>&1 || true
+sync_out="$(cat "$WORK/o-sync")"
+
+check "sync notices the base moved"    "SYNC REBASED" "$sync_out"
+check "it is not skipped as already-PASS" "SYNC " "$sync_out"
+want  "the candidate is a new commit"  "HEAD should have moved" \
+      test "$(git -C "$REPO" rev-parse HEAD)" != "$OLD_CANDIDATE"
+want  "the stale gate result is filed, not deleted" "pre-rebase-1/gate.json" \
+      test -f "$R/pre-rebase-1/gate.json"
+want  "and the run record says a rebase happened" "rebases[0]" \
+      test "$(jq -r '[.rebases[]?] | length' "$R/run.json")" = 1
+
+printf '\n-- and resuming replays exactly the steps the rebase invalidated --\n\n'
+run_line --resume "$R" --stop-after audit-package > "$WORK/o-rewind" 2>&1 || true
+rewind_out="$(cat "$WORK/o-rewind")"
+
+check "the orchestrator rewinds"       "REWIND to gate" "$rewind_out"
+check "and says why"                   "rebased onto origin/main" "$rewind_out"
+check "the gate runs again"            "GATE bean-001" "$rewind_out"
+check "the implementation is re-audited" "JUDGE  impl" "$rewind_out"
+check "the package is re-audited"      "PACKAGE CHECK" "$rewind_out"
+# The two that must NOT run again. The spec audit judged the plan and the plan
+# did not change; the document describes the same implementation. Re-running them
+# would cost two model sessions to reach the same answer.
+nope  "the spec audit is not re-run"   "JUDGE  spec" "$rewind_out"
+# Not "skipped" — never reached. The rewind lands on the gate, so the four steps
+# before it are not visited at all, which is the difference between deciding they
+# are still good and never asking.
+nope  "the spec is not rewritten"      "STEP   spec " "$rewind_out"
+check "the document is skipped"        "SKIP   doc" "$rewind_out"
+want  "a fresh gate result exists"     "gate.json should have been rewritten" \
+      test "$(stat -c %Y "$R/gate.json" 2>/dev/null || echo 0)" -gt "$OLD_GATE_TS"
+want  "the rewind is consumed, not sticky" "rewind.json should be gone" \
+      test ! -f "$R/rewind.json"
+want  "the new verdict names the new candidate" "candidate_sha should be HEAD" \
+      test "$(jq -r 'select(.candidate_sha) | .candidate_sha' "$R"/verdicts/impl.attempt-*.json | tail -1)" \
+         = "$(git -C "$REPO" rev-parse HEAD)"
+
 printf '\n== a doc step that writes nothing is asked again ==\n\n'
 #
 # Two real doc sessions ended with the model saying it was about to write the
@@ -558,6 +615,57 @@ if grep -qF 'HALT  doc' <<<"$nodoc"; then
   printf '  --- end ---\n'
 fi
 nope  "so the run does not halt on it" "HALT  doc" "$nodoc"
+
+printf '\n-- and a doc step that leaves an earlier attempt'"'"'s file alone is the same failure --\n\n'
+#
+# The version of this that actually cost an evening. A resumed run arrives with
+# the previous attempt'"'"'s document already on disk; the session narrates and
+# writes nothing; "does the file exist" answers yes; no retry is offered and the
+# run halts for a human. The output was present and it was not this attempt'"'"'s.
+DOC_R="$(ls -1dt "$REPO"/factory/runs/*/ 2>/dev/null | head -1)"
+STALE_SUM="$(sha256sum "$DOC_R/impl-detail.md" | cut -d' ' -f1)"
+# Put the run back to just-before-doc, with the good document still sitting there.
+python3 - "$DOC_R/steps.jsonl" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+keep = []
+for line in open(p):
+    line = line.strip()
+    if not line:
+        continue
+    r = json.loads(line)
+    # Everything the document depends on stays PASS; doc and what follows it go.
+    if r.get("step") in ("doc", "audit-doc", "audit-package", "sync", "pr"):
+        continue
+    keep.append(r)
+open(p, "w").write("".join(json.dumps(r) + "\n" for r in keep))
+PYEOF
+rm -f "$DOC_R/QUESTIONS.md"
+cp "$WORK/bin/pi" "$WORK/bin/pi-keep2"
+cat > "$WORK/bin/pi" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+# Narrate, never write — whatever the prompt says, including on the retry.
+printf 'Now writing the full document.\n'
+exit 1
+STUB
+chmod +x "$WORK/bin/pi"
+run_line --resume "$DOC_R" --stop-after doc > "$WORK/o-stale" 2>&1 || true
+cp "$WORK/bin/pi-keep2" "$WORK/bin/pi"
+stale="$(cat "$WORK/o-stale")"
+
+check "the untouched document is noticed" "left the previous attempt's document untouched" "$stale"
+check "run-step says whose file it is"    "That file is a previous attempt's" "$stale"
+nope  "and does not call it work done"    "failure after the work" "$stale"
+check "the finding says so too"           "byte-for-byte what an earlier attempt" \
+      "$(cat "$DOC_R/doc-findings.md" 2>/dev/null)"
+want  "the earlier document is left on disk" "a bad attempt must not destroy a good file" \
+      test "$(sha256sum "$DOC_R/impl-detail.md" | cut -d' ' -f1)" = "$STALE_SUM"
 
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #

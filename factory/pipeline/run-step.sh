@@ -267,6 +267,28 @@ fi
 # once, beats remembering it at each call site — build-loop.sh keeps its own
 # redirect as belt and braces, since it has a work list to lose.
 set +e
+# What this step exists to produce, and what those files looked like before it
+# ran. Both halves matter, and the second was missing: a doc attempt that wrote
+# nothing was reported as "its output IS present", because a previous attempt's
+# file was still on disk. The diagnostic was true about the directory and false
+# about the attempt, which is worse than saying nothing — it sent the next
+# reader looking for a crash after the work rather than for work that never
+# happened.
+EXPECTED=""
+case "$STEP" in
+  spec)       EXPECTED="$RUN_DIR/spec.md $RUN_DIR/tasks.yaml" ;;
+  doc)        EXPECTED="$RUN_DIR/impl-detail.md" ;;
+  build-task) EXPECTED="" ;;   # its output is the diff, checked by containment
+esac
+BEFORE_SUMS=()
+for f in $EXPECTED; do
+  if [ -s "$f" ]; then
+    BEFORE_SUMS+=( "$(sha256sum "$f" | cut -d' ' -f1)" )
+  else
+    BEFORE_SUMS+=( "-" )
+  fi
+done
+
 if [ "$CONTAIN" = 1 ]; then
   GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
   GW_STARTED=0
@@ -570,23 +592,36 @@ fi
 #
 # A model that narrates an intention and stops is a specific failure with a
 # specific fix, and it is invisible unless the expected output is named.
-EXPECTED=""
-case "$STEP" in
-  spec)       EXPECTED="$RUN_DIR/spec.md $RUN_DIR/tasks.yaml" ;;
-  doc)        EXPECTED="$RUN_DIR/impl-detail.md" ;;
-  build-task) EXPECTED="" ;;   # its output is the diff, checked by containment
-esac
-MISSING=""
-for f in $EXPECTED; do [ -s "$f" ] || MISSING="$MISSING $(basename "$f")"; done
+MISSING=""; STALE=""; FRESH=""
+i=0
+for f in $EXPECTED; do
+  before="${BEFORE_SUMS[$i]:--}"
+  i=$((i + 1))
+  if [ ! -s "$f" ]; then
+    MISSING="$MISSING $(basename "$f")"
+  elif [ "$(sha256sum "$f" | cut -d' ' -f1)" = "$before" ]; then
+    STALE="$STALE $(basename "$f")"
+  else
+    FRESH="$FRESH $(basename "$f")"
+  fi
+done
 
 printf 'STEP   %s   FAIL   child exit %s session=%s\n' "$STEP" "$RC" "${SESSION_FILE:--}" >&2
-if [ -n "$MISSING" ]; then
-  printf '       It produced none of what it exists to produce:%s\n' "$MISSING" >&2
+if [ -n "$MISSING" ] || [ -n "$STALE" ]; then
+  if [ -n "$MISSING" ]; then
+    printf '       It produced none of what it exists to produce:%s\n' "$MISSING" >&2
+  fi
+  if [ -n "$STALE" ]; then
+    # The trap this closes: the file is there, so the step looks like it worked
+    # and broke afterwards. It is byte-for-byte what an earlier attempt left.
+    printf '       Unchanged since before this attempt started:%s\n' "$STALE" >&2
+    printf '       That file is a previous attempt'"'"'s. This attempt wrote nothing.\n' >&2
+  fi
   printf '       A session that ends without writing its output has usually described what\n' >&2
   printf '       it was about to do rather than doing it. The transcript is in the session\n' >&2
   printf '       file above; its last message is the place to look.\n' >&2
-elif [ -n "$EXPECTED" ]; then
-  printf '       Its output IS present (%s), so this is a failure after the work, not\n' "$EXPECTED" >&2
-  printf '       instead of it.\n' >&2
+elif [ -n "$FRESH" ]; then
+  printf '       It did write what it exists to produce (%s) during this attempt,\n' "${FRESH# }" >&2
+  printf '       so this is a failure after the work rather than instead of it.\n' >&2
 fi
 exit 1
