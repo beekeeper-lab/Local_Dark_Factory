@@ -41,7 +41,11 @@ EOF
 }
 
 RUN_DIR=""; BEAN_FILE=""; BASE="main"; POLICY=""; GATES=""; JUDGE_TIER=""
-SANDBOX=1; SKIP_GATES=0
+# One environment variable governs "verification runs in the pinned container"
+# everywhere it happens — here and in the build loop — so a test or an operator
+# turns it off in one place rather than discovering that half the line is still
+# reaching for an image that is not there. It announces itself either way.
+SANDBOX="${FACTORY_VERIFY_SANDBOX:-1}"; SKIP_GATES=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)        BEAN_FILE="${2:?}"; shift 2 ;;
@@ -184,6 +188,7 @@ if [ "$SKIP_GATES" = 1 ]; then
   note skip "gates" "--skip-gates"
 else
   SB_ARGS=()
+  [ "$SANDBOX" = 1 ] || note note "sandbox" "off — gates and criteria run on the host, which is not the environment their versions are pinned for"
   if [ "$SANDBOX" = 1 ]; then
     [ -f "$GATES" ] || die "--gates manifest not found: $GATES (use --no-sandbox to run on the host)"
     TREE="${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/darkfactory/$(basename "$RUN_DIR")/gate-tree"

@@ -254,6 +254,17 @@ if [ "$CONTAIN" = 0 ] && [ "$ROLE" = developer ]; then
   printf 'STEP   %s   UNCONTAINED — this session runs pi on the host: %s\n' "$STEP" "$CONTAIN_WHY" >&2
 fi
 
+# Every model session gets /dev/null on stdin, contained or not.
+#
+# The build loop already did this for build-task, because a worker reading stdin
+# ate the loop's task list. The same hazard exists at every other step, and it
+# surfaced the moment the line was driven end to end by a stub that behaves like
+# pi: the spec step hung forever on a read waiting for a terminal that was never
+# going to send anything.
+#
+# Nothing in an authoring session should be reading stdin. Making that true here,
+# once, beats remembering it at each call site — build-loop.sh keeps its own
+# redirect as belt and braces, since it has a work list to lose.
 set +e
 if [ "$CONTAIN" = 1 ]; then
   GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
@@ -300,12 +311,12 @@ if [ "$CONTAIN" = 1 ]; then
   "$PIPELINE_DIR/worker-sandbox.sh" \
     --tree "$ROOT" --agent-dir "$AGENT_DIR" --socket-dir "$GW_DIR" \
     --skills "$FACTORY_SKILLS" --lock "$WORKER_LOCK" \
-    -- "${CARGS[@]}" -p "$CPROMPT"
+    -- "${CARGS[@]}" -p "$CPROMPT" </dev/null
   RC=$?
   [ "$GW_STARTED" = 1 ] && "$PIPELINE_DIR/model-gateway.sh" stop --dir "$GW_DIR" >/dev/null 2>&1
   [ "$RC" -eq 5 ] && die "the worker sandbox refused; the step did NOT run on the host instead"
 else
-  "$BIN" "${PI_ARGS[@]}" -p "$PROMPT"
+  "$BIN" "${PI_ARGS[@]}" -p "$PROMPT" </dev/null
   RC=$?
 fi
 set -e
@@ -393,7 +404,13 @@ if [ "$is_audit" = 1 ]; then
   BEST_N=0
   for f in "$RUN_DIR/verdicts/$TARGET".attempt-*.json; do
     [ -e "$f" ] || continue
+    # spec.attempt-1.judgement.json matches this glob too, and its attempt number
+    # parses as "1.judgement". pr.sh and package-check.sh already skip these; this
+    # loop and orchestrate's did not, and printed "integer expected" to stderr
+    # mid-step where it read like noise from something else.
+    case "$f" in *.judgement.json) continue ;; esac
     nfile="${f##*attempt-}"; nfile="${nfile%.json}"
+    case "$nfile" in ''|*[!0-9]*) continue ;; esac
     if [ "$nfile" -gt "$BEST_N" ]; then BEST_N="$nfile"; VFILE="$f"; fi
   done
   if [ -n "$VFILE" ]; then

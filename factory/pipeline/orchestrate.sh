@@ -372,7 +372,15 @@ latest_verdict_file() { # <target> → path of the highest attempt-<n> verdict f
   local target="$1" best="" bestn=0 f n
   for f in "$RUN_DIR/verdicts/$target".attempt-*.json; do
     [ -e "$f" ] || continue
+    # The judge's own output sits beside the verdict under the same stem:
+    # spec.attempt-1.json is the verdict, spec.attempt-1.judgement.json is what
+    # the model said. The glob catches both, and the second parses as attempt
+    # "1.judgement", which `-gt` refuses with "integer expected" — printed to
+    # stderr, in the middle of a step, where it read like noise. Every other
+    # place that walks this directory already skips them; this one did not.
+    case "$f" in *.judgement.json) continue ;; esac
     n="${f##*attempt-}"; n="${n%.json}"
+    case "$n" in ''|*[!0-9]*) continue ;; esac
     if [ "$n" -gt "$bestn" ]; then bestn="$n"; best="$f"; fi
   done
   printf '%s\n' "$best"

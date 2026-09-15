@@ -99,7 +99,12 @@ RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; MAX_OVERRIDE=""; DRY_RUN=
 # unconfined) and a correctness one (the host is not the environment the answer
 # is supposed to be about). --no-sandbox is still there for tests that cannot run
 # a container, and it prints that it is doing so.
-SANDBOX=auto; GATES_FILE=""; SANDBOX_TREE=""
+# FACTORY_VERIFY_SANDBOX=0 is the opt-out, matching FACTORY_CONTAIN_WORKER=0 for
+# the worker. Tests need it: a fixture that pins a gate image by digest — which
+# audit-check requires — cannot also have that image present, so the sandbox
+# refuses and every verify comes back as exit 5. Both opt-outs announce
+# themselves, so a run is never quietly less contained than it claims.
+SANDBOX="${FACTORY_VERIFY_SANDBOX:-auto}"; GATES_FILE=""; SANDBOX_TREE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)        BEAN_FILE="${2:?--bean needs a path}"; shift 2 ;;
@@ -234,7 +239,7 @@ if [ "$SANDBOX" = auto ]; then
     printf '             The host is not the environment these answers are about.\n' >&2
   fi
 elif [ "$SANDBOX" = 0 ]; then
-  printf 'UNCONTAINED  --no-sandbox: task verifies run on the host, which is not the\n' >&2
+  printf 'UNCONTAINED  task verifies run on the host, which is not the\n' >&2
   printf '             environment the pinned toolchain lives in.\n' >&2
 fi
 if [ "$SANDBOX" = 1 ]; then
