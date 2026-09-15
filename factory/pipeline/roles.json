@@ -3,29 +3,30 @@
     "Role -> model binding. The single reason this file exists: in the pipeline",
     "this was forked from, every step ran on Pi's default model, so the auditing",
     "steps and the authoring steps were the same weights. Fresh context is not",
-    "independence. Spec §01 requires the judge to be a different model family so",
+    "independence. Spec \u00a701 requires the judge to be a different model family so",
     "its blind spots do not match the developer's.",
     "",
-    "provider is allow-listed to 'ollama' (spec §08). Startup refuses anything",
-    "else — that absence is the 'no frontier model at runtime' guarantee, and it",
+    "provider is allow-listed to 'ollama' (spec \u00a708). Startup refuses anything",
+    "else \u2014 that absence is the 'no frontier model at runtime' guarantee, and it",
     "is checked, not assumed."
   ],
-  "provider_allowlist": ["ollama"],
-
+  "provider_allowlist": [
+    "ollama"
+  ],
   "roles": {
     "developer": {
       "provider": "ollama",
       "model": "qwen3.8:27b-mtp-q8_0",
       "num_ctx": 32768,
       "thinking": "medium",
-      "note": "Q8_0 + MTP. Q4_K_M (qwen3.8:27b) is the comparison arm — quantization damage on a 27B lands hardest on instruction-following under long context, which is what containment and section-lint depend on."
+      "note": "Q8_0 + MTP. Q4_K_M (qwen3.8:27b) is the comparison arm \u2014 quantization damage on a 27B lands hardest on instruction-following under long context, which is what containment and section-lint depend on."
     },
     "judge": {
       "provider": "ollama",
       "model": "gpt-oss:120b",
       "num_ctx": 32768,
-      "thinking": "high",
-      "note": "Different family from the developer by design. 65 GB against a 62 GB GTT ceiling before the ttm.pages_limit raise — check `ollama ps` shows 100% GPU, not a CPU split."
+      "thinking": "medium",
+      "note": "Different family from the developer by design. thinking was `high` until 2026-09-14, when it was measured to produce NO OUTPUT AT ALL: thinking tokens and content tokens share num_predict, and at high this model spends the entire budget reasoning and emits empty content (130 s, cap hit, nothing returned). low and medium both return a judgement in ~100 s. This is not the reasoning level being lowered to flatter a latency number \u2014 high does not work here. Revisit if the judge's catch rate on bench/judge-fitness.sh is poor at medium."
     },
     "smoke": {
       "provider": "ollama",
@@ -35,7 +36,6 @@
       "note": "Cheap stand-in for the judge while iterating on skill text, where loop speed matters more than verdict quality. Never used for a run whose telemetry is kept."
     }
   },
-
   "step_roles": {
     "spec": "developer",
     "implement": "developer",
@@ -47,9 +47,8 @@
     "audit-package": "judge",
     "pr": "developer"
   },
-
   "_known_gaps": [
-    "pr is bound to developer because the forked pipeline-pr skill still composes the PR body itself. Spec §06 stage 11 makes push/PR pure controller work with no model at all — the pre-PR audit already drafts the body. Fix when the controller lands.",
-    "num_ctx is an intent, not a lever: pi exposes no context flag, so Ollama serves what OLLAMA_CONTEXT_LENGTH or the last request set. run-step.sh no longer stamps this number as fact -- conditions.num_ctx is read from /api/ps and this value is recorded under conditions.declared with a declared_matches_observed flag. Control still has to come from the unit (a single global value, so it cannot express a per-role context): spec §09 healthcheck."
+    "pr is bound to developer because the forked pipeline-pr skill still composes the PR body itself. Spec \u00a706 stage 11 makes push/PR pure controller work with no model at all \u2014 the pre-PR audit already drafts the body. Fix when the controller lands.",
+    "num_ctx is an intent, not a lever: pi exposes no context flag, so Ollama serves what OLLAMA_CONTEXT_LENGTH or the last request set. run-step.sh no longer stamps this number as fact -- conditions.num_ctx is read from /api/ps and this value is recorded under conditions.declared with a declared_matches_observed flag. Control still has to come from the unit (a single global value, so it cannot express a per-role context): spec \u00a709 healthcheck."
   ]
 }

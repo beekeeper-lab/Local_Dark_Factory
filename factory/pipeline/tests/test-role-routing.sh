@@ -110,7 +110,11 @@ done
 
 # The declared value is kept, but it is not what `thinking` reports: that comes
 # back from the session pi actually wrote.
-check "conditions.declared retained"    "\"thinking\":\"high\"" "$(jq -c '.declared' <<<"$cond")"
+# Read the declared level rather than hardcoding one: this asserts that the
+# record is faithful to the configuration, not that any particular level is
+# configured. The judge's level has already changed once on measured grounds.
+declared_thinking="$(jq -r '.roles.judge.thinking' "$PIPELINE_DIR/roles.json")"
+check "conditions.declared retained"    "\"thinking\":\"$declared_thinking\"" "$(jq -c '.declared' <<<"$cond")"
 if [ "$(jq -r '.thinking' <<<"$cond")" = "$(jq -r '.declared.thinking' <<<"$cond")" ]; then
   printf '  ok    conditions.thinking is the observed level, matching what was asked for\n'; PASS=$((PASS + 1))
 else
@@ -142,14 +146,14 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# The real case: roles.json asks for "high", the model runs with thinking off,
+# The real case: roles.json asks for a thinking level, the model runs with it off,
 # and only the session file knows. That is the bug verbatim — the judge spent a
 # session with its reasoning disabled while the record claimed otherwise.
 out="$(STUB_PI_THINKING_OVERRIDE=off run_step audit-doc)"
 drift_cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
 check "drift is warned about"           "conditions drift" "$out"
 if [ "$(jq -r '.thinking' <<<"$drift_cond")" = "off" ] \
-   && [ "$(jq -r '.declared.thinking' <<<"$drift_cond")" = "high" ] \
+   && [ "$(jq -r '.declared.thinking' <<<"$drift_cond")" = "$declared_thinking" ] \
    && [ "$(jq -r '.declared_matches_observed' <<<"$drift_cond")" = "false" ]; then
   printf '  ok    silent thinking downgrade is recorded as off, not as the declared level\n'
   PASS=$((PASS + 1))

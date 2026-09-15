@@ -141,6 +141,13 @@ case "$TARGET" in
       ls -1 "$VERDICTS" 2>/dev/null || printf '(none)\n'; } > "$ARTIFACTS" ;;
 esac
 
+# The acceptance criteria, by id, from the bean the controller already parsed.
+# Measured: without this the judge invents its own — "C001: the spec must be valid
+# JSON" — and then reports against criteria nobody asked about. It was not being
+# careless; nothing in the prompt said which criteria existed.
+CRITERIA_LIST="$(jq -r '(.acceptance_criteria // [])[] | "  \(.id): \(.text)"' <<<"$BEAN_JSON")"
+[ -n "$CRITERIA_LIST" ] || CRITERIA_LIST="  (this bean declares none)"
+
 RUBRIC_FILE="$PIPELINE_DIR/../skills/factory-audit/SKILL.md"
 RUBRIC="$([ -f "$RUBRIC_FILE" ] && sed -n '/^## Rules/,$p' "$RUBRIC_FILE" || echo "Audit the artifact.")"
 
@@ -158,6 +165,17 @@ the change described".
 
 You will not write any code. You will not create any file the document mentions.
 Your entire output is a judgement ABOUT the document.
+
+**The criteria you report on are these, and only these** — one entry in
+\`criteria\` per line, using exactly these ids:
+
+$CRITERIA_LIST
+
+Do not invent criteria of your own and do not report on the document's format.
+The task list is YAML, not JSON; the controller has already validated it against
+its schema, checked every path against the bean and confirmed every criterion is
+claimed by a task. Re-checking any of that is spent attention. Your question is
+whether the plan is *right*.
 
 You are the judge of an automated software line, auditing the **$TARGET** of one
 run. You did not see this work produced and cannot ask its author anything; that
