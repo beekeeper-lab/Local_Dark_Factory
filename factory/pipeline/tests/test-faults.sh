@@ -337,6 +337,29 @@ R="$(ls -1dt "$REPO"/factory/runs/*/ | head -1)"
 want "and it is recorded as a containment violation" "containment.json should say contained:false" \
      test "$(jq -r '.contained' "$R"/build/task-1/attempt-1/containment.json)" = false
 
+printf '\n== a file outside the bean is caught by whole-diff containment ==\n\n'
+#
+# Distinct from the task-level check above, and it exists because the task-level
+# one can be satisfied task by task while the branch as a whole drifts: each
+# attempt stays inside its own write_paths, and a commit made outside the loop —
+# a fixup, a resumed run, anything — is inside nobody's. The gate reads the whole
+# diff against the bean.
+reset_repo
+run_line --stop-after build > /dev/null 2>&1
+# A commit on the branch that no task made and no task's paths allow.
+printf 'not mine\n' > "$REPO/outside.txt"
+git -C "$REPO" add outside.txt
+git -C "$REPO" commit -q -m "a change from outside the loop"
+R="$(ls -1dt "$REPO"/factory/runs/*/ | head -1)"
+o="$(cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+      FACTORY_VERIFY_SANDBOX=0 \
+      bash "$WORK/pipeline/gate.sh" "${R%/}" --bean "$REPO/factory/beans/bean-001-scaffold/bean.yaml" 2>&1)"
+check "the gate names the stray file"  "outside.txt" "$o"
+check "and fails on containment"       "containment" "$o"
+check "the gate does not pass"         "GATE FAIL" "$o"
+check "and the record says so"         '"contained":false' \
+      "$(tr -d ' ' < "${R%/}/gate.json" 2>/dev/null)"
+
 printf '\n== a task list with an unclaimed acceptance criterion is refused ==\n\n'
 reset_repo
 "$PIPELINE_DIR/yaml2json.sh" "$WORK/tasks.yaml" \

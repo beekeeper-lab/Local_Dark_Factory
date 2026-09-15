@@ -442,7 +442,7 @@ now be written against a real boundary rather than an after-the-fact check.)*
 
 - [~] Fault injection — controller restart mid-stage — **building is done** (`tests/test-faults.sh`): the line is killed mid-build, the tree comes back clean, the run record says `interrupted`, and a resume continues rather than starting over. The other stages are the same mechanism and are not separately asserted yet.
 - [x] Fault injection — out-of-path edit inside a task (must **reject**, not strip; attempt++) — `tests/test-faults.sh`
-- [ ] Fault injection — out-of-path edit in whole-diff containment
+- [x] Fault injection — out-of-path edit in whole-diff containment — `tests/test-faults.sh`. Distinct from the task-level check: each attempt can stay inside its own write_paths while the branch drifts, because a commit made outside the loop is inside nobody's paths. The gate reads the whole diff against the bean.
 - [x] Fault injection — task list with an unclaimed AC → spec audit must `revise` — `tests/test-faults.sh`; the controller refuses it before the judge is asked
 - [x] Fault injection — task list exceeding `size_budget` → `split_required`, bean blocked back to intake — `tests/test-faults.sh`
 - [x] Fault injection — impl-detail that misdescribes the diff → refused before the PR, with the code left committed and untouched — `tests/test-faults.sh`
@@ -450,9 +450,9 @@ now be written against a real boundary rather than an after-the-fact check.)*
 - [x] Fault injection — credential-exposure attempt — asserted structurally against the worker image (no ssh dir, no git identity, `.git` masked in the mount) — `tests/test-faults.sh`
 - [ ] Fault injection — remote-CI failure returns to build with targeted tasks
 - [ ] Fault injection — branch-behind-main → rebase → re-gate + re-audit impl and pre-PR (new candidate); spec audit stands
-- [ ] Fault injection — out-of-band PR-head change → blocked (violation, not re-review)
-- [ ] Fault injection — wrong model loaded → blocked (inference healthcheck asserts digest)
-- [ ] Fault injection — frontier provider added to `models.json` → startup refuses (registry allow-list is `ollama` only)
+- [x] Fault injection — out-of-band PR-head change → blocked (violation, not re-review) — `tests/test-pr.sh`: pr.sh refuses when the verdict's `candidate_sha` is not what would be pushed, with "the audit did not see what would be pushed".
+- [~] Fault injection — wrong model loaded → blocked — `tests/test-role-routing.sh` asserts that a model absent from ollama is refused rather than silently substituted, and every step records the digest it actually ran on. What is *not* built is a healthcheck that re-asserts the digest mid-run.
+- [x] Fault injection — frontier provider added to `models.json` → startup refuses — `tests/test-role-routing.sh`: the provider allow-list in roles.json is checked before any step runs, and a non-local provider is a refusal rather than a warning.
 
 **Exit:**
 ```yaml
