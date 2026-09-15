@@ -114,10 +114,36 @@ fi
 
 printf '\nrisk policy %s — what it does to %s bean(s)\n\n' \
   "$(jq -r '.policy_version // "?"' <<<"$POLICY_JSON")" "$(jq 'length' <<<"$ROWS")"
+# Truncate on a word boundary, and say that you did.
+#
+# `${why:0:60}` cut the reason a bean got its tier mid-word — "constraint solving
+# — wrong answers are silent, not loud  (ra" — on sixteen of twenty rows. This
+# table exists to let a person review a risk policy by its consequences, and a
+# consequence cut off in the middle of a word is a worse review than a longer
+# line. An ellipsis at least says the sentence continues.
+elide() { # elide <text> <budget>
+  local t="$1" n="$2"
+  [ "${#t}" -le "$n" ] && { printf '%s' "$t"; return; }
+  local cut="${t:0:$((n - 1))}"
+  # Back up to the last space, unless that throws away more than a third of it.
+  local trimmed="${cut% *}"
+  [ "${#trimmed}" -ge $(((n - 1) * 2 / 3)) ] && cut="$trimmed"
+  printf '%s…' "$cut"
+}
+# Pad by characters, not bytes. printf's %-44s counts bytes, so one multi-byte
+# ellipsis short-pads the column by two and the whole table steps left.
+pad() { # pad <text> <width>
+  local t="$1" n="$2" i=0
+  printf '%s' "$t"
+  while [ $((${#t} + i)) -lt "$n" ]; do printf ' '; i=$((i + 1)); done
+}
 printf '%-10s %-5s %-44s %s\n' BEAN TIER TITLE BOUND-BY
-jq -r '.[] | [.bean, (.tier|tostring), (.title[0:42]), .bound_by] | @tsv' <<<"$ROWS" \
+# BOUND-BY is not truncated. It is the reason a bean lands where it does, and it
+# is the entire thing a person is here to read; a long line that wraps costs
+# nothing, and "(raised to…" costs the review.
+jq -r '.[] | [.bean, (.tier|tostring), .title, .bound_by] | @tsv' <<<"$ROWS" \
   | while IFS=$'\t' read -r id tier title why; do
-      printf '%-10s %-5s %-44s %s\n' "$id" "$tier" "$title" "${why:0:60}"
+      printf '%s %s %s %s\n' "$(pad "$id" 10)" "$(pad "$tier" 5)" "$(pad "$(elide "$title" 42)" 44)" "$why"
     done
 
 printf '\nwho set the tier: '
