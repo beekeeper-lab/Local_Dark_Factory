@@ -33,6 +33,9 @@ usage: package-check.sh <run_dir> [--tier small|full]
 
   --tier <t>   which steps this run should have (default: read from run.json,
                else inferred from the steps actually recorded)
+  --current-step <s>
+               the step this check is running inside; its start is legitimately
+               unpaired because it is waiting for this check to finish
 
 Writes <run_dir>/package-check.json.
 
@@ -40,10 +43,16 @@ Exit: 0 the run record is internally consistent · 1 it is not.
 EOF
 }
 
-RUN_DIR=""; TIER=""
+RUN_DIR=""; TIER=""; CURRENT_STEP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tier)    TIER="${2:?--tier needs small or full}"; shift 2 ;;
+    # The step this check is running inside. Its `start` is in the log and its
+    # `end` cannot be, because it has not finished — it is waiting for this.
+    # Without this the pairing check reports its own caller as an unclosed step,
+    # every single time, and the run halts on the one entry that is supposed to
+    # be open.
+    --current-step) CURRENT_STEP="${2:?--current-step needs a step name}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     --version) cat "$PIPELINE_DIR/VERSION"; exit 0 ;;
     -*)        usage >&2; die "unknown flag: $1" ;;
@@ -79,8 +88,9 @@ finding() { # finding <severity> <summary>
 # complete because the last line said PASS.
 PAIRS='[]'
 if [ -f "$STEPS" ]; then
-  PAIRS="$(jq -s '
+  PAIRS="$(jq -s --arg cur "$CURRENT_STEP" '
     [ .[] | select(.event == "start" or .event == "end")
+          | select($cur == "" or .step != $cur)
           | {step, attempt: (.attempt // 1), event} ]
     | group_by([.step, .attempt])
     | map({step: .[0].step, attempt: .[0].attempt,

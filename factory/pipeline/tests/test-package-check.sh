@@ -128,5 +128,22 @@ check "with a blocker finding"   '"severity":"blocker"' "$(tr -d ' \n' < "$R/pac
 check "and it says what is left for a judge" "whether the run tells a coherent story" \
       "$(cat "$R/package-check.json")"
 
+printf '\n== the step it runs inside is allowed to be open ==\n\n'
+#
+# package-check runs during audit-package, so audit-package's own `start` is in
+# the log and its `end` cannot be — it is waiting for this check. Without
+# --current-step the pairing check reported its own caller as an unclosed step
+# every single time, and the run halted on the one entry that is supposed to be
+# open. It went unnoticed until the audit steps started being recorded at all.
+reset
+printf '{"event":"start","step":"audit-package","attempt":1}\n' >> "$R/steps.jsonl"
+out="$(pc)"
+check "without the flag it complains"  "audit-package attempt 1: 1 start(s), 0 end(s)" "$out"
+
+out="$(pc --current-step audit-package)"
+nope  "with it, the open step is ignored" "audit-package attempt 1" "$out"
+check "and everything else still pairs"  "each opened and closed exactly once" "$out"
+check "the check passes"                 "PACKAGE CHECK PASS" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

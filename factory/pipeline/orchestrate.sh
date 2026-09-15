@@ -434,6 +434,20 @@ run_step() { # <step> [-- <extra args carried through to the child>]
     audit-*)
       local rc=0 ay
       mkdir -p "$RUN_DIR/verdicts"
+      # Record the step, like every other step does.
+      #
+      # This branch handles its own control flow — judge, then audit-check, then
+      # advisory or halt — and in doing so it never called step.sh, so four of a
+      # full tier's ten steps left no trace at all in steps.jsonl. The run's own
+      # account of itself was missing every audit.
+      #
+      # It stayed invisible because the thing that checks the step log is
+      # package-check.sh, which verifies that each start has a matching end — and
+      # an entry that was never written cannot be unpaired. A record with a hole
+      # in it passes every consistency check you can run over what it does
+      # contain. Found by bench/phase1-audit.sh asking whether each step of the
+      # tier ended PASS, which is a different question and the right one.
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" start
       # The package rubric is arithmetic on files the controller wrote: matching
       # start/end pairs, a status that agrees with the log, verdict files under
       # names the driver can read. The controller settles those before the judge
@@ -441,7 +455,7 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # reach — whether the run, taken whole, tells a coherent story.
       if [ "$step" = audit-package ]; then
         local pc=0
-        "$PIPELINE_DIR/package-check.sh" "$RUN_DIR" || pc=$?
+        "$PIPELINE_DIR/package-check.sh" "$RUN_DIR" --current-step "$step" || pc=$?
         if [ "$pc" -ne 0 ]; then
           printf '\nPACKAGE CHECK FAILED — the run record contradicts itself. Not asking a judge\n'
           printf 'to have an opinion about a record that is already known to be wrong.\n'
@@ -464,15 +478,18 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       if [ "$rc" -ne 0 ] && [ "$ADVISORY_AUDITS" = 1 ]; then
         printf '\nNO JUDGEMENT  %s (exit %s) — advisory, so the run continues.\n' "$step" "$rc"
         record_advisory "$step" "$rc" "the judge produced no judgement"
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end PASS
         return 0
       elif [ "$rc" -eq 8 ]; then
         printf '\nNO ANSWER  %s — the judge ran out of room before writing one.\n' "$step"
         printf '           Raise JUDGE_NUM_PREDICT and resume; the spec is not what failed.\n'
         record_failure "$step" 8 "the judge exhausted its token budget before answering"
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
         halt "$step" 8
       elif [ "$rc" -ne 0 ]; then
         printf '\nNO JUDGEMENT  %s — the judge did not produce one (exit %s).\n' "$step" "$rc"
         record_failure "$step" "$rc" "the judge produced no judgement"
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
         halt "$step" "$rc"
       fi
       # The judge wrote a judgement; the controller turns it into a verdict,
@@ -486,13 +503,20 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       if [ "$rc" -eq 7 ] && [ "$ADVISORY_AUDITS" != 1 ]; then
         printf '\nABSTAINED  %s — the judge could not form a judgement. A human decides.\n' "$step"
         record_failure "$step" 7 "the judge abstained; routed to a human rather than retried"
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
         halt "$step" 7
       fi
       if [ "$rc" -ne 0 ] && [ "$ADVISORY_AUDITS" = 1 ]; then
         printf '\nADVISORY  %s verdict: %s — recorded, not blocking.\n' "$step" \
           "$(jq -r '.verdict // "none"' "$(ls -1t "$RUN_DIR/verdicts/${step#audit-}".attempt-*.json 2>/dev/null | grep -v judgement | head -1)" 2>/dev/null || echo unknown)"
         record_advisory "$step" "$rc" "the judge did not accept; advisory mode, so the run continued"
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end PASS
         return 0
+      fi
+      if [ "$rc" -eq 0 ]; then
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end PASS
+      else
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
       fi
       return "$rc" ;;
     doc)

@@ -21,7 +21,18 @@ set -uo pipefail
 
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# The run directory is the evidence. Keeping a copy when something fails turns
+# "the audit said a step never ended" into a question you can answer by looking,
+# instead of re-running the whole thing with a print statement added.
+KEEP="${FULL_LINE_KEEP:-}"
+cleanup() {
+  if [ -n "$KEEP" ] && [ -d "$REPO/factory/runs" ]; then
+    mkdir -p "$KEEP" && cp -r "$REPO"/factory/runs/. "$KEEP/" 2>/dev/null || true
+    printf '\n  run directory kept: %s\n' "$KEEP"
+  fi
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 PASS=0; FAIL=0
 check() {
@@ -102,6 +113,14 @@ JSON
 printf '| ID | Title | Tier | Approved by | Status |\n|---|---|---|---|---|\n| bean-001 | A bean that reaches a pull request | full | test | Approved |\n' \
   > factory/beans/INDEX.md
 mkdir -p "$WORK/sessions"
+# Minimal templates, so the render step actually runs. Without them the line
+# prints "no template; not rendered" and the documents predicate fails on the
+# half a script can check, hiding the half it cannot — which is the one worth
+# asserting.
+for t in spec impl-detail; do
+  printf '<!doctype html><html><head><title>{{TITLE}}</title></head>\n<body><nav>{{TOC}}</nav><main>{{BODY}}</main><footer>{{META}}</footer></body></html>\n' \
+    > "factory/templates/$t.html"
+done
 printf 'factory/runs/\n' > .gitignore
 printf '# x\n' > README.md
 git add -A && git commit -q -m init && git push -q -u origin main
@@ -369,6 +388,35 @@ want "every verify was precheck-ed" "verify-precheck.json missing" test -f "$R/v
 want "the claims check ran"         "claims-check.json missing" test -f "$R/claims-check.json"
 check "gh opened exactly one PR"   "pr create" "$(cat "$GH_CALLS")"
 nope  "and never merged it"        "pr merge" "$(cat "$GH_CALLS")"
+
+printf '\n== the phase-1 exit predicates, computed from this run ==\n\n'
+#
+# bench/phase1-audit.sh reads the seven `phase_1_exit` predicates out of a run
+# directory rather than out of the plan. The only complete run that exists on
+# demand is this one, so it is audited here — which means the predicates are
+# exercised against a finished run every time the suite runs, instead of being
+# tried for the first time on the day someone wants to close the phase.
+#
+# Not every predicate can pass here and that is the point of checking. A stubbed
+# judge cannot make a document teach, and this fixture's bean declares no
+# invariants_ref. What must hold is that the computable ones compute.
+AUDIT="$(bash "$PIPELINE_DIR/../../bench/phase1-audit.sh" "${R%/}" --repo "$REPO" 2>&1)"
+
+if ! grep -q 'ok    seven_stages_completed' <<<"$AUDIT"; then
+  printf '  --- the phase-1 audit in full ---\n'
+  sed 's/^/  | /' <<<"$AUDIT"
+  printf '  --- end ---\n\n'
+fi
+check "the stages predicate passes"   "ok    seven_stages_completed" "$AUDIT"
+check "the verdicts validate"         "ok    three_verdicts_schema_valid" "$AUDIT"
+check "every handoff was a commit"    "ok    every_handoff_is_commit" "$AUDIT"
+check "paths were enforced at both levels" "ok    allowed_path_enforced_task_and_bean" "$AUDIT"
+
+# The two that cannot pass from a script, asserted as *not* passing, so that a
+# change which quietly makes them pass is caught. A predicate that goes green
+# without a human is a predicate that stopped meaning anything.
+check "reading the documents is left to a human" "no human has recorded reading them" "$AUDIT"
+check "and it says what to write"                "documents-read-by.txt" "$AUDIT"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
