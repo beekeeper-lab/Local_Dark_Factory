@@ -386,7 +386,12 @@ run_step() { # <step> [-- <extra args carried through to the child>]
     checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
     audit-*)
       local rc=0 ay
-      "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" "$@" || rc=$?
+      mkdir -p "$RUN_DIR/verdicts"
+      # The judge does not run as a pi session. gpt-oss reaches for a
+      # `repo_browser` tool namespace that does not exist here, gets nothing, and
+      # answers anyway — a fluent audit of a document it never read. judge.sh
+      # puts the artifacts in the question instead. See its header.
+      "$PIPELINE_DIR/judge.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$(bean_yaml)" || rc=$?
       # The judge wrote a judgement; the controller turns it into a verdict,
       # stamping the SHAs, digests, tier and versions it must not have invented.
       ay="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a verdict cannot be stamped without it"
@@ -419,6 +424,10 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       sy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the spec cannot be checked against the bean"
       "$PIPELINE_DIR/spec-check.sh" "$RUN_DIR" --bean "$sy" || rc=$?
       return "$rc" ;;
+    pr)
+      local py
+      py="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a pull request names the bean it came from"
+      run_script_step "$step" "$PIPELINE_DIR/pr.sh" "$RUN_DIR" --bean "$py" ;;
     gate)
       local gy
       gy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the gate cannot contain a diff without the bean's allowed_write_paths"
@@ -609,7 +618,7 @@ for STEP in "${STEPS[@]}"; do
       ensure_run_branch
     fi
     case "$STEP" in
-      spec|build|implement|doc|pr) assert_off_main "$STEP" ;;
+      spec|build|implement|doc|pr) assert_off_main "$STEP" ;;  # pr is controller work, but still never from main
     esac
   fi
   if step_is_pass "$STEP"; then

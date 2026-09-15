@@ -69,21 +69,18 @@ general outbound, and says so when used. An allow-listed proxy is the next piece
 
 Supporting: `sandbox.sh` (36), `render-doc.py` + `doclint.sh` (33), invariants (9).
 
-## To apply when no run is in flight
+## The judge does not run as an agent
 
-Editing a bash script while bash is executing it is unsafe — the interpreter
-reads incrementally and can resume at a byte offset in different text. These are
-queued rather than done:
+`audit-*` does not go through `run-step.sh`. gpt-oss:120b under pi calls a
+`repo_browser.*` tool namespace that does not exist here — twelve calls, empty
+arguments, no result, and then a confident audit of a document it never read.
+`judge.sh` puts the artifacts in the question instead, constrains the answer,
+and writes the file itself. A system message denying tools is load-bearing:
+without it the model emits those tool calls even against the raw API with the
+documents already in the prompt.
 
-- `orchestrate.sh` should `mkdir -p "$RUN_DIR/verdicts"` before an audit step, so
-  the judge only has to write a file, not create a directory first. Every
-  instruction a small model does not need is one it cannot get wrong.
-- `orchestrate.sh` should route the `pr` step to `factory/pipeline/pr.sh`
-  (controller work, no model) instead of `run-step.sh`. `pr.sh` and its 25 tests
-  exist; only the wiring is missing, and the `factory-pr` skill is already
-  retired to a refusal so a mis-wire stops rather than improvises.
-- `roles.json` `step_roles.pr` can go once that wiring lands; it names a role
-  that will no longer run anything.
+It is also the only place in the line where the declared context is the served
+context, because `/api/chat` takes `options.num_ctx` and pi does not.
 
 ## What the first real runs taught
 
