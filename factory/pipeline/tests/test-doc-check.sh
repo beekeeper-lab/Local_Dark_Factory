@@ -14,6 +14,11 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 PASS=0; FAIL=0
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+
 check() {
   if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
   else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
@@ -99,6 +104,21 @@ open(p, "w").write(s)
 PY
 out="$(dc)"
 check "a bare None is refused"     "say what was checked against what" "$out"
+
+printf '\n== a walkthrough written as per-task subsections is read whole ==\n\n'
+#
+# The skill asks for the section BY TASK, so a real document puts each task under
+# its own `###`. The extractor set "inside the walkthrough" from whether the
+# current heading matched "walkthrough" at any depth, so the first subsection
+# turned it off and every file mentioned after that was invisible — the check
+# measured the empty run-up to the first task and reported the rest as uncovered.
+#
+# Same shape as the doclint bug found the same afternoon: both assumed a heading
+# ends a section, rather than a heading of the same or higher level.
+make_doc "$(printf '### task-1 — the calculator\n\n`src/calc.py` gains an add function, which is the whole of what this task does.\n\n```python src/calc.py\ndef add(a, b): return a + b\n```\n\n### task-2 — the test\n\n`src/test_calc.py` pins that behaviour with an assertion that fails if the\narithmetic changes.\n\n```python src/test_calc.py\nassert add(1, 2) == 3\n```')"
+out="$(dc)"
+check "both files are seen"     "the walkthrough covers all" "$out"
+nope  "none is reported missing" "never covers" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

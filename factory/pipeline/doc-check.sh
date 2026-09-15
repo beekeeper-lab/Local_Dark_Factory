@@ -68,16 +68,45 @@ else
   # let a document pass while the reviewer still has no account of the change.
   WALK="$("$PY" - "$DOC" <<'PY'
 import re, sys
+
+# The walkthrough runs until the next heading of the SAME OR HIGHER level, so its
+# per-task subsections are part of it.
+#
+# The previous version set `inside` from whether the current heading matched
+# "walkthrough", at any depth — so the first `### task-1` under it turned the
+# section off and every file mentioned after that was invisible. The skill asks
+# for the section BY TASK ("Walkthrough by task"), which means the first
+# subsection heading is where the content starts, and everything the check was
+# measuring was the empty run-up to it.
+#
+# Identical in shape to the bug found in doclint.sh the same afternoon, which
+# reported a three-thousand-character section as empty and cost a real run two
+# spec attempts. Both were written from the same wrong mental model: that a
+# heading ends a section, rather than a heading of the same or higher level.
 lines = open(sys.argv[1]).read().split("\n")
-out, inside, fence = [], False, False
-for line in lines:
+
+heads, fence = [], False
+for i, line in enumerate(lines):
     if line.startswith("```"):
         fence = not fence
-    if not fence and re.match(r"^#{1,6}\s", line):
-        inside = bool(re.match(r"^#{1,6}\s+walkthrough", line.strip(), re.I))
         continue
-    if inside:
-        out.append(line)
+    if fence:
+        continue
+    m = re.match(r"^(#{1,6})\s+(.*)$", line)
+    if m:
+        heads.append((i, len(m.group(1)), m.group(2).strip()))
+
+out = []
+for n, (start, level, title) in enumerate(heads):
+    if not re.match(r"^walkthrough", title, re.I):
+        continue
+    end = len(lines)
+    for j in range(n + 1, len(heads)):
+        if heads[j][1] <= level:
+            end = heads[j][0]
+            break
+    out.extend(lines[start + 1:end])
+    break
 print("\n".join(out))
 PY
 )"
