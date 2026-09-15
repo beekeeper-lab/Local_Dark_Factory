@@ -113,8 +113,21 @@ REPO_PATHS="$(jq -c '.repo_allowed_paths // []' <<<"$POLICY_JSON")"
 # declaring wider paths, and the repo cannot be edited outside what a human
 # approved. Checking against each list separately is the same thing and gives a
 # better message — it says which of the two bounds was crossed.
-VIOL_BEAN="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | "$PY" "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS" || true)"
-VIOL_REPO="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | "$PY" "$PIPELINE_DIR/contain.py" --patterns "$REPO_PATHS" || true)"
+# `|| true` is right for exit 1 — that is "violations found", and the output is
+# the answer. It is wrong for exit 2, which is contain.py refusing to run at all
+# (patterns that are not JSON, an unreadable list). Both produce empty output, so
+# without separating them a crashed containment check reports a clean diff, and
+# the one boundary the gate exists to enforce fails open.
+contained_or_die() { # contained_or_die <patterns-json> <what>
+  local out rc=0
+  out="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | "$PY" "$PIPELINE_DIR/contain.py" --patterns "$1")" || rc=$?
+  if [ "$rc" -ge 2 ]; then
+    die "containment could not be computed against the $2 paths (contain.py exit $rc). Refusing to report a diff as contained when the check did not run."
+  fi
+  printf '%s' "$out"
+}
+VIOL_BEAN="$(contained_or_die "$BEAN_PATHS" "bean's")"
+VIOL_REPO="$(contained_or_die "$REPO_PATHS" "repository's approved")"
 
 VIOL_ALL="$(printf '%s\n%s\n' "$VIOL_BEAN" "$VIOL_REPO" | sed '/^$/d' | sort -u)"
 if [ -n "$VIOL_ALL" ]; then

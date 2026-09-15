@@ -294,5 +294,30 @@ check "and says where"              "of the diff matches a known credential shap
 nope  "but never prints the secret" "AKIAIOSFODNN7EXAMPLE" "$out"
 check "and says so explicitly"      "deliberately not reproduced" "$out"
 
+printf '\n== a containment check that cannot run does not report "contained" ==\n\n'
+#
+# contain.py exits 1 for "violations found" and 2 for "I could not run" — bad
+# patterns, an unreadable list. Both print nothing to stdout, and the call site
+# swallowed every non-zero exit with `|| true`. So a crashed containment check
+# produced an empty violation list, which reads exactly like a clean diff, and
+# the one boundary the gate exists to enforce failed open.
+cat > broken-bean.yaml <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: example/x
+title: A bean whose allowed_write_paths cannot be read
+intent: Prove the gate refuses when containment cannot be computed.
+status: approved
+allowed_write_paths: "src/** (a string, not a list)"
+acceptance_criteria:
+  - id: ac1
+    text: anything
+    verify: { kind: command, run: ["true"] }
+definition_of_done: ["ac1"]
+YAML
+out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean broken-bean.yaml --policy factory/risk-policy.yaml --skip-gates 2>&1 || true)"
+check "it refuses to compute"   "containment could not be computed" "$out"
+nope  "and never says contained" '"contained": true' "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
