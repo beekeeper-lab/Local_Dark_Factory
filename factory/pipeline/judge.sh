@@ -176,6 +176,12 @@ case "$TARGET" in
     add_artifact "THE TASK LIST" "$RUN_DIR/tasks.yaml"
     add_artifact "THE ACTUAL DIFF" "$RUN_DIR/diff.txt" 120000
     add_artifact "THE GATE RESULTS" "$RUN_DIR/gate.json"
+    # "Are the tests real?" is the hardest question in the impl rubric and the one
+    # a judge cannot answer, because answering it means running the tests against
+    # code without the change in it. The controller did that. The judge is told
+    # the outcome so it can weigh it, not asked to work it out.
+    [ -f "$RUN_DIR/test-integrity.json" ] \
+      && add_artifact "THE TESTS, RUN AGAINST THE CODE WITHOUT THIS CHANGE" "$RUN_DIR/test-integrity.json"
     ;;
   doc)
     add_artifact "THE IMPLEMENTATION DOCUMENT UNDER AUDIT" "$RUN_DIR/impl-detail.md"

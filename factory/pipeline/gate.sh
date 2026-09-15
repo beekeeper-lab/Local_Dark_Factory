@@ -240,6 +240,33 @@ else
   fi
 fi
 
+# ------------------------------------------------- 6. do the tests mean it? --
+# The impl rubric's hardest question, decided by running something rather than
+# asked of a model that cannot run anything: revert the source half of the diff
+# and require the tests to stop passing. See test-integrity.sh for what it is and
+# is not able to claim.
+TEST_INTEGRITY="null"
+if [ "$SKIP_GATES" = 1 ]; then
+  note skip "test integrity" "--skip-gates"
+else
+  ti_args=( "$RUN_DIR" --base "$BASE" )
+  [ "$SANDBOX" = 1 ] && ti_args+=( --sandbox --gates "$GATES" )
+  ti_args+=( ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} )
+  ti_rc=0
+  "$PIPELINE_DIR/test-integrity.sh" "${ti_args[@]}" > "$RUN_DIR/test-integrity.out" 2>&1 || ti_rc=$?
+  ti_why="$(jq -r '.fails_on_revert.why // "see test-integrity.out"' "$RUN_DIR/test-integrity.json" 2>/dev/null)"
+  case "$ti_rc" in
+    0) pass_part "test-integrity" "the tests fail without this change" ;;
+    # 2 is undecided, not failed: no tests written, or they do not pass to begin
+    # with. Neither is decidable, both are facts the audit should weigh, and a
+    # gate that failed on them would be switched off inside a week — taking the
+    # one decidable check with it.
+    2) note note "test-integrity" "undecided — $ti_why" ;;
+    *) fail_part "test-integrity" "$ti_why" ;;
+  esac
+  [ -f "$RUN_DIR/test-integrity.json" ] && TEST_INTEGRITY="$(cat "$RUN_DIR/test-integrity.json")"
+fi
+
 # ------------------------------------------------------------------ record --
 jq -n \
   --arg schema "gate-run/1.0.0" \
@@ -250,7 +277,7 @@ jq -n \
   --argjson viol "$(printf '%s\n' "$VIOL_ALL" | sed '/^$/d' | jq -Rsc 'split("\n") | map(select(length>0))')" \
   --argjson tier "$TIER_JSON" \
   --argjson gates "$GATE_ROWS" --argjson acs "$AC_ROWS" --argjson inv "$INV_ROW" \
-  --arg secrets "$SECRETS" \
+  --arg secrets "$SECRETS" --argjson ti "$TEST_INTEGRITY" \
   --argjson ok "$([ "$FAILED" -eq 0 ] && echo true || echo false)" \
   '{schema:$schema, bean:$bean, base:$base, started_at:$started, finished_at:$finished,
     diff: {files:$changed, file_count:$changed_n, changed_lines:$diff_lines},
@@ -258,6 +285,7 @@ jq -n \
     tier: $tier,
     secret_scan: {suspicious_lines: ($secrets | if . == "" then [] else split("\n") end)},
     gates: $gates, acceptance_criteria: $acs, invariants: $inv,
+    test_integrity: $ti,
     overall: (if $ok then "pass" else "fail" end)}' > "$RESULT"
 
 printf '\n%s — %s\n' "$([ "$FAILED" -eq 0 ] && echo "GATE PASS" || echo "GATE FAIL")" "$RESULT"
