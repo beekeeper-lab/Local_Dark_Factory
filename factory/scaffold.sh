@@ -208,13 +208,26 @@ done
 } | write "factory/beans/INDEX.md"
 
 # -- the pipeline's view of this repo -------------------------------------------
-jq -n --arg tier "$TIER" '{
+# The corpus, copied from the bean set's manifest, which already records all
+# three. run-record.schema.json requires them on every run record, and
+# `requirements_sha256` is the field that proves the input never moved between
+# runs — without it, comparing one run to another is comparing two things that
+# may not have had the same requirements.
+jq -n \
+  --arg corpus_name "$(jq -r '.corpus // "unknown"' "$BEAN_SET/manifest.json" 2>/dev/null)" \
+  --arg corpus_set "$(jq -r '.bean_set // "unversioned"' "$BEAN_SET/manifest.json" 2>/dev/null)" \
+  --arg corpus_sha "$(jq -r '.requirements_sha256 // ""' "$BEAN_SET/manifest.json" 2>/dev/null)" --arg tier "$TIER" '{
   runs_root: "factory/runs",
   branch_pattern: "bean/BEAN-NNN-<slug>",
   bean_dir_pattern: "factory/beans/BEAN-NNN-<slug>",
   bean_index_path: "factory/beans/INDEX.md",
   repo_config: "factory/repo.yaml",
   gates_ref: "factory/gates.lock.yaml",
+  corpus: {
+    name: $corpus_name,
+    bean_set: $corpus_set,
+    requirements_sha256: $corpus_sha
+  },
   test_command: ["pytest", "-q"],
   verify_timeout_s: 900,
   sandbox_env: {

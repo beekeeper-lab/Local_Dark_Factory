@@ -2,23 +2,49 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://forge.local/schemas/run-record.schema.json",
   "title": "RunRecord",
-  "description": "One bean processed under one set of conditions. The existing steps.jsonl and telemetry-report.sh record what HAPPENED; this record fixes what it happened UNDER. Two runs are only comparable when their conditions differ in exactly the dimension under test — without this record, a Q4 run and a Q8 run are two anecdotes rather than one experiment.",
+  "description": "One bean processed under one set of conditions. The existing steps.jsonl and telemetry-report.sh record what HAPPENED; this record fixes what it happened UNDER. Two runs are only comparable when their conditions differ in exactly the dimension under test \u2014 without this record, a Q4 run and a Q8 run are two anecdotes rather than one experiment.",
   "type": "object",
-  "required": ["schema_version", "run_id", "bean_id", "corpus", "conditions", "started_at", "status"],
+  "required": [
+    "schema_version",
+    "run_id",
+    "bean_id",
+    "corpus",
+    "conditions",
+    "started_at",
+    "status"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": "run-record/1.0.0" },
-    "run_id": { "type": "string", "minLength": 1 },
-    "bean_id": { "type": "string", "minLength": 1 },
-    "branch": { "type": "string" },
-
+    "schema_version": {
+      "const": "run-record/1.0.0"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bean_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "branch": {
+      "type": "string"
+    },
     "corpus": {
       "type": "object",
       "description": "Which frozen requirements, and which derived bean set. The requirements hash is what proves the input never moved between runs.",
-      "required": ["name", "requirements_sha256", "bean_set"],
+      "required": [
+        "name",
+        "requirements_sha256",
+        "bean_set"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "examples": ["seating-planner"] },
+        "name": {
+          "type": "string",
+          "examples": [
+            "seating-planner"
+          ]
+        },
         "requirements_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
@@ -28,100 +54,253 @@
           "type": "string",
           "description": "Version of the derived bean set, e.g. 'v1'. Beans are regenerated as intake improves; bean-set quality is itself a dimension under test."
         },
-        "bean_set_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "bean_set_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
       }
     },
-
     "conditions": {
       "type": "object",
-      "description": "Everything that could change the outcome. Any field left unset makes a comparison along that axis unsound.",
-      "required": ["developer", "judge", "stack", "pipeline_version"],
+      "description": "Everything that could change the outcome. Any field left unset makes a comparison along that axis unsound. Written empty at run creation and filled as steps record theirs; the per-step conditions in steps.jsonl are the authoritative ones.",
+      "required": [
+        "developer",
+        "judge",
+        "stack",
+        "pipeline_version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "developer": { "$ref": "#/$defs/roleConfig" },
-        "judge": { "$ref": "#/$defs/roleConfig" },
+        "developer": {
+          "$ref": "#/$defs/roleConfig"
+        },
+        "judge": {
+          "$ref": "#/$defs/roleConfig"
+        },
         "stack": {
           "type": "string",
           "description": "Target tech stack for this build of the corpus, e.g. 'python-fastapi', 'typescript-react'. The same beans built into a different stack is a valid experiment.",
           "minLength": 1
         },
-        "pipeline_version": { "type": "string", "minLength": 1 },
+        "pipeline_version": {
+          "type": "string",
+          "minLength": 1
+        },
         "skill_versions": {
           "type": "object",
           "description": "Content hash per skill actually loaded. Skill text is the primary thing the outside builder tunes, so a run is not reproducible without it.",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "regime": {
-          "enum": ["serial", "coresident"],
+          "enum": [
+            "serial",
+            "coresident"
+          ],
           "description": "From the Phase-0 measurement in effect at run time."
         },
-        "gates_manifest_digest": { "type": "string" },
-        "risk_policy_version": { "type": "string" }
+        "gates_manifest_digest": {
+          "type": "string"
+        },
+        "risk_policy_version": {
+          "type": "string"
+        }
       }
     },
-
-    "started_at": { "type": "string", "format": "date-time" },
-    "ended_at": { "type": "string", "format": "date-time" },
-    "status": {
-      "enum": ["running", "completed", "halted", "blocked", "cancelled"]
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
     },
-    "halt_reason": { "type": "string" },
-
+    "ended_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "completed",
+        "halted",
+        "blocked",
+        "cancelled"
+      ]
+    },
+    "halt_reason": {
+      "type": "string"
+    },
     "outcome": {
       "type": "object",
       "description": "The comparable result. Populated when the run reaches a terminal state.",
       "additionalProperties": false,
       "properties": {
-        "reached_pr": { "type": "boolean" },
+        "reached_pr": {
+          "type": "boolean"
+        },
         "human_verdict": {
-          "enum": ["accepted", "rejected", "not_reviewed"],
+          "enum": [
+            "accepted",
+            "rejected",
+            "not_reviewed"
+          ],
           "description": "Ground truth. A run that produced a PR the human rejected is not a success, whatever the judge said."
         },
         "rejection_reason": {
-          "enum": ["defect", "requirement_miss", "security", "preference", "stale_branch", "unrelated_ci", "doc_quality"],
-          "description": "Per spec §11. Only defect / requirement_miss / security (and doc_quality at document stages) count as false approvals."
+          "enum": [
+            "defect",
+            "requirement_miss",
+            "security",
+            "preference",
+            "stale_branch",
+            "unrelated_ci",
+            "doc_quality"
+          ],
+          "description": "Per spec \u00a711. Only defect / requirement_miss / security (and doc_quality at document stages) count as false approvals."
         },
         "attempts_per_step": {
           "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 1 }
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
         },
         "revise_count_by_stage": {
           "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 0 }
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "wall_seconds": { "type": "number", "minimum": 0 },
-        "swap_seconds_total": { "type": "number", "minimum": 0 },
+        "wall_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "swap_seconds_total": {
+          "type": "number",
+          "minimum": 0
+        },
         "tokens": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "input": { "type": "integer", "minimum": 0 },
-            "output": { "type": "integer", "minimum": 0 },
-            "reasoning": { "type": "integer", "minimum": 0 }
+            "input": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reasoning": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         }
       }
     },
-
-    "pi_session_file": { "type": "string" },
-    "notes": { "type": "string" }
+    "pi_session_file": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "bean": {
+      "type": "string",
+      "description": "Legacy alias for bean_id. Every script here reads it, so it stays; new readers should use bean_id. Declared rather than tolerated, because additionalProperties is false and a field the contract does not name is a field the contract cannot catch drifting."
+    },
+    "tier": {
+      "enum": [
+        "small",
+        "full"
+      ],
+      "description": "Which pipeline tier this run follows, decided from the bean and fixed for the run."
+    },
+    "halted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the run stopped for a human. Distinct from ended_at, which means it finished."
+    },
+    "halted_at_step": {
+      "type": "string",
+      "description": "The step it halted on. What a person looks for first."
+    },
+    "blocked_task": {
+      "type": "string",
+      "description": "The task that exhausted its attempts, when the build loop is what stopped."
+    },
+    "blocked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "interrupted_by": {
+      "type": "string",
+      "description": "The signal that stopped the run, when it was killed rather than halted."
+    },
+    "interrupted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the line reaches its last step. Alias of ended_at as written today."
+    },
+    "pr_url": {
+      "type": "string",
+      "description": "The pull request this run opened, once it has."
+    },
+    "pr_opened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "base": {
+      "type": "string",
+      "description": "The ref the branch is measured against."
+    }
   },
-
   "$defs": {
     "roleConfig": {
       "type": "object",
-      "required": ["model", "num_ctx"],
+      "required": [
+        "model",
+        "num_ctx"
+      ],
       "additionalProperties": false,
       "properties": {
-        "model": { "type": "string", "minLength": 1 },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
         "digest": {
           "type": "string",
           "description": "Ollama digest. The tag can be re-pointed at new weights; the digest cannot."
         },
-        "quant": { "type": "string", "examples": ["Q4_K_M", "Q8_0", "MXFP4"] },
-        "num_ctx": { "type": "integer", "minimum": 1024 },
-        "thinking": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"] },
-        "provider": { "const": "ollama" }
+        "quant": {
+          "type": "string",
+          "examples": [
+            "Q4_K_M",
+            "Q8_0",
+            "MXFP4"
+          ]
+        },
+        "num_ctx": {
+          "type": "integer",
+          "minimum": 1024
+        },
+        "thinking": {
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "provider": {
+          "const": "ollama"
+        }
       }
     }
   }

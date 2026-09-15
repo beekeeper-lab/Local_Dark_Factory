@@ -166,7 +166,8 @@ YAML
 
 cat > ai/pipeline/config.json <<'JSON'
 {
-  "runs_root": "ai/runs",
+ "corpus":{"name":"test-corpus","bean_set":"v0","requirements_sha256":"0000000000000000000000000000000000000000000000000000000000000000"},
+ "runs_root": "ai/runs",
   "branch_pattern": "bean/BEAN-NNN-<slug>",
   "bean_dir_pattern": "ai/beans/BEAN-NNN-<slug>",
   "bean_index_path": "ai/beans/INDEX.md",

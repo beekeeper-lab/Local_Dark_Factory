@@ -100,7 +100,9 @@ verify_versions_at_startup: false
 gates: []
 YAML
 cat > factory/pipeline-config.json <<'JSON'
-{"runs_root":"factory/runs",
+{
+ "corpus":{"name":"test-corpus","bean_set":"v0","requirements_sha256":"0000000000000000000000000000000000000000000000000000000000000000"},
+ "runs_root":"factory/runs",
  "bean_dir_pattern":"factory/beans/BEAN-NNN-<slug>",
  "bean_index_path":"factory/beans/INDEX.md",
  "branch_pattern":"bean/BEAN-NNN-<slug>",
