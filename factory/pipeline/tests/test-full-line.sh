@@ -391,6 +391,35 @@ want "the claims check ran"         "claims-check.json missing" test -f "$R/clai
 check "gh opened exactly one PR"   "pr create" "$(cat "$GH_CALLS")"
 nope  "and never merged it"        "pr merge" "$(cat "$GH_CALLS")"
 
+printf '\n== the phase-1 exit predicates, computed from this run ==\n\n'
+#
+# bench/phase1-audit.sh reads the seven `phase_1_exit` predicates out of a run
+# directory rather than out of the plan. The only complete run that exists on
+# demand is this one, so it is audited here — which means the predicates are
+# exercised against a finished run every time the suite runs, instead of being
+# tried for the first time on the day someone wants to close the phase.
+#
+# Not every predicate can pass here and that is the point of checking. A stubbed
+# judge cannot make a document teach, and this fixture's bean declares no
+# invariants_ref. What must hold is that the computable ones compute.
+AUDIT="$(bash "$PIPELINE_DIR/../../bench/phase1-audit.sh" "${R%/}" --repo "$REPO" 2>&1)"
+
+if ! grep -q 'ok    seven_stages_completed' <<<"$AUDIT"; then
+  printf '  --- the phase-1 audit in full ---\n'
+  sed 's/^/  | /' <<<"$AUDIT"
+  printf '  --- end ---\n\n'
+fi
+check "the stages predicate passes"   "ok    seven_stages_completed" "$AUDIT"
+check "the verdicts validate"         "ok    three_verdicts_schema_valid" "$AUDIT"
+check "every handoff was a commit"    "ok    every_handoff_is_commit" "$AUDIT"
+check "paths were enforced at both levels" "ok    allowed_path_enforced_task_and_bean" "$AUDIT"
+
+# The two that cannot pass from a script, asserted as *not* passing, so that a
+# change which quietly makes them pass is caught. A predicate that goes green
+# without a human is a predicate that stopped meaning anything.
+check "reading the documents is left to a human" "no human has recorded reading them" "$AUDIT"
+check "and it says what to write"                "documents-read-by.txt" "$AUDIT"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed
@@ -452,44 +481,11 @@ check "and handed back, not halted"     "re-entering \`spec\` with the findings"
 check "the second attempt passes"       "SPEC CHECK PASS" "$retry_out"
 nope  "so the run does not halt"        "HALT  spec" "$retry_out"
 
-# Put the good run back for the predicates below.
-rm -rf "$REPO/factory/runs"
-git -C "$REPO" checkout -q main 2>/dev/null
-git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
-git -C "$REPO" clean -fdq
-rm -f "$GH_EXISTING" "$GH_CALLS"
-run_line > "$WORK/line.log" 2>&1
-out="$(cat "$WORK/line.log")"
-R="$(ls -1dt "$REPO"/factory/runs/*/ 2>/dev/null | head -1)"
-
-printf '\n== the phase-1 exit predicates, computed from this run ==\n\n'
-#
-# bench/phase1-audit.sh reads the seven `phase_1_exit` predicates out of a run
-# directory rather than out of the plan. The only complete run that exists on
-# demand is this one, so it is audited here — which means the predicates are
-# exercised against a finished run every time the suite runs, instead of being
-# tried for the first time on the day someone wants to close the phase.
-#
-# Not every predicate can pass here and that is the point of checking. A stubbed
-# judge cannot make a document teach, and this fixture's bean declares no
-# invariants_ref. What must hold is that the computable ones compute.
-AUDIT="$(bash "$PIPELINE_DIR/../../bench/phase1-audit.sh" "${R%/}" --repo "$REPO" 2>&1)"
-
-if ! grep -q 'ok    seven_stages_completed' <<<"$AUDIT"; then
-  printf '  --- the phase-1 audit in full ---\n'
-  sed 's/^/  | /' <<<"$AUDIT"
-  printf '  --- end ---\n\n'
-fi
-check "the stages predicate passes"   "ok    seven_stages_completed" "$AUDIT"
-check "the verdicts validate"         "ok    three_verdicts_schema_valid" "$AUDIT"
-check "every handoff was a commit"    "ok    every_handoff_is_commit" "$AUDIT"
-check "paths were enforced at both levels" "ok    allowed_path_enforced_task_and_bean" "$AUDIT"
-
-# The two that cannot pass from a script, asserted as *not* passing, so that a
-# change which quietly makes them pass is caught. A predicate that goes green
-# without a human is a predicate that stopped meaning anything.
-check "reading the documents is left to a human" "no human has recorded reading them" "$AUDIT"
-check "and it says what to write"                "documents-read-by.txt" "$AUDIT"
+# Deliberately no cleanup run afterwards. The first version re-ran the whole
+# line here to restore state for the checks below, which pushed a rebuilt branch
+# to an origin that already had the first one; pr.sh refused, correctly, and the
+# phase-1 audit reported pr(FAIL) for a run that had never been meant to open one.
+# This block now runs last and leaves the repository however it likes.
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
