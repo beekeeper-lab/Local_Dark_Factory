@@ -431,6 +431,23 @@ if [ -z "$CONTENT" ]; then
   exit 1
 fi
 if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
+  # Cut off mid-object is not the same failure as ignoring the schema, and saying
+  # the wrong one sends the next person looking in the wrong place. A grammar-
+  # constrained decode cannot emit invalid JSON by choice; it can be stopped
+  # part-way through emitting valid JSON. done_reason tells them apart.
+  #
+  # bean-001's first spec audit produced exactly this: a well-formed object that
+  # stopped mid-string, with the model having spent its last few hundred tokens
+  # repeating "The 'ruff check' command is present but not configured to run."
+  # The log called it "not JSON despite constrained decoding", which is true of
+  # the bytes and false about the cause.
+  if [ "$DONE_REASON" = "length" ]; then
+    printf '%s' "$CONTENT" > "$RUN_DIR/verdicts/$TARGET.truncated.json" 2>/dev/null || true
+    printf 'JUDGE  %s: cut off mid-answer at the %s-token cap — the JSON stops part-way.\n' \
+      "$TARGET" "$NUM_PREDICT" >&2
+    printf '       What it managed is in verdicts/%s.truncated.json. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
+    exit 8
+  fi
   printf 'JUDGE  %s: the answer is not JSON despite constrained decoding:\n%s\n' \
     "$TARGET" "$(printf '%s' "$CONTENT" | head -c 400)" >&2
   exit 1
