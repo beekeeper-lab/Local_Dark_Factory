@@ -83,6 +83,17 @@ The controller lints these. A thin one fails the step before a judge sees it.
    whole step was wasted. Announcing the write is not the write. If you find
    yourself describing the document you are about to produce, produce it instead;
    you can say what you did afterwards.
+4. **Write it in pieces, not in one call.** Create the file as soon as you have
+   the Summary — the seven headings and whatever prose you have is enough for a
+   first write — then fill the sections in with further writes or edits. A
+   finished document here runs to sixteen kilobytes, and a session that tries to
+   compose the whole of it before its first tool call is holding the entire thing
+   in one turn. Three real doc sessions have died exactly there: one said "From
+   now on, I'll create the documentation", one said "I am currently writing the
+   documentation", and one said "Now writing the full document" four times in four
+   consecutive turns and then exited, twenty-eight minutes in, with nothing
+   written. A file that exists and is half-finished can be finished. A file that
+   does not exist cannot.
 
 That is the whole job. Do not run git, do not commit, do not render anything, do
 not touch the code — the change is already accepted and the document must not
