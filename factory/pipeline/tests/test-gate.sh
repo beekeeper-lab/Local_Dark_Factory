@@ -95,6 +95,11 @@ commit_all() { # commit_all <message> — refuse to "succeed" with nothing stage
   git commit -q -m "$1"
 }
 
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+
 gate() { bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean bean.yaml --policy factory/risk-policy.yaml "$@" 2>&1; }
 reset_branch() {
   git checkout -q main
@@ -272,6 +277,22 @@ YAML
 else
   printf '  SKIP  podman or the gate image unavailable; execution not exercised\n'
 fi
+
+printf '\n== a found secret is located, never reproduced ==\n\n'
+#
+# The scan used to print the matching lines. A check that finds a credential and
+# copies it into the run log has spread it: the run directory is evidence, it is
+# read by a judge, quoted in findings and summarised into a pull request. The
+# detection would have been the largest single act of disclosure in the process.
+mkdir -p src
+printf 'AWS_KEY = "AKIAIOSFODNN7EXAMPLE"\n' > src/leak.py
+git add src/leak.py >/dev/null 2>&1
+git commit -q -m "a key committed by accident" >/dev/null 2>&1
+out="$(gate --skip-gates || true)"
+check "the scan fires"              "suspicious added line" "$out"
+check "and says where"              "of the diff matches a known credential shape" "$out"
+nope  "but never prints the secret" "AKIAIOSFODNN7EXAMPLE" "$out"
+check "and says so explicitly"      "deliberately not reproduced" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

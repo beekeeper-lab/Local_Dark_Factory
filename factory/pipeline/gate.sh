@@ -176,8 +176,18 @@ SECRETS="$(git -C "$ROOT" diff "$MERGE_BASE"...HEAD -U0 \
   | grep -nEi 'BEGIN (RSA|OPENSSH|DSA|EC|PGP) PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN CERTIFICATE-----|(secret|password|passwd|api[_-]?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' \
   | head -20 || true)"
 if [ -n "$SECRETS" ]; then
-  fail_part "secret_scan" "$(printf '%s' "$SECRETS" | wc -l) suspicious added line(s)"
-  printf '%s\n' "$SECRETS" | sed 's/^/           /'
+  # Report WHERE, never WHAT.
+  #
+  # This used to print the matching lines. A scan that finds a credential and
+  # then copies it into the run log has spread it: the run directory is kept as
+  # evidence, gets read by a judge, quoted in findings, and summarised into a
+  # pull request. The detection would have been the largest single act of
+  # disclosure in the process.
+  #
+  # The line number and the shape that matched are enough to find it, and the
+  # person who goes looking has the diff in front of them anyway.
+  fail_part "secret_scan" "$(printf '%s' "$SECRETS" | wc -l) suspicious added line(s) — locations only, the content is deliberately not reproduced here"
+  printf '%s\n' "$SECRETS" | sed -E 's/^([0-9]+):.*/           added line \1 of the diff matches a known credential shape/'
 else
   pass_part "secret_scan" "no known credential shapes in the added lines"
 fi
