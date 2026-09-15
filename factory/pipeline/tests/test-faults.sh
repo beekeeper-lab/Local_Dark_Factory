@@ -499,7 +499,27 @@ done
 # TERM to the controller, exactly as an operator killing it by pid would. If the
 # line only cleans up when the shell happens to signal the whole group, it does
 # not clean up.
-kill -TERM -"$LINE_PID" 2>/dev/null || kill -TERM "$LINE_PID" 2>/dev/null
+# Signal the group ONLY if setsid actually made one, and only if it is not ours.
+#
+# `kill -TERM -PGID` is a blunt instrument. setsid does not always create a new
+# session — if the caller is already a process-group leader it forks, and `$!` is
+# then setsid's pid rather than the new leader's. Signalling `-$!` in that case
+# targets whatever group $! happens to be in, which is the test runner's own.
+#
+# This is not hypothetical. A live bean build was killed mid-document with SIGTERM
+# while this suite was running, after thirty-seven minutes of model time, and the
+# run recorded "child exit 143" with no indication of where the signal came from.
+# A test that can reach outside its own fixture is a test that will eventually be
+# blamed for something it did not do, or excused for something it did.
+TEST_PGID="$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')"
+LINE_PGID="$(ps -o pgid= -p "$LINE_PID" 2>/dev/null | tr -d ' ')"
+if [ -n "$LINE_PGID" ] && [ "$LINE_PGID" != "$TEST_PGID" ] && [ "$LINE_PGID" = "$LINE_PID" ]; then
+  kill -TERM -"$LINE_PGID" 2>/dev/null
+else
+  printf '  --    setsid did not give the line its own process group; signalling the\n'
+  printf '        process alone so this test cannot reach anything else on the machine.\n'
+  kill -TERM "$LINE_PID" 2>/dev/null
+fi
 wait "$LINE_PID" 2>/dev/null
 # Give the children their cleanup window.
 for _ in $(seq 1 40); do
