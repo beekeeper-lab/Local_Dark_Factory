@@ -72,7 +72,12 @@ jq -e --arg p "$PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >/dev/
 # this task. An unattended line cannot have a stage whose duration is unbounded,
 # and an audit that fails fast and retries is worth more than one that might
 # finish eventually. Generous enough for a real judgement; short of a runaway.
-NUM_PREDICT="${JUDGE_NUM_PREDICT:-6000}"
+# Measured on this box: this model generates at about 6.7 tok/s on a prompt this
+# size — not the 35 tok/s Phase 0 recorded with num_predict=64. So 6000 tokens is
+# fifteen minutes and bounds nothing useful. 2000 is about five minutes, which is
+# long for one audit and short enough that a stuck one is noticed rather than
+# waited on.
+NUM_PREDICT="${JUDGE_NUM_PREDICT:-2000}"
 MODEL="$(jq -r '.roles.judge.model' "$ROLES_FILE")"
 NUM_CTX="$(jq -r '.roles.judge.num_ctx // 32768' "$ROLES_FILE")"
 # The thinking level is a measurable trade, not a preference. The judge's value is

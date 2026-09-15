@@ -145,9 +145,17 @@ while IFS='|' read -r name should_reject description catchwords; do
   rc=$?
   t1="$(date +%s)"
 
+  # Keep the evidence. A case that produced nothing is the most interesting kind
+  # and the one whose log a temp-dir cleanup would take with it.
+  KEEP="$(dirname "$OUT")/judge-fitness-logs/$name"
+  mkdir -p "$KEEP"
+  cp -f "$RD/judge.log" "$KEEP/judge.log" 2>/dev/null || true
+  cp -f "$RD/spec.md" "$RD/tasks.yaml" "$KEEP/" 2>/dev/null || true
+  cp -f "$RD"/verdicts/* "$KEEP/" 2>/dev/null || true
+
   J="$RD/verdicts/spec.attempt-1.judgement.json"
   if [ ! -f "$J" ]; then
-    verdict="none"; outcome="no judgement (rc=$rc)"
+    verdict="none"; outcome="no judgement (rc=$rc): $(tail -1 "$RD/judge.log" 2>/dev/null | head -c 90)"
   else
     verdict="$(jq -r '.verdict' "$J")"
     body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"
