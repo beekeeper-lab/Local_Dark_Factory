@@ -358,9 +358,16 @@ for i in "${!ART_PATHS[@]}"; do
 done
 MESSAGES="$(jq -c --arg c "$CLOSING" '. + [{role:"user", content:$c}]' <<<"$MESSAGES")"
 
+# `think` is a level OR a boolean, and the difference matters: bench/format-support.sh
+# measures that gemma4 holds the judgement schema only with thinking OFF (at any
+# level it emits a markdown fence, which a bound grammar cannot produce) while
+# gpt-oss:120b is the exact reverse. So "false" here is the boolean, not the word.
 BODY="$(jq -n --arg m "$MODEL" --argjson msgs "$MESSAGES" --arg t "$THINKING" \
   --argjson c "$NUM_CTX" --argjson f "$SCHEMA" --argjson np "$NUM_PREDICT" \
-  '{model:$m, stream:false, think:$t, format:$f,
+  '{model:$m, stream:false,
+    think:(if ($t | ascii_downcase) as $l | $l == "false" or $l == "off" or $l == "none"
+           then false else $t end),
+    format:$f,
     options:{num_ctx:$c, temperature:0, num_predict:$np},
     messages:$msgs}')"
 
