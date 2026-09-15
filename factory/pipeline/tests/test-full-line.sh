@@ -391,6 +391,77 @@ want "the claims check ran"         "claims-check.json missing" test -f "$R/clai
 check "gh opened exactly one PR"   "pr create" "$(cat "$GH_CALLS")"
 nope  "and never merged it"        "pr merge" "$(cat "$GH_CALLS")"
 
+printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
+#
+# spec-check produces the most actionable complaints in the line — "proposed
+# change: only 77 characters (min 80)" — and used to halt the run with them,
+# so the commonest spec defect needed a human to transcribe a specific
+# instruction to a model that was right there. An audit that says revise already
+# re-enters the authoring step with its findings; this does the same.
+SPEC_THIN="$WORK/spec-thin.md"
+# Replace the WHOLE section, not its first line: a one-line sed left the rest of
+# the paragraph behind and the section was still comfortably over the minimum,
+# so the first version of this test asserted a complaint that never happened.
+"$PIPELINE_DIR/../../.venv/bin/python" - "$WORK/spec.md" "$SPEC_THIN" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+text = re.sub(r"(## Proposed change\n\n).*?(?=\n## )", r"\1Too short.\n", text, count=1, flags=re.S)
+open(sys.argv[2], "w").write(text)
+PY
+# The stub writes the thin spec first, then the good one, so the retry has
+# something different to produce — a model that rewrites identically is a
+# different failure and is not what this tests.
+cat > "$WORK/bin/pi-retry" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+case "$prompt" in
+  *factory-spec*)
+    # A findings file as the last argument means this is the retry.
+    case "$prompt" in
+      *spec-check-findings.md*)
+        run_dir="$(printf '%s' "$prompt" | awk '{print $(NF-1)}')"
+        cp "$STUB_SPEC_MD" "$run_dir/spec.md"
+        cp "$STUB_TASKS" "$run_dir/tasks.yaml" ;;
+      *)
+        run_dir="${prompt##* }"
+        cp "$STUB_SPEC_THIN" "$run_dir/spec.md"
+        cp "$STUB_TASKS" "$run_dir/tasks.yaml" ;;
+    esac ;;
+esac
+exit 0
+STUB
+chmod +x "$WORK/bin/pi-retry"
+
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+cp "$WORK/bin/pi" "$WORK/bin/pi-real"
+cp "$WORK/bin/pi-retry" "$WORK/bin/pi"
+STUB_SPEC_THIN="$SPEC_THIN" run_line --stop-after spec > "$WORK/o-retry" 2>&1 || true
+cp "$WORK/bin/pi-real" "$WORK/bin/pi"
+retry_out="$(cat "$WORK/o-retry")"
+
+check "the thin section is caught"      "too thin to be worth a reader" "$retry_out"
+check "and handed back, not halted"     "re-entering \`spec\` with the findings" "$retry_out"
+check "the second attempt passes"       "SPEC CHECK PASS" "$retry_out"
+nope  "so the run does not halt"        "HALT  spec" "$retry_out"
+
+# Put the good run back for the predicates below.
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+rm -f "$GH_EXISTING" "$GH_CALLS"
+run_line > "$WORK/line.log" 2>&1
+out="$(cat "$WORK/line.log")"
+R="$(ls -1dt "$REPO"/factory/runs/*/ 2>/dev/null | head -1)"
+
 printf '\n== the phase-1 exit predicates, computed from this run ==\n\n'
 #
 # bench/phase1-audit.sh reads the seven `phase_1_exit` predicates out of a run

@@ -90,10 +90,6 @@ pipeline_snapshot() {
   for sib in schemas bench; do
     [ -d "$parent/$sib" ] && cp -r "$parent/$sib" "$base/$sib" 2>/dev/null
   done
-  # The venv is pointed at rather than copied: hundreds of megabytes, and its
-  # whole purpose is to be the same interpreter every run.
-  [ -x "$parent/.venv/bin/python" ] && export PIPELINE_PYTHON="$parent/.venv/bin/python"
-
   snap="$base/factory/pipeline"
   [ -d "$snap" ] || return 1
   printf '%s\n' "$snap"
@@ -144,6 +140,19 @@ case "$cmd" in
     [ $# -ge 1 ] || die "which bean? try: factory beans"
     SNAP="$(pipeline_snapshot)" || die "could not snapshot the pipeline"
     if [ "$SNAP" != "$PIPE" ]; then
+      # The interpreter is exported HERE, not inside pipeline_snapshot.
+      #
+      # That function runs inside $( ), which is a subshell: an `export` in it
+      # dies with the subshell and never reaches this one. The snapshot duly
+      # carried the schemas and the validator, spec-check found both, ran them
+      # under /usr/bin/python3, and reported "missing deps: jsonschema pyyaml
+      # referencing" — a real run, halted, by a variable that was set in a
+      # process that had already exited.
+      #
+      # The venv is pointed at rather than copied: hundreds of megabytes, and
+      # its whole purpose is to be the same interpreter every run.
+      [ -x "$FACTORY_ROOT/../.venv/bin/python" ] \
+        && export PIPELINE_PYTHON="$(cd "$FACTORY_ROOT/.." && pwd)/.venv/bin/python"
       printf 'pipeline snapshot: %s\n' "$SNAP" >&2
       [ -d "$SNAP/../skills" ] && export FACTORY_SKILLS="$SNAP/../skills"
       # Assert the snapshot is complete rather than discovering it is not by

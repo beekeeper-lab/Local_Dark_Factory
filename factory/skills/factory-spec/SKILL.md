@@ -30,9 +30,18 @@ into a lint problem, and the content problem is the one worth having.
   missing: **write `<run_dir>/QUESTIONS.md`** (the conflict, both sides quoted,
   where you read each) and stop. Do not invent the missing instruction. A real
   run once invented a workaround that was worse than the gap it papered over.
-- On a retry, `<run_dir>/verdicts/spec.attempt-*.json` exists. Read the latest and
-  fix **every** finding before rewriting. A retry that re-submits the same plan
-  with different words spends an attempt and teaches nobody anything.
+- On a retry you are given a findings file as a final argument, and one of two
+  things is in it.
+  - `<run_dir>/verdicts/spec.attempt-*.json` — the judge's verdict. Read the
+    latest and fix **every** finding before rewriting.
+  - `<run_dir>/spec-check-findings.md` — the controller's own checks. These are
+    not opinions: each line is something a script measured, and the run cannot
+    continue while any of them says FAIL. Fix what it names. Do not satisfy a
+    length complaint by padding, and do not satisfy a coverage complaint by
+    deleting the thing that was not covered.
+
+  Either way: a retry that re-submits the same plan with different words spends
+  an attempt and teaches nobody anything.
 
 ## Inputs
 

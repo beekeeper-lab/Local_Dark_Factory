@@ -585,8 +585,46 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # and the rendering. A judge should spend its attention on whether the plan
       # is right, not on whether it is a plan.
       sy="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; the spec cannot be checked against the bean"
-      "$PIPELINE_DIR/spec-check.sh" "$RUN_DIR" --bean "$sy" || rc=$?
-      return "$rc" ;;
+      local sc_out="$RUN_DIR/spec-check.txt"
+      "$PIPELINE_DIR/spec-check.sh" "$RUN_DIR" --bean "$sy" 2>&1 | tee "$sc_out"
+      rc="${PIPESTATUS[0]}"
+      [ "$rc" -eq 0 ] && return 0
+
+      # Hand the findings back and try once, the way a failed audit does.
+      #
+      # An audit that says revise re-enters the authoring step with its findings.
+      # spec-check, which produces far more actionable complaints than any judge
+      # has managed, halted the run instead — so the single most common spec
+      # defect needed a human to read "proposed change: only 77 characters — too
+      # thin to be worth a reader's time (min 80)" and tell the model to write
+      # more. That is not a decision. It is a transcription.
+      #
+      # Once, and only once: a second failure means the model cannot act on
+      # findings this specific, which is a real question for a person and not
+      # something to spend more attempts on.
+      if [ "${SPEC_CHECK_RETRIED:-0}" = 1 ]; then
+        printf '\nSPEC CHECK failed again after re-entry. Not retrying further.\n' >&2
+        return "$rc"
+      fi
+      SPEC_CHECK_RETRIED=1
+      {
+        printf '# The controller checked your spec and it did not pass\n\n'
+        printf 'These are not opinions. Each line is a check the controller ran, and the\n'
+        printf 'run cannot continue until every FAIL is fixed. Rewrite `spec.md` and\n'
+        printf '`tasks.yaml` to satisfy them; do not argue with them and do not work around\n'
+        printf 'them by removing what they complain about.\n\n```\n'
+        cat "$sc_out"
+        printf '```\n'
+      } > "$RUN_DIR/spec-check-findings.md"
+
+      printf '\nRETRY  spec-check FAIL → re-entering `spec` with the findings, then re-checking\n'
+      rc=0
+      run_step spec -- "$RUN_DIR/spec-check-findings.md" || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        record_failure spec "$rc" "re-entered spec step after a failed spec-check exited non-zero"
+        return "$rc"
+      fi
+      return 0 ;;
     pr)
       local py
       py="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a pull request names the bean it came from"
