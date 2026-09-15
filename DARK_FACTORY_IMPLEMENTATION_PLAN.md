@@ -398,6 +398,10 @@ phase_3_exit: { transcript_to_beans: ">= 5 approved", all_ac_verifiable_or_manua
 - [ ] Startup reconciliation after induced crash (GitHub state + worktrees + events.jsonl)
 - [ ] Pre-build ≥10 approved beans; run unattended producing **PRs only** (`human_required`)
 - [ ] Telemetry flowing: false-approval taxonomy, task attempts, revise rates per stage, swap overhead %, blocked reasons
+      *(add judge wall-clock per audit: measured between 21 s and >15 min for the same
+      artifacts depending on whether the shape held first time. A fifteen-minute audit is a
+      throughput problem for an unattended line; a twenty-second one is not, and the
+      difference is currently invisible.)*
 
 **Exit (concrete):**
 ```yaml
