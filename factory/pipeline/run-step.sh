@@ -178,6 +178,7 @@ printf 'STEP   %s   role=%s model=%s ctx=%s thinking=%s\n' \
 # -- locate the child's session file -------------------------------------------------
 SESS_DIR="$(pi_sessions_dir)"
 T0="$(date +%s)"
+STEP_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
 SNAP="$(mktemp)"; NEW="$(mktemp)"
 trap 'rm -f "$SNAP" "$NEW"' EXIT
 find "$SESS_DIR" -type f -name '*.jsonl' 2>/dev/null | sort > "$SNAP" || true
@@ -481,7 +482,10 @@ if [ "$CHILD_ENDS" -gt 0 ] && [ "$CHILD_STARTS" -eq "$CHILD_ENDS" ]; then
   : # this child opened and closed its own attempt: the amend below stamps it
 else
   if [ "$CHILD_STARTS" -eq 0 ]; then
-    "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$STEP" start
+    # Written now, stamped with when the child actually started. Without this
+    # every model step recorded zero elapsed, because both boundaries are written
+    # here after the work is done.
+    STEP_TS="$STEP_STARTED_AT" "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$STEP" start
   fi
   "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$STEP" end "$END_VERDICT"
 fi

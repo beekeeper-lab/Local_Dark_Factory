@@ -22,6 +22,8 @@ case "${1:-}" in
     echo "cannot be closed again (telemetry joins end lines to starts on (step, attempt),"
     echo "so an unopened end is dropped and its work is misattributed)."
     echo "Tokens and durations are NOT recorded here — they come from Pi's own session log."
+    echo "STEP_TS=<iso8601> overrides the timestamp, for a caller that must write a"
+    echo "boundary after the fact but knows when it really happened."
     exit 0
     ;;
 esac
@@ -58,7 +60,17 @@ if [ "$EVENT" = "end" ] && [ "$starts" -lt "$attempt" ]; then
   die "cannot close attempt $attempt of '$STEP': no open start (starts=$starts, ends=$ends); an attempt must be started before it is closed"
 fi
 
-ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+# STEP_TS lets a caller record when the step actually began rather than when this
+# line is written.
+#
+# run-step.sh writes both boundaries after the child has finished, because the
+# reconciliation it does — deciding whether the child opened its own attempt —
+# can only be done once the child has exited. That is the right order for the
+# bookkeeping and the wrong one for the clock: every model step recorded an
+# elapsed time of zero, including a spec step that had taken sixteen minutes.
+# The one column meant to answer "what does a bean cost" was blank for exactly
+# the steps that cost anything.
+ts="${STEP_TS:-$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)}"
 if [ -n "$VERDICT" ]; then
   verdict_json="$(jq -cn --arg v "$VERDICT" '$v')"
 else

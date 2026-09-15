@@ -307,5 +307,30 @@ out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
        bash "$PIPELINE_DIR/run-step.sh" run audit-impl 2>&1)"
 nope "an audit step does not claim to be uncontained" "UNCONTAINED" "$out"
 
+# -- a step's recorded elapsed time is the time it actually took ---------------
+#
+# run-step writes both boundaries after the child exits, because the
+# reconciliation it does needs the child to have finished. That is right for the
+# bookkeeping and was wrong for the clock: every model step recorded zero
+# elapsed, including a real spec step that had taken sixteen minutes. The column
+# meant to answer "what does a bean cost" was blank for the steps that cost
+# anything.
+rm -f run/steps.jsonl
+cat > "$WORK/slow-pi" <<'STUB'
+#!/usr/bin/env bash
+sleep 2
+exec "$STUB_REAL" "$@"
+STUB
+chmod +x "$WORK/slow-pi"
+PI_BIN="$WORK/slow-pi" STUB_REAL="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions"   FACTORY_CONTAIN_WORKER=0 bash "$PIPELINE_DIR/run-step.sh" run spec >/dev/null 2>&1
+elapsed="$(jq -rs '
+  def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+  (t(.[-1].ts) - t(.[0].ts))' run/steps.jsonl 2>/dev/null || echo 0)"
+if [ "${elapsed:-0}" -ge 2 ] 2>/dev/null; then
+  printf '  ok    the step records the time it really took (%ss)\n' "$elapsed"; PASS=$((PASS + 1))
+else
+  printf '  FAIL  elapsed recorded as %ss for a step that slept 2s\n' "${elapsed:-?}"; FAIL=$((FAIL + 1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
