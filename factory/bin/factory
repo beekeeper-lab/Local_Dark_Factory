@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# factory — the one command, so that running the line is not an incantation.
+#
+# Until now a bean was run like this:
+#
+#   cd /path/to/target
+#   PIPELINE_CONFIG=$PWD/factory/pipeline-config.json \
+#     bash /path/to/Local_Dark_Factory/factory/pipeline/orchestrate.sh bean-001 --stop-after gate
+#
+# Two absolute paths and an environment variable, every time, from memory. That
+# is not a convenience problem; it is a correctness one. Every hand-typed
+# invocation is a chance to point the pipeline at the wrong config, and the
+# pipeline has no way to notice — it would run happily against another repo's
+# beans and another repo's risk policy.
+#
+# So: the target repo is wherever you are, its config is found rather than
+# recited, and the factory's own location is derived from this script.
+set -uo pipefail
+BIN_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+FACTORY_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+PIPE="$FACTORY_ROOT/pipeline"
+# shellcheck source=../pipeline/lib.sh
+PIPELINE_DIR="$PIPE"
+source "$PIPE/lib.sh"
+
+usage() {
+  cat <<'EOF'
+factory — run the line against the repository you are standing in.
+
+  factory run <bean-id> [--stop-after <step>] [--resume <run-dir>]
+                            the whole line, or as much of it as you ask for
+  factory step <step> <bean-id>
+                            one step: specify, build, gate, document, pr,
+                            or audit-{spec,impl,doc,package}
+  factory status [<run-dir>]
+                            what the newest run did, stage by stage
+  factory doctor            is this repository ready to be run against?
+  factory beans             the approved beans, in run order
+
+Steps in order: preflight specify audit-spec build gate audit-impl
+                document audit-doc audit-package pr
+
+The target repository is the current one. Its configuration is found at
+factory/pipeline-config.json; PIPELINE_CONFIG overrides it.
+EOF
+}
+
+find_config() {
+  [ -n "${PIPELINE_CONFIG:-}" ] && { printf '%s\n' "$PIPELINE_CONFIG"; return 0; }
+  local root
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  for c in "$root/factory/pipeline-config.json" "$root/ai/pipeline/config.json"; do
+    [ -f "$c" ] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
+require_target() {
+  git rev-parse --show-toplevel >/dev/null 2>&1 \
+    || die "not inside a git repository — run this from the repository the line should build in"
+  CONFIG="$(find_config)" \
+    || die "no factory/pipeline-config.json here. This repo has not been scaffolded:
+  $FACTORY_ROOT/scaffold.sh $(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+  export PIPELINE_CONFIG="$CONFIG"
+  TARGET_ROOT="$(git rev-parse --show-toplevel)"
+}
+
+bean_yaml_for() { # bean_yaml_for <bean-id>
+  local id="$1" pat cand
+  pat="$(jq -r '.bean_dir_pattern // "factory/beans/BEAN-NNN-<slug>"' "$CONFIG")"
+  pat="${pat//BEAN-NNN/$id}"
+  for cand in $(cd "$TARGET_ROOT" && compgen -G "${pat//<slug>/*}/bean.yaml" 2>/dev/null); do
+    printf '%s/%s\n' "$TARGET_ROOT" "$cand"; return 0
+  done
+  return 1
+}
+
+newest_run() {
+  local runs
+  runs="$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
+  ls -1dt "$TARGET_ROOT/$runs"/*/ 2>/dev/null | head -1
+}
+
+cmd="${1:-}"; shift 2>/dev/null || true
+case "$cmd" in
+  ""|-h|--help) usage; exit 0 ;;
+
+  run)
+    require_target
+    [ $# -ge 1 ] || die "which bean? try: factory beans"
+    exec bash "$PIPE/orchestrate.sh" "$@"
+    ;;
+
+  step)
+    require_target
+    step="${1:-}"; bean="${2:-}"
+    [ -n "$step" ] && [ -n "$bean" ] || die "usage: factory step <step> <bean-id>"
+    # One step is the whole line stopped after that step; resuming an existing
+    # run rather than starting a second one for the same bean.
+    run_dir="$(newest_run)"
+    if [ -n "$run_dir" ] && [ "$(jq -r '.bean // empty' "$run_dir/run.json" 2>/dev/null)" = "$bean" ]; then
+      exec bash "$PIPE/orchestrate.sh" "$bean" --resume "${run_dir%/}" --stop-after "$step"
+    fi
+    exec bash "$PIPE/orchestrate.sh" "$bean" --stop-after "$step"
+    ;;
+
+  status)
+    require_target
+    run_dir="${1:-$(newest_run)}"
+    [ -n "$run_dir" ] && [ -d "$run_dir" ] || die "no run found under $(jq -r '.runs_root' "$CONFIG")"
+    run_dir="${run_dir%/}"
+    printf '\n%s\n' "$(basename "$run_dir")"
+    printf 'bean %s · branch %s · status %s\n\n' \
+      "$(jq -r '.bean' "$run_dir/run.json")" \
+      "$(jq -r '.branch // "—"' "$run_dir/run.json")" \
+      "$(jq -r '.status' "$run_dir/run.json")"
+
+    if [ -f "$run_dir/steps.jsonl" ]; then
+      printf '%-16s %-8s %-10s %s\n' STEP VERDICT ATTEMPT CONDITIONS
+      # Tab-separated, not NUL: bash cannot hold a NUL in a variable, so a NUL
+      # separator silently collapses every field into one line with no gaps.
+      jq -rs '[.[] | select(.event == "end")] | .[] |
+        [(.step), (.verdict // "-"), (.attempt | tostring),
+         (if .conditions then
+            (.conditions.model // "-") +
+            (if .conditions.declared_matches_observed == false then "  (conditions drifted)" else "" end)
+          else "" end)] | @tsv' "$run_dir/steps.jsonl" \
+        | while IFS=$'\t' read -r s v a c; do printf '%-16s %-8s %-10s %s\n' "$s" "$v" "$a" "$c"; done
+    fi
+
+    if [ -f "$run_dir/tasks.jsonl" ]; then
+      printf '\ntasks\n'
+      jq -rs '[.[] | select(.event == "task")] | .[] |
+        "  \(.task)  \(.result)  after \(.attempts) attempt(s)"' "$run_dir/tasks.jsonl"
+    fi
+
+    if [ -f "$run_dir/gate.json" ]; then
+      printf '\ngate: %s · tier %s · %s file(s)\n' \
+        "$(jq -r '.overall' "$run_dir/gate.json")" \
+        "$(jq -r '.tier.final_tier // "—"' "$run_dir/gate.json")" \
+        "$(jq -r '.diff.file_count' "$run_dir/gate.json")"
+    fi
+
+    for f in "$run_dir"/verdicts/*.attempt-*.json; do
+      [ -e "$f" ] || continue
+      case "$f" in *judgement.json) continue ;; esac
+      printf 'verdict: %-14s %s\n' "$(jq -r '.stage' "$f")" "$(jq -r '.verdict' "$f")"
+    done
+
+    # The two things a person actually wants to see when a run stopped.
+    [ -f "$run_dir/QUESTIONS.md" ] && printf '\nhalted — %s/QUESTIONS.md\n' "$run_dir"
+    for q in "$run_dir"/questions-from-worker/*.md; do
+      [ -e "$q" ] && printf 'the model wrote its own questions: %s\n' "$q"
+    done
+    for b in "$run_dir"/build/*/BLOCKED.md; do
+      [ -e "$b" ] && printf 'a task blocked: %s\n' "$b"
+    done
+    printf '\n'
+    ;;
+
+  doctor)
+    require_target
+    printf '\nfactory doctor — %s\n\n' "$TARGET_ROOT"
+    fail=0
+    say() { printf '  %-6s %-24s %s\n' "$1" "$2" "$3"; }
+    good() { say ok "$1" "$2"; }
+    bad()  { say FAIL "$1" "$2"; fail=1; }
+
+    good "config" "$CONFIG"
+    for f in factory/repo.yaml factory/risk-policy.yaml factory/gates.lock.yaml; do
+      [ -f "$TARGET_ROOT/$f" ] && good "${f#factory/}" "present" || bad "${f#factory/}" "missing — run scaffold.sh"
+    done
+    n="$(ls -1d "$TARGET_ROOT"/factory/beans/*/ 2>/dev/null | wc -l)"
+    [ "$n" -gt 0 ] && good "beans" "$n installed" || bad "beans" "none installed"
+
+    if [ -f "$TARGET_ROOT/factory/gates.lock.yaml" ]; then
+      img="$("$PIPE/yaml2json.sh" "$TARGET_ROOT/factory/gates.lock.yaml" | jq -r '.image')"
+      if bash "$PIPE/sandbox.sh" --check --gates "$TARGET_ROOT/factory/gates.lock.yaml" >/dev/null 2>&1; then
+        good "gate image" "${img##*/}"
+      else
+        bad "gate image" "not present or not matching its digest — factory/gate-image/build.sh"
+      fi
+    fi
+
+    branch="$(git -C "$TARGET_ROOT" branch --show-current)"
+    [ "$branch" = "main" ] && good "branch" "on main" \
+      || bad "branch" "on '$branch' — a run starts from main; check out main and delete the bean branch"
+    [ -z "$(git -C "$TARGET_ROOT" status --porcelain)" ] && good "tree" "clean" \
+      || bad "tree" "dirty — preflight will refuse"
+
+    for role in developer judge; do
+      m="$(jq -r --arg r "$role" '.roles[$r].model' "$PIPE/roles.json")"
+      ollama list 2>/dev/null | grep -q "^$m" && good "$role" "$m" || bad "$role" "$m is not pulled"
+    done
+
+    printf '\n'
+    [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
+    exit "$fail"
+    ;;
+
+  beans)
+    require_target
+    idx="$TARGET_ROOT/$(jq -r '.bean_index_path // "factory/beans/INDEX.md"' "$CONFIG")"
+    [ -f "$idx" ] && cat "$idx" || die "no bean index at $idx"
+    ;;
+
+  *)
+    usage >&2
+    die "unknown command: $cmd"
+    ;;
+esac
