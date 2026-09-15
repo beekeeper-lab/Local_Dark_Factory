@@ -422,14 +422,24 @@ now be written against a real boundary rather than an after-the-fact check.)*
 > commit, after it has decided the attempt is worth one.
 
 - [ ] Full loop unattended for one bean: lease → worktree → specify → spec audit → build loop → gate → impl audit → document → pre-PR audit → push → CI → **human merge**
+> **Six of these are done, 2026-09-15**, in `tests/test-faults.sh` — model-free,
+> seconds per case, run by `tests/run-all.sh`. They were filed as blocked on
+> worker containment, correctly: you cannot test a containment failure against a
+> worker that is not contained, only the after-the-fact check. Containment landed,
+> and then four of the six passed on their first run, which says the refusals were
+> already right rather than that the tests were written to fit them.
+>
+> The two left need state a stub cannot fake: killing the controller mid-stage,
+> and a remote CI result.
+
 - [ ] Fault injection — controller restart mid-stage (each of: specifying, building, committing, pushing, pr_open)
-- [ ] Fault injection — out-of-path edit inside a task (must **reject**, not strip; attempt++)
+- [x] Fault injection — out-of-path edit inside a task (must **reject**, not strip; attempt++) — `tests/test-faults.sh`
 - [ ] Fault injection — out-of-path edit in whole-diff containment
-- [ ] Fault injection — task list with an unclaimed AC → spec audit must `revise`
-- [ ] Fault injection — task list exceeding `size_budget` → `split_required`, bean blocked back to intake
-- [ ] Fault injection — impl-detail that misdescribes the diff → pre-PR audit `matches_diff: false` → `revise` (doc only; code untouched)
-- [ ] Fault injection — duplicate PR (idempotency holds)
-- [ ] Fault injection — credential-exposure attempt (worker has no creds/git; `.git` absent from editable tree)
+- [x] Fault injection — task list with an unclaimed AC → spec audit must `revise` — `tests/test-faults.sh`; the controller refuses it before the judge is asked
+- [x] Fault injection — task list exceeding `size_budget` → `split_required`, bean blocked back to intake — `tests/test-faults.sh`
+- [x] Fault injection — impl-detail that misdescribes the diff → refused before the PR, with the code left committed and untouched — `tests/test-faults.sh`
+- [x] Fault injection — duplicate PR (idempotency holds) — `tests/test-faults.sh`
+- [x] Fault injection — credential-exposure attempt — asserted structurally against the worker image (no ssh dir, no git identity, `.git` masked in the mount) — `tests/test-faults.sh`
 - [ ] Fault injection — remote-CI failure returns to build with targeted tasks
 - [ ] Fault injection — branch-behind-main → rebase → re-gate + re-audit impl and pre-PR (new candidate); spec audit stands
 - [ ] Fault injection — out-of-band PR-head change → blocked (violation, not re-review)
