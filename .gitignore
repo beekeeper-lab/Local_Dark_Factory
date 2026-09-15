@@ -11,3 +11,4 @@ bench/results/*
 !bench/results/phase0-eviction-log-20260914.txt
 !bench/results/provenance-post-reboot-20260914T173223Z.json
 !bench/results/harmony-20260914T182045Z.json
+!bench/results/judge-fitness-20260915T012448Z.json

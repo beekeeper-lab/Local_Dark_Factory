@@ -125,7 +125,7 @@ unfinishable-task|yes|one task that cannot finish in one session|too large|one s
 criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|annotation|vacuous|does not satisfy|mypy'
 
 RESULTS="[]"
-CAUGHT=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0
+CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0
 
 printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
@@ -155,6 +155,10 @@ while IFS='|' read -r name should_reject description catchwords; do
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
   if [ ! -f "$J" ]; then
+    # Count it as seeded and not caught. Excluding a case that produced nothing
+    # would divide the catch rate by a denominator that omits its own failures —
+    # a metric that flatters itself is worse than no metric.
+    [ "$should_reject" = yes ] && { SEEDED=$((SEEDED+1)); NO_ANSWER=$((NO_ANSWER+1)); }
     verdict="none"; outcome="no judgement (rc=$rc): $(tail -1 "$RD/judge.log" 2>/dev/null | head -c 90)"
   else
     verdict="$(jq -r '.verdict' "$J")"
@@ -170,8 +174,9 @@ while IFS='|' read -r name should_reject description catchwords; do
       SEEDED=$((SEEDED+1))
       case "$verdict" in
         revise|block)
-          if [ "$named" = yes ]; then CAUGHT=$((CAUGHT+1)); outcome="caught, and named it"
-          else CAUGHT=$((CAUGHT+1)); outcome="rejected, but for something else"; fi ;;
+          CAUGHT=$((CAUGHT+1))
+          if [ "$named" = yes ]; then NAMED=$((NAMED+1)); outcome="caught, and named it"
+          else outcome="rejected, but for something else"; fi ;;
         abstain) ABSTAINED=$((ABSTAINED+1)); outcome="abstained — a bad day, not a false approval" ;;
         accept)  FALSE_ACCEPT=$((FALSE_ACCEPT+1)); outcome="FALSE ACCEPT — it passed a seeded defect" ;;
         *)       outcome="no usable verdict" ;;
@@ -195,18 +200,21 @@ done <<< "$CASES"
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
   --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
+  --argjson named "$NAMED" --argjson noans "$NO_ANSWER" \
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts,
     judge:{model:$model, digest:$digest},
-    seeded_defects:$seeded, caught:$caught, false_accepts:$fa, abstentions:$ab,
-    catch_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
+    seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
+    false_accepts:$fa, abstentions:$ab, no_answer:$noans,
+    reject_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
+    named_rate: (if $seeded > 0 then (($named*100/$seeded)|floor) else null end),
     false_accept_rate: (if $seeded > 0 then (($fa*100/$seeded)|floor) else null end),
     cases:$r}' > "$OUT"
 
-printf '\ncaught %s of %s seeded defects · %s false accept(s) · %s abstention(s)\n' \
-  "$CAUGHT" "$SEEDED" "$FALSE_ACCEPT" "$ABSTAINED"
+printf '\nof %s seeded defects: rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$CAUGHT" "$NAMED"
+printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
 printf '%s\n' "$OUT"
 printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
 printf 'so costs a retry; a judge that misses and accepts is the failure the line exists\n'

@@ -624,6 +624,41 @@ Carried over and worth keeping: the `package` audit's run-integrity checks (bran
 is not `main`, commits exist, `steps.jsonl` start/end pairs balance, verdict filenames
 match their target) were each written after a real run failed that exact way.
 
+## Judge fitness — the first number, 2026-09-15
+
+`bench/judge-fitness.sh`, six cases against `gpt-oss:120b` at thinking=medium:
+one clean control and five specs each carrying a single planted defect a script
+cannot catch.
+
+| | |
+|---|---|
+| clean control | **accepted**, correctly, in 52 s against the real ac1–ac4 with verbatim quotes |
+| seeded defects | 5 |
+| rejected | 4 |
+| **named the actual defect** | **1** |
+| false accepts | **0** |
+| produced no judgement at all | 1 |
+
+**The good half:** no false approvals. The judge has never passed a seeded
+defect, and it accepts a clean spec rather than rejecting everything — a judge
+that fails everything is not a judge either.
+
+**The half that needs work:** it rejects for the *wrong reason* four times out of
+five. Told a spec whose only verify is `test -d .`, it complained about YAML
+syntax. Told a spec inventing a module that does not exist, it complained about
+YAML syntax. Only "a criterion declared met by an argument that defeats it" was
+caught and named.
+
+That matters beyond tidiness, because `feedback_to_worker` is what the developer
+gets on a revise. A judge that rejects correctly but explains wrongly sends the
+developer to fix something that is not broken, and burns an attempt doing it. The
+rejection is safe; the feedback is not yet useful.
+
+Recorded at `bench/results/judge-fitness-20260915T012448Z.json` with every
+judgement kept. Re-run after any change to the judge prompt, the thinking level,
+or the model — this is the number the §01 argument rests on, and it is now a
+number rather than a hope.
+
 ## The pivot trigger — decided in advance, on purpose
 
 Six halts in one evening is a normal Phase 1. The hazard is not the halts; it is
