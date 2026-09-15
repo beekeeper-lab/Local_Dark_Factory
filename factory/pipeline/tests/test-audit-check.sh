@@ -69,6 +69,11 @@ printf 'schema_version: tasks/1.0.0\n' > factory/runs/R/tasks.yaml
 
 V=factory/runs/R/verdicts
 judgement() { cat > "$V/spec.attempt-${2:-1}.judgement.json" <<<"$1"; }
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+
 run_check() { bash "$PIPELINE_DIR/audit-check.sh" factory/runs/R --target spec --bean factory/beans/bean.yaml 2>&1; }
 
 BASE='{"schema_version":"judgement/1.0.0","stage":"spec_audit","target":"spec",
@@ -229,6 +234,23 @@ judgement '{"verdict":"accept","confidence":0.9,
   "findings":[]}'
 out="$(run_check)"
 check "it is accepted"            "quote(s) verified" "$out"
+
+printf '\n== a quote from deep in the run directory is found ==\n\n'
+#
+# The haystack was limited to depth 2, which excluded everything under
+# build/<task>/attempt-<n>/ — verify logs, containment records, the worker's own
+# output. An impl audit quoting the output of a check that failed would have had
+# its quote refused as invented, which is the one accusation this script must not
+# make wrongly.
+mkdir -p factory/runs/R/build/task-1/attempt-1
+printf 'E   AssertionError: expected 3 but the function returned 4\n' \
+  > factory/runs/R/build/task-1/attempt-1/verify-1.log
+judgement '{"verdict":"revise","confidence":0.8,
+  "criteria":[{"id":"ac1","met":false,"evidence":"the check failed and says why","quote":"AssertionError: expected 3 but the function returned 4"}],
+  "findings":[]}'
+out="$(run_check)"
+check "the deep quote is verified"  "quote(s) verified" "$out"
+nope  "and is not called invented"  "could not be found" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

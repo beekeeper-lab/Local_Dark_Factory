@@ -173,7 +173,12 @@ trap 'rm -f "$HAYSTACK"' EXIT
 {
   # NOT the verdicts directory. The judgement is in there, so searching it would
   # let every quote match itself and the check would pass for any fiction at all.
-  find "$RUN_DIR" -maxdepth 2 -type f \( -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.log' -o -name '*.jsonl' \) \
+  # No depth limit. It was 2, which excluded everything under
+  # build/<task>/attempt-<n>/ — the verify logs, the containment records, the
+  # worker's own output, all at depth 4. An impl audit quoting the output of a
+  # check that failed would have had its quote refused as invented, which is the
+  # one accusation this script must not make wrongly.
+  find "$RUN_DIR" -type f \( -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.log' -o -name '*.jsonl' \) \
     -not -path "$VERDICTS/*" -exec cat {} + 2>/dev/null
   git -C "$ROOT" ls-files -z 2>/dev/null | xargs -0 -r cat 2>/dev/null
 } | norm > "$HAYSTACK"
