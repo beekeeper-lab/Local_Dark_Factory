@@ -66,6 +66,13 @@ ROLES_FILE="${ROLES_FILE:-$PIPELINE_DIR/roles.json}"
 PROVIDER="$(jq -r '.roles.judge.provider' "$ROLES_FILE")"
 jq -e --arg p "$PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >/dev/null \
   || die "provider '$PROVIDER' is not in the allow-list (runtime is local-only)"
+# A cap on generated tokens. Measured: the same prompt has come back in 21
+# seconds and has also still been generating after fifteen minutes — the
+# difference is how long the model decides to think, which varies enormously on
+# this task. An unattended line cannot have a stage whose duration is unbounded,
+# and an audit that fails fast and retries is worth more than one that might
+# finish eventually. Generous enough for a real judgement; short of a runaway.
+NUM_PREDICT="${JUDGE_NUM_PREDICT:-6000}"
 MODEL="$(jq -r '.roles.judge.model' "$ROLES_FILE")"
 NUM_CTX="$(jq -r '.roles.judge.num_ctx // 32768' "$ROLES_FILE")"
 # The thinking level is a measurable trade, not a preference. The judge's value is
@@ -209,8 +216,8 @@ SCHEMA='{
 
 STAGE="$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)"
 
-printf 'JUDGE  %s  model=%s ctx=%s thinking=%s  (%s bytes of artifacts)\n' \
-  "$TARGET" "$MODEL" "$NUM_CTX" "$THINKING" "$(wc -c < "$ARTIFACTS")" >&2
+printf 'JUDGE  %s  model=%s ctx=%s thinking=%s cap=%s  (%s bytes of artifacts)\n' \
+  "$TARGET" "$MODEL" "$NUM_CTX" "$THINKING" "$NUM_PREDICT" "$(wc -c < "$ARTIFACTS")" >&2
 
 # The system message is load-bearing, not decoration. Without it this model
 # answers a repository-shaped prompt by emitting `repo_browser.open_file` tool
@@ -226,9 +233,9 @@ message, in full. Do not attempt a tool call; there is nothing to call and no on
 answer it. Reply with the JSON object the schema describes and nothing else."
 
 BODY="$(jq -n --arg m "$MODEL" --arg p "$PROMPT" --arg sys "$SYSTEM" --arg t "$THINKING" \
-  --argjson c "$NUM_CTX" --argjson f "$SCHEMA" \
+  --argjson c "$NUM_CTX" --argjson f "$SCHEMA" --argjson np "$NUM_PREDICT" \
   '{model:$m, stream:false, think:$t, format:$f,
-    options:{num_ctx:$c, temperature:0},
+    options:{num_ctx:$c, temperature:0, num_predict:$np},
     messages:[{role:"system", content:$sys}, {role:"user", content:$p}]}')"
 
 T0="$(date +%s)"
@@ -236,6 +243,8 @@ RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
   printf 'JUDGE  %s: the request failed: %s\n' "$TARGET" "${RESP:0:200}" >&2; exit 1; }
 T1="$(date +%s)"
 
+DONE_REASON="$(jq -r '.done_reason // "?"' <<<"$RESP" 2>/dev/null)"
+[ "$DONE_REASON" = "length" ] && printf 'JUDGE  %s: hit the %s-token cap before finishing\n' "$TARGET" "$NUM_PREDICT" >&2
 CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
 NTOOLS="$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)"
 if [ -z "$CONTENT" ] && [ "${NTOOLS:-0}" -gt 0 ]; then
@@ -276,9 +285,9 @@ REMINDER, and this overrides anything above: reply with ONE JSON object whose
 top-level keys are exactly verdict, criteria, findings, confidence (plus the
 optional ones). No prose, no strengths/weaknesses, no report."
   BODY="$(jq -n --arg m "$MODEL" --arg p "$RETRY_PROMPT" --arg sys "$SYSTEM" --arg t "$THINKING" \
-    --argjson c "$NUM_CTX" --argjson f "$SCHEMA" \
+    --argjson c "$NUM_CTX" --argjson f "$SCHEMA" --argjson np "$NUM_PREDICT" \
     '{model:$m, stream:false, think:$t, format:$f,
-      options:{num_ctx:$c, temperature:0},
+      options:{num_ctx:$c, temperature:0, num_predict:$np},
       messages:[{role:"system", content:$sys}, {role:"user", content:$p}]}')"
   RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || true
   RETRY_CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
