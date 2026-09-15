@@ -246,6 +246,22 @@ if [ "$CONTAIN" = 1 ]; then
   mkdir -p "$AGENT_DIR/sessions"
   cp "$HOME/.pi/agent/models.json" "$AGENT_DIR/models.json" 2>/dev/null \
     || die "no ~/.pi/agent/models.json to give the contained worker; it would refuse every --model"
+
+  # Make the declared context the real one.
+  #
+  # pi has no num_ctx flag, so on the host the number in roles.json is a wish:
+  # ollama serves whatever OLLAMA_CONTEXT_LENGTH or pi's own catalogue asks for,
+  # and the first contained run duly recorded declared=32768 observed=262144. The
+  # drift is reported honestly, which is right, but a contained run can do better
+  # than report it — the controller writes this catalogue, so it can set the
+  # number rather than hope for it. On the host this is not possible without
+  # editing the user's own ~/.pi/agent/models.json, which belongs to them.
+  if [ -n "$ROLE_CTX" ]; then
+    jq --arg m "$ROLE_MODEL" --argjson c "$ROLE_CTX" \
+      '(.providers[].models[]? | select(.id == $m) | .contextWindow) = $c' \
+      "$AGENT_DIR/models.json" > "$AGENT_DIR/models.json.tmp" \
+      && mv "$AGENT_DIR/models.json.tmp" "$AGENT_DIR/models.json"
+  fi
   SESS_DIR="$AGENT_DIR/sessions"
   : > "$SNAP"
 
