@@ -127,6 +127,16 @@ criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|an
 RESULTS="[]"
 CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0
 
+# Free the GPU before starting. Two large models resident at once is how four of
+# six cases came back with a dead runner in one run, and a fitness score computed
+# over that is a measurement of VRAM.
+JUDGE_MODEL="$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")"
+while IFS= read -r resident; do
+  [ -n "$resident" ] && [ "$resident" != "$JUDGE_MODEL" ] || continue
+  printf 'evicting %s to leave room for the judge\n' "$resident"
+  ollama stop "$resident" >/dev/null 2>&1 || true
+done < <(curl -s "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null | jq -r '.models[]?.name')
+
 printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
 
@@ -154,7 +164,12 @@ while IFS='|' read -r name should_reject description catchwords; do
   cp -f "$RD"/verdicts/* "$KEEP/" 2>/dev/null || true
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
-  if [ "$rc" -eq 8 ]; then
+  if [ "$rc" -eq 9 ]; then
+    # The runner died. Scoring this at all would be scoring the machine.
+    [ "$should_reject" = yes ] && SEEDED=$((SEEDED+1))
+    CUT_OFF=$((CUT_OFF+1))
+    verdict="no run"; outcome="NOT MEASURED — the model server returned nothing; free VRAM and retry"
+  elif [ "$rc" -eq 8 ]; then
     # The judge was cut off mid-thought by a cap we chose. That is a fact about
     # this harness's configuration, not about the judge's fitness, and scoring it
     # either way would be a lie: counting it as a miss blames the model for our

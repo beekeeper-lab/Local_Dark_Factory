@@ -376,6 +376,21 @@ RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
   printf 'JUDGE  %s: the request failed: %s\n' "$TARGET" "${RESP:0:200}" >&2; exit 1; }
 T1="$(date +%s)"
 
+# Ollama answers HTTP 200 with a zero-valued struct — empty model, empty message,
+# "done": false — when its runner dies mid-request. Measured while switching judge
+# models: a 26B loaded on top of a resident 120B produced this on four of six
+# cases in a row, and the fitness harness scored every one as "the judge had no
+# answer". It was not the judge. Nothing was asked and nothing ran.
+# `.done // "?"` would be wrong here and was: jq's alternative operator treats
+# `false` as empty, exactly like null, so `false // "?"` is "?" and the check
+# never fired on the very response it was written for. tostring, not //.
+if [ "$(jq -r '.model // ""' <<<"$RESP" 2>/dev/null)" = "" ] \
+   && [ "$(jq -r '.done | tostring' <<<"$RESP" 2>/dev/null)" = "false" ]; then
+  printf 'JUDGE  %s: the model server returned nothing at all — its runner died mid-request.\n' "$TARGET" >&2
+  printf '       This is the machine, not the judge. Free VRAM (ollama stop <other-model>) and retry.\n' >&2
+  exit 9
+fi
+
 DONE_REASON="$(jq -r '.done_reason // "?"' <<<"$RESP" 2>/dev/null)"
 [ "$DONE_REASON" = "length" ] && printf 'JUDGE  %s: hit the %s-token cap before finishing\n' "$TARGET" "$NUM_PREDICT" >&2
 CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
