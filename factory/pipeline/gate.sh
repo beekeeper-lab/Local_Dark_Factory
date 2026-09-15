@@ -174,7 +174,7 @@ fi
 SECRETS="$(git -C "$ROOT" diff "$MERGE_BASE"...HEAD -U0 \
   | grep -E '^\+' \
   | grep -nEi 'BEGIN (RSA|OPENSSH|DSA|EC|PGP) PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN CERTIFICATE-----|(secret|password|passwd|api[_-]?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' \
-  | head -20 || true)"
+  || true)"
 if [ -n "$SECRETS" ]; then
   # Report WHERE, never WHAT.
   #
@@ -186,8 +186,14 @@ if [ -n "$SECRETS" ]; then
   #
   # The line number and the shape that matched are enough to find it, and the
   # person who goes looking has the diff in front of them anyway.
-  fail_part "secret_scan" "$(printf '%s' "$SECRETS" | wc -l) suspicious added line(s) — locations only, the content is deliberately not reproduced here"
-  printf '%s\n' "$SECRETS" | sed -E 's/^([0-9]+):.*/           added line \1 of the diff matches a known credential shape/'
+  # Count them all, show the first twenty. `head -20` used to truncate before the
+  # count, so fifty leaked lines reported as twenty — a check that understates a
+  # credential leak by however much worse than expected it turned out to be.
+  N_SECRETS="$(printf '%s\n' "$SECRETS" | sed '/^$/d' | wc -l)"
+  fail_part "secret_scan" "$N_SECRETS suspicious added line(s) — locations only, the content is deliberately not reproduced here"
+  printf '%s\n' "$SECRETS" | head -20 \
+    | sed -E 's/^([0-9]+):.*/           added line \1 of the diff matches a known credential shape/'
+  [ "$N_SECRETS" -gt 20 ] && printf '           ... and %s more\n' "$((N_SECRETS - 20))"
 else
   pass_part "secret_scan" "no known credential shapes in the added lines"
 fi
