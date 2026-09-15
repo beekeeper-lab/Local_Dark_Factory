@@ -64,11 +64,14 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Four ways a check goes wrong, all found on 2026-09-15
+## Six ways a check goes wrong, all found on 2026-09-15
 
 Every one of these was in code written here, most of it written the same day, and
 each was found by a real run rather than by a test. They are listed because the
 next check written will be able to have one of them.
+
+Three of the six, the model being checked said so in its own report, and was
+right.
 
 **1. Measuring something other than what it claims.** doclint reported a
 three-thousand-character section as empty: it started a new section at every
@@ -105,6 +108,17 @@ A fifth, adjacent: **a diagnostic that points at the wrong cause.** "child exit 
 for a doc step that wrote nothing, and a "terminated" line from the container's
 own forwarder that read like an external kill and cost a real diagnosis session
 looking for a signal nobody sent.
+
+**6. Asking whether a thing exists when the question is who made it.** Added
+2026-09-15 evening, and it is category 1 wearing a different hat. run-step
+reported "its output IS present, so this is a failure after the work" for a doc
+attempt that wrote nothing — the file on disk was byte-for-byte a previous
+attempt's, four hours old. Orchestrate's doc retry had the same test
+(`[ ! -s impl-detail.md ]`), which on any resumed run is always false, so the
+retry that exists precisely for this failure never fired and the run halted for a
+human. Both now hash the file before the session and after. **Existence is not
+authorship, and on a resumed run every output of every earlier attempt is sitting
+right there to be mistaken for this one's.**
 
 ## Deterministic checks — what used to be the judge's job
 
@@ -155,7 +169,13 @@ Three lessons are baked into those checks and are worth not relearning:
 | gate | — | `gate.sh`: whole-diff containment, tier, budget, secrets, gates, ACs, invariants, **test integrity** | 44 |
 | document | `factory-doc` | `doc-check.sh` + `doclint.sh`: sections, diff coverage both ways, renders HTML | 13 + 33 |
 | pre-PR audit | `factory-audit` | **`package-check.sh`** settles the whole arithmetic rubric first | 24 |
-| PR | — | `pr.sh`: refuses without an accepting verdict, a clean tree, a gated diff | 25 |
+| sync | — | **`sync.sh`**: rebases a branch the base has moved past, files the now-stale results, and sends the line back to the gate | 48 |
+| PR | — | `pr.sh`: refuses without an accepting verdict, a clean tree, a gated diff, a base that has not moved | 25 |
+
+`sync` is the only step that can run the line backwards. It writes `rewind.json`,
+the orchestrator's loop reads it at the top of each iteration, and gate,
+audit-impl and audit-package run again against the new candidate. The spec audit
+does not: it judged the plan, and a rebase does not change the plan.
 
 Supporting: `sandbox.sh` (36), `test-integrity.sh` (22), invariants (9), role routing (38).
 
