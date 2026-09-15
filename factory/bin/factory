@@ -294,6 +294,19 @@ run from the working tree."
     for f in factory/repo.yaml factory/risk-policy.yaml factory/gates.lock.yaml; do
       [ -f "$TARGET_ROOT/$f" ] && good "${f#factory/}" "present" || bad "${f#factory/}" "missing — run scaffold.sh"
     done
+    # The corpus block, which new-run.sh now refuses to start without. Checked
+    # here so the refusal arrives from `doctor` — whose whole job is to answer
+    # "is this repo ready" — rather than from the first run someone tries.
+    miss=""
+    for k in name bean_set requirements_sha256; do
+      [ -n "$(jq -r --arg k "$k" '.corpus[$k] // empty' "$CONFIG" 2>/dev/null)" ] || miss="$miss $k"
+    done
+    if [ -z "$miss" ]; then
+      good "corpus" "$(jq -r '.corpus.name' "$CONFIG") $(jq -r '.corpus.bean_set' "$CONFIG"), requirements pinned"
+    else
+      bad "corpus" "pipeline-config.json is missing:$miss — re-run factory/scaffold.sh; run records cannot say what input they derive from"
+    fi
+
     n="$(ls -1d "$TARGET_ROOT"/factory/beans/*/ 2>/dev/null | wc -l)"
     [ "$n" -gt 0 ] && good "beans" "$n installed" || bad "beans" "none installed"
 
