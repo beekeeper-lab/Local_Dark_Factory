@@ -367,6 +367,23 @@ re-runnable audit, and a bean set approved to run against.
   is, rather than passing on a run that never tested it.
   *(the invariants exist and are proven to catch their own
       violations; what Phase 1 has to show is the controller running them against a real build)*
+  >
+  > **Updated 2026-09-15 evening.** The mechanism half is now shown, which it was
+  > not: `tests/test-gate.sh` puts a real invariants file on `main` — outside the
+  > bean's write paths, which is the independence guarantee, and the first draft of
+  > this test tripped containment by trying to write one from the branch — and runs
+  > the gate against an implementation that satisfies it and one that violates it.
+  > The gate passes with `ok invariants`, records `invariants.status: pass` and the
+  > ref in `gate.json`, keeps `invariants.log`, and fails with the assertion in the
+  > log when the answer is wrong. Before this, the only invariant assertion here was
+  > the missing-file refusal: a mechanism tested by making it fail, which is a
+  > mechanism nobody had seen work.
+  >
+  > What remains is genuinely the corpus question — no bean before 006 declares any —
+  > and it is a decision for the owner: run 002 through 006 so the predicate is
+  > satisfied literally, or re-read it as "the mechanism is proven" on the evidence
+  > above plus `tests/test-invariants.sh`. **Recommendation: re-read it**, and note
+  > the reason in the phase-1 audit rather than in a checkbox.
 
 > **Where Phase 1 actually stands, 2026-09-15.**
 >

@@ -273,6 +273,86 @@ YAML
     --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
   check "a missing invariants file fails"  "FAIL   invariants" "$out"
   check "and says what that means"         "not a guarantee" "$out"
+
+  # And the case that matters for closing Phase 1: an invariant this repo DOES
+  # carry, run by the controller against a real build, both ways.
+  #
+  # `tests/test-invariants.sh` proves the invariants catch their own violations
+  # against a reference implementation. What that does not show is the controller
+  # running them as part of a gate — which is the predicate the plan actually
+  # asks for, and which was asserted here only in its failure case. A mechanism
+  # tested only by making it fail is a mechanism nobody has seen work.
+  # The invariants have to be on MAIN, not on the bean branch. That is the whole
+  # independence guarantee: `factory/invariants/**` is outside repo_allowed_paths,
+  # so a bean writing one is a containment violation — which is what the first
+  # version of this test produced, correctly, and it is the right refusal about
+  # the wrong thing. Put them in the base the branch is cut from.
+  git checkout -q main
+  mkdir -p factory/invariants
+  cat > factory/invariants/fixture.yaml <<'INV'
+schema_version: invariants/1.0.0
+id: fixture-core
+title: A property any answer must have, whoever wrote the code
+authored_by: "the test, standing in for a different model family"
+# The shape seating.yaml uses, not an invented one: a single `kind: command`
+# with a `run` array, which is what verify.sh reads.
+verify:
+  kind: command
+  run: ["python3", "-m", "pytest", "-q", "--no-header", "factory/invariants/test_fixture.py"]
+INV
+  cat > factory/invariants/test_fixture.py <<'INVPY'
+"""An invariant about the ANSWER, not about how it is produced.
+
+It imports only the seam the bean is obliged to provide, so it constrains the
+result without dictating the architecture — the same shape as seating.yaml.
+"""
+import pathlib
+
+
+def answer() -> str:
+    return pathlib.Path("src/a.py").read_text().strip()
+
+
+def test_the_answer_is_the_agreed_one():
+    assert answer() == "GOOD", f"the answer is {answer()!r}"
+INVPY
+  git add -A factory/invariants && git commit -q -m "invariants, authored outside the bean's reach"
+  reset_branch
+  mkdir -p src && printf 'GOOD\n' > src/a.py
+  commit_all "an implementation that satisfies the invariant"
+  sed 's|^definition_of_done|invariants_ref: factory/invariants/fixture.yaml\ndefinition_of_done|' \
+    bean.yaml > "$WORK/inv-real.yaml"
+  out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/inv-real.yaml" \
+    --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
+  if ! grep -qF 'ok     invariants' <<<"$out"; then
+    printf '  --- the invariants log ---\n'
+    sed 's/^/  | /' ai/runs/R/invariants.log 2>/dev/null | tail -20
+    printf '  --- end ---\n'
+  fi
+  check "the controller runs the bean's invariants" "ok     invariants" "$out"
+  check "and names the file it ran"                 "factory/invariants/fixture.yaml" "$out"
+  check "the gate passes with them"                 "GATE PASS" "$out"
+  check "gate.json records the result"              '"status":"pass"' \
+        "$(jq -c '.invariants' ai/runs/R/gate.json)"
+  check "and which invariants ran"                  "fixture.yaml" \
+        "$(jq -r '.invariants.ref' ai/runs/R/gate.json)"
+  want "the output is kept, not just the verdict"   "invariants.log should exist" \
+       test -s ai/runs/R/invariants.log
+
+  # The same invariant against an implementation that violates it. This is the
+  # half that makes the passing half mean something: a check that passes on
+  # everything has not been shown to be running at all.
+  printf 'ALSO GOOD ENOUGH SURELY\n' > src/a.py
+  commit_all "an implementation that does not"
+  out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/inv-real.yaml" \
+    --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
+  check "a violated invariant fails the gate"       "FAIL   invariants" "$out"
+  check "and the gate fails overall"                "GATE FAIL" "$out"
+  # The gate line is one truncated summary; the assertion itself lives in the log,
+  # which is the point of keeping the log.
+  check "the failure names the file"                "fixture.yaml" "$out"
+  check "and the assertion is in the log"           "the answer is" \
+        "$(cat ai/runs/R/invariants.log 2>/dev/null)"
   unset FACTORY_SANDBOX_ROOT
 else
   printf '  SKIP  podman or the gate image unavailable; execution not exercised\n'
