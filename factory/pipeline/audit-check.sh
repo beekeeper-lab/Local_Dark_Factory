@@ -110,6 +110,24 @@ fi
 # unsure" is not a finding anybody can act on.
 CONF_FLOOR="${JUDGE_CONFIDENCE_FLOOR:-0.4}"
 CONF="$(jq -r '.confidence // 1' <<<"$J")"
+
+# The contract says 0 to 1. A real judgement came back with confidence 100, was
+# stamped into a verdict, and sailed past the floor check because 100 is not less
+# than 0.4 — the one comparison that reads this number cannot tell a confident
+# judge from one that answered a different question.
+#
+# Constrained decoding does not enforce numeric bounds: the grammar knows the
+# field must be a number, not that it must be in range. So the range is checked
+# here, where it is cheap, and a value outside it is refused rather than clamped.
+# Clamping 100 to 1 would invent a claim the model never made — and the two
+# readings, "certain" and "percent", are not reconcilable by guessing.
+if ! awk -v c="$CONF" 'BEGIN{exit !(c >= 0 && c <= 1)}' 2>/dev/null; then
+  printf 'AUDIT %s: confidence %s is outside the contract range 0..1.\n' "$TARGET" "$CONF" >&2
+  printf '       The judgement is kept at %s; no verdict is stamped from it.\n' \
+    "$VERDICTS/$TARGET.attempt-$N.json.rejected" >&2
+  cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
+  exit 1
+fi
 if [ "$VERDICT" = "accept" ] && awk -v c="$CONF" -v f="$CONF_FLOOR" 'BEGIN{exit !(c < f)}'; then
   printf 'AUDIT %s: accepted at confidence %s, below the %s floor — recorded as abstain\n' \
     "$TARGET" "$CONF" "$CONF_FLOOR" >&2

@@ -203,5 +203,32 @@ printf 'invariants_ref: factory/invariants/nope.yaml\n' >> factory/beans/bean.ya
 out="$(run_check)"
 check "a missing invariants file refuses" "not a guarantee" "$out"
 
+printf '\n== a confidence outside 0..1 is refused, not clamped ==\n\n'
+#
+# A real judgement came back with `confidence: 100`, was stamped into a verdict,
+# and passed the floor check because 100 is not below 0.4. Constrained decoding
+# does not enforce numeric bounds — the grammar knows the field is a number, not
+# that it is in range.
+#
+# Refused rather than clamped: 100 read as "certain" and 100 read as "percent"
+# are not reconcilable by guessing, and clamping would invent a claim the model
+# never made.
+judgement '{"verdict":"accept","confidence":100,
+  "criteria":[{"id":"ac1","met":true,"evidence":"the module is there and imports","quote":"allowed_write_paths: [\"src/**\"]"}],
+  "findings":[]}'
+out="$(run_check)"; rc=$?
+check "the range is named"        "outside the contract range 0..1" "$out"
+want  "and it does not pass"      "expected non-zero" test "$rc" -ne 0
+want  "no verdict is stamped"     "a verdict must not exist" test ! -f "$V/spec.attempt-1.json"
+want  "the judgement is kept"     "the rejected judgement must be on disk" \
+      test -f "$V/spec.attempt-1.json.rejected"
+
+printf '\n== and a confidence inside the range still works ==\n\n'
+judgement '{"verdict":"accept","confidence":0.9,
+  "criteria":[{"id":"ac1","met":true,"evidence":"the module is there and imports","quote":"allowed_write_paths: [\"src/**\"]"}],
+  "findings":[]}'
+out="$(run_check)"
+check "it is accepted"            "quote(s) verified" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
