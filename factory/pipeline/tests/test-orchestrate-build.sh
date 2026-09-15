@@ -178,7 +178,7 @@ git add -A && git commit -q -m "fixture"
 git push -q -u origin main 2>/dev/null
 
 run_orchestrate() {
-  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
   STUB_ACTIONS="$WORK/actions" STUB_TASKS="$WORK/tasks.yaml" \
   STUB_SPEC_MD="${STUB_SPEC_MD-$WORK/spec.md}" \
   PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
@@ -233,7 +233,7 @@ esac
 exit 0
 STUB
 chmod +x "$WORK/stub-questions"
-out="$(PI_BIN="$WORK/stub-questions" PI_SESSIONS_DIR="$WORK/sessions" \
+out="$(PI_BIN="$WORK/stub-questions" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
   PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
   bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after spec 2>&1)"
 run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"

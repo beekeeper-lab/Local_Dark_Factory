@@ -63,8 +63,12 @@ exit 0
 STUB
 chmod +x stub-pi
 
+# FACTORY_CONTAIN_WORKER=0 throughout, except where containment IS the subject.
+# These run with a stub pi and no container; the factory ships a worker manifest,
+# so without this every one of them would try to start a sandbox and fail for a
+# reason that has nothing to do with what it is testing.
 run_step() {
-  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
     bash "$PIPELINE_DIR/run-step.sh" run "$@" 2>&1
 }
 

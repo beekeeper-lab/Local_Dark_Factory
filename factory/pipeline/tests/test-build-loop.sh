@@ -159,8 +159,12 @@ cat > "$RUN_DIR/run.json" <<'JSON'
 {"run_id":"R1","bean":"bean-001","branch":"bean/bean-001-loop","status":"running"}
 JSON
 
+# FACTORY_CONTAIN_WORKER=0: the stub pi is not in a container and cannot be. The
+# factory ships a worker manifest, so containment is the default now, and without
+# this every scenario here would fail at sandbox startup rather than testing the
+# loop.
 run_loop() {
-  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+  PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
     bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" \
       --bean "$REPO/bean.yaml" --tasks "$REPO/tasks.yaml" "$@" 2>&1
 }
@@ -326,7 +330,7 @@ tasks:
     write_paths: [/etc/passwd, deploy/prod.yaml]
     verify: [{ kind: command, run: ["true"] }]
 YAML
-out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
   bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$REPO/bean.yaml" --tasks "$WORK/bad-tasks.yaml" 2>&1)"
 check "task paths outside the bean are refused" "outside the bean's allowed_write_paths" "$out"
 check "and it names the offender"               "deploy/prod.yaml" "$out"
@@ -348,7 +352,7 @@ tasks:
     write_paths: [src/b.py]
     verify: [{ kind: command, run: ["true"] }]
 YAML
-out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
   bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$REPO/bean.yaml" --tasks "$WORK/cycle-tasks.yaml" 2>&1)"
 check "a dependency cycle is caught"   "dependency cycle" "$out"
 
@@ -362,7 +366,7 @@ tasks:
     write_paths: [src/a.py]
     verify: [{ kind: command, run: ["true"] }]
 YAML
-out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
   bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$REPO/bean.yaml" --tasks "$WORK/other-bean-tasks.yaml" 2>&1)"
 check "a task list for another bean is refused" "task list is for 'bean-999'" "$out"
 
@@ -434,7 +438,7 @@ YAML
 mkdir -p src && printf 'GOOD
 ' > src/a.py
 SH
-  out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+  out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
     bash "$PIPELINE_DIR/build-loop.sh" "$RUN_DIR" --bean "$REPO/bean.yaml" \
       --tasks "$WORK/escape-tasks.yaml" --sandbox \
       --gates "$PIPELINE_DIR/../scaffold/factory/gates.lock.yaml" 2>&1)"
