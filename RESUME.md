@@ -4,6 +4,13 @@ Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-
 
 ## State: Phase 0 closed. Phase 1 is built end to end; one real run has not yet finished.
 
+**Test coverage as of 2026-09-15 evening: 940 assertions across 26 suites, all green.**
+Nine of those suites are new that evening, written against the scripts that had no
+tests at all — the CLI, judge.sh, claims-check.py, preflight.sh, new-run.sh,
+policy-preview.sh, telemetry-report.sh, lib.sh and the new sync step. Every one of
+them found a live defect in the first hour, which is the argument for writing them:
+see "What the untested scripts were hiding" below.
+
 All six `phase_0_exit` predicates hold — and, as of the audit, they are *computed*
 rather than asserted (`bench/phase0-audit.sh`), which they were not before:
 
@@ -322,6 +329,73 @@ The conditions record has been the most useful single thing: on run one it
 reported `num_ctx: 262144` observed against `32768` declared, which is true, was
 invisible before, and explains the eight-minute spec step.
 
+## What the untested scripts were hiding
+
+Written 2026-09-15 evening. Ten pipeline scripts had no test of their own; nine now
+do. Each of these was found by the first few assertions written against the script,
+and none of them would have failed a run loudly:
+
+| script | what it was doing |
+|---|---|
+| `factory` (CLI) | the help named steps `specify` and `document`; `--stop-after` refuses both. The two names a person was most likely to copy were the two that could not work. |
+| `factory runs` | printed an empty table and exited 0 when the runs directory existed but held nothing — "no history" and "you pointed me somewhere wrong" were the same output. |
+| `judge.sh` | on an empty answer it printed the first 300 bytes of the raw response, which for this model is 300 bytes of the *thinking* field: a fluent paragraph about a different task, presented as the error. |
+| `new-run.sh` | "roles.json has no usable 'judge' role" could not fire — `.roles["judge"]` on a file with no judge builds `{"model":null,...}`, which is neither empty nor `"null"`. Run records were written full of nulls. |
+| `telemetry-report.sh` | the orchestrator row read **0 on every run** since child steps started recording their own sessions: the attribution branch produced an empty assignment and dropped every driver event. Totals were short by the whole driver cost. |
+| `policy-preview.sh` | cut the reason a bean got its tier off mid-word on sixteen of twenty rows, losing exactly the part that says whether the POLICY or the bean set it. |
+| `claims-check.py` | the source comment overstated what the 48-character window does. Measured: a negation in the previous sentence still reaches; ten more characters and it does not. |
+| `preflight.sh` | exercised only through the full line, where it passes. Nothing had ever asserted that it REFUSES — the wrong half to leave untested. |
+
+**The common shape, again:** none of these fails a run. They produce a plausible
+record of something that did not happen, or a diagnostic pointing somewhere else.
+That is the fifth and sixth entries in the defect taxonomy above, and it is what
+"the check is the product" actually costs.
+
+Also removed that evening: `checks.sh` and the `factory-implement` skill — a
+pre-build-loop path that ran the gates on the host with unpinned tools and told a
+model to report success from them, which is the opposite of the rule the rest of
+the line is built on. Nothing reachable used them.
+
+## A full temp filesystem is invisible from inside the line
+
+`/tmp` here is a 63G tmpfs — RAM. The gate tree, the pipeline snapshot, every
+worker's agent directory and the model gateway socket all live in it. When it
+filled, the contained worker's write failed with `Unknown system error -122`
+(errno 122, EDQUOT), pi exited 1, and the run correctly recorded a doc step that
+produced nothing. Every part of that chain is true and none of it says "the disk
+is full".
+
+Three fixes: `factory run` prunes its own abandoned snapshots (it `exec`s into the
+copy and cannot delete the ground it stands on, so twelve had accumulated);
+`factory doctor` reports free space on the temp root and fails below 2 GB, with the
+`-122` string in the message so a search for that error finds the cause; and the
+test that caused it refuses to `cp -r` a path that is not the pipeline.
+
+Two things behaved well under it, and both are worth keeping in mind as the
+standard: the model gateway **refused** rather than falling back to running the
+worker on the host — the containment guarantee held during a resource failure,
+which is when guarantees usually do not — and the run halted rather than recording
+a pass.
+
+## OPEN: something SIGTERMs the doc worker at ~1000 seconds
+
+Not identified as of 2026-09-15 evening. A doc session wrote a complete
+18,626-byte document, printed its report, and its container died at 1022 seconds
+with code 143 — well short of the 3600-second `timeout` in `worker-sandbox.sh`.
+
+It is **not** this project's test suite, which killed a live build once before and
+was the first suspect: a sentinel container and a sentinel process were run
+alongside all 26 suites in sequence and both survived every one. `podman events`
+is the place the death is visible; nothing in the pipeline's own logs names a
+source.
+
+The line no longer loses the work to it. `run-step.sh` already held the rule that
+a `pi -p` exit status is fallback evidence rather than an override of a verdict the
+child stamped; that now extends to a step whose output is a file. Every expected
+output freshly written by this attempt — verified by hash, not by existence — is a
+PASS regardless of the exit code, and the checks that read the file run next, so a
+half-written one still fails on its contents.
+
 ## Next action
 
 **Finish one real run of bean-001 from preflight to pull request.** Everything is built,
@@ -388,6 +462,15 @@ Write the end-to-end test before the next long real run, not after it.
   alone deliberately; the contained worker sets its own context in the mounted
   `models.json` instead.
 - **Hidden tests** are in the gate's design and not built.
+- **`required_checks: [gates]` names a check nothing produces.** Neither repo has a
+  `.github/workflows`, and no pipeline step waits on CI, so the field reads like
+  protection that is in force and is not. `factory doctor` now says so unprompted.
+  Building it is a decision for the owner, because it means either publishing the
+  pinned gate image to a registry under their org (identical to the local gate,
+  which is the point of pinning it) or running looser tools in CI, which produces a
+  green that means something different from the gate's green. **Recommendation: the
+  registry.** Until then the Phase-2 "remote CI failure returns to build with
+  targeted tasks" fault injection cannot be built.
 
 ## What to re-run to confirm nothing drifted
 
