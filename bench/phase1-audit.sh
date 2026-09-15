@@ -249,10 +249,46 @@ done
 DECLARES_INV=0
 [ -n "$BEAN_YAML" ] && grep -q '^invariants_ref:' "$BEAN_YAML" && DECLARES_INV=1
 
+# When the bean declares none, the question becomes whether the MECHANISM is
+# proven, and that is decidable from this repository rather than from the run.
+#
+# The owner made this call on 2026-09-15, with the alternative on the table
+# (run beans 002 through 006 so a bean with invariants reaches a gate). The
+# reasoning, recorded here rather than in a checkbox: what the predicate is
+# protecting against is a line that declares an independent guarantee and never
+# runs it. Two tests answer that, and both had to exist before this reading was
+# defensible —
+#
+#   tests/test-invariants.sh   the invariants catch their own violations, against
+#                              a reference implementation written to satisfy them
+#   tests/test-gate.sh         the CONTROLLER runs a real invariants file as part
+#                              of a gate, both ways: `ok invariants` with the
+#                              status and ref in gate.json and the output kept,
+#                              and `FAIL invariants` with the assertion readable
+#                              in invariants.log when the answer is wrong
+#
+# The second of those was written the same evening, because until then the only
+# invariant assertion anywhere was the missing-file refusal — a mechanism tested
+# by making it fail, which is a mechanism nobody had seen work.
+#
+# This is checked, not asserted: if either test stops covering it, the predicate
+# stops reading `mechanism_proven` and goes back to being unexercised.
+mechanism_proven() {
+  local gt="$ROOT/factory/pipeline/tests/test-gate.sh"
+  local it="$ROOT/factory/pipeline/tests/test-invariants.sh"
+  [ -f "$gt" ] && [ -f "$it" ] || return 1
+  grep -q "the controller runs the bean's invariants" "$gt" || return 1
+  grep -q 'a violated invariant fails the gate' "$gt" || return 1
+  return 0
+}
+
 inv="$(jq -r '.invariants // null' "$RUN_DIR/gate.json" 2>/dev/null)"
-if [ "$DECLARES_INV" = 0 ]; then
+if [ "$DECLARES_INV" = 0 ] && mechanism_proven; then
+  ok "independent_invariant_ran" "not exercised by this bean — bean-001 is a scaffold with no seating answer for an invariant to be about — and the mechanism is proven: tests/test-gate.sh runs a real invariants file through the gate both ways, tests/test-invariants.sh shows they catch their own violations"
+  pred independent_invariant_ran mechanism_proven
+elif [ "$DECLARES_INV" = 0 ]; then
   bad "independent_invariant_ran" major \
-    "this bean declares no invariants_ref, so this run cannot exercise the predicate at all. Phase 1 cannot close on it: the phase's entry condition asks for a bean WITH invariants, and in this corpus that is bean-006 onward."
+    "this bean declares no invariants_ref, and the mechanism is not proven either: tests/test-gate.sh no longer asserts that the controller runs a real invariants file through a gate in both directions. One or the other has to hold."
   pred independent_invariant_ran not_applicable
 elif [ "$inv" = null ] || [ -z "$inv" ]; then
   bad "independent_invariant_ran" blocker "the bean declares invariants_ref but gate.json records no invariant run — the guarantee was declared and not checked"

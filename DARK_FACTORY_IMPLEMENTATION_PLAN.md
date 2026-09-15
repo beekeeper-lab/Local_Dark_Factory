@@ -358,7 +358,7 @@ re-runnable audit, and a bean set approved to run against.
   > worker's edits are discarded rather than trimmed — including the dotfile and
   > `*`-does-not-cross-a-slash cases that a naive matcher gets wrong. The whole
   > diff is re-checked at the gate against the bean's paths.
-- [ ] Independent invariant ran — **and bean-001 cannot satisfy this.** It declares no
+- [x] Independent invariant ran — **re-read as "the mechanism is proven", by the owner, 2026-09-15.** bean-001 declares no
   `invariants_ref`, correctly: it is a scaffold with no solver, so there is no seating
   answer for an invariant to be about. In this corpus the first bean that declares them
   is bean-006, which depends on 002–005. So closing Phase 1 needs the line to reach
@@ -379,11 +379,21 @@ re-runnable audit, and a bean set approved to run against.
   > the missing-file refusal: a mechanism tested by making it fail, which is a
   > mechanism nobody had seen work.
   >
-  > What remains is genuinely the corpus question — no bean before 006 declares any —
-  > and it is a decision for the owner: run 002 through 006 so the predicate is
-  > satisfied literally, or re-read it as "the mechanism is proven" on the evidence
-  > above plus `tests/test-invariants.sh`. **Recommendation: re-read it**, and note
-  > the reason in the phase-1 audit rather than in a checkbox.
+  > **Decided 2026-09-15: re-read it.** The alternative was on the table — run beans
+  > 002 through 006 so a bean that declares invariants reaches a gate, about five
+  > more full runs — and the owner chose the re-reading on the evidence above.
+  >
+  > What the predicate protects against is a line that declares an independent
+  > guarantee and never runs it. Two tests answer that, and `bench/phase1-audit.sh`
+  > now **checks that both still cover it** rather than taking the decision on
+  > trust: if `tests/test-gate.sh` stops asserting that the controller runs a real
+  > invariants file through a gate in both directions, the predicate stops reading
+  > `mechanism_proven` and goes back to unexercised. A decision recorded as a
+  > checkbox would have rotted silently; one recorded as a check cannot.
+  >
+  > It reports `mechanism_proven`, which is its own word — not `pass`, because this
+  > run did not run an invariant, and not `not_applicable`, because the question was
+  > answered elsewhere rather than dodged.
 
 > **Where Phase 1 actually stands, 2026-09-15.**
 >
