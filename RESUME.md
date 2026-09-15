@@ -69,6 +69,41 @@ general outbound, and says so when used. An allow-listed proxy is the next piece
 
 Supporting: `sandbox.sh` (36), `render-doc.py` + `doclint.sh` (33), invariants (9).
 
+## OPEN: the judge is not yet reliable, and this is where the investigation got to
+
+`judge.sh` works in principle and has produced one real judgement. It is not yet
+dependable, and the run in `factory/runs/` is halted at `audit-spec` because of it.
+
+What is established, by measurement:
+
+- gpt-oss:120b under pi calls `repo_browser.*` — a tool namespace from its own
+  training, absent here. Twelve calls, empty args, no result, then a confident
+  audit of a document it never read. **That is the source of every fabricated
+  audit this session.** The developer model has no such problem, so it is the
+  model, not pi.
+- A system message saying plainly that there are no tools removes the tool calls
+  entirely, even against the raw API.
+- `format` (constrained decoding) is honoured under a short prompt and **ignored**
+  under the full 18 KB of artifacts, where the model returns a generic review
+  shape carrying none of the required fields but `verdict`.
+- Latency on the same input has ranged from 21 s to over 15 min. The 21 s run was
+  the one where the schema was **not** applied, which points at grammar-constrained
+  sampling as the cost rather than the thinking level — a `thinking=low` arm was
+  still running after seven minutes.
+
+The hypothesis being tested when this was written: **the schema's complexity is
+the cost.** `factory/pipeline/../scratchpad` is gone with the session, but the
+test is easy to rebuild — same prompt, same thinking level, no schema vs a
+minimal one, compare wall clock and token counts.
+
+If a minimal schema is fast and holds, the fix is to simplify the judgement
+shape. If not, the next lever is the prompt: the rubric is currently inlined from
+the skill and is large; the artifacts alone may be enough.
+
+What is already safe regardless: `judge.sh` refuses a judgement that is not the
+contract, keeps what the model sent as `.rejected`, and the run halts. Nothing
+false has ever been recorded.
+
 ## The judge does not run as an agent
 
 `audit-*` does not go through `run-step.sh`. gpt-oss:120b under pi calls a
