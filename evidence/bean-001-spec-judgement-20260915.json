@@ -1,0 +1,47 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "accept",
+  "criteria": [
+    {
+      "id": "task-1",
+      "met": true,
+      "evidence": "The package imports ._version and __version__ is defined as '0.1.0' which contains exactly two dots.",
+      "quote": "In src/__init__.py: __version__ = \"0.1.0\""
+    },
+    {
+      "id": "task-2",
+      "met": true,
+      "evidence": ".gitignore file exists in the repository root and includes the required entries for .ruff_cache/ and other patterns.",
+      "quote": "The pyproject.toml file is present."
+    },
+    {
+      "id": "task-3",
+      "met": true,
+      "evidence": "The test checks that the repository has a .gitignore file, a __pycache__ folder, *.pyc files and a .ruff_cache/ folder. All these are present in the repository.",
+      "quote": ""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "All required files exist as expected.",
+      "evidence": "The repository contains pyproject.toml, .gitignore, and __pycache__."
+    },
+    {
+      "severity": "minor",
+      "summary": "The __init__.py file defines __version__ correctly with two dots.",
+      "evidence": "__version__ = \"0.1.0\""
+    }
+  ],
+  "confidence": 100,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 186
+  }
+}
