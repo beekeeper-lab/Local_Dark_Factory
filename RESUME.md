@@ -78,6 +78,12 @@ queued rather than done:
 - `orchestrate.sh` should `mkdir -p "$RUN_DIR/verdicts"` before an audit step, so
   the judge only has to write a file, not create a directory first. Every
   instruction a small model does not need is one it cannot get wrong.
+- `orchestrate.sh` should route the `pr` step to `factory/pipeline/pr.sh`
+  (controller work, no model) instead of `run-step.sh`. `pr.sh` and its 25 tests
+  exist; only the wiring is missing, and the `factory-pr` skill is already
+  retired to a refusal so a mis-wire stops rather than improvises.
+- `roles.json` `step_roles.pr` can go once that wiring lands; it names a role
+  that will no longer run anything.
 
 ## What the first real runs taught
 
