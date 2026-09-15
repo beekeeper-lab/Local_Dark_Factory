@@ -178,7 +178,44 @@ else
   ok "size_budget" "$N_TASKS/${MAX_TASKS:-∞} tasks"
 fi
 
-# --------------------------------- 8. can each verify fail? (run it and see) --
+# ------------------------- 8. does the spec's account of the code match it? --
+#
+# "Does the spec claim the code does something it does not?" is in the rubric,
+# and one of the seeded defects in bench/judge-fitness.sh is exactly that — a
+# Current-behaviour section describing a config module, an environment variable
+# and a helper, none of which exist. Across four judge runs, nobody named it.
+#
+# It does not need a judge. A path named in that section is a claim about a file,
+# and whether the file is there is a question for the filesystem.
+CLAIMS_JSON="null"
+if [ -f "$SPEC_MD" ]; then
+  # It exits 1 when it FINDS something, which is the interesting case — so the
+  # exit code is not what we read. `|| echo null` here discarded exactly the
+  # results the check exists to produce.
+  CLAIMS_JSON="$("$PY" "$PIPELINE_DIR/claims-check.py" "$SPEC_MD" --root "$ROOT" --json 2>/dev/null)"
+  jq -e . >/dev/null 2>&1 <<<"$CLAIMS_JSON" || CLAIMS_JSON="null"
+  MISSING_PATHS="$(jq -r '(.missing_paths // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  ABSENT_SYMS="$(jq -r '(.absent_symbols // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  WRONGLY_DENIED="$(jq -r '(.said_absent_but_present // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  NAMED_N="$(jq -r '(.named_paths // []) | length' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  if [ "$(jq -r '.checked // false' <<<"$CLAIMS_JSON")" != true ]; then
+    ok "current behaviour" "$(jq -r '.why // "not checked"' <<<"$CLAIMS_JSON")"
+  elif [ -n "$MISSING_PATHS" ]; then
+    bad "current behaviour" "describes files that are not there: $MISSING_PATHS"
+  elif [ -n "$WRONGLY_DENIED" ]; then
+    bad "current behaviour" "says these are absent, and they are there: $WRONGLY_DENIED"
+  elif [ -n "$ABSENT_SYMS" ]; then
+    # A symbol may be prose, or a name the change is about to introduce. Worth
+    # saying, never worth failing on.
+    ok "current behaviour" "$NAMED_N path(s) all present; these names occur nowhere in the repo, which may be fine: $ABSENT_SYMS"
+  else
+    ok "current behaviour" "every file it describes is there ($NAMED_N named)"
+  fi
+  jq -n --argjson c "$CLAIMS_JSON" '{schema:"claims-check/1.0.0", current_behaviour:$c}' \
+    > "$RUN_DIR/claims-check.json" 2>/dev/null || true
+fi
+
+# --------------------------------- 9. can each verify fail? (run it and see) --
 #
 # A check that already passes on the unmodified tree cannot demonstrate that the
 # task was done. The audit rubric calls that a blocker, and the judge was asked to
@@ -254,7 +291,7 @@ if [ "$PRECHECK_RAN" = 1 ]; then
   fi
 fi
 
-# ------------------------------------------------------------- 9. render it --
+# ------------------------------------------------------------ 10. render it --
 if [ -f "$SPEC_MD" ] && [ -f "$TEMPLATES/spec.html" ]; then
   if "$PY" "$PIPELINE_DIR/render-doc.py" "$SPEC_MD" "$TEMPLATES/spec.html" "$RUN_DIR/spec.html" \
       --meta "bean=$BEAN_ID" \

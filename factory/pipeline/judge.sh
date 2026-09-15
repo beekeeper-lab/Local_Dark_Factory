@@ -169,6 +169,11 @@ case "$TARGET" in
     # — which it demonstrably does not.
     [ -f "$RUN_DIR/verify-precheck.json" ] \
       && add_artifact "EACH VERIFY, RUN BEFORE ANY WORK WAS DONE" "$RUN_DIR/verify-precheck.json"
+    # Likewise measured: every file the spec says exists today, checked against
+    # the filesystem. No judge in four fitness runs ever caught an invented
+    # Current-behaviour section; the filesystem catches it every time.
+    [ -f "$RUN_DIR/claims-check.json" ] \
+      && add_artifact "WHAT THE SPEC SAYS EXISTS, CHECKED AGAINST THE REPO" "$RUN_DIR/claims-check.json"
     ;;
   impl)
     add_artifact "THE BEAN" "$BEAN_FILE"

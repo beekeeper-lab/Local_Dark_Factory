@@ -25,6 +25,10 @@ nocheck() {
   if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
   else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
 }
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
 want() {
   local n="$1" d="$2"; shift 2
   if "$@"; then printf '  ok    %s\n' "$n"; PASS=$((PASS+1))
@@ -51,27 +55,74 @@ YAML
 printf 'x\n' > README.md
 git add -A && git commit -q -m init
 
-printf '# spec\n\nSome specification prose.\n' > factory/runs/R/spec.md
+full_spec() { # full_spec <current-behaviour-body>
+  cat > factory/runs/R/spec.md <<MD
+# spec
+
+## What and why
+
+This bean exists so the fixture has a document that passes doclint, which every
+later check depends on being reached. A spec that fails the section lint stops
+the script before anything interesting runs.
+
+## Current behaviour
+
+$1
+
+## Proposed change
+
+Add the module, add a test for it, and bring the gates to green. The work is
+deliberately small because the point of this fixture is the checking, not the
+change itself.
+
+## Risk
+
+Low. Nothing here is loaded by anything else yet, so a mistake is contained to
+the new files and is caught by the gates before it reaches a branch.
+
+## Blast radius
+
+Three files under src/, and nothing outside them. No configuration, no
+dependency, and no public interface changes.
+
+## Verification
+
+The gates run lint, types and tests. Each task carries its own check, and the
+controller runs every one of them rather than trusting the worker's report.
+
+## Open questions
+
+None. If something turns out to be ambiguous the task blocks and a person is
+asked rather than guessed at.
+MD
+}
+full_spec "The repository is an empty shell with nothing in \`src/\` yet. There is a
+README, a licence and the factory directory, and no application code at all, so
+nothing here can break in a way a test would notice."
 
 # Two tasks. One verify cannot pass yet (the file is not there); the other
 # passes on the tree as it stands, which is the defect.
 cat > factory/runs/R/tasks.yaml <<'YAML'
-schema_version: task/1.0.0
+schema_version: tasks/1.0.0
+bean_id: bean-001
 tasks:
-  - id: t1
+  - id: task-1
     title: write the module
+    intent: Create src/a.py so the package has something in it.
     write_paths: ["src/a.py"]
     satisfies: ["ac1"]
     verify:
       - { kind: command, run: ["test", "-f", "src/a.py"] }
-  - id: t2
+  - id: task-2
     title: a task that verifies nothing
+    intent: Do some work whose only check passes before the work is done.
     write_paths: ["src/b.py"]
     satisfies: ["ac1"]
     verify:
       - { kind: command, run: ["test", "-d", "."] }
-  - id: t3
+  - id: task-3
     title: a task with one vacuous check among real ones
+    intent: Do work that has both a vacuous check and a real one.
     write_paths: ["src/c.py"]
     satisfies: ["ac1"]
     verify:
@@ -123,23 +174,79 @@ cp -r "$PIPELINE_DIR" "$WORK/pipeline"
 cp "$WORK/stub/verify.sh" "$WORK/stub/sync-tree.sh" "$WORK/pipeline/"
 out="$(PATH="$WORK/stub:$PATH" bash "$WORK/pipeline/spec-check.sh" factory/runs/R --bean factory/beans/bean.yaml 2>&1)"
 
-check "the undemonstrable task is named" "every verify already passes for: t2" "$out"
+check "the undemonstrable task is named" "every verify already passes for: task-2" "$out"
 check "and explained"             "nothing these tasks do could be shown by running them" "$out"
-nocheck "a task with a real check is not called undemonstrable" "for: t2, t3" "$out"
+nocheck "a task with a real check is not called undemonstrable" "for: task-2, task-3" "$out"
 check "the step fails"            "SPEC CHECK FAIL" "$out"
 
 printf '\n== and the result is recorded for the judge to read ==\n\n'
 P=factory/runs/R/verify-precheck.json
 want  "the file exists"           "verify-precheck.json should have been written" test -f "$P"
 check "it names the schema"       "verify-precheck/1.0.0" "$(cat "$P")"
-check "t2 has no check that could fail" \
-      'true' "$(jq -c '.tasks[] | select(.task=="t2") | .every_verify_passes_before_the_work' "$P")"
-check "t1 does"                   'false' "$(jq -c '.tasks[] | select(.task=="t1") | .every_verify_passes_before_the_work' "$P")"
-check "and so does t3, despite its vacuous one" \
-      'false' "$(jq -c '.tasks[] | select(.task=="t3") | .every_verify_passes_before_the_work' "$P")"
-check "t3's vacuous check is still recorded" \
-      '"passes_before_the_work":true' "$(jq -c '.tasks[] | select(.task=="t3") | .verifies[0]' "$P")"
+check "task-2 has no check that could fail" \
+      'true' "$(jq -c '.tasks[] | select(.task=="task-2") | .every_verify_passes_before_the_work' "$P")"
+check "task-1 does"                   'false' "$(jq -c '.tasks[] | select(.task=="task-1") | .every_verify_passes_before_the_work' "$P")"
+check "and so does task-3, despite its vacuous one" \
+      'false' "$(jq -c '.tasks[] | select(.task=="task-3") | .every_verify_passes_before_the_work' "$P")"
+check "task-3's vacuous check is still recorded" \
+      '"passes_before_the_work":true' "$(jq -c '.tasks[] | select(.task=="task-3") | .verifies[0]' "$P")"
 check "the note explains the legitimate case" "a lint that is green on an empty directory" "$(cat "$P")"
+
+printf '\n== a spec that describes files which are not there ==\n\n'
+#
+# The seeded defect from bench/judge-fitness.sh, which four judge runs never
+# named: a Current-behaviour section written with complete confidence about a
+# module that does not exist.
+full_spec "The repository already contains \`src/config.py\`, which reads a \`SEATING_ENV\`
+variable and returns a \`Settings\` dataclass. This work extends its existing
+\`load_settings()\` helper rather than creating anything new."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the invented file is named"    "describes files that are not there: src/config.py" "$out"
+check "and the spec fails"            "SPEC CHECK FAIL" "$out"
+check "the finding is recorded"       '"missing_paths"' "$(cat factory/runs/R/claims-check.json)"
+
+printf '\n== a name that occurs nowhere is reported, not failed ==\n\n'
+full_spec "\`src/a.py\` exists and exports \`frobnicate\`, which this change will rename.
+Nothing else imports it yet, so the rename is contained to that one file and its
+test."
+mkdir -p src && printf 'x\n' > src/a.py
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the absent name is mentioned"  "occur nowhere in the repo, which may be fine: frobnicate" "$out"
+nope  "but it does not fail the spec" "describes files that are not there" "$out"
+
+printf '\n== code in a fenced block is an example, not a claim ==\n\n'
+full_spec "\`src/a.py\` is a stub with nothing in it but a docstring, and no other
+module refers to it yet. The change will add:
+
+\`\`\`python
+from src.nonexistent_module import helper_that_does_not_exist
+\`\`\`"
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+nope "the example is not treated as a claim" "nonexistent_module" "$out"
+
+printf '\n== saying a file is NOT there is a true claim, not a false one ==\n\n'
+#
+# This is the case that matters most for whether the check survives contact: a
+# Current-behaviour section that carefully states what is absent is a *good* one,
+# and a check that flags it punishes exactly the specs written well. It was found
+# by breaking another suite's fixture, which said "There is no `src/a.py`."
+full_spec "There is no \`src/nope.py\` and nothing imports it. The package directory
+is empty apart from its docstring, so there is no behaviour here to preserve and
+nothing that a test could currently observe."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+nope  "an absent file is not a false claim" "describes files that are not there" "$out"
+check "and the spec passes"                 "SPEC CHECK PASS" "$out"
+check "it is recorded as a denial"          '"paths_said_to_be_absent"' \
+      "$(cat factory/runs/R/claims-check.json)"
+
+printf '\n== but saying a file is absent when it is there is caught ==\n\n'
+mkdir -p src && printf 'x\n' > src/present.py
+full_spec "There is no \`src/present.py\` yet, so this change creates it from
+scratch. Nothing in the package refers to it and no test covers it, which is why
+the work can be done in a single task without touching anything else."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the contradiction is named" "says these are absent, and they are there: src/present.py" "$out"
+check "and the spec fails"         "SPEC CHECK FAIL" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
