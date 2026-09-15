@@ -332,5 +332,27 @@ else
   printf '  FAIL  elapsed recorded as %ss for a step that slept 2s\n' "${elapsed:-?}"; FAIL=$((FAIL + 1))
 fi
 
+# -- a step that writes nothing says so ---------------------------------------
+#
+# A real doc step spent thirty-seven minutes, ended with the model saying "From
+# now on, I'll create the documentation", and exited without writing anything.
+# The run recorded "child exit 1", which reads like a crash and hides the useful
+# fact.
+cat > "$WORK/silent-pi" <<'STUB'
+#!/usr/bin/env bash
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+printf 'From now on, I will create the documentation.\n'
+exit 1
+STUB
+chmod +x "$WORK/silent-pi"
+rm -f run/impl-detail.md
+out="$(PI_BIN="$WORK/silent-pi" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
+       bash "$PIPELINE_DIR/run-step.sh" run doc 2>&1)"
+check "the missing output is named"  "produced none of what it exists to produce" "$out"
+check "and the file is named"        "impl-detail.md" "$out"
+check "with what it usually means"   "described what" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

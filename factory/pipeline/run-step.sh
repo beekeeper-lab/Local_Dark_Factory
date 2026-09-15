@@ -560,5 +560,33 @@ if [ "$END_VERDICT" = "PASS" ]; then
   fi
   exit 0
 fi
+# Say what the step was for and whether it did it.
+#
+# "child exit 1" is true and useless. A real doc step spent thirty-seven minutes
+# and fifteen turns, ended with the model saying "From now on, I'll create the
+# documentation", and exited — having written nothing. The run recorded `child
+# exit 1`, which reads like a crash, and the actually useful fact (the file it
+# exists to produce is not there) was only discoverable by going to look.
+#
+# A model that narrates an intention and stops is a specific failure with a
+# specific fix, and it is invisible unless the expected output is named.
+EXPECTED=""
+case "$STEP" in
+  spec)       EXPECTED="$RUN_DIR/spec.md $RUN_DIR/tasks.yaml" ;;
+  doc)        EXPECTED="$RUN_DIR/impl-detail.md" ;;
+  build-task) EXPECTED="" ;;   # its output is the diff, checked by containment
+esac
+MISSING=""
+for f in $EXPECTED; do [ -s "$f" ] || MISSING="$MISSING $(basename "$f")"; done
+
 printf 'STEP   %s   FAIL   child exit %s session=%s\n' "$STEP" "$RC" "${SESSION_FILE:--}" >&2
+if [ -n "$MISSING" ]; then
+  printf '       It produced none of what it exists to produce:%s\n' "$MISSING" >&2
+  printf '       A session that ends without writing its output has usually described what\n' >&2
+  printf '       it was about to do rather than doing it. The transcript is in the session\n' >&2
+  printf '       file above; its last message is the place to look.\n' >&2
+elif [ -n "$EXPECTED" ]; then
+  printf '       Its output IS present (%s), so this is a failure after the work, not\n' "$EXPECTED" >&2
+  printf '       instead of it.\n' >&2
+fi
 exit 1
