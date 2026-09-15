@@ -66,30 +66,63 @@ SYMBOL_LIKE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{2,}$")
 # checked and, if absent, reported — which a person then reads. The opposite
 # error, treating a described-as-missing file as a false claim, would make the
 # check untrustworthy on exactly the specs that are written well.
+# What counts as a claim that a file exists NOW.
+#
+# The first three versions of this asked the opposite question — is there a
+# negation near the path? — and treated everything else as an assertion that the
+# file exists. That was wrong on every real spec it met, three times, always the
+# same way: a Current-behaviour section legitimately talks about the future.
+#
+#   "Both are fixed by this bean creating `tests/` and `src/`."
+#   "...a `testpaths` setting in `pyproject.toml` (an allowed write path)"
+#   "no `pyproject.toml`, no `src/`, and no `tests/` exist in the repository"
+#
+# None of those says the file is there, and only the third contains a negation.
+# The absence of a negation is not evidence of an assertion, and building a
+# failure on it means accusing a well-written section of lying about a file it
+# was careful to describe as missing.
+#
+# So the default flips: a path is only required to exist when the text near it
+# says it does. That is a narrower rule, it will miss some real inventions, and
+# the trade is deliberate — the seeded defect this exists to catch says "The
+# repository ALREADY CONTAINS `src/seating_planner/config.py`", which is exactly
+# the shape of a false claim about the present. A spec that invents a file
+# without claiming it is there is making a much weaker error.
+ASSERTS_EXISTENCE = re.compile(
+    r"""\b(
+        already | currently | at\s+present | today | now\s+(contains|holds)
+        | contains | holds | exists | lives\s+(at|in) | sits\s+(at|in)
+        | is\s+(present|there|at|in) | are\s+(present|there|in)
+        | ships\s+with | carries | declares | defines | sets\s+up
+        | the\s+repository\s+has | we\s+have
+    )\b""",
+    re.VERBOSE | re.IGNORECASE,
+)
+
+# Still read, but only to record that the section calls a path absent — never to
+# suppress anything, because suppression is now the default.
+#
+# Deliberately narrow, and narrower than it was. While assertion was inferred
+# from the absence of negation, this had to catch every way of saying "not here",
+# including forward-looking ones like "creating" — and that made "this bean
+# creating `src/`" read as a claim that src/ is absent, which then read as a
+# contradiction once src/ existed. Now that an assertion has to say so, this only
+# needs to catch actual statements of absence.
 NEGATION = re.compile(
     r"""\b(
         no | not | never | nothing | none | without
         | isn't | aren't | doesn't | don't | won't | cannot | can't
         | absent | missing | empty | lacks? | lacking
-        | yet\s+to\s+be | does\s+not | do\s+not | will\s+be\s+(created|added|written)
-        | (to|will|shall)\s+be\s+(created|added|introduced)
-        | currently\s+(has|have)\s+no
+        | yet\s+to\s+be | does\s+not | do\s+not
     )\b""",
     re.VERBOSE | re.IGNORECASE,
 )
 
-
-# How far from the path a negation still counts. Deliberately small.
-#
-# The first version read the whole sentence, and a sentence is far too much: the
-# real spec this line builds contains "`factory/invariants/...py` already exists
-# and imports a module that no bean has created yet". The "no" belongs to "bean",
-# thirty words away from the path, and the check duly reported that the spec
-# denied the existence of a file it had just said already exists.
-#
-# English puts negation next to what it negates — "there is no `X`", "`X` does
-# not exist" — so a narrow window either side catches the real constructions and
-# leaves other clauses alone.
+# How far from the path a claim still counts. Deliberately small: English puts
+# "already contains" and "does not exist" next to what they are about, and a
+# wider window picks up clauses belonging to other nouns. Measured the hard way —
+# a sentence-wide window read "the package does not exist. The entire working
+# tree (excluding `factory/`...)" as a denial of `factory/`.
 BEFORE = 48
 AFTER = 32
 
@@ -124,11 +157,12 @@ def strip_fences(text: str) -> str:
     return "\n".join(p for i, p in enumerate(parts) if i % 2 == 0)
 
 
-def claims(body: str) -> tuple[list[str], list[str], list[str]]:
-    """Paths asserted to exist, paths asserted to be absent, and symbols."""
+def claims(body: str) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Paths asserted to exist, denied, merely mentioned, and asserted symbols."""
     text = strip_fences(body)
     asserted: list[str] = []
     denied: list[str] = []
+    mentioned: list[str] = []
     symbols: list[str] = []
     for m in BACKTICKED.finditer(text):
         tok = m.group(1).strip().rstrip(",.;:")
@@ -137,16 +171,21 @@ def claims(body: str) -> tuple[list[str], list[str], list[str]]:
         is_path = PATH_LIKE.match(tok) and (
             "/" in tok or Path(tok).suffix.lower() in KNOWN_SUFFIXES
         )
+        context = around(text, m.start(), m.end())
         if is_path:
-            if NEGATION.search(around(text, m.start(), m.end())):
+            if NEGATION.search(context):
                 denied.append(tok)
-            else:
+            elif ASSERTS_EXISTENCE.search(context):
                 asserted.append(tok)
+            else:
+                # Mentioned, with no claim either way. Recorded so a reader can
+                # see what the section talked about, and required of nothing.
+                mentioned.append(tok)
             continue
         if SYMBOL_LIKE.match(tok) and tok.lower() not in NOT_SYMBOLS:
-            if not NEGATION.search(around(text, m.start(), m.end())):
+            if ASSERTS_EXISTENCE.search(context):
                 symbols.append(tok)
-    return sorted(set(asserted)), sorted(set(denied)), sorted(set(symbols))
+    return sorted(set(asserted)), sorted(set(denied)), sorted(set(mentioned)), sorted(set(symbols))
 
 
 def grep(root: Path, needle: str) -> bool:
@@ -185,7 +224,7 @@ def main() -> int:
         print(json.dumps(result, indent=2) if args.as_json else result["why"])
         return 0
 
-    asserted, denied, symbols = claims(body)
+    asserted, denied, mentioned, symbols = claims(body)
 
     # A path denied ANYWHERE in the section is not required to exist, even if it
     # is also mentioned neutrally elsewhere. The first spec a contained worker
@@ -221,7 +260,8 @@ def main() -> int:
     result = {
         "section": args.section,
         "checked": True,
-        "named_paths": [p for p in asserted if p not in denied_set],
+        "paths_said_to_exist": [p for p in asserted if p not in denied_set],
+        "paths_only_mentioned": mentioned,
         "missing_paths": missing,
         "paths_said_to_be_absent": denied,
         "said_absent_but_present": denied_and_present,
@@ -234,8 +274,11 @@ def main() -> int:
         "named_symbols": symbols,
         "absent_symbols": absent,
         "note": (
-            "A path this section says exists is a claim about the filesystem, and if "
-            "the file is not there the section is describing something that is not. "
+            "A path this section SAYS EXISTS — 'already contains', 'currently', "
+            "'is present' — is a claim about the filesystem, and if the file is not "
+            "there the section is describing something that is not. A path merely "
+            "mentioned, including one the change is about to create, claims nothing "
+            "and is required of nothing. "
             "A path it says is ABSENT is also a claim, checked the other way. "
             "Sentences are read for negation so that 'There is no `src/a.py`' — a "
             "true and useful thing for this section to say — is not reported as a "

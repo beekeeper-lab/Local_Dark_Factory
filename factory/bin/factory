@@ -70,18 +70,31 @@ EOF
 # itself where the point is to see a change take effect.
 pipeline_snapshot() {
   [ "${FACTORY_NO_SNAPSHOT:-0}" = 1 ] && { printf '%s\n' "$PIPE"; return 0; }
-  local base snap
-  # The whole factory root is copied, not just pipeline/. The first version took
-  # pipeline/ alone and left worker.lock.yaml behind, so run-step's fallback —
-  # "$PIPELINE_DIR/../worker.lock.yaml" — found nothing, containment fell back to
-  # auto-off, and bean-001 ran its worker on the host. Silently, because the
-  # "running uncontained" warning only fires when a manifest exists.
-  #
-  # A snapshot that changes what the run does is worse than no snapshot. It must
-  # be the whole thing the pipeline resolves paths against.
+  local base snap parent
+  parent="$(cd "$FACTORY_ROOT/.." && pwd)"
   base="$(mktemp -d "${TMPDIR:-/tmp}/factory-snap.XXXXXX")" || return 1
-  cp -r "$FACTORY_ROOT/." "$base/" 2>/dev/null || return 1
-  snap="$base/pipeline"
+
+  # The snapshot mirrors the REPOSITORY root, not the factory directory.
+  #
+  # Scripts resolve siblings by climbing: spec-check finds the schema validator
+  # at "$PIPELINE_DIR/../../bench/validate.py", and the schemas it validates
+  # against live beside it. A snapshot that copied only factory/ put pipeline/ at
+  # the top, so "../.." pointed at /tmp and both were missing.
+  #
+  # The failure was quiet, which is the pattern worth naming: spec-check printed
+  # "schema validator unavailable; structural checks only" and carried on. The
+  # run's record then says the spec was checked, and it was — by a weaker check
+  # than the one anyone reading that record would assume.
+  mkdir -p "$base/factory" || return 1
+  cp -r "$FACTORY_ROOT/." "$base/factory/" 2>/dev/null || return 1
+  for sib in schemas bench; do
+    [ -d "$parent/$sib" ] && cp -r "$parent/$sib" "$base/$sib" 2>/dev/null
+  done
+  # The venv is pointed at rather than copied: hundreds of megabytes, and its
+  # whole purpose is to be the same interpreter every run.
+  [ -x "$parent/.venv/bin/python" ] && export PIPELINE_PYTHON="$parent/.venv/bin/python"
+
+  snap="$base/factory/pipeline"
   [ -d "$snap" ] || return 1
   printf '%s\n' "$snap"
 }
@@ -135,8 +148,12 @@ case "$cmd" in
       [ -d "$SNAP/../skills" ] && export FACTORY_SKILLS="$SNAP/../skills"
       # Assert the snapshot is complete rather than discovering it is not by
       # reading a run record afterwards and finding the worker ran on the host.
-      for needed in worker.lock.yaml pipeline/roles.json skills; do
-        [ -e "$SNAP/../$needed" ] \
+      # Asserted, not hoped for. Each of these has already been left out of a
+      # snapshot once, and each time the line kept running with something
+      # silently switched off.
+      for needed in factory/worker.lock.yaml factory/pipeline/roles.json \
+                    factory/skills schemas bench/validate.py; do
+        [ -e "$SNAP/../../$needed" ] \
           || die "the pipeline snapshot is missing $needed — refusing to run a line that would
 quietly behave differently from the one in the repository. Set FACTORY_NO_SNAPSHOT=1 to
 run from the working tree."

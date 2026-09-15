@@ -56,7 +56,10 @@ require_cmd jq
 
 ROOT="$(repo_root)"
 PY="$(factory_python)"
-VALIDATE="$PIPELINE_DIR/../../bench/validate.py"
+# Overridable so a test can remove the validator without removing the interpreter
+# — pointing PIPELINE_PYTHON at nothing breaks every other Python tool here and
+# tests the wrong failure.
+VALIDATE="${SPEC_CHECK_VALIDATOR:-$PIPELINE_DIR/../../bench/validate.py}"
 [ -n "$TEMPLATES" ] || TEMPLATES="$ROOT/factory/templates"
 
 BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bean"
@@ -100,7 +103,19 @@ if [ -f "$VALIDATE" ] && [ -x "$PY" ]; then
     printf '%s\n' "$out" | sed 's/^/          /'
   fi
 else
-  printf '  note  %-26s %s\n' "tasks.yaml" "schema validator unavailable; structural checks only"
+  # Not a note. A run whose task list was never schema-checked produces a record
+  # saying the spec was checked, and it was — by a weaker check than anyone
+  # reading that record would assume. This printed as a quiet note for a while
+  # and a pipeline snapshot duly turned it on without anybody noticing.
+  #
+  # SPEC_CHECK_ALLOW_NO_SCHEMA=1 for a repo that genuinely has no validator.
+  if [ "${SPEC_CHECK_ALLOW_NO_SCHEMA:-0}" = 1 ]; then
+    printf '  note  %-26s %s\n' "tasks.yaml" "schema validation skipped (SPEC_CHECK_ALLOW_NO_SCHEMA=1)"
+  else
+    bad "tasks.yaml" "no schema validator: $VALIDATE with $PY. The task list was NOT
+          checked against task.schema.json, and a spec check that skips that quietly is
+          worse than one that refuses. Set SPEC_CHECK_ALLOW_NO_SCHEMA=1 to accept it."
+  fi
 fi
 
 N_TASKS="$(jq '.tasks | length' <<<"$TASKS_JSON")"
@@ -221,7 +236,8 @@ if [ -f "$SPEC_MD" ]; then
   MISSING_PATHS="$(jq -r '(.missing_paths // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
   ABSENT_SYMS="$(jq -r '(.absent_symbols // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
   WRONGLY_DENIED="$(jq -r '(.said_absent_but_present // []) | join(", ")' <<<"$CLAIMS_JSON" 2>/dev/null)"
-  NAMED_N="$(jq -r '(.named_paths // []) | length' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  NAMED_N="$(jq -r '(.paths_said_to_exist // []) | length' <<<"$CLAIMS_JSON" 2>/dev/null)"
+  MENTIONED_N="$(jq -r '(.paths_only_mentioned // []) | length' <<<"$CLAIMS_JSON" 2>/dev/null)"
   if [ "$(jq -r '.checked // false' <<<"$CLAIMS_JSON")" != true ]; then
     ok "current behaviour" "$(jq -r '.why // "not checked"' <<<"$CLAIMS_JSON")"
   elif [ -n "$MISSING_PATHS" ]; then
@@ -233,9 +249,9 @@ if [ -f "$SPEC_MD" ]; then
   elif [ -n "$ABSENT_SYMS" ]; then
     # A symbol may be prose, or a name the change is about to introduce. Worth
     # saying, never worth failing on.
-    ok "current behaviour" "$NAMED_N path(s) all present; these names occur nowhere in the repo, which may be fine: $ABSENT_SYMS"
+    ok "current behaviour" "$NAMED_N claimed path(s) all present; these names occur nowhere in the repo, which may be fine: $ABSENT_SYMS"
   else
-    ok "current behaviour" "every file it describes is there ($NAMED_N named)"
+    ok "current behaviour" "every file it says exists is there ($NAMED_N claimed, ${MENTIONED_N:-0} mentioned without a claim)"
   fi
   jq -n --argjson c "$CLAIMS_JSON" '{schema:"claims-check/1.0.0", current_behaviour:$c}' \
     > "$RUN_DIR/claims-check.json" 2>/dev/null || true

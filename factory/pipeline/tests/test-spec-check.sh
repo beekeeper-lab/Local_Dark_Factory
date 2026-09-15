@@ -289,5 +289,53 @@ out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
 nope  "the later mention does not revive the claim" "describes files that are not there" "$out"
 check "and the spec passes"                         "SPEC CHECK PASS" "$out"
 
+printf '\n== a section may talk about what the change will create ==\n\n'
+#
+# The third false positive this check produced, and the one that changed its
+# design. A Current-behaviour section legitimately describes the future, and none
+# of these sentences contains a negation:
+#
+#   "Both are fixed by this bean creating `tests/` and `src/`."
+#   "...a `testpaths` setting in `pyproject.toml` (an allowed write path)"
+#
+# Inferring an existence claim from the absence of a negation accused a
+# well-written section of lying, three specs running. A path is now only required
+# to exist when the text says it does.
+full_spec "The unit gate has nothing to run. No tests exist and \`--cov=src\` has
+nothing to cover; both are fixed by this bean creating \`tests/\` and \`src/\`.
+
+The setting that scopes collection from here onward is \`testpaths\` in
+\`pyproject.toml\`, which this change adds along with the rest of the tool
+configuration."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+nope  "future work is not an existence claim" "describes files that are not there" "$out"
+check "and the spec passes"                   "SPEC CHECK PASS" "$out"
+check "the mention is recorded, not judged"   "mentioned without a claim" "$out"
+
+printf '\n== but "already contains" is an existence claim, and is checked ==\n\n'
+full_spec "The repository already contains \`src/config.py\`, which currently reads a
+\`SEATING_ENV\` variable and returns a settings object. This change extends that
+module rather than creating anything new, so the surface is unchanged."
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the false claim is caught"  "describes files that are not there: src/config.py" "$out"
+check "and the spec fails"         "SPEC CHECK FAIL" "$out"
+
+printf '\n== a missing schema validator is a failure, not a note ==\n\n'
+#
+# It printed as a quiet note for a while. Then a pipeline snapshot left the
+# schemas and the venv behind, spec-check said "structural checks only" and
+# carried on, and the run recorded that the spec was checked — by a weaker check
+# than anyone reading that record would assume.
+full_spec "The repository is an empty shell with nothing in \`src/\` yet, and no
+module in it that any test could currently observe."
+out="$(SPEC_CHECK_VALIDATOR=/nonexistent/validate.py SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "it refuses rather than noting"  "no schema validator" "$out"
+check "and says what was not checked"  "NOT
+          checked against task.schema.json" "$out"
+check "the spec fails"                 "SPEC CHECK FAIL" "$out"
+
+out="$(SPEC_CHECK_VALIDATOR=/nonexistent/validate.py SPEC_CHECK_ALLOW_NO_SCHEMA=1 SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "but it can be accepted deliberately" "schema validation skipped" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
