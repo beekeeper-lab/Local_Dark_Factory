@@ -89,6 +89,48 @@ STOP_AFTER=""
 # package-check and every other deterministic check stay blocking, and a run that
 # used this says so in its record and in its pull request.
 ADVISORY_AUDITS="${FACTORY_ADVISORY_AUDITS:-0}"
+
+# Killing the controller has to stop the line, not orphan it.
+#
+# The steps run as children — build-loop.sh, run-step.sh, and a worker container
+# under those. A `kill` of this process alone leaves them running: build-loop
+# carries on editing the repository, committing to the branch and writing into
+# the run directory, for a run whose controller no longer exists. Ctrl+C in a
+# terminal happens to work, because the shell signals the whole process group;
+# anything that kills by pid does not. `tests/test-faults.sh` found this by
+# doing exactly that.
+#
+# So: forward the signal down, wait for the children to take their own cleanup
+# paths — build-loop resets the tree on INT/TERM — and only then leave.
+#
+# One limit worth knowing: bash does not run a trap while blocked on a foreground
+# child, so a TERM sent to this process alone is deferred until the current step
+# returns. Ctrl+C in a terminal does not have that problem, because the shell
+# signals the whole process group and the child dies first. To stop a detached
+# run promptly, signal the group: `kill -TERM -<pgid>`.
+on_signal() {
+  local sig="$1" kid
+  printf '\n%s — stopping the line. Waiting for the current step to clean up.\n' "$sig" >&2
+  # By parent, not by name and not by process group. `kill -$$` needs this to be
+  # a group leader, which it is not when something else launched it; a name
+  # pattern would match any shell whose command line mentions the pipeline,
+  # including the one running the tests. pgrep -P is exact.
+  for kid in $(pgrep -P $$ 2>/dev/null); do
+    kill -TERM "$kid" 2>/dev/null || true
+  done
+  wait 2>/dev/null || true
+  if [ -n "${RUN_DIR:-}" ] && [ -f "$RUN_DIR/run.json" ]; then
+    jq -c --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg s "$sig" \
+      '. + {status:"interrupted", interrupted_by:$s, interrupted_at:$ts}' \
+      "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" 2>/dev/null \
+      && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
+    printf 'The run record is at %s and says it was interrupted.\n' "$RUN_DIR" >&2
+  fi
+  trap - INT TERM
+  exit 130
+}
+trap 'on_signal SIGINT' INT
+trap 'on_signal SIGTERM' TERM
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) cat "$PIPELINE_DIR/VERSION"; exit 0 ;;

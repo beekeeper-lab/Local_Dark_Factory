@@ -429,10 +429,18 @@ now be written against a real boundary rather than an after-the-fact check.)*
 > and then four of the six passed on their first run, which says the refusals were
 > already right rather than that the tests were written to fit them.
 >
-> The two left need state a stub cannot fake: killing the controller mid-stage,
-> and a remote CI result.
+> Killing the controller mid-build joined them, which was not obvious: the reason
+> it was filed as unfakeable is that a stub cannot produce a half-finished remote
+> state — but it can be killed. Doing so found that the controller left its
+> children running, and taught a limit worth writing down: bash does not run a
+> trap while blocked on a foreground child, so TERM to the controller alone is
+> deferred until the current step returns. Ctrl+C does not have that problem
+> because a terminal signals the whole process group. To stop a detached run
+> promptly, signal the group.
+>
+> Only the remote-CI case is genuinely left.
 
-- [ ] Fault injection — controller restart mid-stage (each of: specifying, building, committing, pushing, pr_open)
+- [~] Fault injection — controller restart mid-stage — **building is done** (`tests/test-faults.sh`): the line is killed mid-build, the tree comes back clean, the run record says `interrupted`, and a resume continues rather than starting over. The other stages are the same mechanism and are not separately asserted yet.
 - [x] Fault injection — out-of-path edit inside a task (must **reject**, not strip; attempt++) — `tests/test-faults.sh`
 - [ ] Fault injection — out-of-path edit in whole-diff containment
 - [x] Fault injection — task list with an unclaimed AC → spec audit must `revise` — `tests/test-faults.sh`; the controller refuses it before the judge is asked

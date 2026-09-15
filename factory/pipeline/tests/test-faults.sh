@@ -399,5 +399,77 @@ else
   printf '  --    worker image not built here; containment asserted by tests/test-sandbox.sh\n'
 fi
 
+printf '\n== the controller is killed mid-build, and the run resumes ==\n\n'
+#
+# Filed as needing state a stub cannot fake, which was half right: the *remote*
+# half cannot be faked, but killing the controller can — and it is the half that
+# has actually bitten. An interrupted attempt leaves the worker's edits in the
+# tree, and the next run's preflight refuses a dirty tree without being able to
+# say whose changes they are.
+#
+# What must hold after a kill: the tree is clean, the completed work is still
+# committed, and a resume continues rather than starting over.
+reset_repo
+# orchestrate.sh directly, not through run_line: backgrounding a shell FUNCTION
+# gives $! the subshell's pid, and signalling that does not reach orchestrate at
+# all. The first version of this test killed a wrapper and concluded the line
+# failed to clean up.
+PI_SESSIONS_DIR="$WORK/sessions" \
+STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
+STUB_DOC="$WORK/doc-good.md" STUB_BUILD_EXTRA='sleep 20' \
+FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
+PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+  setsid bash "$WORK/pipeline/orchestrate.sh" bean-001 --stop-after build > "$WORK/o-kill" 2>&1 &
+LINE_PID=$!
+# setsid puts the line in its own process group, so the test can signal the group
+# the way a terminal does on Ctrl+C. This is not a convenience: bash does not run
+# a trap while it is blocked on a foreground child, so TERM to the controller
+# alone is deferred until the step it is waiting on finishes — which for a build
+# step can be many minutes. Signalling the group reaches the worker too, the
+# child exits, and every trap in the chain runs promptly. An operator pressing
+# Ctrl+C gets exactly this; `kill <pid>` gets the deferred version.
+# Wait for the first task to be under way rather than racing a fixed delay.
+for _ in $(seq 1 60); do
+  grep -q 'ATTEMPT 1/' "$WORK/o-kill" 2>/dev/null && break
+  sleep 0.5
+done
+# By pid, never by pattern: a pattern kill here would match this test script,
+# which has done exactly that four times in this project's history.
+# TERM to the controller, exactly as an operator killing it by pid would. If the
+# line only cleans up when the shell happens to signal the whole group, it does
+# not clean up.
+kill -TERM -"$LINE_PID" 2>/dev/null || kill -TERM "$LINE_PID" 2>/dev/null
+wait "$LINE_PID" 2>/dev/null
+# Give the children their cleanup window.
+for _ in $(seq 1 40); do
+  pgrep -P "$LINE_PID" >/dev/null 2>&1 || break
+  sleep 0.5
+done
+
+dirty="$(git -C "$REPO" status --porcelain | grep -v '^?? factory/runs/' || true)"
+want "the tree is clean after the kill" "a killed attempt must not leave the worker's edits behind: $dirty" \
+     test -z "$dirty"
+KILLED="$(cat "$WORK/o-kill")"
+check "the controller says it is stopping" "stopping the line" "$KILLED"
+if ! grep -qF 'discarding its edits' <<<"$KILLED"; then
+  printf '  --- what the killed run printed ---\n'
+  sed 's/^/  | /' <<<"$KILLED" | tail -12
+  printf '  --- end ---\n'
+fi
+check "and the loop says what it discarded" "discarding its edits" "$KILLED"
+
+R="$(ls -1dt "$REPO"/factory/runs/*/ | head -1)"
+want "the run directory survived"       "the evidence must outlive the reset" test -d "$R"
+
+# Now resume it. The point is that it continues rather than redoing what is done.
+rm -f "$R/QUESTIONS.md"
+run_line --resume "${R%/}" --stop-after build > "$WORK/o-resume" 2>&1 || true
+o="$(cat "$WORK/o-resume")"
+check "the resume skips what passed"    "SKIP   spec" "$o"
+check "and finishes the build"          "BUILD COMPLETE" "$o"
+check "with every task"                 "task(s) verified" "$o"
+want  "and nothing was left half-committed" "the branch should carry one commit per verified task" \
+      test "$(git -C "$REPO" rev-list --count "main..bean/bean-001-scaffold" 2>/dev/null || echo 0)" -eq 2
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
