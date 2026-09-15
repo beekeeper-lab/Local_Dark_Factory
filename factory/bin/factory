@@ -30,7 +30,7 @@ factory — run the line against the repository you are standing in.
   factory run <bean-id> [--stop-after <step>] [--resume <run-dir>]
                             the whole line, or as much of it as you ask for
   factory step <step> <bean-id>
-                            one step: specify, build, gate, document, pr,
+                            one step: spec, build, gate, doc, sync, pr,
                             or audit-{spec,impl,doc,package}
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
@@ -46,8 +46,12 @@ factory — run the line against the repository you are standing in.
                             it there — for reviewing risk-policy.yaml by its
                             consequences rather than by reading globs
 
-Steps in order: preflight specify audit-spec build gate audit-impl
-                document audit-doc audit-package pr
+Steps in order: preflight spec audit-spec build gate audit-impl
+                doc audit-doc audit-package sync pr
+
+These are the names the pipeline uses. `specify` and `document` read better and
+were in this text for a while, and `--stop-after specify` is refused by the
+orchestrator, which is the only opinion that counts.
 
 The target repository is the current one. Its configuration is found at
 factory/pipeline-config.json; PIPELINE_CONFIG overrides it.
@@ -342,6 +346,25 @@ run from the working tree."
       bad "worker image" "no worker.lock.yaml in this repo or in the factory — the worker would run on the host"
     fi
 
+    # required_checks names checks that must be green before a merge. Nothing in
+    # the line produces them and nothing reads them: there is no CI step, and
+    # merge_mode is human_required, so the human merging is the one who looks at
+    # the PR's checks. That is a defensible place to be — and a config naming a
+    # check that nothing produces reads exactly like protection that is in force,
+    # which is how a "failing open" defect starts. So say it out loud rather than
+    # letting the file imply otherwise.
+    if [ -f "$TARGET_ROOT/factory/repo.yaml" ]; then
+      RCHECKS="$("$PIPE/yaml2json.sh" "$TARGET_ROOT/factory/repo.yaml" | jq -r '[.required_checks[]?] | join(", ")')"
+      if [ -n "$RCHECKS" ]; then
+        if [ -d "$TARGET_ROOT/.github/workflows" ] \
+           && [ -n "$(ls -A "$TARGET_ROOT/.github/workflows" 2>/dev/null)" ]; then
+          say note "required_checks" "$RCHECKS — workflows exist; no pipeline step waits on them yet"
+        else
+          say note "required_checks" "$RCHECKS — but this repo has no .github/workflows, so nothing produces them and no step waits on them"
+        fi
+      fi
+    fi
+
     branch="$(git -C "$TARGET_ROOT" branch --show-current)"
     [ "$branch" = "main" ] && good "branch" "on main" \
       || bad "branch" "on '$branch' — a run starts from main; check out main and delete the bean branch"
@@ -370,6 +393,15 @@ run from the working tree."
     require_target
     runs_root="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
     [ -d "$runs_root" ] || die "no runs yet under $runs_root"
+    # A directory that exists and holds nothing printed a bare header and exited
+    # 0, which reads as "this repo has no history" and is indistinguishable from
+    # "I looked somewhere you did not mean". Say which it is, and exit non-zero,
+    # so a wrong runs_root is a failure rather than an empty table.
+    found=0
+    for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
+      [ -f "$d/run.json" ] && { found=1; break; }
+    done
+    [ "$found" = 1 ] || die "no runs yet under $runs_root"
     printf '\n%-34s %-12s %-9s %-7s %s\n' RUN STATUS STEPS ELAPSED ENDED-AT
     for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
       rj="$d/run.json"; [ -f "$rj" ] || continue
