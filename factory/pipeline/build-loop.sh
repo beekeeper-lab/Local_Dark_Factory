@@ -412,7 +412,17 @@ changed_paths() { # paths changed vs HEAD, repo-relative, run dir excluded
 # that may touch it during a session is the controller appending to steps.jsonl.
 run_dir_manifest() { # run_dir_manifest <attempt-dir> — hash the record, not the channel
   [ -n "$RUN_DIR_REL" ] || return 0
-  local adir="${1:-}"
+  # The attempt directory arrives as "$RUN_DIR/build/..." and RUN_DIR is whatever
+  # the caller typed — `factory run` passes a relative path. `find` emits absolute
+  # paths, so comparing the two matched nothing and the exemption silently did not
+  # apply: bean-001's first build attempt was failed for tampering by the
+  # controller's own worker.log and changed-paths.txt, both written into the
+  # attempt directory by this script, during the session it was measuring.
+  #
+  # A containment check that accuses the controller of tampering is worse than no
+  # check, because the first thing anyone does with it is turn it off.
+  local adir=""
+  [ -n "${1:-}" ] && adir="$(cd "$(dirname "$1")" 2>/dev/null && pwd)/$(basename "$1")"
   find "$RUN_DIR_ABS" -type f -print0 2>/dev/null \
     | while IFS= read -r -d '' f; do
         case "$f" in

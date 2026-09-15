@@ -517,6 +517,25 @@ want  "only one attempt was made"      "expected exactly 1 attempt dir" \
 nope  "and nothing was committed"      "task-1 should not have been committed" \
       git -C "$REPO" log --oneline -1 --format=%s | grep -q task-1
 
+printf '\n== the controller\'s own writes are never tampering, however the path was typed ==\n\n'
+#
+# The run directory is passed to build-loop.sh as whatever the caller typed, and
+# `factory run` types a relative path. `find` emits absolute ones. The attempt
+# directory exemption compared the two directly, matched nothing, and the first
+# real build attempt of bean-001 was failed for tampering by this script's own
+# worker.log — written into the attempt directory during the session it was
+# measuring. A containment check that accuses the controller is worse than none.
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(cd "$REPO" && PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
+  STUB_ACTIONS="$WORK/actions" FACTORY_CONTAIN_WORKER=0 \
+  bash "$PIPELINE_DIR/build-loop.sh" ai/runs/R1 \
+    --bean "$REPO/bean.yaml" --tasks "$REPO/tasks.yaml" --task task-1 2>&1)"
+nope  "a relative run dir does not produce a false accusation" "TAMPERED" "$out"
+check "and the task verifies"  "PASS   task-1" "$out"
+
 printf '\n== but its own attempt directory is its channel, not the record ==\n\n'
 reset_run
 act task-1.1 <<'SH'
