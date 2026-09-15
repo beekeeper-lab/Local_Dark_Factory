@@ -29,7 +29,7 @@ usage() {
 judge-fitness.sh — measure whether the judge catches planted defects.
 
 usage: judge-fitness.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
-                        [--out <results.json>] [--only <case>]
+                        [--out <results.json>] [--only <case>] [--repeat <n>]
 
 Each case is the same artifacts with exactly one thing wrong. Slow on purpose:
 one real audit per case, no stubs — a fitness number from a stub measures the
@@ -45,6 +45,8 @@ while [ $# -gt 0 ]; do
     --bean) BEAN="${2:?}"; shift 2 ;;
     --out)  OUT="${2:?}"; shift 2 ;;
     --only) ONLY="${2:?}"; shift 2 ;;
+    --repeat) REPEAT="${2:?--repeat needs a count}"; shift 2 ;;
+    --no-evict) NO_EVICT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -168,12 +170,29 @@ criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|an
 
 RESULTS="[]"
 CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0
+# One pass is the default because it is what fits in a coffee break, and it is
+# also not a measurement — see the warning this prints at the end. Anything you
+# intend to compare against another number needs --repeat, and 5 is the smallest
+# count that showed the spread when this was first measured.
+REPEAT="${REPEAT:-1}"
 
-# Free the GPU before starting. Two large models resident at once is how four of
-# six cases came back with a dead runner in one run, and a fitness score computed
-# over that is a measurement of VRAM.
+# Nothing else may be using the GPU, because the next thing this does is take it.
+#
+# Evicting models is how this harness stops a fitness score from being a
+# measurement of VRAM, and it is also a loaded gun pointed at any run in flight:
+# started during a real bean's spec audit, it would evict the judge mid-request
+# and the run would record a dead runner as the judge's answer. Nearly did.
+if pgrep -f '[o]rchestrate\.sh' >/dev/null 2>&1; then
+  printf 'REFUSED — a pipeline run is in flight (orchestrate.sh).\n' >&2
+  printf 'This harness evicts models to control what it is measuring, which would take\n' >&2
+  printf 'the GPU out from under that run. Wait for it, or use --no-evict to measure\n' >&2
+  printf 'alongside it and accept that the numbers include the contention.\n' >&2
+  [ "${NO_EVICT:-0}" = 1 ] || exit 2
+fi
+
 JUDGE_MODEL="$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")"
 while IFS= read -r resident; do
+  [ "${NO_EVICT:-0}" = 1 ] && break
   [ -n "$resident" ] && [ "$resident" != "$JUDGE_MODEL" ] || continue
   printf 'evicting %s to leave room for the judge\n' "$resident"
   ollama stop "$resident" >/dev/null 2>&1 || true
@@ -182,11 +201,13 @@ done < <(curl -s "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null | j
 printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
 
+for REP in $(seq 1 "$REPEAT"); do
+[ "$REPEAT" -gt 1 ] && printf '\n-- pass %s of %s --\n' "$REP" "$REPEAT"
 while IFS='|' read -r name should_reject description catchwords; do
   [ -n "$name" ] || continue
   [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
 
-  RD="$WORK/$name"
+  RD="$WORK/$name.$REP"
   mkdir -p "$RD/verdicts"
   cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
   printf '{"run_id":"fitness-%s","bean":"%s"}\n' "$name" "$(basename "$(dirname "$BEAN")")" > "$RD/run.json"
@@ -199,7 +220,7 @@ while IFS='|' read -r name should_reject description catchwords; do
 
   # Keep the evidence. A case that produced nothing is the most interesting kind
   # and the one whose log a temp-dir cleanup would take with it.
-  KEEP="$(dirname "$OUT")/judge-fitness-logs/$name"
+  KEEP="$(dirname "$OUT")/judge-fitness-logs/$name$([ "$REPEAT" -gt 1 ] && printf '.%s' "$REP")"
   mkdir -p "$KEEP"
   cp -f "$RD/judge.log" "$KEEP/judge.log" 2>/dev/null || true
   cp -f "$RD/spec.md" "$RD/tasks.yaml" "$KEEP/" 2>/dev/null || true
@@ -260,8 +281,10 @@ while IFS='|' read -r name should_reject description catchwords; do
   RESULTS="$(jq -c --arg n "$name" --arg d "$description" --arg sr "$should_reject" \
     --arg v "$verdict" --arg o "$outcome" --argjson s "$((t1-t0))" \
     --argjson j "$( [ -f "$J" ] && jq -c '{findings, criteria, confidence}' "$J" 2>/dev/null || echo null )" \
-    '. + [{case:$n, defect:$d, should_reject:$sr, verdict:$v, outcome:$o, seconds:$s, judgement:$j}]' <<<"$RESULTS")"
+    --argjson rep "$REP" \
+    '. + [{case:$n, pass:$rep, defect:$d, should_reject:$sr, verdict:$v, outcome:$o, seconds:$s, judgement:$j}]' <<<"$RESULTS")"
 done <<< "$CASES"
+done
 
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
@@ -269,9 +292,11 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --argjson named "$NAMED" --argjson noans "$NO_ANSWER" --argjson cut "$CUT_OFF" \
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
-  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts,
     judge:{model:$model, digest:$digest},
+    passes:$passes,
+    one_pass_is_not_a_measurement: ($passes < 2),
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
     false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
     complete: ($cut == 0),
@@ -280,7 +305,22 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
     false_accept_rate: (if $seeded > 0 then (($fa*100/$seeded)|floor) else null end),
     cases:$r}' > "$OUT"
 
-printf '\nof %s seeded defects: rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$CAUGHT" "$NAMED"
+if [ "$REPEAT" -gt 1 ]; then
+  printf '\nper case, across %s passes — the spread is the point:\n\n' "$REPEAT"
+  printf '%-28s %-34s %s\n' CASE VERDICTS NAMED-THE-DEFECT
+  while IFS='|' read -r name _ _ _; do
+    [ -n "$name" ] || continue
+    [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
+    printf '%-28s %-34s %s\n' "$name" \
+      "$(jq -r --arg n "$name" '[.[] | select(.case == $n) | .verdict] | group_by(.) | map("\(.[0])×\(length)") | join(" ")' <<<"$RESULTS")" \
+      "$(jq -r --arg n "$name" '[.[] | select(.case == $n) | .outcome | test("named it")] | "\(map(select(.)) | length)/\(length)"' <<<"$RESULTS")"
+  done <<< "$CASES"
+  printf '\nA case with more than one verdict in that column is not a result. It is the\n'
+  printf 'judge disagreeing with itself on identical input, and no amount of arithmetic\n'
+  printf 'over it produces a number worth acting on.\n'
+fi
+
+printf '\nof %s seeded defects (%s case(s) × %s pass(es)): rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$((SEEDED / REPEAT))" "$REPEAT" "$CAUGHT" "$NAMED"
 printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
 if [ "$CUT_OFF" -gt 0 ]; then
   printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged.\n' "$CUT_OFF"
