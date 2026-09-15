@@ -347,6 +347,16 @@ controller gets switched off and takes the real one with it.
 none of them needed a model. `tests/test-full-line.sh` now does that in twenty seconds.
 Write the end-to-end test before the next long real run, not after it.
 
+### Operator actions the line expects
+
+- **`factory read <run>`** — the one exit predicate a script cannot settle.
+- **`factory policy`** — review risk-policy.yaml by what it does to each bean.
+- **`failed-attempts/resolved/`** — move a step's failure records into this
+  directory, with a note saying why, when the failure was caused by something
+  outside the model: a killed container, a controller bug since fixed. The
+  attempt limit stops counting them and the evidence stays. A delete would do the
+  first and lose the second.
+
 ### Still open
 
 - **`risk-policy.yaml` has not had a human read.** Marked `[~]` since Phase 0. It governs

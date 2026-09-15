@@ -268,6 +268,19 @@ authoring_for_audit() {
   esac
 }
 
+# failed_count — how many recorded failures this step has, which is what stops a
+# third attempt.
+#
+# `failed-attempts/resolved/` is the operator's escape hatch, and it is a
+# directory rather than a delete on purpose. A failed attempt caused by something
+# outside the model — a killed container, a controller bug since fixed — should
+# stop counting against the step without the evidence disappearing. Move the
+# records into resolved/ with a note saying why, and the glob below no longer
+# sees them because it does not recurse.
+#
+# Used once already: a doc step with two recorded failures, one a real narration
+# failure now fixed in the skill, the other this project's own test suite sending
+# SIGTERM to a process group it wrongly believed was its own.
 failed_count() {
   local s="$1" n=0 f
   for f in "$FAILDIR/${s}".*; do
