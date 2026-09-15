@@ -94,9 +94,18 @@ pass "bean-approved" "bean $BEAN_ID is Approved"
 # Checked here rather than at spec time because it is a property of the bean, and
 # the cheapest moment to refuse a malformed bean is before the line spends a
 # model on it.
-# A plain glob. `compgen -G` inside a command substitution did not resolve here,
-# and a bean lookup that silently finds nothing turns this check into one that
-# never runs — the worst kind, because it reports nothing and looks fine.
+# A plain glob, and a correction to what an earlier version of this comment said.
+#
+# It blamed `compgen -G` for not resolving inside a command substitution. That is
+# not true — it resolves fine non-interactively, which took one command to check
+# and which I should have checked before writing an explanation into the source.
+# The actual failure was a typo: this file's repository root is `$root`, and I
+# used `$ROOT`, so the lookup died on an unbound variable and the check never ran.
+#
+# The real lesson is the one that survives either way: a bean lookup that
+# silently finds nothing turns this into a check that never runs, reports
+# nothing, and looks fine. Hence the explicit failure below when no bean.yaml is
+# found, rather than a quietly skipped block.
 BEAN_YAML=""
 BEANS_DIR="$root/$(dirname "$(jq -r '.bean_dir_pattern // "factory/beans/BEAN-NNN-<slug>"' "$CONFIG_PATH")")"
 for cand in "$BEANS_DIR/$BEAN_ID"-*/bean.yaml "$BEANS_DIR/$BEAN_ID/bean.yaml"; do
