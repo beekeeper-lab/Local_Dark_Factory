@@ -356,12 +356,26 @@ fi
 # declared value beside it, and say plainly when they differ.
 OBS_THINKING=""
 OBS_MODEL=""
+COMPACTIONS=0
 if [ -n "$SESSION_FILE" ] && [ -f "$SESSION_FILE" ]; then
   OBS_THINKING="$(jq -rs '[.[] | select(.type == "thinking_level_change") | .thinkingLevel] | last // empty' "$SESSION_FILE" 2>/dev/null || true)"
   OBS_MODEL="$(jq -rs '[.[] | select(.type == "model_change") | .model] | last // empty' "$SESSION_FILE" 2>/dev/null || true)"
+  # Did the session run out of context and compact?
+  #
+  # This is a quality signal, not a performance one. A worker that compacted has
+  # lost the earlier part of its own reasoning mid-task — exactly the failure the
+  # task loop exists to prevent, and invisible in the output, which still looks
+  # like a confident finished answer. Found by noticing a spec step taking fifty
+  # minutes instead of twenty and asking why.
+  COMPACTIONS="$(jq -rs '[.[] | select(.type == "compaction")] | length' "$SESSION_FILE" 2>/dev/null || echo 0)"
 fi
 OBS_CTX="$(curl -s --max-time 5 "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null \
   | jq -r --arg m "$ROLE_MODEL" '[.models[]? | select(.name == $m) | .context_length] | last // empty' 2>/dev/null || true)"
+
+if [ "${COMPACTIONS:-0}" -gt 0 ]; then
+  printf 'WARN   %s   the session COMPACTED %s time(s) — it ran out of context and lost\n' "$STEP" "$COMPACTIONS" >&2
+  printf '       part of its own reasoning. Raise num_ctx for role %s, or make the task smaller.\n' "$ROLE" >&2
+fi
 
 drift=""
 [ -n "$OBS_THINKING" ] && [ -n "$ROLE_THINKING" ] && [ "$OBS_THINKING" != "$ROLE_THINKING" ] \
@@ -462,10 +476,13 @@ jq -sc \
       --arg thinking "$ROLE_THINKING" --argjson ctx "${ROLE_CTX:-null}" \
       --arg obs_thinking "$OBS_THINKING" --argjson obs_ctx "${OBS_CTX:-null}" \
       --arg obs_model "$OBS_MODEL" --argjson harness "$HARNESS_JSON" \
+      --argjson compactions "${COMPACTIONS:-0}" \
       'def s($v): if $v == "" then null else $v end;
        {role:$role, model:$model, digest:$digest,
         num_ctx:($obs_ctx // null), thinking:s($obs_thinking),
         harness:{flags:$harness, tools:["read","write","edit","bash"]},
+        compactions:$compactions,
+        ran_within_context:($compactions == 0),
         declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
         observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
         declared_matches_observed:

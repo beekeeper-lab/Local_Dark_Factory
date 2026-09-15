@@ -17,9 +17,9 @@
     "developer": {
       "provider": "ollama",
       "model": "qwen3.8:27b-mtp-q8_0",
-      "num_ctx": 32768,
+      "num_ctx": 65536,
       "thinking": "medium",
-      "note": "Q8_0 + MTP. Q4_K_M (qwen3.8:27b) is the comparison arm \u2014 quantization damage on a 27B lands hardest on instruction-following under long context, which is what containment and section-lint depend on."
+      "note": "Q8_0 + MTP. Q4_K_M (qwen3.8:27b) is the comparison arm \u2014 quantization damage on a 27B lands hardest on instruction-following under long context, which is what containment and section-lint depend on. num_ctx was 32768 until 2026-09-15, a figure inherited from the co-residency probe, where it was the most that fit beside the judge. The regime is serial: the developer has the GPU to itself and that constraint does not apply. Measured consequence of the old number \u2014 once the contained worker started actually honouring it \u2014 a single spec session COMPACTED TWICE. A worker that compacts has lost the earlier part of its own reasoning, which is precisely the failure the task loop exists to prevent. Raise again if spec or build sessions still compact; watch VRAM, since the KV cache is what this buys."
     },
     "judge": {
       "provider": "ollama",
