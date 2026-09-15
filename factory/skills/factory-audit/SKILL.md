@@ -58,8 +58,15 @@ before writing — do not reconstruct it from memory.
 - **No evidence, no finding.** Every finding carries a command's output, a quote,
   or a `file:line` that proves it. A finding you cannot evidence costs the run a
   retry and teaches the developer nothing; it is worse than saying nothing.
-- **Verify by looking, not by trusting.** Re-read the files. Run the commands. A
-  claim in the run directory is a claim, including the developer's own.
+- **Verify by looking, not by trusting.** Re-read the files. A claim in the run
+  directory is a claim, including the developer's own.
+- **Do not re-derive what was measured.** Some artifacts you are given are not
+  claims — they are the recorded output of the controller running something:
+  every `verify` executed against the untouched tree, the tests executed against
+  the reverted diff, the run's own bookkeeping counted. Those are facts, and
+  re-checking them by eye is both slower and less reliable than what produced
+  them. They are labelled where they appear. Your attention is wanted on what
+  they cannot settle, which is what the rubric below now asks for.
 - **Read only what this target needs.** Auditing `spec`, do not read the
   implementation; your job is whether the plan is sound, not whether you like what
   was built from it.
@@ -89,9 +96,14 @@ the part a script cannot do:
 
 - Is the decomposition *right*? Is each task finishable and verifiable in one
   session by a model that cannot see the other tasks?
-- **Could each `verify` actually fail?** A check that passes on the current tree,
-  or that tests the task's own setup, is a tautology. Where you can, run it now
-  against the unmodified tree and require it to fail. That output is your evidence.
+- **Already measured for you: could each `verify` actually fail?** The controller
+  ran every one of them against the tree before any task touched it, and the
+  result is in front of you as an artifact. A task where *every* check already
+  passed cannot be demonstrated by running it — that is settled and the spec has
+  already been failed for it. One vacuous check among several is not settled: a
+  lint that is green on an empty directory is fine, a check that quietly tests the
+  task's own setup is not. **That** is your call, and it is the only part of this
+  you are being asked for.
 - Does the spec claim the code does something it does not? Check "Current
   behaviour" against the real files.
 - Does anything widen scope beyond the bean — a task doing work the bean's intent
@@ -105,10 +117,19 @@ Read `spec.md`, `tasks.yaml`, and the actual diff (`git diff main...HEAD` — re
 it, do not run git yourself; the controller puts the diff in the run dir).
 
 - Does the diff do what the spec said, no more and no less?
-- **Are the tests real?** Read every test the spec names. An assertion that would
-  pass with the change reverted — truthy-by-construction, asserting the test's own
-  setup — is a blocker. Count deleted tests, new skips and weakened assertions for
-  `test_integrity`.
+- **Already measured for you: do the tests fail without the change?** The
+  controller reverted the source half of the diff in a copy of the tree and ran
+  the tests against it. It required them to pass first, so a missing dependency
+  cannot be mistaken for a test doing its job. The result, the counts of deleted
+  tests and new skips, and what those counts cannot see are all in front of you.
+  Do not re-derive any of it.
+
+  What is left is what running things cannot settle. A test can fail on revert
+  because the module it imports is not there yet, which proves the file changed
+  and nothing about the assertion. So: read the tests the spec names and say
+  whether they assert the *behaviour* the bean asked for, or merely touch it. And
+  when the measurement came back undecided — no tests written, or the counts show
+  assertions removed — say whether that is defensible for this change.
 - Does anything in the diff look like it was written to satisfy a check rather
   than to work?
 
@@ -125,19 +146,30 @@ Read `impl-detail.md` against the spec and the diff.
 
 ### `package`
 
-The whole run, not just the change. Read `run.json`, `steps.jsonl`, `gate.json`
-and `tasks.jsonl`.
+The whole run, not just the change. Read `run.json`, `steps.jsonl`, `gate.json`,
+`tasks.jsonl` — and `package-check.json`, which is where the counting already
+went.
 
-- Every `end` line in `steps.jsonl` has a matching `start` at the same attempt,
-  and no attempt is closed twice.
-- `run.json` status agrees with the recorded steps — a `halted` status with every
-  step PASS is inconsistent, and a completed status with a `QUESTIONS.md` still at
-  the run root is a stale halt.
-- `gate.json` says `pass`, its containment is clean, and its tier is recorded.
-- Verdict files are named `<target>.attempt-N.json` for a real target. A verdict
-  under any other spelling is invisible to the driver and the run halts on a
-  phantom failure. This has happened.
-- Expect verdict files only for the audit steps this run's tier actually ran.
+**Every arithmetic bullet this rubric used to carry is settled before you are
+asked.** Matching start/end pairs, no attempt closed twice, a status that agrees
+with the log, a gate that passed with clean containment and a recorded tier,
+verdict files named so the driver can read them, and verdicts only for the audits
+this tier ran — the controller checks all of it, fails the run outright when it
+does not hold, and hands you the result. You will not be shown an inconsistent
+record: if one existed, nobody asked you.
+
+So do not count anything. What is left is the question counting cannot reach:
+
+- **Does this run tell a coherent story?** Read the attempts and the reasons
+  recorded for them. Does the sequence make sense as an account of work — a
+  failure, a specific fix, a pass — or does it read as a model flailing until
+  something went green? Three attempts that each failed for a different unrelated
+  reason and then passed is a different run from three that converged.
+- Does the evidence support the conclusion? The record says the bean was built.
+  Do the artifacts in front of you actually show that, or do they show a bean
+  whose scope quietly shrank until the checks fit it?
+- Is there anything here a human reviewer would want flagged that no check would
+  have caught?
 
 ## Report
 

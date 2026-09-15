@@ -195,6 +195,10 @@ case "$TARGET" in
     add_artifact "THE GATE RESULTS" "$RUN_DIR/gate.json"
     ls -1 "$VERDICTS" 2>/dev/null > "$VERDICT_LIST" || printf '(none)\n' > "$VERDICT_LIST"
     add_artifact "THE VERDICT FILES PRESENT" "$VERDICT_LIST"
+    # Already counted, so it need not be counted again. Every arithmetic bullet of
+    # the package rubric is settled in here; what is left is the judgement.
+    [ -f "$RUN_DIR/package-check.json" ] \
+      && add_artifact "THE BOOKKEEPING, ALREADY CHECKED BY THE CONTROLLER" "$RUN_DIR/package-check.json"
     ;;
 esac
 

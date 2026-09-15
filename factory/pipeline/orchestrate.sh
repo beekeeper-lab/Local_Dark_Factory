@@ -387,6 +387,21 @@ run_step() { # <step> [-- <extra args carried through to the child>]
     audit-*)
       local rc=0 ay
       mkdir -p "$RUN_DIR/verdicts"
+      # The package rubric is arithmetic on files the controller wrote: matching
+      # start/end pairs, a status that agrees with the log, verdict files under
+      # names the driver can read. The controller settles those before the judge
+      # is asked anything, and the judge is left with the part counting cannot
+      # reach — whether the run, taken whole, tells a coherent story.
+      if [ "$step" = audit-package ]; then
+        local pc=0
+        "$PIPELINE_DIR/package-check.sh" "$RUN_DIR" || pc=$?
+        if [ "$pc" -ne 0 ]; then
+          printf '\nPACKAGE CHECK FAILED — the run record contradicts itself. Not asking a judge\n'
+          printf 'to have an opinion about a record that is already known to be wrong.\n'
+          record_failure "$step" "$pc" "the run record is not internally consistent"
+          halt "$step" "$pc"
+        fi
+      fi
       # The judge does not run as a pi session. gpt-oss reaches for a
       # `repo_browser` tool namespace that does not exist here, gets nothing, and
       # answers anyway — a fluent audit of a document it never read. judge.sh
