@@ -105,7 +105,8 @@ verdict() { # verdict <verdict-word> <candidate-sha>
  "gate_run_id":"g","gate_manifest_digest":"sha256:$(printf b%.0s {1..64})",
  "invariants_digest":"sha256:$(printf c%.0s {1..64})","policy_version":"p/1",
  "effective_risk_tier":1,"model_digest":"abc","prompt_version":"factory-audit@x",
- "criteria":[{"id":"ac1","met":true,"evidence":"e"}],"artifacts":[],"verdict":"$1"}
+ "artifacts":[{"kind":"spec","path":"factory/runs/R/spec.md","sha256":"$(printf c%.0s {1..64})"}],
+ "criteria":[{"id":"ac1","met":true,"evidence":"e"}],"verdict":"$1"}
 JSON
 }
 cat > $R/verdicts/package.attempt-1.judgement.json <<'JSON'
@@ -181,6 +182,10 @@ check "it carries non-blocking findings" "the scaffold test is thin but real" "$
 check "it records the candidate"     "${HEAD_SHA:0:12}" "$body"
 check "and the gate image"           "gate image" "$body"
 check "and the binding tier"         "binding tier" "$body"
+# The schema says the artifacts array exists so the PR can prove which version
+# was audited. It was being stamped into the verdict and going no further.
+check "it names what was audited"    "What was audited, by hash" "$body"
+check "with the artifact hashes"     "sha256" "$body"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

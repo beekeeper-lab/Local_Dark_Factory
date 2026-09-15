@@ -190,6 +190,23 @@ BODY="$(mktemp)"
   printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest_digest' <<<"$V")"
   printf '| risk policy | `%s` |\n' "$(jq -r '.policy_version' <<<"$V")"
   printf '| judge | `%s`, prompt `%s` |\n' "$(jq -r '.model_digest' <<<"$V")" "$(jq -r '.prompt_version' <<<"$V")"
+
+  # The documents, by hash.
+  #
+  # verdict.schema.json says the artifacts array exists "so the PR can prove
+  # which version was audited", and audit-check has been stamping it all along —
+  # but it stopped there, in a file nobody opens. The two documents linked at the
+  # top of this pull request are rendered from Markdown that is not committed
+  # anywhere, so without this a reviewer has the judge's word that it audited
+  # something, and no way to tell whether it is what they are reading.
+  if [ "$(jq -r '[.artifacts[]?] | length' <<<"$V")" -gt 0 ]; then
+    printf '\n### What was audited, by hash\n\n'
+    printf '| document | sha256 |\n|---|---|\n'
+    jq -r '.artifacts[]? | "| `\(.path)` | `\(.sha256[0:16])…` |"' <<<"$V"
+    printf '\nThese are the bytes the audit saw. The rendered documents linked above are\n'
+    printf 'made from them, and `sha256sum` on the run directory will say whether what\n'
+    printf 'you are reading is what was judged.\n'
+  fi
   [ "$TIER" -ge 3 ] 2>/dev/null && printf '\n> **Tier 3.** Never auto-merged in any merge mode.\n'
   # A run that continued past a verdict it did not satisfy says so here. This is
   # the whole difference between "advisory" and "discarded": the reviewer of this
