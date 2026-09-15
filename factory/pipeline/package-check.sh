@@ -204,21 +204,51 @@ case "$TIER" in
   full)  EXPECTED="spec impl doc package" ;;
   *)     EXPECTED="" ;;
 esac
+# An audit run in advisory mode produces no verdict, and that is recorded rather
+# than silent: orchestrate writes `failed-attempts/audit-<target>.advisory.N`
+# saying the judge produced none and why the run continued anyway. Two rules in
+# this line disagreed about what that means — the advisory mode says a missing
+# verdict is expected, this check says a missing verdict is the record
+# contradicting itself — and on the first run that reached this step, both were
+# applying at once.
+#
+# The rule that resolves it without weakening anything: a full-tier audit must
+# have EITHER a verdict OR a recorded reason it has none. Both are facts on disk.
+# Neither is the contradiction, and that is still a blocker.
+advisory_recorded() { # advisory_recorded <target>
+  local t="$1" f
+  for f in "$RUN_DIR/failed-attempts/audit-$t".advisory.* \
+           "$RUN_DIR/failed-attempts/resolved/audit-$t".advisory.*; do
+    [ -e "$f" ] && return 0
+  done
+  return 1
+}
+
 if [ -n "$EXPECTED" ]; then
-  MISSING=""; UNEXPECTED=""
+  MISSING=""; UNEXPECTED=""; ADVISORY=""
   for t in $EXPECTED; do
     # `package` is this step; its own verdict does not exist yet.
     [ "$t" = package ] && continue
-    case " $VERDICTS_SEEN " in *" $t "*) : ;; *) MISSING="$MISSING $t" ;; esac
+    case " $VERDICTS_SEEN " in
+      *" $t "*) : ;;
+      *) if advisory_recorded "$t"; then ADVISORY="$ADVISORY $t"
+         else MISSING="$MISSING $t"; fi ;;
+    esac
   done
   for t in $VERDICTS_SEEN; do
     case " $EXPECTED " in *" $t "*) : ;; *) UNEXPECTED="$UNEXPECTED $t" ;; esac
   done
   if [ -z "$MISSING" ] && [ -z "$UNEXPECTED" ]; then
-    ok "verdicts vs tier" "$TIER tier, and every audit it runs has one"
+    if [ -n "$ADVISORY" ]; then
+      # Not a pass dressed up. The run has no verdict for these and says so; a
+      # reader of this record must see that rather than infer it from an absence.
+      note "verdicts vs tier" "$TIER tier; no verdict for:$ADVISORY — each has an advisory record saying the judge produced none"
+    else
+      ok "verdicts vs tier" "$TIER tier, and every audit it runs has one"
+    fi
   else
-    [ -n "$MISSING" ] && { bad "verdicts vs tier" "$TIER tier is missing a verdict for:$MISSING"
-      finding blocker "The $TIER tier runs audits with no verdict recorded:$MISSING"; }
+    [ -n "$MISSING" ] && { bad "verdicts vs tier" "$TIER tier is missing a verdict for:$MISSING, with nothing recorded to say why"
+      finding blocker "The $TIER tier runs audits with no verdict recorded and no advisory record explaining the absence:$MISSING"; }
     [ -n "$UNEXPECTED" ] && { bad "verdicts vs tier" "$TIER tier has verdicts it never runs:$UNEXPECTED"
       finding major "Verdicts exist for audits the $TIER tier does not run:$UNEXPECTED — this run's record describes a pipeline it did not follow."; }
   fi

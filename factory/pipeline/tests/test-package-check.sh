@@ -51,6 +51,53 @@ check "the verdicts are named" "all correctly named" "$out"
 check "and match the tier"     "full tier, and every audit it runs has one" "$out"
 check "overall"                "PACKAGE CHECK PASS" "$out"
 
+printf '\n== an audit with no verdict, and no reason recorded ==\n\n'
+#
+# The blocker this check exists for. A full-tier run whose spec audit produced
+# nothing and left no trace of why is a record that says the audit happened and
+# cannot say what it concluded.
+reset
+rm -f "$R/verdicts/spec.attempt-1.json"
+out="$(pc)"
+check "the missing verdict is named"   "missing a verdict for: spec" "$out"
+check "and the silence is the point"   "with nothing recorded to say why" "$out"
+check "it fails"                       "PACKAGE CHECK FAIL" "$out"
+
+printf '\n-- but an advisory audit has no verdict BY DESIGN, and says so --\n\n'
+#
+# Two rules in this line disagreed. FACTORY_ADVISORY_AUDITS lets a run continue
+# when the judge produces no judgement — it is on because the judge is measured
+# as not reproducible — and orchestrate records `audit-<target>.advisory.N`
+# saying so. This check said a missing verdict is the record contradicting
+# itself. Both were applying at once on the first run that reached this step, and
+# the run halted on a contradiction between two of its own rules.
+#
+# The resolution does not weaken anything: a full-tier audit must have EITHER a
+# verdict OR a recorded reason it has none. Neither is still a blocker.
+mkdir -p "$R/failed-attempts"
+cat > "$R/failed-attempts/audit-spec.advisory.1" <<'ADV'
+recorded:  2026-09-15T21:02:00Z
+step:      audit-spec
+exit:      1
+mode:      advisory — this did NOT stop the run
+note:      the judge produced no judgement
+ADV
+out="$(pc)"
+check "it is reported, not passed over" "no verdict for: spec" "$out"
+check "with the reason on disk"         "advisory record saying the judge produced none" "$out"
+check "as a note, not an ok"            "--    verdicts vs tier" "$out"
+check "and the run is consistent"       "PACKAGE CHECK PASS" "$out"
+
+printf '\n-- and a resolved advisory record still counts --\n\n'
+#
+# failed-attempts/resolved/ is where a record moves when the failure was caused
+# by something outside the model. The evidence is still the evidence.
+mkdir -p "$R/failed-attempts/resolved"
+mv "$R/failed-attempts/audit-spec.advisory.1" "$R/failed-attempts/resolved/"
+out="$(pc)"
+check "it is still accounted for"      "no verdict for: spec" "$out"
+check "and still passes"               "PACKAGE CHECK PASS" "$out"
+
 printf '\n== a step closed twice is caught ==\n\n'
 reset
 printf '{"event":"end","step":"build","attempt":1,"verdict":"PASS"}\n' >> "$R/steps.jsonl"
