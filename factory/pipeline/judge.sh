@@ -153,7 +153,12 @@ $RUBRIC
 ---
 Your entire reply is ONE JSON object with exactly these top-level keys:
 
-  verdict     "accept" | "revise" | "block"
+  verdict     "accept" | "revise" | "block" | "abstain"
+              Use "abstain" when you cannot form a judgement you would stand
+              behind — the artifact is truncated, something you needed is not
+              here, or you do not understand the change well enough to say. An
+              abstention goes to a human. It is never held against you, and it
+              is always better than a confident answer you do not have.
   criteria    [ { "id", "met", "evidence", "quote" } ]  — one per acceptance criterion,
               where "quote" is text copied VERBATIM from an artifact above
   findings    [ { "severity", "summary", "evidence" } ]  — [] if you found nothing
@@ -186,7 +191,7 @@ SCHEMA='{
   "type": "object",
   "required": ["verdict", "criteria", "findings", "confidence"],
   "properties": {
-    "verdict": { "type": "string", "enum": ["accept", "revise", "block"] },
+    "verdict": { "type": "string", "enum": ["accept", "revise", "block", "abstain"] },
     "criteria": { "type": "array", "items": {
       "type": "object", "required": ["id", "met", "evidence", "quote"],
       "properties": {
@@ -263,42 +268,21 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
   exit 1
 fi
 
-# Constrained decoding is a request, not a guarantee. Measured: with a short
-# prompt this model honours the schema exactly; with the full artifacts in the
-# prompt it has returned a generic review shape instead — strengths, weaknesses,
-# recommendations — carrying none of the required fields but `verdict`. So the
-# shape is checked here rather than assumed, and a judgement that is not the
-# contract is refused with what it actually sent, so the next attempt has
-# something to work from.
+# Constrained decoding is a request, not a guarantee. Measured: `required` is
+# declared at every level of the schema, and this model honours it exactly under
+# a short prompt while returning a generic review shape — strengths, weaknesses,
+# recommendations — under the full artifacts. Why is not yet known.
+#
+# There is deliberately NO retry with a louder instruction here. A retry that
+# says "this overrides everything above" is prompt-nudging a model already shown
+# to answer regardless of what it read, and it would make a wrong answer into a
+# wrong answer that arrived on the second try. The shape is checked; a judgement
+# that is not the contract is refused, and what the model sent is kept beside it
+# so the cause can be found rather than papered over.
 MISSING=""
 for field in verdict criteria findings confidence; do
   jq -e --arg f "$field" 'has($f)' >/dev/null 2>&1 <<<"$CONTENT" || MISSING="$MISSING $field"
 done
-if [ -n "$MISSING" ]; then
-  # One retry, with the shape restated as the last thing the model reads. The
-  # schema plus the preamble usually holds; when it does not, being the final
-  # instruction seems to matter more than being the formal one.
-  printf 'JUDGE  %s: wrong shape (missing:%s) — retrying once with the shape last\n' "$TARGET" "$MISSING" >&2
-  RETRY_PROMPT="$PROMPT
-
-REMINDER, and this overrides anything above: reply with ONE JSON object whose
-top-level keys are exactly verdict, criteria, findings, confidence (plus the
-optional ones). No prose, no strengths/weaknesses, no report."
-  BODY="$(jq -n --arg m "$MODEL" --arg p "$RETRY_PROMPT" --arg sys "$SYSTEM" --arg t "$THINKING" \
-    --argjson c "$NUM_CTX" --argjson f "$SCHEMA" --argjson np "$NUM_PREDICT" \
-    '{model:$m, stream:false, think:$t, format:$f,
-      options:{num_ctx:$c, temperature:0, num_predict:$np},
-      messages:[{role:"system", content:$sys}, {role:"user", content:$p}]}')"
-  RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || true
-  RETRY_CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
-  if jq -e . >/dev/null 2>&1 <<<"$RETRY_CONTENT"; then
-    MISSING=""
-    for field in verdict criteria findings confidence; do
-      jq -e --arg f "$field" 'has($f)' >/dev/null 2>&1 <<<"$RETRY_CONTENT" || MISSING="$MISSING $field"
-    done
-    [ -z "$MISSING" ] && CONTENT="$RETRY_CONTENT"
-  fi
-fi
 if [ -n "$MISSING" ]; then
   printf 'JUDGE  %s: the answer is JSON but not a judgement — missing:%s\n' "$TARGET" "$MISSING" >&2
   printf '       it returned: %s\n' "$(jq -c 'keys' <<<"$CONTENT" 2>/dev/null)" >&2

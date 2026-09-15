@@ -397,6 +397,14 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       ay="$(bean_yaml)" || die "no bean YAML for $BEAN_ID; a verdict cannot be stamped without it"
       rc=0
       "$PIPELINE_DIR/audit-check.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$ay" || rc=$?
+      # 7 means the judge abstained. There is nothing for the authoring step to
+      # act on — "the judge was unsure" is not a finding — so the run stops for a
+      # person instead of spending an attempt.
+      if [ "$rc" -eq 7 ]; then
+        printf '\nABSTAINED  %s — the judge could not form a judgement. A human decides.\n' "$step"
+        record_failure "$step" 7 "the judge abstained; routed to a human rather than retried"
+        halt "$step" 7
+      fi
       return "$rc" ;;
     doc)
       local rc=0

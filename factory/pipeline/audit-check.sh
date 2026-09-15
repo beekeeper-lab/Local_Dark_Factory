@@ -82,13 +82,40 @@ fi
 J="$(cat "$JUDGEMENT")"
 VERDICT="$(jq -r '.verdict // empty' <<<"$J")"
 case "$VERDICT" in
-  accept|revise|block) ;;
+  accept|revise|block|abstain) ;;
   *) printf 'AUDIT %s: verdict is %s, expected accept|revise|block\n' "$TARGET" "${VERDICT:-absent}" >&2; exit 2 ;;
 esac
+
+# An abstention is the judge saying it could not tell. That is a question for a
+# person, not work for the authoring step: re-entering the developer with "the
+# judge was unsure" gives it nothing to act on, and re-running the judge just
+# rolls the dice again. So it is recorded, flagged for human review, and the run
+# stops here.
+#
+# This exists because the judge is the component with the recorded honesty
+# problem — it once audited a document it never read, fluently — and a judge with
+# no way to say "I cannot tell" will say something else instead. Quote
+# verification catches invented evidence; nothing catches a confident accept
+# whose quotes are all real. An abstention is the only place that doubt can go.
+if [ "$VERDICT" = "abstain" ]; then
+  printf 'AUDIT %s: the judge abstained — this goes to a human, not to a retry\n' "$TARGET" >&2
+  printf '       %s\n' "$(jq -r '.feedback_to_worker // "no reason given"' <<<"$J")" >&2
+fi
 
 # A blocker with an accept is self-contradicting. The schema cannot say this, so
 # the controller does — and it corrects rather than rejects, because the finding
 # is the judge's real opinion and the summary word is the slip.
+# Confidence below the floor is an abstention the judge did not know to declare.
+# Routed to a human rather than to `revise` for the same reason: "the judge was
+# unsure" is not a finding anybody can act on.
+CONF_FLOOR="${JUDGE_CONFIDENCE_FLOOR:-0.4}"
+CONF="$(jq -r '.confidence // 1' <<<"$J")"
+if [ "$VERDICT" = "accept" ] && awk -v c="$CONF" -v f="$CONF_FLOOR" 'BEGIN{exit !(c < f)}'; then
+  printf 'AUDIT %s: accepted at confidence %s, below the %s floor — recorded as abstain\n' \
+    "$TARGET" "$CONF" "$CONF_FLOOR" >&2
+  VERDICT="abstain"
+fi
+
 BLOCKERS="$(jq '[.findings[]? | select(.severity == "blocker")] | length' <<<"$J")"
 if [ "$BLOCKERS" -gt 0 ] && [ "$VERDICT" = "accept" ]; then
   printf 'AUDIT %s: %s blocker finding(s) with an "accept" verdict — recorded as "revise"\n' "$TARGET" "$BLOCKERS" >&2
@@ -281,7 +308,11 @@ fi
 STEPS="$RUN_DIR/steps.jsonl"
 STEP_NAME="audit-$TARGET"
 if [ -f "$STEPS" ]; then
-  step_verdict="$([ "$VERDICT" = "accept" ] && echo PASS || echo FAIL)"
+  case "$VERDICT" in
+    accept)  step_verdict=PASS ;;
+    abstain) step_verdict=ABSTAIN ;;
+    *)       step_verdict=FAIL ;;
+  esac
   jq -sc --arg s "$STEP_NAME" --arg v "$step_verdict" --arg f "$OUT" '
     . as $arr
     | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx
@@ -297,4 +328,7 @@ printf 'AUDIT %s   %s   attempt %s   tier %s   %s finding(s)   %s\n' \
 jq -r '.findings[]? | "  \(.severity): \(.summary)"' <<<"$J" 2>/dev/null
 
 [ "$VERDICT" = "accept" ] && exit 0
+# 7: a human is needed. Distinct from 1 (revise/block, which the driver routes
+# back to the authoring step) because there is nothing to route.
+[ "$VERDICT" = "abstain" ] && exit 7
 exit 1

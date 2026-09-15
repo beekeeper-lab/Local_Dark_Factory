@@ -64,6 +64,13 @@ before writing — do not reconstruct it from memory.
   implementation; your job is whether the plan is sound, not whether you like what
   was built from it.
 - **A blocker means `revise` or `block`.** Never `accept` with a blocker.
+- **`abstain` is available, and using it is not a failure.** If the artifact is
+  truncated, if something you needed to check is not in front of you, or if you do
+  not understand the change well enough to have a view — say so with `abstain` and
+  explain what you were missing. It goes to a person, not back to the model.
+  Nothing is held against an abstention; the only thing that is ever held against
+  a judge here is a confident answer it did not have. This line has already had
+  one of those, and it cost more than any abstention could.
 
 ## Inputs
 

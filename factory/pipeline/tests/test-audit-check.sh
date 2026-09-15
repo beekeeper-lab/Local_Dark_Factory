@@ -141,6 +141,29 @@ judgement "$(jq -c '. + {verdict:"accept", suggested_tier:0}' <<<"$BASE")"
 run_check >/dev/null
 check "a lower suggestion is ignored" '"effective_risk_tier": 1' "$(cat "$V/spec.attempt-1.json")"
 
+printf '\n== the judge can say it could not tell ==\n\n'
+# Quote verification catches invented evidence. Nothing catches a confident
+# accept whose quotes are all real, so the judge needs somewhere for doubt to go.
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"abstain", feedback_to_worker:"the spec references a file that was not given to me"}' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+check "an abstention is reported"     "the judge abstained" "$out"
+check "with its reason"               "not given to me" "$out"
+want  "and it exits 7, not 1"         "a human is needed, and that is not a revise" test "$rc" -eq 7
+check "it is recorded as abstain"     '"verdict": "abstain"' "$(cat "$V/spec.attempt-1.json")"
+check "and the step does not read PASS" '"verdict":"ABSTAIN"' "$(tr -d ' ' < factory/runs/R/steps.jsonl)"
+
+rm -f "$V"/spec.attempt-*
+printf '{"ts":"t","step":"audit-spec","event":"start","attempt":1,"verdict":null}\n{"ts":"t","step":"audit-spec","event":"end","attempt":1,"verdict":"FAIL"}\n' > factory/runs/R/steps.jsonl
+judgement "$(jq -c '. + {verdict:"accept", confidence:0.2}' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+check "a low-confidence accept becomes abstain" "below the 0.4 floor" "$out"
+want  "and it exits 7"                "an unsure accept is a question, not a pass" test "$rc" -eq 7
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept", confidence:0.9}' <<<"$BASE")"
+run_check >/dev/null; rc=$?
+want "a confident accept still passes" "expected 0" test "$rc" -eq 0
+
 printf '\n== a judgement that quotes nothing, or quotes fiction, is refused ==\n\n'
 # The failure this exists for: a real judge produced a fluent audit of a document
 # it never read, describing sections that do not exist in this format at all.
