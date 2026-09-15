@@ -26,7 +26,6 @@ usage: run-step.sh <run_dir> <step-name> [-- <extra args for the skill>]
 
 Step → child skill mapping (args the child receives):
   spec            factory-spec         <bean-id> <run_dir>
-  implement       factory-implement    <run_dir>
   build-task      factory-build-task   <run_dir> <task-id> <attempt-dir>
                   (one task of the build loop; build-loop.sh passes the extras)
   doc             factory-doc          <run_dir>
@@ -89,7 +88,6 @@ BEAN_ID="$(jq -r '.bean // empty' "$RUN_DIR/run.json")"
 # the run record would have said nothing about which one won.
 case "$STEP" in
   spec)      SKILL="factory-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ; TARGET="" ;;
-  implement) SKILL="factory-implement"; SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
   build-task) SKILL="factory-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
   doc)       SKILL="factory-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
   pr)        SKILL="factory-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
@@ -344,6 +342,25 @@ else
 fi
 set -e
 
+# Did THIS attempt write what the step exists to produce? Computed here, before
+# any verdict is derived, because the answer changes what the exit code means.
+MISSING=""; STALE=""; FRESH=""
+_i=0
+for _f in $EXPECTED; do
+  _before="${BEFORE_SUMS[$_i]:--}"
+  _i=$((_i + 1))
+  if [ ! -s "$_f" ]; then
+    MISSING="$MISSING $(basename "$_f")"
+  elif [ "$(sha256sum "$_f" | cut -d' ' -f1)" = "$_before" ]; then
+    STALE="$STALE $(basename "$_f")"
+  else
+    FRESH="$FRESH $(basename "$_f")"
+  fi
+done
+# Every expected file, and at least one of them, written during this attempt.
+OUTPUT_FRESH=0
+[ -n "$EXPECTED" ] && [ -z "$MISSING" ] && [ -z "$STALE" ] && OUTPUT_FRESH=1
+
 find "$SESS_DIR" -type f -name '*.jsonl' 2>/dev/null | sort > "$NEW" || true
 
 SESSION_FILE=""
@@ -456,6 +473,32 @@ STARTS="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "start
 CHILD_STARTS=$((STARTS - STARTS_BEFORE))
 CHILD_ENDS=$((ENDS - ENDS_BEFORE))
 
+# verdict_from_rc — the exit code, unless the step produced its output anyway.
+#
+# The exit status of a `pi -p` session is fallback evidence, which this file
+# already says a few lines down about a verdict the child stamped. It is the same
+# for a step whose output is a file: a doc session wrote a complete 18KB document,
+# printed its report, and then returned 143 — seventeen minutes of model time
+# thrown away over a signal that arrived after the work was finished.
+#
+# This is safe because it is not the last word. Everything a step produces is
+# checked by the controller immediately afterwards — doc-check reads the document,
+# spec-check reads the spec — so a half-written file fails on its contents rather
+# than being accepted on its timestamp. What changes is only which check gets to
+# make that decision: the one that reads the file, rather than an exit code.
+verdict_from_rc() {
+  if [ "$RC" -eq 0 ]; then
+    END_VERDICT="PASS"
+  elif [ "$OUTPUT_FRESH" = 1 ]; then
+    END_VERDICT="PASS"
+    printf 'NOTE   %s   exited %s AFTER writing%s. The output is what this step is for,\n' \
+      "$STEP" "$RC" "$FRESH" >&2
+    printf '       and the checks that read it run next; the exit code is not the last word.\n' >&2
+  else
+    END_VERDICT="FAIL"
+  fi
+}
+
 # End verdict for *this* attempt.
 END_VERDICT=""
 if [ "$is_audit" = 1 ]; then
@@ -492,12 +535,12 @@ elif [ "$CHILD_ENDS" -gt 0 ]; then
   # an earlier attempt is not this attempt's result.
   EXISTING="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | last.verdict' "$STEPS")"
   if [ -z "$EXISTING" ] || [ "$EXISTING" = "null" ]; then
-    if [ "$RC" -eq 0 ]; then END_VERDICT="PASS"; else END_VERDICT="FAIL"; fi
+    verdict_from_rc
   else
     END_VERDICT="$EXISTING"
   fi
 else
-  if [ "$RC" -eq 0 ]; then END_VERDICT="PASS"; else END_VERDICT="FAIL"; fi
+  verdict_from_rc
 fi
 
 if [ "$CHILD_ENDS" -gt 0 ] && [ "$CHILD_STARTS" -eq "$CHILD_ENDS" ]; then
@@ -575,7 +618,10 @@ fi
 # a child that stamped nothing and exited non-zero yielded FAIL above and
 # still halts the run — the spec-timeout path is preserved.
 if [ "$END_VERDICT" = "PASS" ]; then
-  if [ "$RC" -ne 0 ]; then
+  if [ "$RC" -ne 0 ] && [ "$OUTPUT_FRESH" = 1 ]; then
+    printf 'STEP   %s   PASS   child exited %s after writing%s — the output stands\n' \
+      "$STEP" "$RC" "$FRESH"
+  elif [ "$RC" -ne 0 ]; then
     printf 'STEP   %s   PASS   child exited %s but recorded PASS — the stamped verdict wins\n' "$STEP" "$RC"
   else
     printf 'STEP   %s   PASS   session=%s\n' "$STEP" "${SESSION_FILE:--}"
@@ -592,20 +638,8 @@ fi
 #
 # A model that narrates an intention and stops is a specific failure with a
 # specific fix, and it is invisible unless the expected output is named.
-MISSING=""; STALE=""; FRESH=""
-i=0
-for f in $EXPECTED; do
-  before="${BEFORE_SUMS[$i]:--}"
-  i=$((i + 1))
-  if [ ! -s "$f" ]; then
-    MISSING="$MISSING $(basename "$f")"
-  elif [ "$(sha256sum "$f" | cut -d' ' -f1)" = "$before" ]; then
-    STALE="$STALE $(basename "$f")"
-  else
-    FRESH="$FRESH $(basename "$f")"
-  fi
-done
-
+# MISSING, STALE and FRESH were settled before the verdict was derived; a step
+# that reaches here produced nothing new, or it would have passed.
 printf 'STEP   %s   FAIL   child exit %s session=%s\n' "$STEP" "$RC" "${SESSION_FILE:--}" >&2
 if [ -n "$MISSING" ] || [ -n "$STALE" ]; then
   if [ -n "$MISSING" ]; then

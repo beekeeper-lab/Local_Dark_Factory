@@ -499,7 +499,6 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
       return "$src"
       ;;
-    checks)    run_script_step "$step" "$PIPELINE_DIR/checks.sh" "$RUN_DIR" ;;
     audit-*)
       local rc=0 ay
       mkdir -p "$RUN_DIR/verdicts"
@@ -819,21 +818,6 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
       local rv
       rv="$(jq -rs --arg x "$step" '[.[] | select(.step == $x and .event == "end")] | last.verdict // "none"' "$RUN_DIR/steps.jsonl" 2>/dev/null || echo '?')"
       printf -- '- Last recorded verdict for `%s` in steps.jsonl: `%s`\n' "$step" "$rv"
-      # BEAN-127: never invent a gate failure. Claim gates only when checks.json
-      # actually records a failing gate; otherwise say plainly what it does say.
-      if [ -f "$RUN_DIR/checks.json" ]; then
-        local nfail
-        nfail="$(jq -r '[.gates[]? | select(.status == "fail")] | length' "$RUN_DIR/checks.json" 2>/dev/null || echo '?')"
-        if [ "$nfail" != "?" ] && [ "$nfail" -gt 0 ]; then
-          printf '\nFailing gates from `checks.json`:\n\n'
-          jq -r '.gates[] | select(.status == "fail") | "- \(.name) (exit \(.exit_code)): \((.output_tail // []) | join(" | "))"' "$RUN_DIR/checks.json"
-        else
-          printf '\n- `checks.json` records overall `%s` — no gate is failing, so this halt is the step failure itself, not a gate.\n' \
-            "$(jq -r '.overall // "?"' "$RUN_DIR/checks.json" 2>/dev/null || echo '?')"
-        fi
-      else
-        printf '\n- `checks.json` does not exist — the gates have not run, so they cannot be the cause of this halt.\n'
-      fi
       if [ -f "$RUN_DIR/gate.json" ] && [ "$(jq -r '.overall // ""' "$RUN_DIR/gate.json" 2>/dev/null)" = "fail" ]; then
         printf '\n- The gate failed. What it found, in `%s/gate.json`:\n' "$RUN_DIR"
         jq -r '(if (.containment.contained | not) then "  - containment: " + (.containment.violations | join(", ")) else empty end),

@@ -667,6 +667,62 @@ check "the finding says so too"           "byte-for-byte what an earlier attempt
 want  "the earlier document is left on disk" "a bad attempt must not destroy a good file" \
       test "$(sha256sum "$DOC_R/impl-detail.md" | cut -d' ' -f1)" = "$STALE_SUM"
 
+printf '\n-- a doc step that writes the document and THEN dies still counts --\n\n'
+#
+# A real doc session wrote a complete 18KB document, printed its report, and then
+# returned 143. Seventeen minutes of model time were thrown away over a signal
+# that arrived after the work was finished, and the run halted for a human whose
+# job would have been to look at the file and say "that is fine".
+#
+# The exit status of a `pi -p` session is fallback evidence — already the rule
+# here for a verdict the child stamped. It is the same for a step whose output is
+# a file, and it is safe because it is not the last word: doc-check reads the
+# document immediately afterwards, so a half-written one fails on its contents.
+DOC_R2="$(ls -1dt "$REPO"/factory/runs/*/ 2>/dev/null | head -1)"
+python3 - "$DOC_R2/steps.jsonl" <<'PYLATE'
+import json, sys
+p = sys.argv[1]
+rows = [json.loads(l) for l in open(p) if l.strip()]
+rows = [r for r in rows if r.get("step") not in ("doc", "audit-doc", "audit-package", "sync", "pr")]
+open(p, "w").write("".join(json.dumps(r) + "\n" for r in rows))
+PYLATE
+# Keep the good document the earlier stub wrote; it is what this stub will write
+# back, so the test is about the exit code and nothing else.
+cp "$DOC_R2/impl-detail.md" "$WORK/doc.md"
+export STUB_DOC="$WORK/doc.md"
+rm -f "$DOC_R2/QUESTIONS.md" "$DOC_R2/impl-detail.md" "$DOC_R2/doc-findings.md"
+cp "$WORK/bin/pi" "$WORK/bin/pi-keep3"
+# Writes a real document on its first call and then exits 143, exactly as a
+# session killed after its last turn does.
+cat > "$WORK/bin/pi" <<'LATESTUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+case "$prompt" in
+  *factory-doc*)
+    run_dir="$(printf '%s' "$prompt" | tr ' ' '\n' | grep '/factory/runs/' | head -1)"
+    run_dir="${run_dir%/doc-findings.md}"
+    cp "$STUB_DOC" "$run_dir/impl-detail.md"
+    printf 'Document written. Now I will be killed.\n' ;;
+esac
+exit 143
+LATESTUB
+chmod +x "$WORK/bin/pi"
+run_line --resume "$DOC_R2" --stop-after doc > "$WORK/o-latedeath" 2>&1 || true
+cp "$WORK/bin/pi-keep3" "$WORK/bin/pi"
+late="$(cat "$WORK/o-latedeath")"
+
+want "the document was written"         "impl-detail.md should exist" \
+     test -s "$DOC_R2/impl-detail.md"
+check "the late exit is not fatal"      "the output stands" "$late"
+check "and the exit code is still said" "child exited 143" "$late"
+nope  "the run does not halt on it"     "HALT  doc" "$late"
+check "and the step is recorded PASS"   "STEP   doc   PASS" "$late"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed

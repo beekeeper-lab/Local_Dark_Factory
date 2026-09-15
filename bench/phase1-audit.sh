@@ -58,8 +58,8 @@ RUNJSON="$RUN_DIR/run.json"
 [ -f "$RUNJSON" ] || { echo "no run.json in $RUN_DIR" >&2; exit 2; }
 TIER="$(jq -r '.tier // "full"' "$RUNJSON")"
 case "$TIER" in
-  small) EXPECTED_STEPS="preflight spec build gate audit-impl audit-package pr" ;;
-  *)     EXPECTED_STEPS="preflight spec audit-spec build gate audit-impl doc audit-doc audit-package pr" ;;
+  small) EXPECTED_STEPS="preflight spec build gate audit-impl audit-package sync pr" ;;
+  *)     EXPECTED_STEPS="preflight spec audit-spec build gate audit-impl doc audit-doc audit-package sync pr" ;;
 esac
 
 # ------------------------------------------------- 1. seven_stages_completed --
