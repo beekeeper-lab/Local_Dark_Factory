@@ -36,6 +36,9 @@ factory — run the line against the repository you are standing in.
                             what the newest run did, stage by stage
   factory doctor            is this repository ready to be run against?
   factory beans             the approved beans, in run order
+  factory read [<run-dir>]  confirm you have read the run's two documents, and
+                            record who and when — the one exit predicate a script
+                            cannot settle
   factory policy            the tier every bean lands in, and the rule that put
                             it there — for reviewing risk-policy.yaml by its
                             consequences rather than by reading globs
@@ -198,6 +201,25 @@ run from the working tree."
       printf 'verdict: %-14s %s\n' "$(jq -r '.stage' "$f")" "$(jq -r '.verdict' "$f")"
     done
 
+    # A run that continued past a verdict it did not satisfy says so here, not
+    # only in the pull request. Someone reading `factory status` to decide
+    # whether a run is trustworthy should not have to open the PR to find out
+    # that an audit was overridden.
+    for a in "$run_dir"/failed-attempts/*.advisory.*; do
+      [ -e "$a" ] || continue
+      printf 'advisory: %-12s %s\n' "$(basename "$a" | cut -d. -f1)" \
+        "$(grep '^note:' "$a" | head -1 | sed 's/^note: *//')"
+    done
+
+    # A step whose session ran out of context lost part of its own reasoning.
+    # It is in the step record; it belongs in the summary too, because it is a
+    # reason to distrust the output that nothing else in the output shows.
+    if [ -f "$run_dir/steps.jsonl" ]; then
+      jq -rs '[.[] | select(.event == "end" and (.conditions.compactions // 0) > 0)]
+              | .[] | "compacted: \(.step) ran out of context \(.conditions.compactions) time(s) — it lost part of its own reasoning"' \
+        "$run_dir/steps.jsonl" 2>/dev/null
+    fi
+
     # The two things a person actually wants to see when a run stopped.
     [ -f "$run_dir/QUESTIONS.md" ] && printf '\nhalted — %s/QUESTIONS.md\n' "$run_dir"
     for q in "$run_dir"/questions-from-worker/*.md; do
@@ -270,6 +292,52 @@ run from the working tree."
     printf '\n'
     [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
     exit "$fail"
+    ;;
+
+  read)
+    # Record that a person read the rendered documents.
+    #
+    # `docs_rendered_and_read` is the one phase-1 predicate a script cannot
+    # settle: rendering is computable, and whether a document teaches is not.
+    # bench/phase1-audit.sh therefore looks for a file saying who read them and
+    # when, and reports the predicate as pending until one exists. Without a
+    # command to write it, that file is a thing someone has to be told about,
+    # which is how a predicate quietly becomes a formality.
+    require_target
+    run_dir="${1:-$(newest_run)}"
+    [ -n "$run_dir" ] && [ -d "$run_dir" ] || die "no run found; pass a run directory"
+    run_dir="${run_dir%/}"
+    for d in spec impl-detail; do
+      [ -s "$run_dir/$d.html" ] || die "$run_dir/$d.html is not rendered — there is nothing to read yet"
+    done
+    printf '
+The two documents this run produced:
+
+'
+    printf '  %s
+  %s
+
+' "$run_dir/spec.html" "$run_dir/impl-detail.html"
+    printf 'Confirming you have read them means: they teach. Someone who does not know
+'
+    printf 'this stack could follow the change and its risk from them alone, the risk and
+'
+    printf 'blast radius are stated rather than implied, and the walkthrough matches what
+'
+    printf 'was actually built.
+
+'
+    printf 'Record that? [y/N] '
+    read -r answer </dev/tty || answer=n
+    case "$answer" in
+      y|Y|yes|YES)
+        printf '%s <%s> at %s
+'           "$(git -C "$TARGET_ROOT" config user.name)"           "$(git -C "$TARGET_ROOT" config user.email)"           "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$run_dir/documents-read-by.txt"
+        printf 'Recorded in %s/documents-read-by.txt
+' "$run_dir" ;;
+      *) printf 'Not recorded.
+'; exit 1 ;;
+    esac
     ;;
 
   policy)
