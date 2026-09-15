@@ -444,7 +444,25 @@ if [ -z "$CONTENT" ] && [ "$DONE_REASON" = "length" ]; then
   exit 8
 fi
 if [ -z "$CONTENT" ]; then
-  printf 'JUDGE  %s: no content in the response: %s\n' "$TARGET" "$(printf '%s' "$RESP" | head -c 300)" >&2
+  # Three different things produce an empty `content`, and only one of them is
+  # "the judge could not answer". The old message printed the first 300 bytes of
+  # the raw response, which for this model is 300 bytes of the *thinking* field —
+  # a fluent paragraph about something else entirely, presented as the error.
+  THINK="$(jq -r '.message.thinking // ""' <<<"$RESP" 2>/dev/null)"
+  if [ -n "$THINK" ]; then
+    printf '%s' "$THINK" > "$RUN_DIR/verdicts/$TARGET.thinking.txt" 2>/dev/null || true
+    printf 'JUDGE  %s: it reasoned for %s characters and then ended its turn (done_reason=%s)\n' \
+      "$TARGET" "${#THINK}" "$DONE_REASON" >&2
+    printf '       without writing an answer. This is not the token cap — it had room left\n' >&2
+    printf '       and stopped anyway, which is the judge failing at the task rather than\n' >&2
+    printf '       the controller giving it too little room.\n' >&2
+    printf '       Its reasoning is in verdicts/%s.thinking.txt; the first line of it is\n' "$TARGET" >&2
+    printf '       usually enough to see whether it understood what it was asked.\n' >&2
+  else
+    printf 'JUDGE  %s: the response carries neither an answer nor any reasoning\n' "$TARGET" >&2
+    printf '       (done_reason=%s). That is a server or model-loading problem, not a\n' "$DONE_REASON" >&2
+    printf '       judgement: %s\n' "$(printf '%s' "$RESP" | head -c 300)" >&2
+  fi
   exit 1
 fi
 if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
