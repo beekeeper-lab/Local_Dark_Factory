@@ -465,6 +465,31 @@ dirty="$(changed_paths)"
 [ -z "$dirty" ] || die "working tree is dirty before the loop starts; containment could not tell your changes from the worker's:
 $dirty"
 
+# If the loop is killed mid-attempt, the worker's edits are still in the tree.
+#
+# Every path through the loop that rejects an attempt calls reset_tree, so the
+# only way to leave a half-finished attempt behind is to be interrupted — and
+# then the next run's preflight refuses a dirty tree and the person has to work
+# out whose changes those are. Which is right, and is also a puzzle nobody
+# should have to solve: the answer is always "the worker's, from the attempt you
+# killed".
+#
+# The run directory survives, as it does for every other reset, so the evidence
+# of what the interrupted attempt did is still there to read.
+ATTEMPT_IN_FLIGHT=0
+on_interrupt() {
+  local sig="$1"
+  if [ "$ATTEMPT_IN_FLIGHT" = 1 ]; then
+    printf '\n%s during an attempt — discarding its edits and leaving the tree clean.\n' "$sig" >&2
+    printf 'The evidence stays in %s\n' "$RUN_DIR" >&2
+    reset_tree
+  fi
+  trap - INT TERM
+  exit 130
+}
+trap 'on_interrupt SIGINT' INT
+trap 'on_interrupt SIGTERM' TERM
+
 # reset_tree — throw the attempt away. Tracked files restored, untracked removed,
 # with the run dir excluded so the evidence of WHY we reset survives the reset.
 reset_tree() {
@@ -516,6 +541,7 @@ while IFS= read -r TID; do
     # -- worker session -------------------------------------------------------
     printf 'ATTEMPT %s/%s  %s\n' "$ATTEMPT" "$MAXA" "$TID"
     RECORD_BEFORE="$(run_dir_manifest "$ADIR")"
+    ATTEMPT_IN_FLIGHT=1
     rc=0
     # pipefail is set, so PIPESTATUS[0] is the child's status, not tee's.
     "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" build-task -- "$TID" "$ADIR" 2>&1 | tee "$ADIR/worker.log"
@@ -636,6 +662,7 @@ EOF
       fi
     fi
 
+    ATTEMPT_IN_FLIGHT=0
     dur=$((t1 - t0))
     log_event "$(jq -cn --arg ts "$started" --arg task "$TID" --argjson attempt "$ATTEMPT" \
       --arg result "$result" --arg detail "$detail" --argjson dur "$dur" \

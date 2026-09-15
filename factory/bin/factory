@@ -45,6 +45,37 @@ factory/pipeline-config.json; PIPELINE_CONFIG overrides it.
 EOF
 }
 
+# pipeline_snapshot — run from a copy, so editing the line cannot derail a run.
+#
+# bash reads a script incrementally, by byte offset, while it executes. Rewriting
+# a pipeline script during a run therefore does not take effect next time — it
+# corrupts the run in progress, which resumes parsing at an offset that now
+# points into different text. This has happened twice here: judge.sh mid-fitness,
+# where a case died with "m: unbound variable" on a line that contains no such
+# variable, and build-loop.sh mid-build a few minutes ago.
+#
+# Both times the cause took longer to find than the bug being fixed, because the
+# error is always somewhere else. So a run gets its own copy of the pipeline,
+# made once at launch. Edit the repository freely while a bean is building; the
+# run finishes on the code it started with, which is also the more honest thing
+# for the run record to mean.
+#
+# FACTORY_NO_SNAPSHOT=1 runs from the working tree, for iterating on the pipeline
+# itself where the point is to see a change take effect.
+pipeline_snapshot() {
+  [ "${FACTORY_NO_SNAPSHOT:-0}" = 1 ] && { printf '%s\n' "$PIPE"; return 0; }
+  local snap
+  snap="$(mktemp -d "${TMPDIR:-/tmp}/factory-pipeline.XXXXXX")" || return 1
+  cp -r "$FACTORY_ROOT/pipeline/." "$snap/" 2>/dev/null || return 1
+  # The skills travel with it for the same reason: a skill edited mid-run would
+  # change what a later step asks the model for, inside a run whose record says
+  # one thing was asked.
+  if [ -d "$FACTORY_ROOT/skills" ]; then
+    mkdir -p "$snap/../skills-snap" && cp -r "$FACTORY_ROOT/skills/." "$snap/../skills-snap/" 2>/dev/null || true
+  fi
+  printf '%s\n' "$snap"
+}
+
 find_config() {
   [ -n "${PIPELINE_CONFIG:-}" ] && { printf '%s\n' "$PIPELINE_CONFIG"; return 0; }
   local root
@@ -88,7 +119,12 @@ case "$cmd" in
   run)
     require_target
     [ $# -ge 1 ] || die "which bean? try: factory beans"
-    exec bash "$PIPE/orchestrate.sh" "$@"
+    SNAP="$(pipeline_snapshot)" || die "could not snapshot the pipeline"
+    if [ "$SNAP" != "$PIPE" ]; then
+      printf 'pipeline snapshot: %s\n' "$SNAP" >&2
+      [ -d "$SNAP/../skills-snap" ] && export FACTORY_SKILLS="$SNAP/../skills-snap"
+    fi
+    exec bash "$SNAP/orchestrate.sh" "$@"
     ;;
 
   step)
