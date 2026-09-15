@@ -1,0 +1,80 @@
+{
+  "schema": "format-support/2.0.0",
+  "measured_at": "2026-09-15T02:50:45Z",
+  "results": [
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false",
+      "holds": true,
+      "seconds": 18,
+      "what": "{\"verdict\":\"accept\",\"confidence\":1.0}"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 10,
+      "what": "wrapped in a markdown fence — the grammar did not bind"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 7,
+      "what": "wrapped in a markdown fence — the grammar did not bind"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 6,
+      "what": "wrapped in a markdown fence — the grammar did not bind"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "false",
+      "holds": false,
+      "seconds": 37,
+      "what": "empty content (done_reason=stop)"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "low",
+      "holds": true,
+      "seconds": 85,
+      "what": "{\"verdict\":\"revise\",\"confidence\":0.73}"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "medium",
+      "holds": true,
+      "seconds": 121,
+      "what": "{\"verdict\":\"accept\",\"confidence\":0.93}"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "high",
+      "holds": true,
+      "seconds": 68,
+      "what": "{\"verdict\":\"accept\",\"confidence\":0.97}"
+    }
+  ],
+  "eligible_judges": [
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "low"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "medium"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "high"
+    }
+  ]
+}

@@ -2,13 +2,25 @@
 __pycache__/
 
 # Sweep output is regenerable and noisy, so bench/results is ignored by default.
-# The exception is deliberate: any artifact the ledger cites as the basis of a
-# decision is committed by name. A figure whose evidence exists only on one box
-# is a rumour with a timestamp — and Phase-0 exit asserts figures_have_provenance.
+# Any artifact a commit cites as the basis of a decision is kept: a figure whose
+# evidence exists only on one box is a rumour with a timestamp, and Phase-0 exit
+# asserts figures_have_provenance.
+#
+# This used to be a list of individual filenames, and the list failed twice in
+# the way lists do — silently. Three commits on 2026-09-15 described results in
+# detail and committed none of them, because `git add` obeyed the ignore and said
+# nothing, and `git commit` reported success. Nobody lied; the record was simply
+# missing, which is worse than a wrong number because there is nothing to check.
+#
+# So the exception is by FAMILY, not by name. A new run of a harness that already
+# has provenance is kept automatically; a genuinely new kind of sweep needs one
+# line here, which is a deliberate act rather than a thing to remember.
 bench/results/*
-!bench/results/phase0-20260914T173319Z.json
-!bench/results/coresidency-probe-20260914.json
-!bench/results/phase0-eviction-log-20260914.txt
-!bench/results/provenance-post-reboot-20260914T173223Z.json
-!bench/results/harmony-20260914T182045Z.json
-!bench/results/judge-fitness-20260915T012448Z.json
+!bench/results/phase0-*
+!bench/results/coresidency-probe-*
+!bench/results/provenance-*
+!bench/results/harmony-*
+!bench/results/judge-fitness-*
+!bench/results/controller-fitness-*
+!bench/results/format-support-*
+!bench/results/size-sweep-*
