@@ -16,6 +16,11 @@ PY="${PIPELINE_PYTHON:-$PIPELINE_DIR/../../.venv/bin/python}"
 [ -x "$PY" ] || PY=python3
 
 PASS=0; FAIL=0
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
+
 check() {
   if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
   else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
@@ -168,6 +173,74 @@ for t in spec impl-detail; do
   nocheck "$t.html loads no external stylesheet"       '<link' "$body"
   check   "$t.html has a print stylesheet"             '@media print' "$body"
 done
+
+printf '\n== a section written as subsections is not empty ==\n\n'
+#
+# The authoring skill asks for exactly this shape — "per task: what changes,
+# where, and an illustrative code block" — and doclint reported "section is
+# empty" about a Proposed change section of three thousand characters, because
+# it started a new section at every heading including deeper ones and measured
+# only the gap before the first `###`.
+#
+# It cost a real run two spec attempts. The model was right both times, and said
+# so: "the section was never thin, the linter just didn't recognize its
+# blocks/subsections".
+SUBS="$WORK/subsections.md"
+cat > "$SUBS" <<'MD'
+# A spec whose sections have subsections
+
+## What and why
+
+The bean asks for a scaffold. This document explains what that means for someone
+who has not seen this repository before, and what they should expect to change.
+
+## Current behaviour
+
+There is nothing here yet. The tree holds a README and the factory directory,
+and no application code at all, so nothing can break in a way a test would see.
+
+## Proposed change
+
+### task-1 — declare the project
+
+`pyproject.toml` declares the package, the Python floor and the tool
+configuration the gates need. It deliberately does not pin the tool versions,
+because the gate image is already pinned by digest and a second list would drift.
+
+```toml pyproject.toml
+[project]
+name = "seating-planner"
+```
+
+### task-2 — the package module
+
+A two-statement module: a docstring and a version. Nothing imports it yet, which
+is the point — the scaffold has to exist before anything can be built on it.
+
+## Risk
+
+Low. Every file is new, nothing refers to any of them, and reverting the branch
+restores the previous state exactly with no ordering to respect.
+
+## Blast radius
+
+Three files, all new, all inside the bean's allowed write paths. No dependency
+changes and no public interface, so nothing outside this bean can be affected.
+
+## Verification
+
+Each task carries its own check and the controller runs every one of them, in
+the pinned gate container rather than on the host where the versions differ.
+
+## Open questions
+
+None. If something turns out to be ambiguous the task blocks and a person is
+asked, rather than the model guessing and the guess becoming the specification.
+MD
+out="$(bash "$PIPELINE_DIR/doclint.sh" spec "$SUBS" 2>&1)"
+check "the section is measured whole"  "proposed change" "$out"
+nope  "and is not called empty"        "section is empty" "$out"
+check "the document passes"            "doclint: PASS" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

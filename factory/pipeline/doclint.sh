@@ -71,21 +71,48 @@ report_ok()   { printf '  ok    %-32s %s\n' "$1" "$2"; }
 # heading of the same or higher level.
 BODY_OF="$(python3 - "$DOC" <<'PY'
 import json, re, sys
+
+# A section runs to the next heading of the SAME OR HIGHER level. Its
+# subsections are part of it.
+#
+# The previous version said that in a comment and did something else: it started
+# a new section on any heading at all, so a `## Proposed change` written as a
+# series of `### task-N` subsections measured only the empty gap before the first
+# one. doclint reported "section is empty" about a section with two thousand
+# words in it.
+#
+# That cost a real run two spec attempts, roughly thirty-five minutes of model
+# time, and the model was right both times — its own report said "the section was
+# never thin, the linter just didn't recognize its blocks/subsections". The
+# authoring skill actively asks for those subsections: "per task: what changes,
+# where, and an illustrative code block". So the lint was refusing the shape it
+# had requested.
 lines = open(sys.argv[1]).read().replace("\r\n", "\n").split("\n")
-sections, cur, level = {}, None, 0
+
+heads = []          # (index, level, name)
 in_fence = False
-for line in lines:
+for i, line in enumerate(lines):
     if line.startswith("```"):
         in_fence = not in_fence
-    m = None if in_fence else re.match(r"^(#{1,6})\s+(.*?)\s*$", line)
-    if m:
-        cur = re.sub(r"[`*_:]", "", m.group(2)).strip().lower()
-        level = len(m.group(1))
-        sections.setdefault(cur, [])
         continue
-    if cur is not None:
-        sections[cur].append(line)
-print(json.dumps({k: "\n".join(v) for k, v in sections.items()}))
+    if in_fence:
+        continue
+    m = re.match(r"^(#{1,6})\s+(.*?)\s*$", line)
+    if m:
+        name = re.sub(r"[`*_:]", "", m.group(2)).strip().lower()
+        heads.append((i, len(m.group(1)), name))
+
+sections = {}
+for n, (start, level, name) in enumerate(heads):
+    end = len(lines)
+    for j in range(n + 1, len(heads)):
+        if heads[j][1] <= level:
+            end = heads[j][0]
+            break
+    # A repeated heading keeps its first body rather than being overwritten by a
+    # later one; the first is the one the document leads with.
+    sections.setdefault(name, "\n".join(lines[start + 1:end]))
+print(json.dumps(sections))
 PY
 )" || die "could not parse $DOC"
 
