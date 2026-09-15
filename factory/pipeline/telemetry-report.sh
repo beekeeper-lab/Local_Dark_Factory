@@ -176,12 +176,23 @@ def pick_legacy($ts):
           end ) as $assign
           | (reduce $assign[] as $a (. ; .acc[$a.k] = add_agg(.acc[$a.k]; agg($a.ev)))) )
       elif ($f == $run_sess) then
-        ( ([ $rows[] | select(.session_file == null) ] | length) as $nl
-          | (if $nl == 0 then []
-             else [ $e.events[] | . as $ev | (pick_legacy($ev.ts)) as $r
-                    | if $r == null then { k: "__orch__", ev: $ev } else { k: $r.key, ev: $ev } end
-                    ]
-             end) as $assign
+        # The orchestrator file. Its events go to a step only when that step
+        # has no session file of its own, which means a run from before children
+        # recorded theirs. Otherwise they belong to the driver, which is the
+        # whole point of having a separate row for it.
+        #
+        # A guard here produced an EMPTY assignment whenever every step owned a
+        # session file, which is every run since children began recording them:
+        # every event in the orchestrator file was dropped on the floor. The row
+        # read 0 for every run and the totals were short by the entire driver
+        # cost, while the header comment at the top of this file described the
+        # behaviour it now has. Found by the first test written against it.
+        #
+        # No apostrophes in this comment on purpose: the whole jq program is one
+        # single-quoted shell string, and one apostrophe ends it.
+        ( ( [ $e.events[] | . as $ev | (pick_legacy($ev.ts)) as $r
+              | if $r == null then { k: "__orch__", ev: $ev } else { k: $r.key, ev: $ev } end
+            ] ) as $assign
           | (reduce $assign[] as $a (. ;
                if $a.k == "__orch__" then .orch = add_agg(.orch; agg([$a.ev]))
                else .acc[$a.k] = add_agg(.acc[$a.k]; agg([$a.ev])) end)) )
