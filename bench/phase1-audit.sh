@@ -106,8 +106,26 @@ jsonschema.Draft202012Validator(json.loads(schema_path.read_text()),
 PY
   fi
 done
-if [ "$nv" -eq 0 ]; then
-  bad "three_verdicts_schema_valid" blocker "no verdict files at all — nothing was audited"
+# An audit that ran advisory reaches no verdict, on purpose, and orchestrate
+# records `failed-attempts/audit-<target>.advisory.N` saying so. "No verdict
+# files at all" and "nothing was audited" are then two different statements, and
+# only the first is true: the judge ran, and what it produced was not a judgement.
+#
+# This is the third place in the line where the advisory decision met a rule that
+# assumed a verdict — package-check and pr.sh were the other two. The predicate
+# is not satisfied either way; what changes is that it says which of two very
+# different things happened, and that `not_exercised` is not reported as `fail`.
+nadv=0
+for f in "$RUN_DIR/failed-attempts"/audit-*.advisory.* \
+         "$RUN_DIR/failed-attempts/resolved"/audit-*.advisory.*; do
+  [ -e "$f" ] && nadv=$((nadv + 1))
+done
+if [ "$nv" -eq 0 ] && [ "$nadv" -gt 0 ]; then
+  bad "three_verdicts_schema_valid" major \
+    "no verdicts: $nadv audit(s) ran advisory and reached none. The judge ran; it did not produce a judgement the controller could stamp. Nothing here is schema-invalid — there is nothing to validate, which is a different problem and one this predicate cannot close."
+  pred three_verdicts_schema_valid not_exercised
+elif [ "$nv" -eq 0 ]; then
+  bad "three_verdicts_schema_valid" blocker "no verdict files at all, and nothing recorded to say why — nothing was audited"
   pred three_verdicts_schema_valid fail
 elif [ -n "$invalid" ]; then
   bad "three_verdicts_schema_valid" blocker "invalid against verdict.schema.json:$invalid"

@@ -2,7 +2,7 @@
 
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-and-bean-set-v1`.
 
-## State: Phase 0 closed. Phase 1 is built end to end; one real run has not yet finished.
+## State: Phase 0 closed. Phase 1 is built end to end, and one real run has now finished — PR #1 is open.
 
 **Test coverage as of 2026-09-15 evening: 940 assertions across 26 suites, all green.**
 Nine of those suites are new that evening, written against the scripts that had no
@@ -396,9 +396,47 @@ output freshly written by this attempt — verified by hash, not by existence �
 PASS regardless of the exit code, and the checks that read the file run next, so a
 half-written one still fails on its contents.
 
+## DONE: one real run reached a pull request
+
+`bean-001-20260915T192025Z`, 2026-09-15, ~2h35m of step time across eleven steps.
+**https://github.com/beekeeper-lab/seating-planner-py/pull/1** — +64/−0 across four
+files, opened by the line, merged by nobody.
+
+What it took, and what each halt was: the doc step failed five times before it
+passed, and only the first was the model — attempt 1 narrated and wrote nothing;
+attempt 2 was killed by this project's own test suite; attempt 3 looped on "now
+writing the full document"; attempt 4 died when a full tmpfs made every write fail
+with `Unknown system error -122`; attempt 5 wrote a complete document and was
+SIGTERMed at 1022 seconds by something still unidentified. Attempt 6 passed. Three
+more halts came after it, and all three were the line's own rules disagreeing about
+advisory audits — package-check, pr.sh and phase1-audit each assumed a verdict
+that advisory mode is defined not to produce.
+
+**Every one of those halts is now a test.** That is the whole product: nine of the
+eleven steps passed on the first attempt, and the two that did not stopped the run
+rather than letting anything through.
+
+Phase-1 exit as computed from that run:
+
+```yaml
+seven_stages_completed: pass              every_handoff_is_commit: pass
+allowed_path_enforced_task_and_bean: pass docs_rendered_and_read: pending_human
+three_verdicts_schema_valid: not_exercised   (advisory: the judge reached no verdict)
+task_retry_with_evidence: not_exercised      (no task needed a retry)
+independent_invariant_ran: not_applicable    (bean-001 declares none; bean-006 is the first)
+```
+
+Three pass, one waits on a person (`factory read <run>`), three are not-exercised
+or not-applicable and say which. None failed.
+
 ## Next action
 
-**Finish one real run of bean-001 from preflight to pull request.** Everything is built,
+**Two decisions for the owner, then Phase 2.** See "Still open" below for
+`required_checks`, and the Phase-1 invariant item in the plan for the
+run-002-through-006 versus re-read-the-predicate choice — both have a
+recommendation attached.
+
+The instructions below still stand for the next bean. Everything is built,
 every step has been exercised, and no single real run has yet gone the whole way. Six
 defects stopped the first five attempts; all are fixed and all have tests.
 
