@@ -273,7 +273,15 @@ re-runnable audit, and a bean set approved to run against.
       `split_required`, back to a human) and renders `spec.html`.
       **A real run passed every one of those checks.** What Phase 1 still needs is the same
       thing surviving the judge and the build.
-- [ ] `factory step commit` — spec candidate commit; artifact hashes recorded
+- [x] `factory step commit` — spec candidate commit; artifact hashes recorded
+  > **There is no separate commit step, and there should not be.** The spec and task
+  > list live in the run directory, which is gitignored: they are the record of a run,
+  > not part of the repository's history, and committing them would put a model's
+  > working notes into the project's tree. What the item is actually asking for —
+  > that the audited artifacts are bound by hash, so a reviewer can prove which
+  > version was judged — is done. `audit-check.sh` stamps `artifacts[]` with the path
+  > and sha256 of the spec, the task list and the implementation document, and `pr.sh`
+  > puts that table in the pull request.
 - [~] `factory step audit --stage spec_audit` — **the contract is built.** The judge writes a
       *judgement* (`JUDGEMENT-CONTRACT.md`): its verdict, criteria with evidence, findings,
       feedback, suggested tier. `audit-check.sh` stamps the ten provenance fields the judge
@@ -310,7 +318,12 @@ re-runnable audit, and a bean set approved to run against.
       AC verifies and invariants, in the sandbox. **Hidden tests vs baseline and the
       test-integrity counts are not built** — they need a baseline snapshot the controller
       keeps, which is Phase-2 work.)*
-- [ ] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
+- [x] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
+  > The build loop commits per verified task, which is the implementation candidate:
+  > `every_handoff_is_commit` in `bench/phase1-audit.sh` checks that the branch carries
+  > one commit per verified task and that the tree is clean. `diff_sha256` and
+  > `gate_run_id` are stamped into every verdict by `audit-check.sh` and appear in the
+  > pull request's provenance table.
 - [~] `factory step audit --stage impl_audit` — `test_integrity` required and present
   > `test_integrity` is now measured by the controller rather than asked of the
   > judge, and handed to it as an artifact. What the judge is asked for is what
