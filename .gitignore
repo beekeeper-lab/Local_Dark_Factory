@@ -24,3 +24,7 @@ bench/results/*
 !bench/results/controller-fitness-*
 !bench/results/format-support-*
 !bench/results/size-sweep-*
+# The judge-variance measurement is the one that says a single fitness run cannot
+# be compared with another, which makes it the last file that should live only on
+# this disk. It did, until the Phase-0 audit's evidence.tracked check caught it.
+!bench/results/judge-variance-*

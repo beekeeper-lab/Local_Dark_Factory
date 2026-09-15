@@ -19,6 +19,10 @@
 # This changes nothing between runs. It asks the same question N times and reports
 # what came back.
 set -uo pipefail
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
 
@@ -47,7 +51,16 @@ while [ $# -gt 0 ]; do
     *) usage >&2; exit 1 ;;
   esac
 done
-[ -n "$SPEC" ] && [ -n "$TASKS" ] && [ -n "$BEAN" ] || { usage >&2; exit 1; }
+# Existence, not just presence. A flag pointing at a file that is not there
+# produced a complete set of fitness numbers measured against nothing: the
+# mutations applied to an empty spec, the judge answered about it, and the result
+# was written to bench/results looking exactly like a real measurement. A harness
+# that can fail open is worse than one that fails, because the output is a number
+# someone will cite. judge-fitness.sh has always checked this; the three harnesses
+# written after it copied the presence check and not the existence check.
+for _f in "$SPEC" "$TASKS" "$BEAN"; do
+  [ -n "$_f" ] && [ -f "$_f" ] || { usage >&2; printf 'missing input: %s\n' "${_f:-<unset>}" >&2; exit 2; }
+done
 [ -n "$OUT" ] || OUT="$ROOT/bench/results/judge-variance-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$(dirname "$OUT")"
 
@@ -107,7 +120,8 @@ VERDICTS="$(jq -r '[.[].verdict] | unique | join(", ")' <<<"$RESULTS")"
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg sha "$SHA" \
   --argjson distinct "$DISTINCT" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
-  '{schema:"judge-variance/1.0.0", measured_at:$ts, case:$case, judge:$model,
+  --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
+  '{schema:"judge-variance/1.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model,
     input_sha:$sha, runs:$r, distinct_verdicts:$distinct,
     reproducible:($distinct == 1),
     note:"Identical input every run: same spec, same task list, same prompt, temperature 0. Any difference between rows is the model, not the question."}' > "$OUT"

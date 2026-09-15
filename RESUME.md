@@ -462,6 +462,13 @@ Write the end-to-end test before the next long real run, not after it.
   alone deliberately; the contained worker sets its own context in the mounted
   `models.json` instead.
 - **Hidden tests** are in the gate's design and not built.
+- **Eleven figures in `bench/results/` carry no provenance block.** They were
+  measured before `bench/provenance.sh` existed, and writing one in now would be
+  inventing it. The cause is fixed — every harness emits one, and a new
+  `harnesses_emit_provenance` check in the Phase-0 audit keeps the next one from
+  skipping it — so the standing finding is about artifacts, not about code.
+  Re-measure when the GPU is free; `controller-fitness.sh` needs no GPU but does
+  need the target repo on `main`, which it now refuses without.
 - **`required_checks: [gates]` names a check nothing produces.** Neither repo has a
   `.github/workflows`, and no pipeline step waits on CI, so the field reads like
   protection that is in force and is not. `factory doctor` now says so unprompted.

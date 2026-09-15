@@ -104,6 +104,24 @@ else
   else
     finding "figures_have_provenance" major "no provenance block in:$missing"
   fi
+
+  # And separately: can each harness still produce one? The artifact check above
+  # is about figures already on disk and cannot be fixed by editing code — a
+  # measurement taken without provenance does not acquire it later, and writing
+  # one in now would be inventing it. This check is about the next figure, and it
+  # is the one that keeps the list from growing: five harnesses were added after
+  # bench/phase0.sh and every one of them copied everything except the provenance
+  # block, which is how eleven files accumulated before anything noticed.
+  noprov=""
+  for h in "$ROOT"/bench/*.sh; do
+    case "$(basename "$h")" in phase0-audit.sh|phase1-audit.sh|provenance.sh) continue ;; esac
+    grep -q 'provenance' "$h" || noprov="$noprov $(basename "$h")"
+  done
+  if [ -z "$noprov" ]; then
+    ok "harnesses_emit_provenance" "every bench harness writes where and on what it measured"
+  else
+    finding "harnesses_emit_provenance" major "these harnesses write figures with no provenance block:$noprov"
+  fi
 fi
 
 # 4. pi_drives_both_models — the catalog half, which is what silently broke once.

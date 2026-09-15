@@ -20,6 +20,10 @@
 # The schema used here is judge.sh's own, read from the file, so this cannot drift
 # away from what the judge actually asks for.
 set -uo pipefail
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PIPE="$HERE/../factory/pipeline"
 HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
@@ -115,7 +119,8 @@ done
 OUT="${OUT:-$HERE/results/format-support-$(date -u +%Y%m%dT%H%M%SZ).json}"
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{schema:"format-support/2.0.0", measured_at:$ts, results:$r,
+  --argjson prov "$(provenance_block)" \
+  '{schema:"format-support/2.0.0", measured_at:$ts, provenance:$prov, results:$r,
     eligible_judges: [$r[] | select(.holds) | {model, thinking}]}' > "$OUT"
 
 printf '\neligible (model, thinking) pairs:\n'

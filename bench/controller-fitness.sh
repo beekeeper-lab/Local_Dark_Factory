@@ -14,6 +14,10 @@
 #
 # No GPU, no model, no variance. Run it as often as you like.
 set -uo pipefail
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
 
@@ -41,8 +45,48 @@ while [ $# -gt 0 ]; do
     *) usage >&2; exit 1 ;;
   esac
 done
-[ -n "$SPEC" ] && [ -n "$TASKS" ] && [ -n "$BEAN" ] || { usage >&2; exit 1; }
+# Existence, not just presence. A flag pointing at a file that is not there
+# produced a complete set of fitness numbers measured against nothing: the
+# mutations applied to an empty spec, the judge answered about it, and the result
+# was written to bench/results looking exactly like a real measurement. A harness
+# that can fail open is worse than one that fails, because the output is a number
+# someone will cite. judge-fitness.sh has always checked this; the three harnesses
+# written after it copied the presence check and not the existence check.
+for _f in "$SPEC" "$TASKS" "$BEAN"; do
+  [ -n "$_f" ] && [ -f "$_f" ] || { usage >&2; printf 'missing input: %s\n' "${_f:-<unset>}" >&2; exit 2; }
+done
 [ -n "$REPO" ] || REPO="$(cd "$(dirname "$BEAN")/../.." && pwd)"
+# The state of the target repository is an input to this measurement, not a
+# detail of where it was run from.
+#
+# `verify can fail` asks whether each task's verification would fail BEFORE the
+# task is done. Run against a repo with the bean's work already committed — a
+# bean branch left checked out after a run — every verify already passes and the
+# clean control fails, which is reported as a false alarm in a check that is
+# behaving exactly as designed. A fitness number measured against a tree where
+# the work is already done is not a fitness number, so this refuses rather than
+# producing one.
+if [ -d "$REPO/.git" ] || git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  _branch="$(git -C "$REPO" branch --show-current 2>/dev/null || true)"
+  _default="main"
+  if [ -f "$REPO/factory/repo.yaml" ]; then
+    _default="$("$PIPE/yaml2json.sh" "$REPO/factory/repo.yaml" 2>/dev/null | jq -r '.default_branch // "main"')"
+  fi
+  if [ "$_branch" != "$_default" ]; then
+    printf 'controller-fitness: %s is on "%s", not "%s".\n' "$REPO" "${_branch:-detached}" "$_default" >&2
+    printf '  The spec under test describes the state of the base. On a bean branch the\n' >&2
+    printf '  work is already committed, every verify already passes, and the clean control\n' >&2
+    printf '  fails — which would be recorded as a false alarm in a check that is right.\n' >&2
+    exit 2
+  fi
+  _dirty="$(git -C "$REPO" status --porcelain 2>/dev/null | grep -v ' factory/runs/' || true)"
+  if [ -n "$_dirty" ]; then
+    printf 'controller-fitness: %s has uncommitted changes; the measurement would be of\n' "$REPO" >&2
+    printf '  whatever is in the tree right now: %s\n' "$(printf '%s' "$_dirty" | head -3 | tr '\n' ' ')" >&2
+    exit 2
+  fi
+fi
+
 [ -n "$OUT" ] || OUT="$ROOT/bench/results/controller-fitness-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$(dirname "$OUT")"
 
@@ -122,7 +166,11 @@ done <<< "$CASES"
 jq -n --argjson r "$RESULTS" --argjson seeded "$SEEDED" --argjson caught "$CAUGHT" \
   --argjson missed "$MISSED" --argjson fa "$FALSE_ALARM" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{schema:"controller-fitness/1.0.0", measured_at:$ts,
+  --argjson prov "$(provenance_block)" \
+    --arg repo_branch "$(git -C "$REPO" branch --show-current 2>/dev/null || echo '-')" \
+  --arg repo_head "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo '-')" \
+'{schema:"controller-fitness/1.0.0", measured_at:$ts, provenance:$prov,
+    measured_against:{repo:$repo_branch, head:$repo_head},
     seeded_defects:$seeded, caught_by_name:$caught,
     not_decidable:$missed, false_alarms:$fa, cases:$r,
     note:"Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."}' > "$OUT"

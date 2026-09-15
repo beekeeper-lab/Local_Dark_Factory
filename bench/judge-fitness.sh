@@ -20,6 +20,10 @@
 # A miss that abstains is a bad day. A miss that accepts is a false approval,
 # which is the §11 metric the whole line is built to keep near zero.
 set -uo pipefail
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
@@ -293,7 +297,8 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
-  '{schema:"judge-fitness/1.0.0", measured_at:$ts,
+  --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
+  '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
     judge:{model:$model, digest:$digest},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),

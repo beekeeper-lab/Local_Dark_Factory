@@ -18,6 +18,10 @@
 # beans get split until specs fit under it. If it does not, granularity is not
 # the lever and this says so.
 set -uo pipefail
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
 
@@ -53,7 +57,16 @@ while [ $# -gt 0 ]; do
     *) usage >&2; exit 1 ;;
   esac
 done
-[ -n "$SPEC" ] && [ -n "$TASKS" ] && [ -n "$BEAN" ] || { usage >&2; exit 1; }
+# Existence, not just presence. A flag pointing at a file that is not there
+# produced a complete set of fitness numbers measured against nothing: the
+# mutations applied to an empty spec, the judge answered about it, and the result
+# was written to bench/results looking exactly like a real measurement. A harness
+# that can fail open is worse than one that fails, because the output is a number
+# someone will cite. judge-fitness.sh has always checked this; the three harnesses
+# written after it copied the presence check and not the existence check.
+for _f in "$SPEC" "$TASKS" "$BEAN"; do
+  [ -n "$_f" ] && [ -f "$_f" ] || { usage >&2; printf 'missing input: %s\n' "${_f:-<unset>}" >&2; exit 2; }
+done
 [ -n "$PAD_FROM" ] || PAD_FROM="$(dirname "$(dirname "$BEAN")")"
 [ -n "$OUT" ] || OUT="$ROOT/bench/results/size-sweep-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$(dirname "$OUT")"
@@ -123,6 +136,7 @@ done
 
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
-  '{schema:"size-sweep/1.0.0", measured_at:$ts, case:$case, judge:$model, points:$r,
+  --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
+  '{schema:"size-sweep/1.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model, points:$r,
     note:"One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it."}' > "$OUT"
 printf '\n%s\n' "$OUT"
