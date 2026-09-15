@@ -79,18 +79,24 @@ NEGATION = re.compile(
 )
 
 
-def sentence_around(text: str, index: int) -> str:
-    """The sentence containing the character at `index`.
+# How far from the path a negation still counts. Deliberately small.
+#
+# The first version read the whole sentence, and a sentence is far too much: the
+# real spec this line builds contains "`factory/invariants/...py` already exists
+# and imports a module that no bean has created yet". The "no" belongs to "bean",
+# thirty words away from the path, and the check duly reported that the spec
+# denied the existence of a file it had just said already exists.
+#
+# English puts negation next to what it negates — "there is no `X`", "`X` does
+# not exist" — so a narrow window either side catches the real constructions and
+# leaves other clauses alone.
+BEFORE = 48
+AFTER = 32
 
-    Sentence boundaries are approximated by `.`, `!`, `?` and blank lines. A
-    backticked path is usually mid-sentence, and the claim about it lives in
-    that sentence rather than in the paragraph.
-    """
-    starts = [text.rfind(b, 0, index) for b in (". ", "! ", "? ", "\n\n", ".\n")]
-    start = max(starts) + 1 if max(starts) >= 0 else 0
-    ends = [e for e in (text.find(b, index) for b in (". ", "! ", "? ", "\n\n", ".\n")) if e >= 0]
-    end = min(ends) + 1 if ends else len(text)
-    return text[start:end]
+
+def around(text: str, index: int, end: int) -> str:
+    """The few words either side of the token, and no more."""
+    return text[max(0, index - BEFORE):min(len(text), end + AFTER)]
 
 # Words that look like identifiers and are not. Everything here appeared in a
 # real spec as prose or as a tool name.
@@ -132,13 +138,13 @@ def claims(body: str) -> tuple[list[str], list[str], list[str]]:
             "/" in tok or Path(tok).suffix.lower() in KNOWN_SUFFIXES
         )
         if is_path:
-            if NEGATION.search(sentence_around(text, m.start())):
+            if NEGATION.search(around(text, m.start(), m.end())):
                 denied.append(tok)
             else:
                 asserted.append(tok)
             continue
         if SYMBOL_LIKE.match(tok) and tok.lower() not in NOT_SYMBOLS:
-            if not NEGATION.search(sentence_around(text, m.start())):
+            if not NEGATION.search(around(text, m.start(), m.end())):
                 symbols.append(tok)
     return sorted(set(asserted)), sorted(set(denied)), sorted(set(symbols))
 
@@ -182,10 +188,22 @@ def main() -> int:
     asserted, denied, symbols = claims(body)
     missing = [p for p in asserted if not (root / p).exists()]
     absent = [s for s in symbols if not grep(root, s)]
-    # A path the spec says is absent, which is in fact there, is the same kind of
-    # error pointing the other way — and a more interesting one, because it means
-    # the work may already be done.
-    wrongly_denied = [p for p in denied if (root / p).exists()]
+    # The reverse check — a path the spec says is absent which is in fact there —
+    # was implemented and then removed, and the removal is the point.
+    #
+    # Negation detection exists to SUPPRESS a check: to stop "there is no `X`"
+    # being reported as a false claim about a missing file. Suppression is the
+    # forgiving direction, because a missed negation costs one line a person
+    # reads and dismisses. Using the same fuzzy signal to FIRE a failure asks far
+    # more precision of it than it has, and on the first real spec it met it was
+    # wrong twice in one section: "the package does not exist. The entire working
+    # tree (excluding `factory/`, ...)" reads as a denial of `factory/`, and
+    # "`...py` already exists and imports a module that no bean has created yet"
+    # reads as a denial of the file it had just said exists.
+    #
+    # So denials are recorded and never judged. What they are is a list of things
+    # the spec claims are absent, which a reader — or a judge — can weigh.
+    denied_and_present = [p for p in denied if (root / p).exists()]
 
     result = {
         "section": args.section,
@@ -193,7 +211,13 @@ def main() -> int:
         "named_paths": asserted,
         "missing_paths": missing,
         "paths_said_to_be_absent": denied,
-        "said_absent_but_present": wrongly_denied,
+        "said_absent_but_present": denied_and_present,
+        "said_absent_but_present_is_not_a_failure": (
+            "Recorded, never failed. Deciding which noun a negation attaches to is "
+            "not something this can do reliably, and it was wrong twice on the first "
+            "real spec it met. Suppressing a check on a maybe is cheap; firing one is "
+            "not."
+        ),
         "named_symbols": symbols,
         "absent_symbols": absent,
         "note": (
@@ -212,12 +236,12 @@ def main() -> int:
     else:
         for p in missing:
             print(f"missing path: {p}")
-        for p in wrongly_denied:
-            print(f"said to be absent but present: {p}")
+        for p in denied_and_present:
+            print(f"note: said to be absent, but present: {p}")
         for s in absent:
             print(f"symbol not found anywhere: {s}")
 
-    return 1 if (missing or wrongly_denied) else 0
+    return 1 if missing else 0
 
 
 if __name__ == "__main__":

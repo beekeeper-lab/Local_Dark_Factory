@@ -70,10 +70,35 @@ if case == "clean":
     pass
 
 elif case == "tautological-verify":
-    # A check that cannot fail: it asserts the file the task itself creates.
-    # spec-check cannot see this; it is a runnable command of a legal kind.
-    tasks = re.sub(r'run: \[[^\]]*\]',
-                   'run: ["sh", "-c", "test -d ."]', tasks, count=1)
+    # A check that cannot fail: it asserts that the working directory exists.
+    #
+    # The first version of this did `re.sub(r'run: \[[^\]]*\]', ...)` and was
+    # broken for months of runs: the character class stops at the first `]`,
+    # which in this task list is inside a Python string (`d['project']`), so the
+    # mutation left a mangled line and the fixture was not a tautological verify
+    # at all — it was a syntax error. The judge duly reported a syntax error and
+    # was scored as having missed the defect, three separate times, and the
+    # "format fixation" it was accused of was in this case simply being right.
+    #
+    # Rewritten to replace the whole `verify:` block of the first task, line by
+    # line, so the result is valid YAML that is wrong in exactly the intended way.
+    lines = tasks.split("\n")
+    out, i, done = [], 0, False
+    while i < len(lines):
+        line = lines[i]
+        if not done and line.strip() == "verify:":
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(line)
+            out.append(f'{indent}  - {{ kind: command, run: ["sh", "-c", "test -d ."] }}')
+            i += 1
+            # Skip the items that were there.
+            while i < len(lines) and lines[i].strip().startswith("-"):
+                i += 1
+            done = True
+            continue
+        out.append(line)
+        i += 1
+    tasks = "\n".join(out)
     spec += "\n\nThe first task is verified by confirming the working directory exists.\n"
 
 elif case == "contradicts-non-goal":
@@ -95,12 +120,29 @@ elif case == "invented-current-behaviour":
         spec, count=1, flags=re.S)
 
 elif case == "unfinishable-task":
-    # One session could not finish this, and the spec says so in passing.
-    tasks = tasks.replace("intent:",
-        "intent: >\n      Implement the complete seating optimizer: domain models, the "
-        "CP-SAT solver, soft-constraint scoring, the persistence layer, the REST API "
-        "and the report renderer, all wired together and covered by tests. Original "
-        "intent follows.\n    original_intent:", 1)
+    # One session could not finish this. The same lesson as above applies: the
+    # first version introduced an `original_intent:` key the task schema does not
+    # allow, so the fixture failed schema validation rather than presenting an
+    # oversized task. Replace the intent in place instead.
+    lines = tasks.split("\n")
+    for n, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("intent:"):
+            indent = line[: len(line) - len(line.lstrip())]
+            lines[n] = (
+                f"{indent}intent: >\n"
+                f"{indent}  Implement the complete seating optimizer: domain models, the\n"
+                f"{indent}  CP-SAT solver, soft-constraint scoring, the persistence layer,\n"
+                f"{indent}  the REST API and the report renderer, all wired together and\n"
+                f"{indent}  covered by tests."
+            )
+            # Drop any continuation lines of the original block scalar.
+            m = n + 1
+            while m < len(lines) and lines[m].startswith(indent + "  "):
+                lines[m] = ""
+                m += 1
+            break
+    tasks = "\n".join(l for l in lines if l != "")
 
 elif case == "criterion-not-really-met":
     # The spec claims a criterion is satisfied by something that does not satisfy it.

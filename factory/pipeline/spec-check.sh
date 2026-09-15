@@ -203,7 +203,9 @@ if [ -f "$SPEC_MD" ]; then
   elif [ -n "$MISSING_PATHS" ]; then
     bad "current behaviour" "describes files that are not there: $MISSING_PATHS"
   elif [ -n "$WRONGLY_DENIED" ]; then
-    bad "current behaviour" "says these are absent, and they are there: $WRONGLY_DENIED"
+    # Reported, never failed. See claims-check.py for why: deciding which noun a
+    # negation attaches to is not reliable enough to fail a run on.
+    ok "current behaviour" "every file it describes is there; it also calls these absent, and they are not: $WRONGLY_DENIED"
   elif [ -n "$ABSENT_SYMS" ]; then
     # A symbol may be prose, or a name the change is about to introduce. Worth
     # saying, never worth failing on.
