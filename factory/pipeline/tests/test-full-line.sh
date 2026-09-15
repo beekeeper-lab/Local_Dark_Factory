@@ -342,6 +342,8 @@ export PATH="$WORK/bin:$PATH"
 run_line() {
   PI_SESSIONS_DIR="$WORK/sessions" \
   STUB_TASKS="$WORK/tasks.yaml" STUB_SPEC_MD="$WORK/spec.md" \
+  SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+  PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
   FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
   PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
     bash "$WORK/pipeline/orchestrate.sh" bean-001 "$@" 2>&1

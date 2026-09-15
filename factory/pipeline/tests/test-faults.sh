@@ -312,6 +312,8 @@ run_line() {
   PI_SESSIONS_DIR="$WORK/sessions" \
   STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
   STUB_DOC="${STUB_DOC:-$WORK/doc-good.md}" \
+  SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+  PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
   FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
   PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
     bash "$WORK/pipeline/orchestrate.sh" bean-001 "$@" 2>&1
@@ -417,6 +419,8 @@ reset_repo
 PI_SESSIONS_DIR="$WORK/sessions" \
 STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
 STUB_DOC="$WORK/doc-good.md" STUB_BUILD_EXTRA='sleep 20' \
+SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
 FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
 PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
   setsid bash "$WORK/pipeline/orchestrate.sh" bean-001 --stop-after build > "$WORK/o-kill" 2>&1 &
@@ -453,7 +457,7 @@ KILLED="$(cat "$WORK/o-kill")"
 check "the controller says it is stopping" "stopping the line" "$KILLED"
 if ! grep -qF 'discarding its edits' <<<"$KILLED"; then
   printf '  --- what the killed run printed ---\n'
-  sed 's/^/  | /' <<<"$KILLED" | tail -12
+  sed 's/^/  | /' <<<"$KILLED" | tail -30
   printf '  --- end ---\n'
 fi
 check "and the loop says what it discarded" "discarding its edits" "$KILLED"
