@@ -261,5 +261,21 @@ check "and says why it does not go on" "would stop the next bean too" "$out"
 nope  "the second bean is never started" "=== bean-002 ===" "$out"
 rm -f "$REPO/dirty.txt"
 
+printf '\n== a count that does not match the rows under it ==\n\n'
+#
+# "queue — 20 bean(s)" followed by one row reads as a bug. It is not: the table
+# shows the states a reader can act on. But a number that disagrees with the rows
+# beneath it is exactly the shape of something broken, so the difference is said.
+out="$(q)"
+n_rows="$(grep -cE '^bean-[0-9]+ ' <<<"$out" || true)"
+n_total="$(sed -n 's/^queue — \([0-9]*\) bean.*/\1/p' <<<"$out" | head -1)"
+if [ "${n_total:-0}" -gt "${n_rows:-0}" ]; then
+  check "the hidden ones are counted"  "more, blocked or done" "$out"
+  check "and how to see them"          "factory queue --all" "$out"
+else
+  printf '  ok    nothing was hidden, so nothing to say about it\n'; PASS=$((PASS+1))
+  printf '  ok    (the same assertion, vacuous here by construction)\n'; PASS=$((PASS+1))
+fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

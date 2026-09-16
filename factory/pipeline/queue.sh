@@ -214,6 +214,15 @@ jq -r '.[] | [.id, .state, (.title[0:42]), .why] | @tsv' <<<"$ROWS" \
       printf '%-10s %-12s %-44s %s\n' "$id" "$state" "$title" "$why"
     done
 
+# "queue — 20 bean(s)" followed by one row reads as a bug. It is not: the table
+# shows the states a reader can act on. Say how many were left out and how to see
+# them, because a number that does not match the rows under it is the shape of a
+# thing that is broken.
+if [ "$SHOW_ALL" != 1 ]; then
+  HIDDEN="$(jq -r '[.[] | select(.state != "ready" and .state != "refused" and .state != "pr_open")] | length' <<<"$ROWS")"
+  [ "${HIDDEN:-0}" -gt 0 ] && printf '\n(%s more, blocked or done — `factory queue --all`)\n' "$HIDDEN"
+fi
+
 READY="$(jq -r '[.[] | select(.state == "ready") | .id] | join(" ")' <<<"$ROWS")"
 printf '\nready: %s\n' "${READY:-nothing}"
 REFUSED="$(jq -r '[.[] | select(.state == "refused") | .id] | length' <<<"$ROWS")"
