@@ -32,7 +32,7 @@ factory — run the line against the repository you are standing in.
   factory step <step> <bean-id>
                             one step: spec, build, gate, doc, sync, pr, ci,
                             or audit-{spec,impl,doc,package}
-  factory go [--limit N] [--dry-run] [--bean <id>]
+  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>]
                             run the approved beans in order, one at a time,
                             stopping at the first halt
   factory queue [--all]     what is runnable, and what blocks the rest
@@ -461,13 +461,20 @@ run from the working tree."
     # Phase 0 measured why (the Q8 developer and the judge cannot co-reside, so a
     # second concurrent bean would make two beans wait on the same model).
     require_target
-    GO_LIMIT=0; GO_DRY=0; GO_ONE=""
+    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --limit) GO_LIMIT="${2:?--limit needs a number}"; shift 2 ;;
         --dry-run) GO_DRY=1; shift ;;
         --bean) GO_ONE="${2:?--bean needs an id}"; shift 2 ;;
-        *) die "usage: factory go [--limit N] [--dry-run] [--bean <id>]" ;;
+        # Passed through to every bean. The case it exists for: a repository whose
+        # CI is not wired yet, where `ci` correctly refuses rather than waiting for
+        # a check nothing can report — and a queue that halted every bean at the
+        # last step would be describing the repository's configuration, not the
+        # beans. `--stop-after pr` says "this line ends at the pull request here",
+        # which for `merge_mode: human_required` may simply be true.
+        --stop-after) GO_STOP="${2:?--stop-after needs a step}"; shift 2 ;;
+        *) die "usage: factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>]" ;;
       esac
     done
 
@@ -507,7 +514,7 @@ run from the working tree."
       fi
       printf '\n=== %s ===\n' "$NEXT"
       GO_RC=0
-      bash "$0" run "$NEXT" || GO_RC=$?
+      bash "$0" run "$NEXT" ${GO_STOP:+--stop-after "$GO_STOP"} || GO_RC=$?
       GO_RAN=$((GO_RAN + 1))
       if [ "$GO_RC" -ne 0 ]; then
         printf '\nSTOPPED at %s (exit %s). The line does not move on from a halt: whatever\n' "$NEXT" "$GO_RC"
