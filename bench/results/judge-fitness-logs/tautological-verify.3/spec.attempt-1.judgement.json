@@ -1,0 +1,78 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "accept",
+  "criteria": [
+    {
+      "id": "schema_version",
+      "met": true,
+      "evidence": "The top-level object contains a field named \"schema_version\" with value \"tasks/1.0.0\" as required by the specification.",
+      "quote": "\"schema_version: tasks/1.0.0\""
+    },
+    {
+      "id": "bean_id",
+      "met": true,
+      "evidence": "The top-level object contains a field named \"bean_id\" with value \"bean-001\" as required by the specification.",
+      "quote": "\"bean_id: bean-001\""
+    },
+    {
+      "id": "tasks[].id",
+      "met": true,
+      "evidence": "All three task objects have an `id` field (task-1, task-2, task-3).",
+      "quote": "[{\"id\": \"task-1\", ...}, {\"id\": \"task-2\", ...}, {\"id\": \"task-3\", ...}]"
+    },
+    {
+      "id": "tasks[].title",
+      "met": true,
+      "evidence": "Each task object defines a `title` field describing its purpose.",
+      "quote": "\"title\": \"Add pyproject.toml and extend .gitignore\" (for task-1), etc."
+    },
+    {
+      "id": "tasks[].intent",
+      "met": true,
+      "evidence": "Each task object includes an `intent` field with a description of the intended changes, satisfying the requirement that each task has an intent string describing its purpose and constraints.",
+      "quote": "\"intent\": \">\\nCreate pyproject.toml declaring the project ...\" (for task-1), etc."
+    },
+    {
+      "id": "tasks[].write_paths",
+      "met": true,
+      "evidence": "Each task provides a `write_paths` list indicating which files it will create or modify. For example, task‑1 lists `[pyproject.toml, .gitignore]` and task‑2 lists `[src/seating_planner/__init__.py]`.",
+      "quote": "\"write_paths\": [\"pyproject.toml\", \".gitignore\"]"
+    },
+    {
+      "id": "tasks[].depends_on",
+      "met": true,
+      "evidence": "All tasks declare a `depends_on` list (empty for task‑1, containing \"task-1\" for task‑2, and \"task-2\" for task‑3). This satisfies the requirement that each task may optionally depend on earlier tasks.",
+      "quote": "\"depends_on\": []\" (for task‑1) and appropriate dependencies for others"
+    },
+    {
+      "id": "tasks[].satisfies",
+      "met": true,
+      "evidence": "Each task lists at least one `satisfies` entry, matching the required format.",
+      "quote": "\"satisfies\": [\"ac1\", \"ac3\"] (for task‑1), etc."
+    },
+    {
+      "id": "tasks[].verify",
+      "met": true,
+      "evidence": "Each task includes a `verify` list with at least one verification step. The steps are expressed as dictionaries containing the required keys (`kind`, `run`). For example, task‑1 has three verification commands each specified correctly.",
+      "quote": "\"verify\": [{\"kind\": \"command\", \"run\": [\"sh\", \"-c\", \"test -d .\"] , ...]"
+    },
+    {
+      "id": "tasks[].max_attempts",
+      "met": true,
+      "evidence": "All tasks define a `max_attempts` field (value 3).",
+      "quote": "\"max_attempts\": 3"
+    }
+  ],
+  "findings": [],
+  "confidence": 0.99,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 79
+  }
+}

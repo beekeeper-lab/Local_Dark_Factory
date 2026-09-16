@@ -596,6 +596,7 @@ jq -sc \
   --arg s "$STEP" \
   --arg sf "$SF_ARG" \
   --arg v "$END_VERDICT" \
+  --argjson dur "$(( $(date +%s) - T0 ))" \
   --argjson cond "$(jq -cn \
       --arg role "$ROLE" --arg model "$ROLE_MODEL" --arg digest "$MODEL_DIGEST" \
       --arg thinking "$ROLE_THINKING" --argjson ctx "${ROLE_CTX:-null}" \
@@ -623,6 +624,22 @@ jq -sc \
       $arr | .[ ($idx | last) ] |=
           ( .session_file = (if $sf == "" then null else $sf end)
           | .verdict = (if $v == "" then .verdict else $v end)
+          # One clock reading, not the difference between two records.
+          #
+          # Elapsed time has been derived by subtracting the ts on the start line
+          # from the ts on the end line, which is right when both were written
+          # when they say and wrong in a way nothing notices when they were not.
+          # (No apostrophes: this whole jq program is one single-quoted shell
+          # string, and one apostrophe ends it. Fourth time in this repository.)
+          # On the first
+          # complete run every build-task attempt read 0s — the pair written six
+          # milliseconds apart after work that took 947, 89 and 95 seconds — while
+          # the `build` step wrapping them read 1136s. A per-attempt duration of
+          # zero is the number every later question about cost reads from.
+          #
+          # This is measured in the process that ran the step, from before the
+          # child to after it, and does not depend on the start line being right.
+          | .duration_s = $dur
           | .conditions = $cond )
     end
   | .[]

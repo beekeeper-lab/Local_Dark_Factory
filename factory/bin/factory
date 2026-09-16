@@ -252,7 +252,14 @@ run from the working tree."
             | ($all | map(select(.event == "start" and .step == $e.step
                           and (.attempt // 1) == ($e.attempt // 1))) | last) as $s
             | [ $e.step, ($e.verdict // "-"), ($e.attempt | tostring),
-                (if $s then (secs($s.ts; $e.ts) | floor | tostring) + "s" else "-" end),
+                # duration_s when the step measured it in its own process; the
+                # gap between the two lines otherwise. Both are here because the
+                # second is right for steps the controller runs start-to-finish
+                # and was silently wrong for model steps, where both boundaries
+                # were written at the end and every attempt read 0s.
+                (if ($e.duration_s // null) != null then (($e.duration_s | floor | tostring) + "s")
+                 elif $s then (secs($s.ts; $e.ts) | floor | tostring) + "s"
+                 else "-" end),
                 (if $e.conditions then
                    ($e.conditions.model // "-")
                    + (if $e.conditions.declared_matches_observed == false then "  (conditions drifted)" else "" end)

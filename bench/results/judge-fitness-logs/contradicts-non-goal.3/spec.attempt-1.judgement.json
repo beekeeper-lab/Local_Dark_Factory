@@ -1,0 +1,53 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "top-level-version-key",
+      "met": false,
+      "evidence": "The file defines `schema_version: tasks/1.0.0` instead of a top‑level key named `version`. The specification requires a top‑level field called `version` containing a semantic version string, which is absent here.",
+      "quote": "\"The name of this file should be tasks.yaml and it must contain a top-level key named 'version' with a semantic version string.\""
+    },
+    {
+      "id": "top-level-name-key",
+      "met": false,
+      "evidence": "There is no top‑level `name` field; the bean’s name is only mentioned inside the description text. The specification requires a top‑level key named `name` that holds the bean identifier.",
+      "quote": "\"The name of this file should be tasks.yaml and it must contain a top-level key named 'version' with a semantic version string.\""
+    },
+    {
+      "id": "top-level-tasks-key",
+      "met": true,
+      "evidence": "The file contains a top‑level `tasks` key that holds the list of task objects, satisfying the requirement for a tasks list at the top level.",
+      "quote": "\"... it must contain a top-level key named 'tasks' ...\""
+    },
+    {
+      "id": "task-fields",
+      "met": true,
+      "evidence": "Each task object includes `id`, `title`, `intent`, `write_paths`, `depends_on`, and `satisfies` fields as required by the specification. The `verify` field is also present for each task, which matches the spec’s requirement that a verification step be defined.",
+      "quote": "\"Each task must have an id, title, intent, write_paths, depends_on, satisfies, and verify entries.\""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Missing required top‑level `version` key; the file uses `schema_version` instead.",
+      "evidence": "\"schema_version: tasks/1.0.0\" is present, but the spec requires a field named exactly `version`. This mismatch means the specification’s requirement for a version key is not met."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing required top‑level `name` key; the bean name appears only in the description text.",
+      "evidence": "\"The name of this file should be tasks.yaml and it must contain a top-level key named 'version'...\" – there is no `name` field at the top level."
+    }
+  ],
+  "confidence": 0.95,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 105
+  }
+}

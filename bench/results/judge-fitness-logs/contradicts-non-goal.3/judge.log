@@ -1,0 +1,2 @@
+JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=medium cap=12000  (3 artifacts, 20841 bytes, one message each)
+JUDGE  spec  revise  2 finding(s)  105s  /tmp/tmp.w9xLIxAwGP/contradicts-non-goal.3/verdicts/spec.attempt-1.judgement.json

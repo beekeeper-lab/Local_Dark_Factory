@@ -638,5 +638,43 @@ nope  "a later run rebuilds nothing"   "task-1 must not be attempted a third tim
       grep -qF "ATTEMPT 1/3  task-1" <<<"$third"
 check "everything is already done"     "already done" "$third"
 
+printf '\n== a build-task step records how long it really took ==\n\n'
+#
+# `factory status` on the first complete run showed every build-task attempt at
+# 0s while the `build` step around them showed 1136s — and the tasks took 947, 89
+# and 95 seconds of model time. Both boundaries were being written at the end.
+# A per-attempt duration of zero is the number every later question about cost
+# reads from, and it is silently wrong rather than missing.
+reset_run
+rm -f "$WORK/actions"/*
+act task-1.1 <<'SH'
+sleep 2
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+act task-2.1 <<'SH'
+mkdir -p src && printf 'second\n' > src/b.py
+SH
+run_loop > "$WORK/o-elapsed" 2>&1 || true
+bt_elapsed="$(jq -rs '
+  def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+  [.[] | select(.step == "build-task" and .attempt == 1)] as $r
+  | if ($r | length) < 2 then 0 else (t($r[-1].ts) - t($r[0].ts)) end' \
+  "$RUN_DIR/steps.jsonl" 2>/dev/null || echo 0)"
+if [ "${bt_elapsed:-0}" -ge 2 ] 2>/dev/null; then
+  printf '  ok    the boundaries are two seconds apart (%ss)\n' "$bt_elapsed"; PASS=$((PASS + 1))
+else
+  printf '  FAIL  the boundaries are %ss apart for work that took at least 2\n' "${bt_elapsed:-0}"; FAIL=$((FAIL + 1))
+fi
+# And independently of the boundaries: the end line carries a duration measured
+# in the process that ran the step, so a bad start stamp cannot make a long step
+# look instantaneous. On the first complete run every build-task attempt read 0s.
+bt_dur="$(jq -rs '[.[] | select(.step == "build-task" and .attempt == 1 and .event == "end")] | last.duration_s // -1' \
+  "$RUN_DIR/steps.jsonl" 2>/dev/null || echo -1)"
+if [ "${bt_dur:--1}" -ge 2 ] 2>/dev/null; then
+  printf '  ok    and the end line says so on its own (%ss)\n' "$bt_dur"; PASS=$((PASS + 1))
+else
+  printf '  FAIL  duration_s on the end line is %s, for work that took at least 2\n' "${bt_dur:--1}"; FAIL=$((FAIL + 1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

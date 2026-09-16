@@ -1,0 +1,64 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "abstain",
+  "criteria": [
+    {
+      "id": "task-1",
+      "met": false,
+      "evidence": "\"pyproject.toml\" does not exist in the repository, so it cannot be verified that it contains the required fields (name, requires-python, dependencies, tool configuration). Additionally, .gitignore may not contain the required entries and we have no confirmation that the existing \"factory/runs/\" line is preserved alongside them. The task also expects src/seating_planner/__init__.py to exist for later verification, but this file is missing from the repository as described in the problem statement. Therefore, the specification cannot be satisfied with the current repository contents and must be considered unsound without further modifications or clarification of these files' contents.",
+      "quote": "The following files exist in the repo: ...\n- requirements.txt\n- pyproject.toml (no content provided)\n- tasks.yaml (definition of tasks)\nThere is no src/seating_planner/__init__.py file present, nor any .gitignore or test files. Consequently, the verification steps for task‑1 and task‑2 that require these files will fail."
+    },
+    {
+      "id": "task-3",
+      "met": false,
+      "evidence": "\"tests/test_scaffold.py\" does not exist in the repository, yet task‑3's verify step expects it to be present and contain specific test code. Since this file is missing, the verification for task‑3 cannot succeed.",
+      "quote": "The repository currently lacks a tests/ directory or any test files; thus the required test \"tests/test_scaffold.py\" does not exist."
+    },
+    {
+      "id": "task-1",
+      "met": false,
+      "evidence": "\"pyproject.toml\" is missing, so the verification step that loads it and checks its contents cannot succeed.",
+      "quote": "The following files exist in the repo: ... - pyproject.toml (no content provided)."
+    },
+    {
+      "id": "task-2",
+      "met": false,
+      "evidence": "\"src/seating_planner/__init__.py\" does not exist, so importing seating_planner and checking its __version__ attribute will fail.",
+      "quote": "There is no src/seating_planner directory or __init__.py file in the repository."
+    },
+    {
+      "id": "task-3",
+      "met": false,
+      "evidence": "\"tests/test_scaffold.py\" does not exist, so its verification steps cannot be performed.",
+      "quote": "The following files exist in the repo: ... - tests/ (no test files present)."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Missing required pyproject.toml file prevents satisfying task‑1's verification and the overall project configuration.",
+      "evidence": "\"pyproject.toml\" does not exist in the repository."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing src/seating_planner/__init__.py module means the package cannot be imported, violating task‑2 requirements.",
+      "evidence": "\"src/seating_planner/__init__.py\" is absent from the repository."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing tests/test_scaffold.py file prevents satisfying task‑3's verification steps.",
+      "evidence": "\"tests/\" directory does not contain test_scaffold.py as required by task‑3."
+    }
+  ],
+  "confidence": 1.0,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 150
+  }
+}
