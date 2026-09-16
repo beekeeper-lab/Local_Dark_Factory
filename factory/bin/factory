@@ -512,6 +512,26 @@ run from the working tree."
         printf '\n(and then whatever that unblocks — `factory queue --all` shows the chain)\n'
         break
       fi
+      # Before each bean, not once at the start.
+      #
+      # A twenty-bean queue is hours of writing into TMPDIR — gate trees, a
+      # pipeline snapshot per run, an agent directory per worker session. When it
+      # filled last night the contained worker's write failed with "Unknown system
+      # error -122", pi exited 1, and the run recorded a doc step that produced
+      # nothing. Every part of that chain was true and none of it said "the disk
+      # is full". A queue that keeps starting beans into a full disk turns one
+      # environmental failure into twenty runs of wasted model time.
+      GO_TMP="${TMPDIR:-/tmp}"
+      GO_KB="$(df -Pk "$GO_TMP" 2>/dev/null | awk 'NR==2 {print $4}')"
+      if [ -n "$GO_KB" ] && [ "$GO_KB" -lt 2097152 ]; then
+        printf '\nSTOPPING before %s: %s MB free on %s.\n' "$NEXT" "$(( GO_KB / 1024 ))" "$GO_TMP"
+        printf 'The gate tree, the pipeline snapshot and every worker session write here. A\n'
+        printf 'worker whose write fails reports "Unknown system error -122", which reads\n'
+        printf 'like anything but a full disk — so the queue stops while the message is\n'
+        printf 'still the true one. %s bean(s) run.\n' "$GO_RAN"
+        exit 1
+      fi
+
       printf '\n=== %s ===\n' "$NEXT"
       GO_RC=0
       bash "$0" run "$NEXT" ${GO_STOP:+--stop-after "$GO_STOP"} || GO_RC=$?

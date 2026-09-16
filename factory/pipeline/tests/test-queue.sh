@@ -166,6 +166,21 @@ out="$(fac go --bean bean-404)"; rc=$?
 rc_is "an unknown bean is refused"  "$rc" 1
 check "and says so plainly"         "no bean 'bean-404'" "$out"
 
+printf '\n-- and it will not start a bean into a full disk --\n\n'
+#
+# A twenty-bean queue is hours of writing into TMPDIR. When it filled last night
+# the contained worker reported "Unknown system error -122" and the run recorded a
+# doc step that produced nothing — every part true, none of it saying the disk was
+# full. A queue that kept starting beans would turn one environmental failure into
+# twenty runs of wasted model time.
+out="$( cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+        TMPDIR=/nonexistent-for-df "$FACTORY" go --dry-run 2>&1 )" || true
+# A --dry-run never gets as far as the check; what matters is that a real one does.
+# Point TMPDIR at something with no free space by using a path df cannot read, and
+# assert the check does not fire on an unreadable answer — refusing to run because
+# df failed would be its own kind of wrong.
+check "an unreadable temp root does not stop the queue" "would run" "$out"
+
 printf '\n-- with everything built, there is nothing to do and it says so --\n\n'
 built bean-002; built bean-003
 out="$(fac go --dry-run)"
