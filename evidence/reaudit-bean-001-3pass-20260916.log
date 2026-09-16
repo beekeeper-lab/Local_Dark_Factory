@@ -1,0 +1,43 @@
+# bean-001's four audits × three passes, 2026-09-16, cap=16000 thinking=low,
+# after `read as:` was added to every artifact header. Against copies of the
+# original run directory; nothing wrote to it.
+
+logs: /tmp/reaudit2.gzKbZD
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     0         revise     no        2 finding(s), 2 criteria, conf 0
+impl      1     1         -          no        JUDGE  impl: it reasoned for 714 characters and then ended its turn (don
+doc       1     1         -          no        JUDGE  doc: the model tried to call tools instead of answering (1 call(s
+package   1     0         revise     no        0 finding(s), 1 criteria, conf 0.0
+spec      2     0         revise     no        1 finding(s), 2 criteria, conf 0
+impl      2     1         -          no        JUDGE  impl: the model tried to call tools instead of answering (1 call(
+doc       2     1         -          no        JUDGE  doc: the model tried to call tools instead of answering (1 call(s
+package   2     1         -          no        JUDGE  package: it reasoned for 2479 characters and then ended its turn 
+spec      3     0         revise     no        2 finding(s), 5 criteria, conf 0.5
+impl      3     0         revise     no        0 finding(s), 1 criteria, conf 0.5
+doc       3     1         -          no        JUDGE  doc: the answer is not JSON (done_reason=stop, 2027 bytes). jq: p
+package   3     0         revise     no        1 finding(s), 2 criteria, conf 0.5
+
+--- why each of the twelve was refused ---
+1-doc        doc: the judge wrote no judgement file.
+1-impl       impl: the judge wrote no judgement file.
+1-package    package: verdict "revise" with zero findings.
+1-spec       spec: the judgement does not report on the criteria it was given.
+2-doc        doc: the judge wrote no judgement file.
+2-impl       impl: the judge wrote no judgement file.
+2-package    package: the judge wrote no judgement file.
+2-spec       spec: the judgement does not report on the criteria it was given.
+3-doc        doc: the judge wrote no judgement file.
+3-impl       impl: verdict "revise" with zero findings.
+3-package    package: the judgement does not report on the criteria it was given.
+3-spec       spec: the judgement does not report on the criteria it was given.
+
+--- what it put in `criteria`, when it answered at all ---
+1-spec       ["task-1","task-2"]
+1-package    ["test_files_presented"]
+2-spec       ["task-1","task-2"]
+3-spec       ["artifact-1","artifact-2","artifact-3","artifact-4","artifact-5"]
+3-impl       ["ac1"]
+3-package    ["importable-modules","module-docstrings"]
+
+the bean declares: ac1 ac2 ac3 ac4

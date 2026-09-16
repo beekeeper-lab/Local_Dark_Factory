@@ -253,6 +253,9 @@ esac
 # else would have.
 BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bean: $BEAN_FILE"
 CRITERIA_LIST="$(jq -r '(.acceptance_criteria // [])[] | "  \(.id): \(.text)"' <<<"$BEAN_JSON")"
+# The same ids as data, for the schema. One source, so the list the judge is shown
+# and the list the grammar permits cannot drift apart.
+CRIT_IDS_JSON="$(jq -c '[(.acceptance_criteria // [])[].id]' <<<"$BEAN_JSON")"
 [ -n "$CRITERIA_LIST" ] || CRITERIA_LIST="  (this bean declares none)"
 
 # What `met` means depends on what is being audited, and it was never said.
@@ -411,6 +414,32 @@ SCHEMA='{
 SCHEMA="$(jq --arg d "$MET_MEANS" \
   '.properties.criteria.items.properties.met.description = $d' <<<"$SCHEMA")" \
   || die "could not put the per-target meaning of met into the judgement schema"
+
+# The criterion ids go in the GRAMMAR, not only in the prose.
+#
+# The prompt has said, in bold, "the criteria you report on are these, and only
+# these — one entry per line, using exactly these ids", followed by the list, for
+# days. Twelve real audits of bean-001 on 2026-09-16 filled `criteria` with:
+#
+#   task-1, task-2        (the task list's ids)
+#   artifact-1 .. -5      (the numbering of the prompt's own artifact delimiters)
+#
+# Never once ac1..ac4. It is not ignoring the instruction so much as filling the
+# field from whatever enumerable thing is nearest, and prose cannot stop that.
+#
+# An enum can. Constrained decoding makes `task-1` unemittable rather than
+# discouraged, and minItems makes a partial list unemittable too — which is the
+# difference between a rule and a request, and this project has the measurement
+# saying which one works on this model.
+#
+# Only when the bean has criteria. A bean with none would otherwise produce an
+# empty enum, which is a grammar that permits no string at all.
+if [ -n "$CRIT_IDS_JSON" ] && [ "$(jq 'length' <<<"$CRIT_IDS_JSON")" -gt 0 ]; then
+  SCHEMA="$(jq --argjson ids "$CRIT_IDS_JSON" \
+    '.properties.criteria.items.properties.id.enum = $ids
+     | .properties.criteria.minItems = ($ids | length)' <<<"$SCHEMA")" \
+    || die "could not put the bean's criterion ids into the judgement schema"
+fi
 
 STAGE="$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)"
 

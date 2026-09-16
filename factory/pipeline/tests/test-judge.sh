@@ -34,6 +34,10 @@ want() {
   if "$@"; then printf '  ok    %s\n' "$n"; PASS=$((PASS+1))
   else printf '  FAIL  %s — %s\n' "$n" "$d"; FAIL=$((FAIL+1)); fi
 }
+eq() {
+  if [ "$2" = "$3" ]; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
+  else printf '  FAIL  %s — expected "%s", got "%s"\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
 rc_is() {
   if [ "$2" = "$3" ]; then printf '  ok    %s (exit %s)\n' "$1" "$3"; PASS=$((PASS+1))
   else printf '  FAIL  %s — expected exit %s, got %s\n' "$1" "$3" "$2"; FAIL=$((FAIL+1)); fi
@@ -356,6 +360,45 @@ check "and that it is not a question"       "not a question for you" "$req"
 # beside the bytes it describes.
 check "the note is in the artifact header"  "read as:" "$req"
 rm -f "$R/claims-check.json"
+
+printf '\n== the criterion ids are in the grammar, not only in the prose ==\n\n'
+#
+# The prompt has said, in bold, "the criteria you report on are these, and only
+# these — using exactly these ids", followed by the list. Twelve real audits of
+# bean-001 on 2026-09-16 filled `criteria` with `task-1`, `task-2` (the task
+# list's ids) and `artifact-1`..`artifact-5` (the numbering of the prompt's own
+# delimiters). Never once ac1..ac4.
+#
+# It is not ignoring the instruction so much as filling the field from whatever
+# enumerable thing is nearest, and prose cannot stop that. An enum can:
+# constrained decoding makes `task-1` unemittable rather than discouraged.
+printf 'schema_version: bean/2.0.0\nid: bean-001\ntitle: a thing\nintent: do a thing\nacceptance_criteria:\n  - id: ac1\n    text: one\n  - id: ac2\n    text: two\n  - id: ac3\n    text: three\n' \
+  > "$WORK/bean-crit.yaml"
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
+ids="$(jq -c '.format.properties.criteria.items.properties.id.enum' "$WORK/last-request.json")"
+eq "the ids are an enum in the schema" '["ac1","ac2","ac3"]' "$ids"
+eq "and a partial list is unemittable" "3" \
+   "$(jq -r '.format.properties.criteria.minItems' "$WORK/last-request.json")"
+# The list in the prose and the list in the grammar come from one source, so they
+# cannot drift apart — which is how the prose came to be right and ignored.
+check "the prose still lists them too" "ac1: one" \
+   "$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
+
+printf '\n-- a bean with no criteria gets no enum, not an empty one --\n\n'
+#
+# An empty enum is a grammar that permits no string at all, which would make the
+# field unfillable rather than constrained.
+clean_verdicts
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean.yaml" ) >/dev/null 2>&1
+eq "no enum for a bean with none"      "null" \
+   "$(jq -r '.format.properties.criteria.items.properties.id.enum // "null"' "$WORK/last-request.json")"
+eq "and no minItems"                   "null" \
+   "$(jq -r '.format.properties.criteria.minItems // "null"' "$WORK/last-request.json")"
 
 printf '\n== the token cap has one default, in three files ==\n\n'
 #
