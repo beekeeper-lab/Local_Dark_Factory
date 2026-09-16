@@ -9,6 +9,19 @@ description: |
 
 # factory-audit
 
+**This file is the rubric, and the rubric only.** The audit is not a session any
+more: `factory/pipeline/judge.sh` reads the artifacts, puts them in the question,
+constrains the answer to the judgement schema and writes the file itself, and
+`run-step.sh` refuses an `audit-*` step outright. Everything below from `## Rules`
+is spliced into that prompt verbatim; nothing else here reaches a model.
+
+That matters because this file used to say "open the files named below" while the
+prompt it is spliced into says "there are no tools here and nothing to open". The
+judge duly reached for `repo_browser.open_file` — nine times out of nine on one
+audit — and a prompt that contradicts itself is not a prompt the model can obey.
+Corrected 2026-09-16. If you edit the sections below, read judge.sh's preamble
+first: the two are one document.
+
 You audit work you did not see produced. That is the point: the fresh context is
 what stops you rationalising the artifact. If you catch yourself assuming "they
 must have meant X" about prior intent, delete the assumption — you cannot know it,
@@ -50,16 +63,19 @@ before writing — do not reconstruct it from memory.
 
 ## Rules
 
-- **Read the artifact before judging it.** Open the files named below. If you find
-  yourself writing about a section, a function or a file you have not actually
-  seen in this run, stop and go read it. A fluent review of something you did not
-  read is the most expensive output you can produce here: it looks exactly like a
-  real one.
+- **Everything you may judge is already in front of you.** The artifacts are in
+  the messages above, in full, one per message. There is nothing to open and no
+  tool to open it with. If you find yourself writing about a section, a function
+  or a file you have not seen in these messages, you are inventing it — stop, and
+  say in a finding that you were not given what you needed. A fluent review of
+  something you did not read is the most expensive output you can produce here: it
+  looks exactly like a real one, and this line has already had several.
 - **No evidence, no finding.** Every finding carries a command's output, a quote,
   or a `file:line` that proves it. A finding you cannot evidence costs the run a
   retry and teaches the developer nothing; it is worse than saying nothing.
-- **Verify by looking, not by trusting.** Re-read the files. A claim in the run
-  directory is a claim, including the developer's own.
+- **Verify by looking, not by trusting.** Look again at the message the artifact
+  is in. A claim in the run directory is a claim, including the developer's own —
+  but "look again" means scrolling up, not opening anything.
 - **Do not re-derive what was measured.** Some artifacts you are given are not
   claims — they are the recorded output of the controller running something:
   every `verify` executed against the untouched tree, the tests executed against
@@ -88,8 +104,8 @@ before writing — do not reconstruct it from memory.
 
 ### `spec`
 
-Read `<run-dir>/spec.md`, `<run-dir>/tasks.yaml`, and the bean they came from
-(`factory/beans/<id>-*/bean.yaml`). The controller has already checked that the
+You have been given `spec.md`, `tasks.yaml` and the bean they came from, each in
+its own message above. The controller has already checked that the
 sections exist, the task list validates, the paths are inside the bean, every
 criterion is claimed and the budget holds. **Do not re-check those.** Your job is
 the part a script cannot do:

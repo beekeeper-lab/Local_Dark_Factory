@@ -398,6 +398,27 @@ check "and the setting to change"      "roles.json" "$out"
 check "and what is NOT the lever"      "JUDGE_NUM_PREDICT" "$out"
 check "and that done_reason hid it"    "which does not say this" "$out"
 
+printf '\n== the prompt does not contradict itself about tools ==\n\n'
+#
+# judge.sh's preamble says "There are no tools here and nothing to open". The
+# rubric spliced in below it said "Open the files named below" and "Re-read the
+# files" — written when the audit was a pi session, and still in the prompt long
+# after it stopped being one. The judge duly reached for `repo_browser.open_file`,
+# nine times out of nine on one audit.
+#
+# A prompt that contradicts itself is not a prompt a model can obey, and the two
+# halves are one document.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
+check "the preamble says there are none" "You have NO tools: no file system, no repo_browser" "$prompt"
+nope  "and the rubric does not say open" "Open the files named below" "$prompt"
+nope  "nor re-read them"                 "Re-read the files" "$prompt"
+check "it says where the artifacts are"  "already in front of you" "$prompt"
+check "and what writing about an unseen file is" "you are inventing it" "$prompt"
+
 printf '\n== the criterion ids are in the grammar, not only in the prose ==\n\n'
 #
 # The prompt has said, in bold, "the criteria you report on are these, and only
