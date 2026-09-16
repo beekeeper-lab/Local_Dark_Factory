@@ -132,6 +132,48 @@ check "workflows change the wording" ".github/workflows exists in the working tr
 check "and points at the branch check" "the ci step asks the same of the branch" "$out"
 rm -rf "$REPO/.github"
 
+printf '\n-- "could not ask ollama" is not "the model is missing" --\n\n'
+#
+# This was `ollama list 2>/dev/null | grep -q` per role, so a list that failed
+# produced empty input, no match, and the words "is not pulled" about a model
+# sitting on disk. Observed while a judge measurement had the GPU: doctor said
+# the developer model was missing; `ollama list` a second later showed it, 29 GB,
+# three days old.
+mkdir -p "$WORK/badbin"
+printf '#!/usr/bin/env bash\nexit 7\n' > "$WORK/badbin/ollama"
+chmod +x "$WORK/badbin/ollama"
+out="$(PATH="$WORK/badbin:$PATH" fac doctor)"
+check "it says it could not ask"     "cannot ask ollama what is pulled" "$out"
+check "and names the exit code"      "list exited 7" "$out"
+nope "and does not claim absence"    "is not pulled" "$out"
+
+printf '\n-- hidden tests, reported whether or not they exist --\n\n'
+#
+# A doctor silent about a check nobody set up reads the same as a doctor
+# reporting it green, and the value of hidden tests is that a reader knows
+# whether the worker was measured by something it could not read.
+out="$(fac doctor)"
+check "none configured is said"      "none configured" "$out"
+check "and what that means"          "every check in this repo runs code the worker could read" "$out"
+
+HTD="$WORK/hidden/bean-001"; mkdir -p "$HTD"
+printf 'def test_h():\n    assert True\n' > "$HTD/test_h.py"
+jq --arg d "$WORK/hidden/<bean>" '.hidden_tests = {dir:$d}' \
+  "$REPO/factory/pipeline-config.json" > "$WORK/c" && mv "$WORK/c" "$REPO/factory/pipeline-config.json"
+out="$(fac doctor)"
+check "a per-bean root is counted"   "1 file(s) for 1 bean(s), outside the repository" "$out"
+
+# Inside the repository is the one that matters: the worker mounts the whole tree.
+mkdir -p "$REPO/hidden-inside"
+printf 'def test_h():\n    assert True\n' > "$REPO/hidden-inside/test_h.py"
+jq --arg d "$REPO/hidden-inside" '.hidden_tests = {dir:$d}' \
+  "$REPO/factory/pipeline-config.json" > "$WORK/c" && mv "$WORK/c" "$REPO/factory/pipeline-config.json"
+out="$(fac doctor)"
+check "inside the repository fails"  "is inside the repository" "$out"
+check "and says what reads it"       "the worker mounts the whole tree" "$out"
+jq 'del(.hidden_tests)' "$REPO/factory/pipeline-config.json" > "$WORK/c" && mv "$WORK/c" "$REPO/factory/pipeline-config.json"
+rm -rf "$REPO/hidden-inside"
+
 # --------------------------------------------------------------------------
 printf '\n== runs lists the history, which is the only place it is visible ==\n\n'
 out="$(fac runs 2>&1)"; rc=$?

@@ -477,9 +477,24 @@ run from the working tree."
     [ -z "$(git -C "$TARGET_ROOT" status --porcelain)" ] && good "tree" "clean" \
       || bad "tree" "dirty — preflight will refuse"
 
+    # Asked once, and "could not ask" is not "absent".
+    #
+    # This was `ollama list 2>/dev/null | grep -q` per role, so a list that failed
+    # — a busy server, a slow one, a socket that was not there — produced empty
+    # input, no match, and the words "is not pulled" about a model that was
+    # sitting on disk. Observed on 2026-09-16 while a judge measurement had the
+    # GPU: doctor said the developer model was missing, `ollama list` a second
+    # later showed it, 29 GB, three days old. A diagnostic that names the wrong
+    # cause costs more than no diagnostic.
+    OLLAMA_LIST=""; OLLAMA_LIST_RC=0
+    OLLAMA_LIST="$(timeout 30 ollama list 2>/dev/null)" || OLLAMA_LIST_RC=$?
     for role in developer judge; do
       m="$(jq -r --arg r "$role" '.roles[$r].model' "$PIPE/roles.json")"
-      ollama list 2>/dev/null | grep -q "^$m" && good "$role" "$m" || bad "$role" "$m is not pulled"
+      if [ "$OLLAMA_LIST_RC" -ne 0 ] || [ -z "$OLLAMA_LIST" ]; then
+        bad "$role" "cannot ask ollama what is pulled (list exited $OLLAMA_LIST_RC) — this is not the same as '$m is missing'"
+        continue
+      fi
+      grep -q "^$m" <<<"$OLLAMA_LIST" && good "$role" "$m" || bad "$role" "$m is not pulled"
     done
 
     printf '\n'
