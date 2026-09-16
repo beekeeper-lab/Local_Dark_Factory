@@ -31,6 +31,7 @@ size-sweep.sh — judge catch rate against artifact size, one defect held consta
 
 usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
                      [--case <name>] [--pad-from <dir>] [--sizes "0 5000 10000 20000"]
+                     [--repeat <n>]
                      [--out <results.json>]
 
   --case      which seeded defect to use (default: contradicts-non-goal, the one
@@ -39,10 +40,23 @@ usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
   --pad-from  directory of bean.yaml files to pad with (default: the bean's own
               beans directory)
   --sizes     padding sizes in bytes, whitespace separated
+  --repeat    how many times to measure every size (default 1). Use at least 3:
+              this judge gives different verdicts for byte-identical input at
+              temperature 0, so one reading per size cannot tell a trend from the
+              spread, and every sweep taken here before 2026-09-16 was one reading.
 EOF
 }
 
 SPEC=""; TASKS=""; BEAN=""; CASE="contradicts-non-goal"; PAD_FROM=""; OUT=""
+# One reading per size is not a sweep, it is six coin flips in a row.
+#
+# This harness asks whether the judge gets worse as the prompt grows. The judge
+# has since been measured giving different verdicts for byte-identical input at
+# temperature 0 — two of six fitness cases flipped between `revise` and `accept`
+# across three passes — so a single reading at each size cannot tell a trend from
+# the spread. Every earlier sweep here was one reading per point, and the
+# conclusions drawn from it are withdrawn on the same grounds as the fitness ones.
+REPEAT="${REPEAT:-1}"
 SIZES="0 5000 10000 20000"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -53,6 +67,7 @@ while [ $# -gt 0 ]; do
     --pad-from) PAD_FROM="${2:?}"; shift 2 ;;
     --sizes)    SIZES="${2:?}"; shift 2 ;;
     --out)      OUT="${2:?}"; shift 2 ;;
+    --repeat)   REPEAT="${2:?}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
     *) usage >&2; exit 1 ;;
   esac
@@ -97,6 +112,8 @@ printf '\nsize sweep — case %s\n\n' "$CASE"
 printf '%-10s %-10s %-9s %-7s %s\n' PADDING TOTAL VERDICT NAMED SECONDS
 
 RESULTS='[]'
+for _pass in $(seq 1 "$REPEAT"); do
+[ "$REPEAT" -gt 1 ] && printf '\n-- pass %s of %s --\n' "$_pass" "$REPEAT"
 for pad in $SIZES; do
   RD="$TMP/pad-$pad"; mkdir -p "$RD/verdicts"
   cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
@@ -129,14 +146,22 @@ for pad in $SIZES; do
 
   printf '%-10s %-10s %-9s %-7s %s\n' "$pad" "$total" "$verdict" "$named" "$((t1-t0))"
   RESULTS="$(jq -c --argjson p "$pad" --argjson t "$total" --arg v "$verdict" \
-    --arg n "$named" --argjson s "$((t1-t0))" \
-    '. + [{padding_bytes:$p, total_artifact_bytes:$t, verdict:$v, named_the_defect:$n, seconds:$s}]' \
+    --arg n "$named" --argjson s "$((t1-t0))" --argjson pass "$_pass" \
+    '. + [{pass:$pass, padding_bytes:$p, total_artifact_bytes:$t, verdict:$v, named_the_defect:$n, seconds:$s}]' \
     <<<"$RESULTS")"
+done
 done
 
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
-  '{schema:"size-sweep/1.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model, points:$r,
-    note:"One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it."}' > "$OUT"
+  --argjson passes "$REPEAT" \
+  '{schema:"size-sweep/2.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model,
+    passes:$passes, one_pass_is_not_a_sweep: ($passes < 2), points:$r,
+    by_size: ([$r[] | {k: (.padding_bytes|tostring), v: .}] | group_by(.k)
+              | map({key: .[0].k,
+                     value: {verdicts: [.[].v.verdict], named: [.[].v.named_the_defect],
+                             agree: ([.[].v.verdict] | unique | length == 1)}})
+              | from_entries),
+    note:"One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it. With passes > 1 the same point is measured repeatedly, because this judge gives different verdicts for identical input and a single reading per size cannot tell a trend from the spread."}' > "$OUT"
 printf '\n%s\n' "$OUT"
