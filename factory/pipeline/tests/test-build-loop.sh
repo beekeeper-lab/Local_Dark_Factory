@@ -595,5 +595,48 @@ check "the first task runs"   "PASS   task-1" "$out"
 check "and so does the second" "PASS   task-2" "$out"
 check "both are counted"      "2 task(s) verified" "$out"
 
+printf '\n== a task the remote gates sent back is rebuilt, once ==\n\n'
+#
+# ci.sh writes `reopened-tasks.txt` when a required check fails: the tasks whose
+# write paths the failing log names. The build loop treats those as unverified
+# again, and the earlier `verified` line stays in tasks.jsonl — it happened, and
+# what changed is that something else found a problem this machine did not.
+#
+# The half that is easy to get wrong is the other one: left in place after a
+# successful rebuild, the list would make every later resume rebuild the same
+# tasks and the run could never finish.
+reset_run
+rm -f "$WORK/actions"/*
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+act task-2.1 <<'SH'
+mkdir -p src && printf 'second\n' > src/b.py
+SH
+run_loop > "$WORK/o-first" 2>&1 || true
+first="$(cat "$WORK/o-first")"
+check "the first build verifies both"  "2 task(s) verified" "$first"
+
+# CI sends task-1 back. Its action is needed again; task-2's must not be.
+act task-1.2 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+printf 'task-1\n' > "$RUN_DIR/reopened-tasks.txt"
+run_loop > "$WORK/o-reopen" 2>&1 || true
+reopened="$(cat "$WORK/o-reopen")"
+check "the named task is built again"  "TASK   task-1" "$reopened"
+check "and the other one is skipped"   "SKIP   task-2     already verified" "$reopened"
+check "which the loop says out loud"   "REBUILT the tasks the remote gates sent back" "$reopened"
+want  "the list is consumed"           "reopened-tasks.txt must not survive a complete rebuild" \
+      test ! -f "$RUN_DIR/reopened-tasks.txt"
+want  "but kept as evidence"           "the list should be filed under ci/" \
+      bash -c 'ls "$0"/ci/reopened-tasks.*.txt >/dev/null 2>&1' "$RUN_DIR"
+
+run_loop > "$WORK/o-third" 2>&1 || true
+third="$(cat "$WORK/o-third")"
+nope  "a later run rebuilds nothing"   "task-1 must not be attempted a third time" \
+      grep -qF "ATTEMPT 1/3  task-1" <<<"$third"
+check "everything is already done"     "already done" "$third"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

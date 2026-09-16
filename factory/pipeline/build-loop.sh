@@ -752,5 +752,18 @@ if [ -n "$BLOCKED_TASK" ]; then
   exit "$BLOCKED_RC"
 fi
 
+# The re-open list is consumed, not kept.
+#
+# `reopened-tasks.txt` makes the tasks CI sent back count as unverified. Left in
+# place after a successful rebuild it would keep doing that forever: every later
+# resume would rebuild the same tasks, and a run could never finish. Removed only
+# on a complete loop — an interrupted one has not rebuilt them yet, and losing the
+# list would silently turn a targeted rebuild into no rebuild at all.
+if [ -f "$RUN_DIR/reopened-tasks.txt" ]; then
+  mkdir -p "$RUN_DIR/ci"
+  mv "$RUN_DIR/reopened-tasks.txt" "$RUN_DIR/ci/reopened-tasks.$(date -u +%Y%m%dT%H%M%SZ).txt"
+  printf '\nREBUILT the tasks the remote gates sent back; the list is in %s/ci/\n' "$(basename "$RUN_DIR")"
+fi
+
 printf '\nBUILD COMPLETE  %s task(s) verified, %s already done\n' "$VERIFIED_COUNT" "$SKIPPED_COUNT"
 exit 0
