@@ -451,11 +451,39 @@ SCHEMA="$(jq --arg d "$MET_MEANS" \
 #
 # Only when the bean has criteria. A bean with none would otherwise produce an
 # empty enum, which is a grammar that permits no string at all.
+# An OBJECT keyed by criterion id, not an array with an enum on the id.
+#
+# The enum plus minItems was already a large win — criterion compliance went from
+# roughly none to every answer carrying the right count. It left one hole, and the
+# model found it: `criteria` came back as
+#
+#   ac1, ac1, ac1, ac2
+#   ac1, ac1, ac2, ac3
+#
+# Four items, each drawn from the list, exactly as asked. Nothing said distinct.
+# JSON Schema's `uniqueItems` cannot say it either: two entries with the same id
+# and different evidence are unique objects.
+#
+# Keyed by id, `required` naming all four and `additionalProperties: false`, a
+# missing criterion and a duplicated one are both unemittable rather than refused
+# afterwards. Same move as the enum, one layer down.
+#
+# The wire shape is converted back to the array everything downstream expects
+# before the judgement is written, so audit-check, verdict.schema.json and the
+# pull request body see no change at all.
+CRITERIA_AS_OBJECT=0
 if [ -n "$CRIT_IDS_JSON" ] && [ "$(jq 'length' <<<"$CRIT_IDS_JSON")" -gt 0 ]; then
+  CRITERIA_AS_OBJECT=1
   SCHEMA="$(jq --argjson ids "$CRIT_IDS_JSON" \
-    '.properties.criteria.items.properties.id.enum = $ids
-     | .properties.criteria.minItems = ($ids | length)' <<<"$SCHEMA")" \
-    || die "could not put the bean's criterion ids into the judgement schema"
+    '(.properties.criteria.items.properties | del(.id)) as $item
+     | .properties.criteria = {
+         type: "object",
+         required: $ids,
+         additionalProperties: false,
+         description: "one entry per acceptance criterion, keyed by its id. Every one of them, each exactly once.",
+         properties: ($ids | map({key: ., value: {type:"object", required:["met","evidence","quote"], properties:$item}}) | from_entries)
+       }' <<<"$SCHEMA")" \
+    || die "could not key the judgement schema by the bean's criterion ids"
 fi
 
 STAGE="$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)"
@@ -687,6 +715,24 @@ fi
 # wrong answer that arrived on the second try. The shape is checked; a judgement
 # that is not the contract is refused, and what the model sent is kept beside it
 # so the cause can be found rather than papered over.
+# The wire shape back to the shape everything downstream expects.
+#
+# When the bean has criteria the grammar asks for an object keyed by id, because
+# that is the only shape in which "all four, each exactly once" is expressible.
+# Nothing downstream should know that: audit-check, verdict.schema.json and the
+# pull request body all take `criteria` as an array of objects carrying an `id`.
+# Converted here, once, at the boundary.
+#
+# Order comes from the bean rather than from the object, so two runs of the same
+# audit produce criteria in the same order and a diff between two judgements is
+# about their content.
+if [ "${CRITERIA_AS_OBJECT:-0}" = 1 ] \
+   && jq -e '.criteria | type == "object"' >/dev/null 2>&1 <<<"$CONTENT"; then
+  CONTENT="$(jq -c --argjson ids "$CRIT_IDS_JSON" \
+    '.criteria = [ $ids[] as $i | select(.criteria[$i] != null) | ({id:$i} + .criteria[$i]) ]' \
+    <<<"$CONTENT")" || { printf 'JUDGE  %s: could not convert the keyed criteria back to a list\n' "$TARGET" >&2; exit 1; }
+fi
+
 MISSING=""
 for field in verdict criteria findings confidence; do
   jq -e --arg f "$field" 'has($f)' >/dev/null 2>&1 <<<"$CONTENT" || MISSING="$MISSING $field"

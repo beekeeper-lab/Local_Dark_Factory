@@ -407,10 +407,24 @@ reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
   '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
 ( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
   bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
-ids="$(jq -c '.format.properties.criteria.items.properties.id.enum' "$WORK/last-request.json")"
-eq "the ids are an enum in the schema" '["ac1","ac2","ac3"]' "$ids"
-eq "and a partial list is unemittable" "3" \
-   "$(jq -r '.format.properties.criteria.minItems' "$WORK/last-request.json")"
+# An OBJECT keyed by id, not an array with an enum on it. The enum plus minItems
+# was already a large win and left one hole, which the model found: `criteria`
+# came back as ac1, ac1, ac1, ac2 — four items, each from the list, exactly as
+# asked, and nothing said distinct. JSON Schema's `uniqueItems` cannot say it
+# either, because two entries with the same id and different evidence are unique
+# objects.
+eq "criteria is keyed by criterion id"  "object" \
+   "$(jq -r '.format.properties.criteria.type' "$WORK/last-request.json")"
+eq "all of them are required"           '["ac1","ac2","ac3"]' \
+   "$(jq -c '.format.properties.criteria.required' "$WORK/last-request.json")"
+eq "and nothing else is allowed"        "false" \
+   "$(jq -r '.format.properties.criteria.additionalProperties' "$WORK/last-request.json")"
+eq "each carries the same fields"       '["evidence","met","quote"]' \
+   "$(jq -c '.format.properties.criteria.properties.ac1.required | sort' "$WORK/last-request.json")"
+# id is not a field inside the entry any more: the key IS the id, and two places
+# to write it is one place that can disagree.
+eq "and not a redundant id field"       "null" \
+   "$(jq -r '.format.properties.criteria.properties.ac1.properties.id // "null"' "$WORK/last-request.json")"
 # The list in the prose and the list in the grammar come from one source, so they
 # cannot drift apart — which is how the prose came to be right and ignored.
 check "the prose still lists them too" "ac1: one" \
@@ -423,10 +437,27 @@ printf '\n-- a bean with no criteria gets no enum, not an empty one --\n\n'
 clean_verdicts
 ( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
   bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean.yaml" ) >/dev/null 2>&1
-eq "no enum for a bean with none"      "null" \
-   "$(jq -r '.format.properties.criteria.items.properties.id.enum // "null"' "$WORK/last-request.json")"
-eq "and no minItems"                   "null" \
-   "$(jq -r '.format.properties.criteria.minItems // "null"' "$WORK/last-request.json")"
+eq "criteria stays an array"           "array" \
+   "$(jq -r '.format.properties.criteria.type' "$WORK/last-request.json")"
+eq "with no required key list"         "null" \
+   "$(jq -r '.format.properties.criteria.required // "null"' "$WORK/last-request.json")"
+
+printf '\n-- and the keyed answer becomes the list everything downstream expects --\n\n'
+#
+# audit-check, verdict.schema.json and the pull request body all take `criteria`
+# as an array of objects carrying an `id`. None of them should know about the wire
+# shape; it is converted at the boundary, in the bean's order so that two runs of
+# the same audit are diffable.
+clean_verdicts
+reply "$(jq -nc --arg c '{"verdict":"accept","confidence":0.9,"findings":[],"criteria":{"ac3":{"met":true,"evidence":"e3","quote":"the third quote here"},"ac1":{"met":false,"evidence":"e1","quote":"the first quote here"},"ac2":{"met":true,"evidence":"e2","quote":"the second quote here"}}}' \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
+J="$R/verdicts/spec.attempt-1.judgement.json"
+eq "criteria is written as a list"     "array" "$(jq -r '.criteria | type' "$J" 2>/dev/null)"
+eq "in the bean's order"               '["ac1","ac2","ac3"]' "$(jq -c '[.criteria[].id]' "$J" 2>/dev/null)"
+eq "carrying each entry's fields"      "e1" "$(jq -r '.criteria[0].evidence' "$J" 2>/dev/null)"
+eq "and its met value"                 "false" "$(jq -r '.criteria[0].met' "$J" 2>/dev/null)"
 
 printf '\n== the token cap has one default, in three files ==\n\n'
 #
