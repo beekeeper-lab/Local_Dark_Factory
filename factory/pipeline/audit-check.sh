@@ -411,6 +411,38 @@ MODEL_DIGEST="$(ollama list 2>/dev/null | awk -v m="$ROLE_MODEL" '$1 == m {print
 SKILL_MD="$PIPELINE_DIR/../skills/factory-audit/SKILL.md"
 PROMPT_VERSION="$([ -f "$SKILL_MD" ] && printf 'factory-audit@%s' "$(sha256sum "$SKILL_MD" | cut -c1-12)" || echo "factory-audit@unknown")"
 
+# test_integrity comes from the controller's measurement, not the judge's memory.
+#
+# verdict.schema.json REQUIRES test_integrity on an impl audit. judge.sh's response
+# schema does not contain the field at all — so the judge is never asked for it, and
+# an impl verdict could never validate. On 2026-09-16 an impl audit got all the way
+# through every other check, four criteria and two verified quotes, and died on
+# "'test_integrity' is a required property". A contract that cannot be satisfied.
+#
+# The fix is not to ask the judge. test-integrity.sh already ran the tests against
+# the reverted source and counted the deleted tests and new skips from the diff, and
+# the judge was handed the result as an artifact. The verdict is the controller's
+# document and this is the controller's measurement, so it goes in from there. If
+# the judge volunteered numbers of its own, the check further up has already refused
+# the judgement for contradicting them.
+#
+# weakened_asserts: the controller counts assertions removed against assertions
+# added and declines to call that a boolean, so the boolean the schema wants is
+# derived here, and derived to the only shape the counts can support — more removed
+# than added. coverage_delta says "not measured", because it is not.
+TI_MEASURED=null
+if [ -f "$RUN_DIR/test-integrity.json" ]; then
+  TI_MEASURED="$(jq -c '
+    (.test_integrity // {}) as $t
+    | if ($t | has("deleted_tests")) then
+        {deleted_tests: $t.deleted_tests,
+         new_skips: $t.new_skips,
+         weakened_asserts: ((($t.removed_asserts // 0)) > (($t.added_asserts // 0))),
+         coverage_delta: "not measured"}
+      else null end' "$RUN_DIR/test-integrity.json" 2>/dev/null || echo null)"
+  [ -n "$TI_MEASURED" ] || TI_MEASURED=null
+fi
+
 OUT="$VERDICTS/$TARGET.attempt-$N.json"
 jq -n \
   --arg sv "verdict/2.0.0" --arg stage "$STAGE" --arg bean "$BEAN_ID" \
@@ -419,6 +451,7 @@ jq -n \
   --arg policy "$POLICY_VERSION" --argjson tier "${TIER:-1}" \
   --arg model "$MODEL_DIGEST" --arg prompt "$PROMPT_VERSION" \
   --arg verdict "$VERDICT" --argjson j "$J" --argjson artifacts "$ARTIFACTS" \
+  --argjson ti "$TI_MEASURED" \
   '{schema_version: $sv, stage: $stage, bean_id: $bean,
     base_sha: $base, candidate_sha: $cand, diff_sha256: $diff,
     gate_run_id: $gate_run, gate_manifest_digest: $gate_digest,
@@ -429,7 +462,8 @@ jq -n \
     verdict: $verdict, artifacts: $artifacts}
    + (if $j.feedback_to_worker then {feedback_to_worker: $j.feedback_to_worker} else {} end)
    + (if $j.document_quality then {document_quality: $j.document_quality} else {} end)
-   + (if $j.test_integrity then {test_integrity: $j.test_integrity} else {} end)
+   + (if $ti != null then {test_integrity: $ti}
+       elif $j.test_integrity then {test_integrity: $j.test_integrity} else {} end)
    + (if $j.security_findings then {security_findings: $j.security_findings} else {} end)
    + (if $j.confidence then {confidence: $j.confidence} else {} end)
    + (if $j.suggested_tier then {suggested_tier: $j.suggested_tier} else {} end)

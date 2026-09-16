@@ -69,6 +69,10 @@ printf 'schema_version: tasks/1.0.0\n' > factory/runs/R/tasks.yaml
 
 V=factory/runs/R/verdicts
 judgement() { cat > "$V/spec.attempt-${2:-1}.judgement.json" <<<"$1"; }
+eq() {
+  if [ "$2" = "$3" ]; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
+  else printf '  FAIL  %s — expected "%s", got "%s"\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
 nope() {
   if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
   else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
@@ -407,6 +411,41 @@ judgement "$two"
 out="$(run_check)"; rc=$?
 want  "no test_integrity is fine here" "expected 0, got $rc: $out" test "$rc" -eq 0
 nope  "and nothing is claimed about it" "the counts it restates" "$out"
+rm -f factory/runs/R/test-integrity.json
+
+printf '\n== the verdict carries the controller\x27s test_integrity, not the judge\x27s ==\n\n'
+#
+# verdict.schema.json REQUIRES test_integrity on an impl audit. judge.sh's
+# response schema does not contain the field at all, so the judge is never asked
+# for it and an impl verdict could never validate — a contract that cannot be
+# satisfied. On 2026-09-16 a real impl audit got through every other check, four
+# criteria and two verified quotes, and died on "'test_integrity' is a required
+# property".
+#
+# It is not asked for. test-integrity.sh measured it and the verdict is the
+# controller's document.
+printf '{"test_integrity":{"deleted_tests":1,"new_skips":2,"removed_asserts":5,"added_asserts":1}}\n' \
+  > factory/runs/R/test-integrity.json
+rm -f "$V/spec.attempt-1.json"
+judgement "$two"
+run_check >/dev/null 2>&1
+ti="$(jq -c '.test_integrity' "$V/spec.attempt-1.json" 2>/dev/null)"
+eq "the counts are the controller's"   "1" "$(jq -r '.deleted_tests' <<<"$ti")"
+eq "both of them"                      "2" "$(jq -r '.new_skips' <<<"$ti")"
+# The controller counts assertions removed against added and will not call that a
+# boolean; the boolean the schema wants is derived to the only shape the counts
+# support.
+eq "weakened_asserts is derived"       "true" "$(jq -r '.weakened_asserts' <<<"$ti")"
+eq "and coverage_delta says it is not measured" "not measured" "$(jq -r '.coverage_delta' <<<"$ti")"
+
+printf '\n-- more added than removed is not a weakened assertion --\n\n'
+printf '{"test_integrity":{"deleted_tests":0,"new_skips":0,"removed_asserts":1,"added_asserts":9}}\n' \
+  > factory/runs/R/test-integrity.json
+rm -f "$V/spec.attempt-1.json"
+judgement "$two"
+run_check >/dev/null 2>&1
+eq "weakened_asserts is false"         "false" \
+   "$(jq -r '.test_integrity.weakened_asserts' "$V/spec.attempt-1.json" 2>/dev/null)"
 rm -f factory/runs/R/test-integrity.json
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

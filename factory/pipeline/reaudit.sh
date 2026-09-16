@@ -29,9 +29,14 @@ reaudit.sh — re-run a finished run's audits against a copy of it.
 
 usage: reaudit.sh <run-dir> --bean <bean.yaml>
                   [--target spec|impl|doc|package|all] [--passes <n>]
-                  [--keep <dir>] [--json <path>]
+                  [--thinking <level>] [--keep <dir>] [--json <path>]
 
   --target   which audit (default: all four)
+  --thinking override the level in roles.json for this experiment. The thinking
+             level is the difference between a judge that answers and one that
+             spends its budget reasoning, and it has already been changed once on
+             measured grounds — so an experiment that does not say which level it
+             ran at cannot be compared with another.
   --passes   how many times each (default: 3 — one pass cannot tell a change
              from this judge's spread)
   --keep     where to put the copies and logs (default: a temp dir, kept, and
@@ -44,12 +49,13 @@ can audit this run", which has never yet been true.
 EOF
 }
 
-RUN_DIR=""; BEAN=""; TARGETS="spec impl doc package"; PASSES=3; KEEP=""; JSON=""
+RUN_DIR=""; BEAN=""; TARGETS="spec impl doc package"; PASSES=3; KEEP=""; JSON=""; THINKING=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)   BEAN="${2:?--bean needs a file}"; shift 2 ;;
     --target) TARGETS="${2:?--target needs a name}"; [ "$TARGETS" = all ] && TARGETS="spec impl doc package"; shift 2 ;;
     --passes) PASSES="${2:?--passes needs a number}"; shift 2 ;;
+    --thinking) THINKING="${2:?--thinking needs a level}"; shift 2 ;;
     --keep)   KEEP="${2:?--keep needs a directory}"; shift 2 ;;
     --json)   JSON="${2:?--json needs a path}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -77,7 +83,9 @@ if pgrep -f 'judge-fitness.sh|judge-variance.sh|size-sweep.sh|format-support.sh'
   printf 'NOTE  a bench harness is running. Both will be slower and neither number will be clean.\n\n' >&2
 fi
 
-printf 'reaudit: %s\n  bean:  %s\n  keep:  %s\n\n' "$RUN_DIR" "$BEAN" "$KEEP"
+printf 'reaudit: %s\n  bean:  %s\n  keep:  %s\n' "$RUN_DIR" "$BEAN" "$KEEP"
+printf '  judge: %s thinking\n\n' \
+  "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPELINE_DIR/roles.json}" 2>/dev/null)}"
 printf '%-9s %-5s %-9s %-10s %-9s %s\n' TARGET PASS JUDGE-RC VERDICT STAMPED NOTE
 
 ROWS='[]'
@@ -90,7 +98,7 @@ for pass in $(seq 1 "$PASSES"); do
     # one's — the same defect run-step.sh had, arriving by a different door.
     rm -rf "$R/verdicts"; mkdir -p "$R/verdicts"
     jrc=0
-    "$PIPELINE_DIR/judge.sh" "$R" --target "$t" --bean "$BEAN" \
+    "$PIPELINE_DIR/judge.sh" "$R" --target "$t" --bean "$BEAN" ${THINKING:+--thinking "$THINKING"} \
       > "$KEEP/judge-$pass-$t.log" 2>&1 || jrc=$?
     J="$R/verdicts/$t.attempt-1.judgement.json"
     v="-"; note=""; crit=0; find_n=0
@@ -133,7 +141,8 @@ if [ -n "$JSON" ]; then
   jq -n --argjson r "$ROWS" --arg run "$RUN_DIR" --arg bean "$BEAN" \
     --argjson stamped "$STAMPED_N" --argjson total "$TOTAL" --argjson passes "$PASSES" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{schema:"reaudit/1.0.0", measured_at:$ts, run:$run, bean:$bean, passes:$passes,
+    --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPELINE_DIR/roles.json}" 2>/dev/null)}" \
+    '{schema:"reaudit/1.1.0", measured_at:$ts, run:$run, bean:$bean, passes:$passes, thinking:$thinking,
       stamped:$stamped, total:$total, rows:$r,
       note:"Nothing was written to the run directory. Each row is a fresh copy of it with an empty verdicts/."}' \
     > "$JSON"

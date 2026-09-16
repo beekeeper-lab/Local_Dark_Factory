@@ -110,6 +110,17 @@ eq "the run is named"                   "$RUN" "$(jq -r '.run' "$WORK/r.json")"
 eq "and the stamped count"              "2" "$(jq -r '.stamped' "$WORK/r.json")"
 check "the criterion ids are recorded"  "ac1" "$(jq -c '.rows[0].criteria_ids' "$WORK/r.json")"
 
+printf '\n== it records the thinking level, because that is the variable ==\n\n'
+#
+# The thinking level is the difference between a judge that answers and one that
+# spends its budget reasoning, and it has already been changed once on measured
+# grounds. An experiment that does not say which level it ran at cannot be
+# compared with another.
+out="$(re --passes 1 --target spec --keep "$WORK/k5" --thinking medium)"
+check "the header says the level"      "judge: medium thinking" "$out"
+re --passes 1 --target spec --keep "$WORK/k6" --thinking high --json "$WORK/t.json" >/dev/null
+eq "and the JSON records it"           "high" "$(jq -r '.thinking' "$WORK/t.json")"
+
 printf '\n== it refuses what it cannot audit ==\n\n'
 out="$(bash "$PIPE/reaudit.sh" "$WORK/nope" --bean "$WORK/bean.yaml" 2>&1)"; rc=$?
 check "a missing run directory"         "no such run directory" "$out"

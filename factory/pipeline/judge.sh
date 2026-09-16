@@ -367,6 +367,20 @@ $(cat "$FEEDBACK")"
 fi
 
 # ---------------------------------------------------------------- the shape --
+# maxLength on every free-text field, and it is not tidiness.
+#
+# 2026-09-16, impl audits of a real run: the JSON-level shape was correct — the
+# right keys, criterion ids straight out of the enum — and `evidence` contained a
+# unified diff and a complete Python module with docstrings. Another pass put the
+# model's own reasoning in there ("Hence, we must reject.") followed by a nested
+# ```json block containing a different judgement. It fills the field with
+# everything it would otherwise have said, runs long, and the string never closes:
+# "unfinished string at EOF", at 40% of the context window and a third of the
+# token cap.
+#
+# So the field says how long it is allowed to be. Whether llama.cpp's grammar
+# conversion honours maxLength is not something to assume — it is measured by
+# running the audits again, which is what bench and `factory reaudit` are for.
 # Constrained decoding, so the answer is a judgement rather than an essay about
 # one. Harmony conformance (bench/harmony-conformance.sh) proved this model holds
 # a schema while thinking is on; that test exists because if it did not, every
@@ -381,14 +395,17 @@ SCHEMA='{
       "properties": {
         "id": { "type": "string" },
         "met": { "type": "boolean", "description": "set per target; see MET_MEANS below" },
-        "evidence": { "type": "string" },
-        "quote": { "type": "string", "description": "text copied verbatim from an artifact above" } } } },
+        "evidence": { "type": "string", "maxLength": 600,
+                      "description": "one or two sentences saying why. Not the work, not your reasoning, not a code block." },
+        "quote": { "type": "string", "maxLength": 300,
+                   "description": "text copied verbatim from an artifact above" } } } },
     "findings": { "type": "array", "items": {
       "type": "object", "required": ["severity", "summary", "evidence"],
       "properties": {
         "severity": { "type": "string", "enum": ["blocker", "major", "minor"] },
-        "summary": { "type": "string" }, "evidence": { "type": "string" },
-        "quote": { "type": "string" }, "where": { "type": "string" } } } },
+        "summary": { "type": "string", "maxLength": 200 },
+        "evidence": { "type": "string", "maxLength": 600 },
+        "quote": { "type": "string", "maxLength": 300 }, "where": { "type": "string", "maxLength": 200 } } } },
     "feedback_to_worker": { "type": "string" },
     "suggested_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
     "suggested_human_review": { "type": "boolean" },
@@ -500,6 +517,19 @@ BODY="$(jq -n --arg m "$MODEL" --argjson msgs "$MESSAGES" --arg t "$THINKING" \
     think:(if ($t | ascii_downcase) as $l | $l == "false" or $l == "off" or $l == "none"
            then false else $t end),
     format:$f,
+    # An explicit empty tool list, because the API should say what the prompt says.
+    #
+    # The system prompt has told this model it has no tools, in those words, for
+    # days. It calls `repo_browser.open_file` anyway — 9 times out of 9 on the
+    # impl audit of a real run, at two thinking levels — and then stops, having
+    # generated 45 to 84 tokens out of a 16,000 cap in a window it filled 35% of.
+    # A tool call is the one route around `format`: the grammar constrains
+    # message.content and a tool call is not content.
+    #
+    # The field was simply absent. Absent is not the same as empty, and this
+    # project has just measured what the difference between a rule and a
+    # suggestion is worth on this model.
+    tools: [],
     options:{num_ctx:$c, temperature:0, num_predict:$np, repeat_penalty:$rp},
     messages:$msgs}')"
 
