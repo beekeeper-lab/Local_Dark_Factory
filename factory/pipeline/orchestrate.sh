@@ -886,7 +886,14 @@ handle_audit_failure() { # audit FAIL: route back to the authoring step with fin
   printf '\nRETRY  %s FAIL (attempt %s) → re-entering `%s` with findings, then re-auditing\n' \
     "$step" "$n" "$authoring"
   rc=0
-  run_step "$authoring" -- "$vf" || rc=$?
+  # The findings, not the verdict file. After audit-check the verdict carries
+  # base_sha, model_digest, policy_version and the artifact hashes — provenance
+  # the worker cannot act on and should not be reasoning about. audit-findings.sh
+  # renders the part it can use.
+  local wf
+  wf="$("$PIPELINE_DIR/audit-findings.sh" "$vf" "$target" "$RUN_DIR/audit-findings-$target.md")" \
+    || { printf 'HALT  %s: could not render findings from %s\n' "$step" "$vf" >&2; halt "$step"; }
+  run_step "$authoring" -- "$wf" || rc=$?
   if [ "$rc" -ne 0 ]; then
     record_failure "$authoring" "$rc" "re-entered authoring step exited non-zero"
     halt "$authoring" "$rc"

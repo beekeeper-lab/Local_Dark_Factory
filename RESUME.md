@@ -653,9 +653,16 @@ in flight, and the first one restarts ollama:
   as events on stdout, `run-step.sh` reads them there and the session-directory search
   (`pi_sessions_dir()`, ~100 lines) goes; a pi update that changes the session format
   stops being a silent risk.
-- `handle_audit_failure` hands the re-entered authoring step the whole verdict file,
-  which after `audit-check.sh` names the judge's `model_digest`. The worker needs the
-  findings, not the provenance block.
+- ~~`handle_audit_failure` hands the re-entered authoring step the whole verdict
+  file~~ — **done 2026-09-16.** `audit-findings.sh` renders the part a worker can
+  act on: the verdict word, the findings, the feedback, and the criteria the audit
+  says are not met. Not base_sha, candidate_sha, diff_sha256, model_digest,
+  gate_manifest_digest, invariants_digest, policy_version, prompt_version or the
+  artifact hashes — a worker that can see the judge's model digest can start
+  theorising about the judge instead of fixing the artifact, and most of its
+  25 assertions check what is absent. A verdict with no findings says so out loud
+  rather than rendering a blank section, which in a prompt reads as "nothing was
+  wrong".
 - One benchmark arm with `--append-system-prompt` for the developer — four lines: scope
   only what was asked; four tools exist and no others; the controller decides done, do
   not claim it; if blocked, write `QUESTIONS.md` and stop. `judge.sh` found the system
