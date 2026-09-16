@@ -974,9 +974,29 @@ What it costs: five requests per audit instead of one. At 21–56 seconds each t
 is roughly what a single audit costs today, because the long ones are long
 precisely because the model is trying to do everything at once.
 
-How to find out, without touching the live path: a bench harness that asks
-per-criterion and scores with `judge-fitness`'s existing classifier. The false
-accept rate is the number it has to beat, and that number is 7 to 9 in 15.
+**Built, 2026-09-16**: `bench/judge-per-criterion.sh`, 20 assertions. It calls
+`judge.sh` once per criterion with a bean carrying only that criterion — so the
+artifacts, the preamble, the grammar and every refusal are the ones the line
+actually uses — and composes the judgement itself:
+
+```
+verdict      accept iff every criterion is met. NOT the model's word: the stub in
+             the suite returns "accept" on every sub-request and the composition
+             disagrees with it.
+findings     one per criterion the judge says is not met, carrying its evidence
+confidence   the LOWEST of the parts, because a mean lets four confident answers
+             bury one the judge was unsure about
+```
+
+A criterion that produced no usable answer counts as **not met**, with a blocker
+finding saying so: silence is not agreement.
+
+It takes judge.sh's command line exactly, so `JUDGE_CMD=bench/judge-per-criterion.sh
+bench/judge-fitness.sh …` scores it with the same classifier and the artifact
+records which was asked. The number to beat is **7 to 9 false accepts in 15**.
+
+The live path is untouched. `roles.json` still says gpt-oss:120b at `low`, and
+`judge.sh` is still what `orchestrate.sh` calls.
 
 **The cheaper question was asked first, and it is answered.** Is any other model on
 this box better on the same corpus?
