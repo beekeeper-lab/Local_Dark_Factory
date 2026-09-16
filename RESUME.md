@@ -689,9 +689,11 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   `repo_browser.open_file` calls that stopped when the empty tool list was
   declared. The sweep may now measure something different, or nothing at all.
 
-- **Re-run `bench/judge-fitness.sh --repeat 3`.** Every fitness figure predates the
-  enum, the empty tool list and the field length caps. It is ~75 minutes and it is
-  the case-level measurement the advisory-audits decision actually rests on.
+- **Re-run `bench/judge-fitness.sh --repeat 3`.** Now doubly needed. Every fitness
+  figure predates the enum, the empty tool list, the field length caps, the keyed
+  criteria and the confidence enum — *and* two of its six fixtures were not seeding
+  the defects they claimed. It is ~75 minutes and it is the case-level measurement
+  the advisory-audits decision actually rests on.
 
 - ~~**`confidence` as an enum**~~ — **done 2026-09-16.** The keyword finding stands
   and is the transferable part: the schema carried `{"minimum":0,"maximum":1}` for
@@ -756,6 +758,25 @@ decidable, 0 false alarms** (`controller-fitness-20260916T171328Z.json`).
 **And what it invalidates**: every `judge-fitness` figure involving this case
 scored the judge against a fixture that was not the defect. That is one of six
 cases in every run since the rewrite.
+
+**A second one was wrong too**, found by applying every other mutation and reading
+what came out. `contradicts-non-goal` spliced a block list item after
+`write_paths:`, which in this task list is followed by an inline flow list on the
+same line:
+
+```yaml
+write_paths:
+  - src/seating_planner/solver/** [pyproject.toml, .gitignore]
+```
+
+One nonsense string, with the two real paths swallowed into it. Parsed and
+rewritten with yaml now.
+
+**Every mutation asserts its own post-condition**, and one assertion holds for all
+of them: a non-control mutation that changed nothing is an error. Driven against a
+renamed heading to prove they bite. This one fixture has been silently wrong three
+times in three different ways and the assertions are the only thing that makes a
+fourth different from the first three.
 
 ## Queued for an idle pipeline
 
