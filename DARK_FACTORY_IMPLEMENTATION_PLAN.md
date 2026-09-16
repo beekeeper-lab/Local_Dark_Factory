@@ -428,6 +428,23 @@ re-runnable audit, and a bean set approved to run against.
 > question at temperature 0 gave two verdicts and findings counts of 9, 1, 1 and
 > 4. Work has moved out of it rather than into prompting it — see
 > `bench/controller-fitness.sh` for what the deterministic checks now settle.
+>
+> **2026-09-16: measured against a real run, and "advisory for now" is doing more
+> work than it looks.** bean-001's four audits, re-run three times each against
+> copies of its own run directory at the best configuration this project knows
+> (cap 16000, thinking low, `met` defined per target): **twelve attempts, zero
+> verdicts the controller will stamp.** Six wrote no judgement at all; four
+> reported on criteria that are not in the bean (`task-1`, `artifact-3`,
+> `importable-modules`); two returned `revise` with no findings.
+> `evidence/reaudit-bean-001-3pass-20260916.log`.
+>
+> The criteria half proved fixable by moving the rule out of the prose and into
+> the grammar — an `enum` of the bean's ids on `criteria[].id`, so the wrong ones
+> are unemittable rather than discouraged — and the first run after that change
+> produced `["ac1","ac2","ac3","ac4"]` for the first time. Whether the rest
+> follows is being measured. Until it does, `merge_mode: human_required` is
+> carrying the weight the audits were meant to, and that is worth saying plainly
+> rather than leaving inside the word "advisory".
 
 **Exit:**
 ```yaml
