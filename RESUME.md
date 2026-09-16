@@ -418,6 +418,15 @@ cannot. The collision check stays as the defence until then.
 
 ## Queued for an idle pipeline
 
+- **`run-step.sh`'s `audit-*` branch is dead and should go.** orchestrate handles
+  audits itself (judge.sh → audit-check.sh) and never falls through to run-step for
+  one, so the branch is a second way to run an audit — and it is the way judge.sh's
+  header records as measured not to work: as a pi session this model reaches for a
+  `repo_browser` namespace that does not exist and answers anyway. It survives only
+  because `tests/test-role-routing.sh` drives run-step directly to assert that an
+  audit step does not claim to be uncontained. Remove both together, the same call
+  that removed `checks.sh` and `factory-implement`.
+
 The judge setting its own `options.num_ctx` changes what `OLLAMA_CONTEXT_LENGTH` has to
 do: it no longer has to express two roles, only the developer's. These wait for no run
 in flight, and the first one restarts ollama:

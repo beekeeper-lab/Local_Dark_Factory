@@ -91,6 +91,21 @@ case "$STEP" in
   build-task) SKILL="factory-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
   doc)       SKILL="factory-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
   pr)        SKILL="factory-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
+  # NOTE, 2026-09-16: nothing in the live line reaches this branch.
+  #
+  # orchestrate.sh handles `audit-*` itself — judge.sh, then audit-check.sh — and
+  # never falls through to run-step for an audit. judge.sh's header explains why,
+  # and it is a measured reason rather than a preference: as a pi session this
+  # model reaches for a `repo_browser` tool namespace that does not exist, gets
+  # nothing, and answers anyway, producing a fluent audit of a document it never
+  # read.
+  #
+  # So this is a second way to run an audit, and it is the way that was measured
+  # not to work. It is left in place only because `tests/test-role-routing.sh`
+  # drives run-step directly to assert that an audit step does not claim to be
+  # uncontained, and unpicking that is a bigger change than it looks. Removing
+  # both together is the right end state — the same call that removed checks.sh
+  # and factory-implement.
   audit-*)   SKILL="factory-audit"; TARGET="${STEP#audit-}"
              case "$TARGET" in
                spec|impl|doc|package) ;;
