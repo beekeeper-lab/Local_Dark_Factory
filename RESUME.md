@@ -662,6 +662,26 @@ left to read afterwards. A successful measurement can no longer be reported as a
 failed launcher. If this recurs, the thing to catch is what is writing to
 `bench/snapshot.sh` — `inotifywait -m bench/snapshot.sh` during a long run.
 
+- **`minLength` on `quote`, for the same reason as everything else in that list.**
+  The quote check counts a quote only at 12 characters or more — anything shorter
+  proves nothing and matches everything — and refuses a judgement where none
+  qualifies. The first pass of the measurement that produced the first stamped
+  verdict was refused for exactly that: quotes of 10, 14, 23 and 24 characters,
+  and the ten-character one was not the problem, the *absence of a long one* was.
+  A `minLength` of about 20 makes a too-short quote unemittable rather than
+  refused afterwards. Measure it the same way — `factory reaudit --passes 3`.
+
+- **Re-run `bench/size-sweep.sh` now that `tools: []` is declared.** Its standing
+  finding is that at exactly 10,000 bytes of padding the judge produces no
+  judgement, reproducibly, answering `{"path": "", "depth": 3}`. That is a
+  file-browsing tool call leaking into content, and the same shape as the
+  `repo_browser.open_file` calls that stopped when the empty tool list was
+  declared. The sweep may now measure something different, or nothing at all.
+
+- **Re-run `bench/judge-fitness.sh --repeat 3`.** Every fitness figure predates the
+  enum, the empty tool list and the field length caps. It is ~75 minutes and it is
+  the case-level measurement the advisory-audits decision actually rests on.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**
