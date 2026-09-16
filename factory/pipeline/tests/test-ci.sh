@@ -126,6 +126,8 @@ out="$(ci)"; rc=$?
 rc_is "it refuses rather than assuming" "$rc" 3
 check "it says how long it waited"      "PENDING after 3s" "$out"
 want  "and asks a human"                "QUESTIONS.md should exist" test -s "$R/QUESTIONS.md"
+want  "the run record says it ran"      "ci.json should say unfinished" \
+      test "$(jq -r '.status' "$R/ci.json" 2>/dev/null)" = unfinished
 check "naming the likely cause"         ".github/workflows" "$(cat "$R/QUESTIONS.md")"
 nope  "it never calls that green"       "CI PASS" "$out"
 
@@ -222,6 +224,8 @@ out="$(ci)"; rc=$?
 rc_is "it refuses at once"             "$rc" 3
 check "saying what is impossible"      "CI IMPOSSIBLE" "$out"
 check "and that it did not wait"       "Not waiting" "$out"
+want  "and the run record says so"     "ci.json should say impossible" \
+      test "$(jq -r '.status' "$R/ci.json" 2>/dev/null)" = impossible
 check "the question names both fixes"  "or remove" "$(cat "$R/QUESTIONS.md")"
 check "including how to install one"   "factory/scaffold.sh" "$(cat "$R/QUESTIONS.md")"
 nope  "and it is never green"          "CI PASS" "$out"
@@ -238,7 +242,14 @@ rc_is "it does not fail the run"       "$rc" 0
 check "but it does not claim green"    "CI NOT ASKED" "$out"
 check "and says what that means"       "a green here would" "$out"
 nope  "no CI PASS"                     "CI PASS" "$out"
-want  "and no ci.json is invented"     "ci.json must not exist" test ! -f "$R/ci.json"
+# Not "no record" — a record that says nothing was asked. The first version of
+# this asserted ci.json must not exist, which made a step that ran and a step that
+# was skipped indistinguishable in the run directory. The record is the point; what
+# must not happen is a record that says `pass`.
+want  "it records what happened"       "ci.json should say not_asked" \
+      test "$(jq -r '.status' "$R/ci.json" 2>/dev/null)" = not_asked
+want  "and claims nothing green"       "status must not be pass" \
+      test "$(jq -r '.status' "$R/ci.json" 2>/dev/null)" != pass
 
 # --------------------------------------------------------------------------
 printf '\n== preconditions ==\n\n'

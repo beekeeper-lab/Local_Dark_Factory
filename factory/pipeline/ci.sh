@@ -50,6 +50,26 @@ ROOT="$(repo_root)"
 REQUIRED="$([ -f "$REPO_CONFIG" ] && "$PIPELINE_DIR/yaml2json.sh" "$REPO_CONFIG" | jq -r '[.required_checks[]?] | join(" ")' || echo "")"
 PR_URL="$(jq -r '.pr_url // empty' "$RUN_DIR/run.json" 2>/dev/null || true)"
 
+# Every path through this step leaves a record.
+#
+# ci.json was written only when the checks became terminal, so a run that halted
+# on "no workflow can report this" or "they never finished" left nothing in the
+# run directory saying the step had run at all. A reader could not tell CI from
+# a step that was skipped — which is the gap doc-check had until last night, and
+# the gap package-check exists to close.
+ci_record() { # ci_record <status> <failed-space-separated> <why>
+  jq -n --arg st "$1" --arg failed "$2" --arg why "$3" \
+     --arg sha "${HEAD_SHA:-}" --arg pr "${PR_URL:-}" --arg required "${REQUIRED:-}" \
+     --argjson rows "${ROWS:-[]}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{schema:"ci/1.1.0", status:$st, checked_at:$ts,
+      pull_request:(if $pr == "" then null else $pr end),
+      candidate_sha:(if $sha == "" then null else $sha end),
+      required:(if $required == "" then [] else ($required | split(" ")) end),
+      failed:(if $failed == "" then [] else ($failed | split(" ")) end),
+      why:(if $why == "" then null else $why end),
+      checks:$rows}' > "$RUN_DIR/ci.json"
+}
+
 printf '\nCI  %s\n\n' "$(basename "$RUN_DIR")"
 
 if [ -z "$PR_URL" ]; then
@@ -60,6 +80,7 @@ if [ -z "$REQUIRED" ]; then
   # Not a pass. The repo names no required checks, so there is nothing this step
   # can assert, and saying "green" would be asserting it anyway.
   printf '  --    required_checks         none named in %s; nothing to wait for\n' "$(basename "$REPO_CONFIG")"
+  ci_record not_asked "" "the repository names no required checks"
   printf '\nCI NOT ASKED — this repository names no required checks, so a green here would\n'
   printf 'mean only that nothing was checked.\n'
   exit 0
@@ -100,6 +121,7 @@ the image \`gates.lock.yaml\` pins, which has to be published to a registry firs
 \`required_checks\` from repo.yaml, which is the honest thing to do if this
 repository is not going to have CI.
 EOF
+  ci_record impossible "$REQUIRED" "no .github/workflows on this branch, so nothing can report the required checks"
   printf '\nCI IMPOSSIBLE — required checks are named and no workflow exists to report them.\n'
   printf 'See QUESTIONS.md. Not waiting %ss to reach the same conclusion.\n' "$TIMEOUT"
   exit 3
@@ -171,6 +193,7 @@ What this step will not do is call that green. Either the workflow is not
 installed in this repository (\`.github/workflows/\`), or it is queued behind
 something, or it never started. \`gh pr checks $PR_URL\` says which.
 EOF
+  ci_record unfinished "${NEVER}${SLOW}" "not terminal after ${TIMEOUT}s"
   printf '\nCI UNFINISHED — see QUESTIONS.md\n'
   exit 3
 fi
@@ -194,11 +217,7 @@ for c in $REQUIRED; do
   esac
 done
 
-jq -n --arg sha "$HEAD_SHA" --arg pr "$PR_URL" --argjson rows "$ROWS" \
-   --arg required "$REQUIRED" --arg failed "${FAILED# }" \
-  '{schema:"ci/1.0.0", pull_request:$pr, candidate_sha:$sha,
-    required:($required | split(" ")), failed:(if $failed == "" then [] else ($failed | split(" ")) end),
-    checks:$rows}' > "$RUN_DIR/ci.json"
+ci_record "$([ -z "$FAILED" ] && echo pass || echo failed)" "${FAILED# }" ""
 
 if [ -z "$FAILED" ]; then
   printf '\nCI PASS — every required check is green on %s\n' "${HEAD_SHA:0:12}"
