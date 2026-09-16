@@ -47,6 +47,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
+# Validated only when it was asked for. A JUDGE_CMD someone typed is worth
+# refusing early; a missing default means a broken checkout, and refusing here
+# would pre-empt the checks that say so more usefully — including the mutation
+# guard, which is the one that must run first.
+if [ -n "${JUDGE_CMD:-}" ] && [ ! -f "$JUDGE_CMD" ]; then
+  printf 'no such judge command: %s\n' "$JUDGE_CMD" >&2; exit 2
+fi
+JUDGE_CMD="${JUDGE_CMD:-$PIPE/judge.sh}"
 
 usage() {
   cat <<'EOF'
@@ -317,7 +325,14 @@ while IFS='|' read -r name should_reject description catchwords; do
   # so the harness has to be able to ask the same six questions at another level
   # without editing the file the line runs from, or the comparison is between two
   # different configurations of the repository rather than two thinking levels.
-  bash "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" \
+  # JUDGE_CMD, so the shape of the ask is a variable this harness can name.
+  #
+  # Everything about the judge has been varied and measured except the size of the
+  # question it is asked. bench/judge-per-criterion.sh asks one criterion at a
+  # time and composes the verdict by arithmetic; it takes judge.sh's command line
+  # exactly, so the classifier below is the same one and the numbers are
+  # comparable. The artifact records which was used.
+  bash "$JUDGE_CMD" "$RD" --target spec --bean "$BEAN" \
     ${THINKING:+--thinking "$THINKING"} >"$RD/judge.log" 2>&1
   rc=$?
   t1="$(date +%s)"
@@ -417,9 +432,10 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
   --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
   --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
+  --arg judge_cmd "$(basename "$JUDGE_CMD")" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
-    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen},
+    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
