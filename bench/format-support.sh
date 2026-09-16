@@ -84,6 +84,15 @@ if [ -n "$ART_DIR" ]; then
   done
   printf 'payload: %s artifact(s), %s bytes\n' \
     "$(jq length <<<"$PAYLOAD")" "$(jq -r '[.[].content | length] | add // 0' <<<"$PAYLOAD")"
+else
+  # Say it, every time, because the answer without artifacts is a different and
+  # more flattering answer to a different question. On 2026-09-16 gpt-oss:120b at
+  # `medium` came back eligible on a short question and, under 18KB of real
+  # artifacts, spent its whole token budget thinking and wrote nothing — which is
+  # the configuration the line had been running for two days.
+  printf 'NO ARTIFACTS — this asks a short question, and the failures this harness\n'
+  printf 'exists to find appear only under a full set. Pass --artifacts <run-dir>\n'
+  printf 'before believing anything below.\n'
 fi
 
 LEVELS=( false low medium high )
@@ -141,7 +150,11 @@ OUT="${OUT:-$HERE/results/format-support-$(date -u +%Y%m%dT%H%M%SZ).json}"
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --argjson prov "$(provenance_block)" \
-  '{schema:"format-support/2.0.0", measured_at:$ts, provenance:$prov, results:$r,
+  --argjson with_artifacts "$([ -n "$ART_DIR" ] && echo true || echo false)" \
+  --argjson payload_bytes "$(jq -r '[.[].content | length] | add // 0' <<<"$PAYLOAD")" \
+  '{schema:"format-support/3.0.0", measured_at:$ts, provenance:$prov,
+    asked_with_artifacts:$with_artifacts, payload_bytes:$payload_bytes,
+    short_question_only: ($with_artifacts | not), results:$r,
     eligible_judges: [$r[] | select(.holds) | {model, thinking}]}' > "$OUT"
 
 printf '\neligible (model, thinking) pairs:\n'
