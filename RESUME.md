@@ -693,6 +693,19 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   enum, the empty tool list and the field length caps. It is ~75 minutes and it is
   the case-level measurement the advisory-audits decision actually rests on.
 
+- **`confidence` as an enum, because `minimum`/`maximum` are not enforced.** The
+  judgement schema has carried `"confidence": {"type":"number","minimum":0,"maximum":1}`
+  for days and the judge returned **100** again on 2026-09-16. So llama.cpp's
+  grammar conversion honours `enum` and (apparently) `maxLength`, and does **not**
+  honour numeric bounds — which is worth knowing before reaching for any other
+  numeric constraint.
+
+  `audit-check` refuses a confidence outside the range and refuses rather than
+  clamping, because "certain" and "percent" cannot be told apart by guessing. An
+  `enum` of `[0, 0.1, … 1]` makes 100 unemittable instead, and one decimal place
+  is the honest precision for this number anyway. Measure it with
+  `factory reaudit --passes 3`, one variable at a time.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**
