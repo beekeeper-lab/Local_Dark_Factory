@@ -76,9 +76,14 @@ JSON
 cat > "$WORK/server.py" <<'PY'
 import http.server, os, sys
 REPLY = sys.argv[2]
+REQ = os.path.join(os.path.dirname(REPLY), "last-request.json")
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        # Keep what was asked, not only what came back. Everything about the
+        # prompt -- the schema, the preamble, the artifact split -- was
+        # unassertable while this was a discarded read.
+        raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        open(REQ, "wb").write(raw)
         body = open(REPLY, "rb").read()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -271,6 +276,60 @@ want  "and no judgement is written"     "a dead runner must not produce a judgem
       test ! -f "$R/verdicts/spec.attempt-1.judgement.json"
 
 # --------------------------------------------------------------------------
+printf '\n== what `met` means is said, and it depends on the target ==\n\n'
+#
+# The schema asked for a boolean called `met` and said nothing about it. For an
+# impl audit the answer is in the diff; for a SPEC audit there is no code at all,
+# and on 2026-09-16 the judge answered a spec audit with `met: false, evidence:
+# "No source files were provided for analysis; the repository appears empty"`.
+# A correct observation about a question it was not asked: every artifact it had
+# was a plan.
+#
+# The sentence lives in two places — the preamble a human reads and the schema
+# the decoder enforces — so both are asserted, against the same request.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+REQ="$WORK/last-request.json"
+want "the request is recorded"          "the stub should have kept the body" test -s "$REQ"
+# The redirect has to be inside the command, not after `want` — after it, it is
+# want's own "ok" line that goes to /dev/null and the assertion passes silently.
+want "and the whole request is JSON"    "judge.sh sent something unparseable" \
+     bash -c 'jq -e . "$1" >/dev/null' _ "$REQ"
+# The schema travels inside the request; if it were malformed the model would be
+# decoding against nothing and every field guarantee below it would be a wish.
+# And the LITERAL in judge.sh is valid JSON on its own, before any substitution.
+# bench/format-support.sh reads it out of the file with sed to measure a model
+# against the real grammar rather than a copy — so a `$(...)` spliced into the
+# literal makes what it extracts shell, and it refuses. That is a bench failure
+# eighteen assertions wide for a change made in judge.sh, which is the wrong file
+# to find out in.
+want "the schema literal parses as JSON" "sed extraction must yield a schema, not shell" \
+     bash -c "sed -n \"/^SCHEMA='/,/^}'\$/p\" \"\$1\" | sed \"1s/^SCHEMA='//; \\\$s/'\$//\" | jq -e . >/dev/null" \
+     _ "$PIPELINE_DIR/judge.sh"
+want "the response schema is valid JSON" "format must parse as a schema object" \
+     bash -c 'jq -e ".format | type == \"object\"" "$1" >/dev/null' _ "$REQ"
+want "and met carries a description"     "met must describe itself" \
+     bash -c 'jq -e ".format.properties.criteria.items.properties.met | has(\"description\")" "$1" >/dev/null' _ "$REQ"
+
+spec_met="$(jq -r '.format.properties.criteria.items.properties.met.description' "$REQ")"
+check "a spec audit asks about the plan" "would THE PLAN" "$spec_met"
+check "and says no code is expected"     "There is no code yet" "$spec_met"
+# The same sentence, not a second one that can drift from it.
+prompt="$(jq -r '[.messages[].content] | join("\n")' "$REQ")"
+check "the preamble says the same thing" "$spec_met" "$prompt"
+
+printf '\n-- and an impl audit asks about the work, not the plan --\n\n'
+printf 'diff --git a/x b/x\n+++ b/x\n+one line\n' > "$R/diff.txt"
+printf '{"overall":"pass","gates":[]}\n' > "$R/gate.json"
+clean_verdicts
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target impl --bean "$WORK/bean.yaml" ) >/dev/null 2>&1
+impl_met="$(jq -r '.format.properties.criteria.items.properties.met.description' "$REQ")"
+check "it asks about the work as built" "the work as built" "$impl_met"
+nope "and not about a plan"             "would THE PLAN" "$impl_met"
+
 printf '\n== the runtime allow-list holds on this path too ==\n\n'
 #
 # judge.sh is the second place a model is chosen, and a hole here would be a hole

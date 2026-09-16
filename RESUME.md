@@ -416,6 +416,13 @@ global-skill collision impossible rather than alarmed, but whether pi 0.85.1 sti
 honours `--skill` under `--no-skills` needs a live smoke step to prove; the stub
 cannot. The collision check stays as the defence until then.
 
+- **The next judge measurement is not comparable with the ones before it.**
+  `met` now carries a per-target meaning (judge.sh, 2026-09-16). Every fitness and
+  variance figure taken before this asked the judge a question with an undefined
+  field in it; a spec audit answering `met: false, evidence: "No source files were
+  provided for analysis"` was the model reading `met` as "the code satisfies this"
+  and saying, correctly, that there is no code. Re-measure before comparing.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**

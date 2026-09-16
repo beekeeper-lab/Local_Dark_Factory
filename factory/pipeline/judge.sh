@@ -219,6 +219,27 @@ BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bea
 CRITERIA_LIST="$(jq -r '(.acceptance_criteria // [])[] | "  \(.id): \(.text)"' <<<"$BEAN_JSON")"
 [ -n "$CRITERIA_LIST" ] || CRITERIA_LIST="  (this bean declares none)"
 
+# What `met` means depends on what is being audited, and it was never said.
+#
+# For an impl or package audit, "met" is "the work satisfies this criterion" —
+# the code is there to look at. For a SPEC audit there is no code yet: the
+# question is whether the plan, carried out as written, would satisfy it. The
+# schema asked for a boolean called `met` and said nothing, so on 2026-09-16 the
+# judge answered a spec audit with `met: false, evidence: "No source files were
+# provided for analysis; the repository appears empty"` — a correct observation
+# about a question it was not asked. Every artifact it had was a plan.
+#
+# Each of these is one sentence, because it goes in two places (the preamble and
+# the schema's own description of the field) and they must not drift apart.
+case "$TARGET" in
+  spec)
+    MET_MEANS="met means: would THE PLAN, carried out exactly as written, satisfy this criterion? There is no code yet and none is expected. A criterion is not unmet because you cannot see an implementation of it -- every artifact above is a plan." ;;
+  doc)
+    MET_MEANS="met means: does the document describe the change well enough that this criterion can be seen to have been addressed?" ;;
+  *)
+    MET_MEANS="met means: does the work as built satisfy this criterion, judged from the diff and the gate results above?" ;;
+esac
+
 RUBRIC_FILE="$PIPELINE_DIR/../skills/factory-audit/SKILL.md"
 RUBRIC="$([ -f "$RUBRIC_FILE" ] && sed -n '/^## Rules/,$p' "$RUBRIC_FILE" || echo "Audit the artifact.")"
 
@@ -241,6 +262,8 @@ Your entire output is a judgement ABOUT the document.
 \`criteria\` per line, using exactly these ids:
 
 $CRITERIA_LIST
+
+$MET_MEANS
 
 Do not invent criteria of your own and do not report on the document's format.
 The task list is YAML, not JSON; the controller has already validated it against
@@ -317,7 +340,8 @@ SCHEMA='{
     "criteria": { "type": "array", "items": {
       "type": "object", "required": ["id", "met", "evidence", "quote"],
       "properties": {
-        "id": { "type": "string" }, "met": { "type": "boolean" },
+        "id": { "type": "string" },
+        "met": { "type": "boolean", "description": "set per target; see MET_MEANS below" },
         "evidence": { "type": "string" },
         "quote": { "type": "string", "description": "text copied verbatim from an artifact above" } } } },
     "findings": { "type": "array", "items": {
@@ -340,6 +364,17 @@ SCHEMA='{
     "security_findings": { "type": "array", "items": { "type": "string" } }
   }
 }'
+
+# The per-target meaning of `met` goes in here rather than being spliced into the
+# literal above, and that is not a style choice: bench/format-support.sh reads
+# this schema out of this file with sed, between `SCHEMA='` and the closing `}'`,
+# because measuring the grammar a judge is asked to hold against a copy of it
+# measures the copy. A `$(...)` inside the literal makes what sed extracts shell
+# rather than JSON, and format-support refuses — which is how this was caught,
+# eighteen assertions at once, the same minute it was introduced.
+SCHEMA="$(jq --arg d "$MET_MEANS" \
+  '.properties.criteria.items.properties.met.description = $d' <<<"$SCHEMA")" \
+  || die "could not put the per-target meaning of met into the judgement schema"
 
 STAGE="$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)"
 
