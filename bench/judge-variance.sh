@@ -169,8 +169,9 @@ jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg sha "$SHA" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
   --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
+  --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
   '{schema:"judge-variance/2.0.0", measured_at:$ts, provenance:$prov, case:$case,
-    judge:{model:$model, thinking:$thinking, num_predict:$cap},
+    judge:{model:$model, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen},
     input_sha:$sha, runs:$r, distinct_verdicts:$distinct,
     reproducible:($distinct == 1),
     note:"Identical input every run: same spec, same task list, same prompt, temperature 0. Any difference between rows is the model, not the question."}' > "$OUT"

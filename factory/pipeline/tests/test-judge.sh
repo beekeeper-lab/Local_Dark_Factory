@@ -459,6 +459,52 @@ eq "in the bean's order"               '["ac1","ac2","ac3"]' "$(jq -c '[.criteri
 eq "carrying each entry's fields"      "e1" "$(jq -r '.criteria[0].evidence' "$J" 2>/dev/null)"
 eq "and its met value"                 "false" "$(jq -r '.criteria[0].met' "$J" 2>/dev/null)"
 
+printf '\n== the field caps are a knob, because they are a suspect ==\n\n'
+#
+# maxLength stopped `evidence` arriving with a Python module in it, and the same
+# afternoon the case-level fitness numbers became the worst on record. Two things
+# changed at once, so neither is attributable — and the way to find out is to vary
+# one of them and be able to say in the artifact which value produced the number,
+# rather than depending on what the working tree looked like at the time.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+eq "the default caps evidence"         "600" \
+   "$(jq -r '.format.properties.criteria.items.properties.evidence.maxLength' "$WORK/last-request.json")"
+eq "and quotes at half of it"          "300" \
+   "$(jq -r '.format.properties.criteria.items.properties.quote.maxLength' "$WORK/last-request.json")"
+
+clean_verdicts
+JUDGE_FIELD_MAXLEN=1200 judge >/dev/null 2>&1
+eq "one number moves them together"    "1200" \
+   "$(jq -r '.format.properties.criteria.items.properties.evidence.maxLength' "$WORK/last-request.json")"
+eq "the quote with it"                 "600" \
+   "$(jq -r '.format.properties.criteria.items.properties.quote.maxLength' "$WORK/last-request.json")"
+eq "and the one-line fields at a third" "400" \
+   "$(jq -r '.format.properties.findings.items.properties.summary.maxLength' "$WORK/last-request.json")"
+
+printf '\n-- and 0 removes them, which is the experiment --\n\n'
+clean_verdicts
+# With the bean that HAS criteria, so the assertion below about the keyed shape
+# surviving is about something. $WORK/bean.yaml declares none and keeps the plain
+# array, correctly, which would make it pass for the wrong reason.
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" JUDGE_FIELD_MAXLEN=0 \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
+eq "no cap on evidence"                "null" \
+   "$(jq -r '.format.properties.criteria.items.properties.evidence.maxLength // "null"' "$WORK/last-request.json")"
+eq "nor anywhere else"                 "0" \
+   "$(jq '[.. | objects | select(has("maxLength"))] | length' "$WORK/last-request.json")"
+# The rest of the grammar must survive it: removing a cap must not remove the
+# constraints that were measured to work.
+eq "the criterion keys survive"        "object" \
+   "$(jq -r '.format.properties.criteria.type' "$WORK/last-request.json")"
+eq "and the confidence enum"           "11" \
+   "$(jq -r '.format.properties.confidence.enum | length' "$WORK/last-request.json")"
+
+out="$(JUDGE_FIELD_MAXLEN=nonsense judge 2>&1)"
+check "a non-numeric cap is refused"   "wants a number of characters" "$out"
+
 printf '\n== confidence is an enum, because numeric bounds are not enforced ==\n\n'
 #
 # This field has carried `"minimum": 0, "maximum": 1` for days and the judge

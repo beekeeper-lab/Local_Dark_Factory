@@ -407,9 +407,10 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
   --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
+  --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
-    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap},
+    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),

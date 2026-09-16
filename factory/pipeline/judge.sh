@@ -448,6 +448,37 @@ SCHEMA="$(jq --arg d "$MET_MEANS" \
   '.properties.criteria.items.properties.met.description = $d' <<<"$SCHEMA")" \
   || die "could not put the per-target meaning of met into the judgement schema"
 
+# The field caps are a knob, because they are a suspect.
+#
+# `maxLength` on the free-text fields stopped `evidence` arriving with a Python
+# module in it, and the same afternoon the case-level fitness numbers became the
+# worst on record — nine false accepts in fifteen, answers in 21 to 56 seconds
+# where they used to take minutes. Two things changed at once (two fixtures were
+# also repaired), so neither is attributable, and the way to find out is to vary
+# one of them.
+#
+# A knob rather than an edit: the experiment is then a variable a measurement can
+# name, `JUDGE_FIELD_MAXLEN=0 bench/judge-fitness.sh …`, and the artifact says
+# which value produced it instead of the comparison depending on what the working
+# tree looked like at the time.
+FIELD_MAXLEN="${JUDGE_FIELD_MAXLEN:-600}"
+case "$FIELD_MAXLEN" in ''|*[!0-9]*) die "JUDGE_FIELD_MAXLEN wants a number of characters, or 0 for no cap; got '$FIELD_MAXLEN'" ;; esac
+if [ "$FIELD_MAXLEN" -eq 0 ]; then
+  SCHEMA="$(jq 'walk(if type == "object" and has("maxLength") then del(.maxLength) else . end)' <<<"$SCHEMA")" \
+    || die "could not remove the field length caps from the judgement schema"
+else
+  # One number, scaled: evidence is the long field, quote half of it, the one-line
+  # ones a third. Written once so a reader changes one value and not four.
+  SCHEMA="$(jq --argjson n "$FIELD_MAXLEN" '
+      .properties.criteria.items.properties.evidence.maxLength = $n
+    | .properties.criteria.items.properties.quote.maxLength = ($n / 2 | floor)
+    | .properties.findings.items.properties.evidence.maxLength = $n
+    | .properties.findings.items.properties.quote.maxLength = ($n / 2 | floor)
+    | .properties.findings.items.properties.summary.maxLength = ($n / 3 | floor)
+    | .properties.findings.items.properties.where.maxLength = ($n / 3 | floor)' <<<"$SCHEMA")" \
+    || die "could not set the field length caps in the judgement schema"
+fi
+
 # The criterion ids go in the GRAMMAR, not only in the prose.
 #
 # The prompt has said, in bold, "the criteria you report on are these, and only
