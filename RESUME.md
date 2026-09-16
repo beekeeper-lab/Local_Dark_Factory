@@ -599,7 +599,7 @@ the next thing to do here.
 not a temporary accommodation while the judge was tuned. The audit stage did not
 produce a binding verdict on this line's artifacts at all.
 
-## OPEN and important: the grammar work improved conformance and the fitness numbers are the worst on record
+## OPEN and important: the judge accepts about half the seeded defects, and always did
 
 `bench/judge-fitness.sh --repeat 3`, 2026-09-16 evening, on fixtures that are
 actually seeding their defects for the first time
@@ -638,16 +638,38 @@ What it does say on its own terms:
   plans.
 - **Advisory audits are more justified than before, not less.**
 
-What would separate the two causes, and it is the obvious next work: re-run
-`judge-fitness --repeat 3` with the fixed fixtures and the grammar changes backed
-out one at a time. `tools: []` and the `maxLength` caps are the two candidates —
-the first forces an answer where the model used to reach for a tool, the second
-forces a short one. Each is ~75 minutes. `git log` has each change as its own
-commit, so reverting one at a time is a `git revert` and a measurement.
+**The caps were measured and are not the cause** (`JUDGE_FIELD_MAXLEN=0`,
+`evidence/judge-fitness-nocap-20260916.log`, everything else identical):
+
+```
+                 field_maxlen 600    field_maxlen 0
+false accepts          9                  7
+named                  2                  3
+rejected               5                  8
+no answer              1                  0
+```
+
+Better on every axis without them, and not significantly: a judge that gives
+different verdicts to byte-identical input does not distinguish 9 from 7 in
+fifteen trials.
+
+**Which leaves the uncomfortable conclusion.** This judge accepts about half the
+seeded defects put in front of it, in either configuration, and the earlier
+figures of zero to two false accepts were flattered by two fixtures that were not
+seeding their defects. **It was always this bad**; today is the first time the
+corpus was capable of showing it.
+
+One real signal in the pair: `criterion-not-really-met` is named 3 of 3 without
+the caps and 1 of 3 with — the only case this judge ever names. That is an
+argument for **raising** 600 rather than removing it, and n is 3. The caps stay at
+600, which is the configuration everything else today was measured at; raising
+them is a candidate with a measurement attached, not a tidy-up.
 
 **Do not take the grammar changes as settled improvements.** They are settled
-improvements to *conformance*, which is what the controller needs to stamp
-anything at all, and an open question about everything else.
+improvements to *conformance* — which is what the controller needs to stamp
+anything at all, and is why the line produced its first verdict today — and they
+are not evidence about whether the judge is right. `tools: []` remains untested as
+a cause and is the next thing to vary if anyone wants to keep pulling this thread.
 
 ## Then three changes in an afternoon, and they are all the same change
 
