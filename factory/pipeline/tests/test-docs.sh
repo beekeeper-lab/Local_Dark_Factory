@@ -242,5 +242,44 @@ check "the section is measured whole"  "proposed change" "$out"
 nope  "and is not called empty"        "section is empty" "$out"
 check "the document passes"            "doclint: PASS" "$out"
 
+printf '\n== every file in evidence/ says what it evidences ==\n\n'
+#
+# evidence/ is not a sample gallery — its README says so — and a file nobody
+# described is a file nobody can cite. The directory has grown by eight entries
+# in two days, several of them kept for what is WRONG with them, and that is
+# exactly the kind of thing that stops being legible the moment it is undocumented.
+EV="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/evidence"
+if [ -d "$EV" ]; then
+  undocumented=""
+  for f in "$EV"/*; do
+    b="$(basename "$f")"
+    [ "$b" = README.md ] && continue
+    grep -qF "\`$b\`" "$EV/README.md" || undocumented="$undocumented $b"
+  done
+  if [ -z "$undocumented" ]; then
+    printf '  ok    every evidence file is described in its README\n'; PASS=$((PASS + 1))
+  else
+    printf '  FAIL  not described in evidence/README.md:%s\n' "$undocumented"; FAIL=$((FAIL + 1))
+  fi
+  # And the reverse: a README row naming a file that is gone is a citation to
+  # nothing, which is worse than no row.
+  missing=""
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    [ -e "$EV/$name" ] || missing="$missing $name"
+  # The first cell of each table row, not every backticked name in the prose —
+  # the README legitimately mentions `roles.json` and other files that live
+  # elsewhere, and a check that cannot tell a citation from a reference reports
+  # the document as broken for describing the project.
+  done < <(grep -oE '^\| `[A-Za-z0-9._-]+`' "$EV/README.md" | tr -d '|` ' | sort -u)
+  if [ -z "$missing" ]; then
+    printf '  ok    and every file it names is there\n'; PASS=$((PASS + 1))
+  else
+    printf '  FAIL  named in the README but absent:%s\n' "$missing"; FAIL=$((FAIL + 1))
+  fi
+else
+  printf '  --    no evidence directory\n'
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
