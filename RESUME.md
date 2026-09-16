@@ -1166,11 +1166,19 @@ been five hours of GPU for one number, so it was stopped and the GPU spent on th
 cheaper experiment (the rubric fix below), which tests a change made for a
 well-evidenced reason.
 
-What the stopped run did establish is the cost, and it is the thing to fix first:
-the prompt-order refinement above would make four requests share one processed
-prompt instead of re-processing 12,000 tokens each time. Do that, then measure the
-accuracy. `JUDGE_CMD=bench/judge-per-criterion.sh bench/judge-fitness.sh … --repeat 3`
-is the command; 7 to 9 false accepts in 15 is the number to beat.
+**The cost fix is done and measured.** `JUDGE_CRITERIA_LAST=1` moves the criteria
+list into the closing message so the four sub-requests share a prefix; the
+harness sets it. Against bean-001's real spec:
+
+```
+before   262s per criterion   1049s for the audit
+after     75, 119, 120, 206s   520s for the audit
+```
+
+Roughly halved — from 20x the single ask to about 2x, which is affordable for a
+stage that runs four times a bean. The accuracy measurement is running at
+`--repeat 1` first: if pass one is not in the right ballpark, three passes is not
+worth 2.6 hours. `4 false accepts in 15` is the number to beat.
 
 **The cheaper question was asked first, and it is answered.** Is any other model on
 this box better on the same corpus?
