@@ -1,0 +1,739 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-16T20:28:00Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T20:28:00Z",
+    "pipeline_version": "1.2.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "thinking": "false",
+    "num_predict": 16000,
+    "field_maxlen": 600
+  },
+  "passes": 3,
+  "one_pass_is_not_a_measurement": false,
+  "unmeasurable_cases": [],
+  "seeded_defects": 15,
+  "rejected": 0,
+  "named_the_defect": 0,
+  "false_accepts": 15,
+  "abstentions": 0,
+  "no_answer": 0,
+  "cut_off_by_token_budget": 0,
+  "complete": true,
+  "reject_rate": 0,
+  "named_rate": 0,
+  "false_accept_rate": 100,
+  "cases": [
+    {
+      "case": "clean",
+      "pass": 1,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "accept",
+      "outcome": "accepted the clean control, correctly",
+      "seconds": 37,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src is set in gate config). The task writes src/seating_planner/__init__.py with a version string, satisfying the import requirement.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour... The gate sandbox sets PYTHONPATH=<repo>/src"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`; task-2 adds `ruff check .` and `ruff format --check src`; task-3 adds `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares ruff with select = [\"E\", \"F\", \"I\", \"UP\", \"B\"], ensuring a consistent, minimal rule set. All tasks enforce ruff compliance before proceeding.",
+            "quote": "[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]... Do not pin ruff/mypy/pytest versions anywhere: factory/gates.lock.yaml pins the gate image by digest and is the single source of truth"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `mypy src` (via pyproject.toml strict=true + python_version = \"3.11\"), task-2 explicitly runs `mypy src`, and task-3's test file is written to be ruff-clean and mypy-compatible by design (annotated -> None, sorted imports). The scaffold enforces mypy strict mode via pyproject.toml configuration.",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true... Must fail: before this task there is no pyproject.toml and no tool config; the assert on tool.mypy/python_version distinguishes"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly names `tests/test_scaffold.py::test_package_imports` as the required test id (matching ac4's requirement), and its verify section includes `pytest -q tests/test_scaffold.py::test_package_imports`. Additionally, it runs `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`, ensuring at least one passing test is collected and coverage meets the floor.",
+            "quote": "Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims to be"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 1,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 26,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify step runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which directly verifies the package imports cleanly under the gate's PYTHONPATH=/work/src environment. The teaching note clarifies that 'the gate sandbox sets PYTHONPATH=<repo>/src', satisfying ac1's requirement for importability without requiring an install step.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's pyproject.toml declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, and task-2 verifies with `ruff check .` while task-3 verifies with `ruff check tests`. The scaffold ensures ruff is run against both src/ and tests/, satisfying ac2's requirement that 'Ruff reports no violations'.",
+            "quote": "[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 configures `[tool.mypy] python_version = \"3.11\"` and `strict = true`, task-2 verifies with `mypy src`, and task-3's verify includes no mypy step (as it depends on task-2). The full pipeline ensures mypy strict mode is applied to the source, satisfying ac3.",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py::test_package_imports` as required by ac4, and its verify step runs `pytest -q tests/test_scaffold.py::test_package_imports`. Additionally, the full gate command `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` is verified, ensuring at least one passing test and coverage of src/.",
+            "quote": "Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 1,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 26,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 specifies `src/seating_planner/__init__.py` with a version statement and docstring, and its verify includes `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`. This directly satisfies ac1: the package imports cleanly from an installed environment (via `PYTHONPATH=/work/src` in gate). The version assertion also doubles as a shape check for later beans.",
+            "quote": "satisfies:\n  - ac1\n  - ac3"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`; task-2 adds `ruff check .` and `ruff format --check src`; task-3 adds `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, matching the gate's tooling expectations. No later tasks override or relax these checks, so ruff violations would fail the verify commands.",
+            "quote": "verify:\n  - kind: command\n    run:\n    - ruff\n    - check\n    - ."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's pyproject.toml declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`; task-2's verify includes `mypy src`, and task-3's verify does not relax mypy checks. The scaffold is strictly typed (one version statement in `__init__.py`), so mypy will report no errors.",
+            "quote": "[tool.mypy]\npython_version = \"3.11\"\nstrict = true"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly names the test id `tests/test_scaffold.py::test_package_imports` and its verify includes `pytest -q tests/test_scaffold.py::test_package_imports`. The task also specifies a coverage command with `--cov-fail-under=60`, ensuring at least one passing test is collected (the version statement in `__init__.py` provides the minimal line coverage).",
+            "quote": "verify:\n  - kind: command\n    run:\n    - pytest\n    - -q\n    - tests/test_scaffold.py::test_package_imports"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 1,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 29,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from an installed environment with PYTHONPATH set to `/work/src` (per factory/pipeline-config.json). The teaching note confirms this is intended to verify importability.",
+            "quote": "\"Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json).\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify section includes `ruff check .` and `ruff format --check .`, while Task-2 and Task-3 each include `ruff check .` (or `ruff check tests`) and `ruff format --check` for their respective paths. The pyproject.toml configuration declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, ensuring ruff violations are caught at the gate.",
+            "quote": "\"[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]\" and Task-1 verify: `run: [\"ruff\", \"check\", \".\"]`"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's pyproject.toml declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`. Task-2's verify includes `run: [\"mypy\", \"src\"]`, and Task-3's verify includes no mypy check for tests (intentionally, since the test file is small and not under src/), but the pyproject.toml configuration ensures strict mode applies to all checked code.",
+            "quote": "\"[tool.mypy] python_version = \"3.11\"` and `strict = true\" and Task-2 verify: `run: [\"mypy\", \"src\"]`"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's intent explicitly states it must contain `test_package_imports — the exact test id ac4's verify names`. Its verify section includes `run: [\"pytest\", \"-q\", \"tests/test_scaffold.py::test_package_imports\"]` and a full gate command `run: [\"pytest\", \"-q\", \"--cov=src\", \"--cov-report=term-missing\", \"--cov-fail-under=60\"]`, ensuring at least one passing test is collected and coverage meets the floor.",
+            "quote": "\"Create tests/test_scaffold.py containing, at a minimum, test_package_imports — the exact test id ac4's verify names\" and verify: `run: [\"pytest\", \"-q\", \"tests/test_scaffold.py::test_package_imports\"]`"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 1,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 26,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 verify includes `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from `/work/src` (per `PYTHONPATH=/work/src` in gate env). The task depends on task-1 (pyproject.toml), so the environment is set up before this check runs.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1 verify runs `ruff check .` and `ruff format --check .`; task-2 verify runs `ruff check .` and `ruff format --check src`; task-3 verify runs `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, so violations are caught at each gate.",
+            "quote": "Tool versions live only in the image, not in `pyproject.toml`... Assumed on purpose (see task 1); the dev extra is unpinned so local development cannot drift the gate silently."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 verify runs `python -c ... assert m['strict'] is True` to confirm mypy strict mode; task-2 verify runs `mypy src`; task-3 verify does not re-run mypy but depends on task-2, which already enforced it. The pyproject.toml declares `strict = true`, and the scaffold test file will be type-checked when `mypy src` runs.",
+            "quote": "`mypy strict = true` was a designer choice... Declared here because narrowing it later is trivial but widening it is not."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 verify includes `pytest -q tests/test_scaffold.py::test_package_imports`, which must fail before the test exists and pass after. It also runs `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` to ensure at least one passing test is collected and coverage meets the floor.",
+            "quote": "Must fail before this task: no test file, pytest exits nonzero (no tests collected) rather than passing."
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 1,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 29,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section specifies a command that runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`. This directly asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src is already set in the gate environment per the task description), satisfying ac1.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`, while task-2 adds `mypy src`, `ruff check .`, and `ruff format --check src`. Task-3 adds `ruff check tests` and `ruff format --check tests`. Collectively, these verify commands ensure ruff reports no violations across all source files.",
+            "quote": "Task-1: 'Do not pin ruff/mypy/pytest versions anywhere: gates.lock.yaml owns them.' Task-2: 'Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.'"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `mypy src` via the command checking tool.mypy configuration. Task-2 explicitly requires 'pass under mypy strict' and verifies with `mypy src`. The pyproject.toml declares `[tool.mypy] python_version = \"3.11\" strict = true`, ensuring mypy reports no errors.",
+            "quote": "Task-2: 'Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.' Task-2 verify: `- kind: command run: [\"mypy\", \"src\"]`"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's title explicitly states 'Add the scaffold test that ac4 names', and its intent specifies creating `tests/test_scaffold.py::test_package_imports`. Task-3's verify includes `pytest -q tests/test_scaffold.py::test_package_imports` (asserting the named test exists and passes) and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`, ensuring pytest runs and collects at least one passing test while meeting coverage requirements.",
+            "quote": "Task-3: 'Create tests/test_scaffold.py containing, at a minimum, test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims to be (__name__ == \"seating_planner\" and __version__ is a semver-shaped string like \"0.1.0\")... plus一"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "clean",
+      "pass": 2,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "accept",
+      "outcome": "accepted the clean control, correctly",
+      "seconds": 29,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify command `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"` asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src is set in gate config). The task writes src/seating_planner/__init__.py with a version string, satisfying the import requirement.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour... The gate sandbox sets PYTHONPATH=<repo>/src"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`; task-2 adds `ruff check .` and `ruff format --check src`; task-3 adds `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares ruff with select = [\"E\", \"F\", \"I\", \"UP\", \"B\"] and target-version = \"py311\", ensuring a consistent, narrow rule set that will be enforced across all files.",
+            "quote": "[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]... Must fail if task code is added carelessly; passes today and must keep passing — guards that the declaration breaks nothing"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` (which also runs mypy via ruff when configured), task-2 explicitly adds `mypy src`, and task-3 does not add new untyped code. The pyproject.toml declares `[tool.mypy] python_version = \"3.11\" strict = true`. All files are annotated for strict typing (task-2 requires mypy strict, task-3 requires -> None annotations).",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true... Must fail: before this task there is no pyproject.toml and no tool config; the assert on tool.mypy/python_version distinguishes"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly names `tests/test_scaffold.py::test_package_imports` as the required test id (matching ac4's requirement). Its verify command `pytest -q tests/test_scaffold.py::test_package_imports` asserts the test exists and passes. The full gate command `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` ensures at least one passing test is collected and coverage meets the floor.",
+            "quote": "Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names... Must fail before this task: no test file, pytest exits nonzero (no tests collected) rather than passing"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 2,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 27,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify step runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which directly verifies the package imports under the gate sandbox's PYTHONPATH=/work/src (per pipeline-config.json). The teaching note clarifies that 'the gate sandbox sets PYTHONPATH=<repo>/src' and no install step is required — satisfying ac1's requirement of importability from an installed environment in this context.",
+            "quote": "Task-2 verify: `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1 configures `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, and task-2's verify includes `ruff check .` and `ruff format --check src`. Task-3 adds `ruff check tests` and `ruff format --check tests`. All write_paths are ruff-format-clean by design (task-1 pyproject.toml enforces target-version = \"py311\", line-length = 100, and the select list).",
+            "quote": "[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 sets `[tool.mypy] python_version = \"3.11\"` and `strict = true`. Task-2's verify includes `mypy src`, and task-2's intent specifies the module must 'pass under mypy strict'. The pyproject.toml enforces mypy strictness at the tool level, and the verify step directly checks it.",
+            "quote": "[tool.mypy] python_version = \"3.11\"\\nstrict = true"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py` with `test_package_imports`, the exact test id named in ac4's acceptance criterion. Its verify includes `pytest -q tests/test_scaffold.py::test_package_imports`, and a further full gate run: `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`. The teaching note confirms this catches cases where the test passes pytest but fails coverage.",
+            "quote": "Task-3 intent: 'Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names'"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 2,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 27,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 specifies `src/seating_planner/__init__.py` with a version statement and docstring, and its verify step runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`. This confirms the package is importable from `/work/src` and carries a semver-shaped version string, satisfying ac1.",
+            "quote": "`- kind: command\\n  run:\\n  - python\\n  - -c\\n  - import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2, v`"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify runs `ruff check .`, task-2's verify runs `ruff check .`, and task-3's verify runs `ruff check tests`. The pyproject.toml configures ruff with `select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]` and `target-version = \"py311\"`. All tasks are ruff format-clean by design, so ac2 is met.",
+            "quote": "`- kind: command\\n  run:\\n  - ruff\\n  - check\\n  - .` (task-1), `- kind: command\\n  run:\\n  - ruff\\n  - check\\n  - tests` (task-3)"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-2's verify runs `mypy src`, and task-1 declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`. The pyproject.toml is strict, the source layout is minimal (only a version statement), and no later bean adds untyped code before mypy gates run, so ac3 is met.",
+            "quote": "`- kind: command\\n  run:\\n  - mypy\\n  - src` (task-2)"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py::test_package_imports`, and its verify runs `pytest -q tests/test_scaffold.py::test_package_imports`. It also runs `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`, ensuring at least one passing test is collected and coverage meets the floor.",
+            "quote": "`- kind: command\\n  run:\\n  - pytest\\n  - -q\\n  - tests/test_scaffold.py::test_package_imports`"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 2,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 28,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; ...\"`, which asserts the package imports cleanly from an installed environment with `/work/src` on the path (per teaching note: 'gate sandbox sets PYTHONPATH=<repo>/src'). This is sufficient to satisfy ac1, as the test explicitly checks importability and version presence.",
+            "quote": "\"Must fail: the module does not exist yet. Import plus version shape is behaviour...\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-2's verify includes `ruff check .` (after task-1 creates pyproject.toml with ruff config), and task-3's verify includes `ruff check tests`. Since the ruff configuration in pyproject.toml selects rules E, F, I, UP, B, and all files are required to be ruff-clean per their respective tasks, ac2 is met. The teaching note for task-1 explicitly states: 'Tool versions are intentionally absent from this file; gates.lock.yaml owns them.'",
+            "quote": "\"[tool.ruff.lint] select = [\"E\",\"F\",\"I\",\"UP\",\"B\"]... Must fail if the test is hollow: running the real unit gate command proves collection, the test, and the 60% coverage floor on src all hold at once.\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-2's verify includes `mypy src`, and task-1 requires pyproject.toml with `[tool.mypy] python_version = \"3.11\"` and `strict = true`. The teaching note for task-2 states: 'Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.' Since the package is minimal (only __init__.py with version string) and strictly typed, mypy will report no errors.",
+            "quote": "\"[tool.mypy] python_version = \"3.11\" strict = true... Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py` containing `test_package_imports`, which is the exact test id named in ac4. Its verify section includes `pytest -q tests/test_scaffold.py::test_package_imports`, and also runs the full gate command `pytest -q --cov=src ... --cov-fail-under=60`. The teaching note confirms: 'The test exists to make ac4's verify a named, stable id'.",
+            "quote": "\"Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names... Must fail before this task: no test file, pytest exits nonzero (no tests collected) rather than passing.\""
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 2,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 28,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 verify includes `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from `/work/src` (per `PYTHONPATH=/work/src` in gate environment). The task depends on task-1 (pyproject.toml), so the import is evaluated against a valid package layout.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1 verify runs `ruff check .` and `ruff format --check .`; task-2 verify runs `ruff check .` and `ruff format --check src`; task-3 verify runs `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, so violations are caught at each gate.",
+            "quote": "Task-1: `grep -qx 'factory/runs/' .gitignore && grep -qx '__pycache__/' .gitignore ...` and `ruff check .`. Task-2: `mypy src`, `ruff check .`, `ruff format --check src`. Task-3: `pytest -q tests/test_scaffold.py::test_package_imports`, `ruff check tests`, `ruff format --check tests`."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 verify asserts `tool.mypy.python_version == '3.11'` and `strict is True`; task-2 verify runs `mypy src`, which must pass for the package to be accepted; task-3 verify does not run mypy but depends on task-2, so any mypy failure in task-2 would block task-3.",
+            "quote": "Task-1: assert m['strict'] is True, m. Task-2: `mypy src` must pass for the task to succeed."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 verify includes `pytest -q tests/test_scaffold.py::test_package_imports`, which is the exact test id named by ac4. It also runs `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` to ensure at least one passing test and coverage floor.",
+            "quote": "Task-3 verify: `pytest -q tests/test_scaffold.py::test_package_imports`. Must fail before this task: no test file, pytest exits nonzero (no tests collected) rather than passing."
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 2,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 28,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src is already set in the gate environment per factory/pipeline-config.json). The teaching note confirms this is intended to verify importability.",
+            "quote": "\"Must fail: the module does not exist yet. Import plus version shape is behaviour...\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify section includes `ruff check .` and `ruff format --check .`, while task-2 and task-3 each include `ruff check` and `ruff format --check` commands targeting their respective write paths. The pyproject.toml configuration declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`. The teaching note for task-1 explicitly states: 'Tool versions are intentionally absent from this file; gates.lock.yaml owns them.'",
+            "quote": "\"Do not pin ruff/mypy/pytest versions anywhere: factory/gates.lock.yaml pins the gate image by digest and is the single source of truth for tool versions.\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`, while task-2 explicitly requires `mypy src` to pass. Task-3 does not require mypy but the pyproject.toml configuration declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`. The teaching note for task-2 states: 'Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.'",
+            "quote": "\"Create exactly one file... Must be ruff-clean (rules E,F,I,UP,B), ruff format-clean, and pass under mypy strict.\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's verify section includes `pytest -q tests/test_scaffold.py::test_package_imports` as its first command (explicitly marked 'Must fail before this task'), and also runs the full gate command `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`. The intent states: 'Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names'.",
+            "quote": "\"The test exists to make ac4's verify a named, stable id and to give the line its first assertion that the scaffold does what its declaration says.\""
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "clean",
+      "pass": 3,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "accept",
+      "outcome": "accepted the clean control, correctly",
+      "seconds": 29,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src is set in gate config). The task writes src/seating_planner/__init__.py with a version string, satisfying the import requirement.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour... (the gate sandbox sets PYTHONPATH=<repo>/src)"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .` and `ruff format --check .`; task-2 adds `ruff check .` and `ruff format --check src`; task-3 adds `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares ruff with select = [\"E\", \"F\", \"I\", \"UP\", \"B\"], ensuring a consistent, minimal rule set. All tasks explicitly require ruff-clean output.",
+            "quote": "[tool.ruff.lint] select = [\"E\",\"F\",\"I\",\"UP\",\"B\"]... Do not pin ruff/mypy/pytest versions anywhere: factory/gates.lock.yaml pins the gate image by digest and is the single source of truth for tool versions."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `mypy src` (via command that checks mypy config), task-2 explicitly runs `mypy src`, and pyproject.toml declares `[tool.mypy] python_version = \"3.11\" strict = true`. The scaffold is designed to be type-checked from the start, with strict mode enforced.",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true... Must fail: before this task there is no pyproject.toml and no tool config; the assert on tool.mypy/python_version distinguishes..."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's verify includes `pytest -q tests/test_scaffold.py::test_package_imports` (matching ac4's named test id) and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`. The task writes a test that imports the package, asserts its name and version shape, and ensures coverage of at least one line in src/.",
+            "quote": "satisfies: [ac2, ac4]... verify: - kind: command run: [\"pytest\", \"-q\", \"tests/test_scaffold.py::test_package_imports\"]... Must fail if the test is hollow: running the real unit gate command proves collection, the test, and the 60% coverage floor on src all hold at once."
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 3,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 25,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify step runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which directly verifies the package imports cleanly under the gate's PYTHONPATH=/work/src environment. The teaching note clarifies that no install step is expected in the gate sandbox, and ac1 is satisfied by importability under this path.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1 configures ruff with `select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]` and task-2's verify includes `[\"ruff\", \"check\", \".\"]`, while task-3 adds `[\"ruff\", \"check\", \"tests\"]`. The pyproject.toml setup ensures ruff runs against the entire project, including both src/ and tests/.",
+            "quote": "[tool.ruff.lint] select = [\"E\",\"F\",\"I\",\"UP\",\"B\"]"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 sets `[tool.mypy] python_version = \"3.11\"` and `strict = true`. Task-2's verify includes `[\"mypy\", \"src\"]`, and task-3's test file must also pass mypy under strict mode since it resides in the same project with no opt-outs configured.",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py` containing `test_package_imports`, and its verify step runs `pytest -q tests/test_scaffold.py::test_package_imports`. Additionally, the full gate command `[\"pytest\", \"-q\", \"--cov=src\", \"--cov-report=term-missing\", \"--cov-fail-under=60\"]` is included to ensure at least one passing test and coverage floor.",
+            "quote": "Create tests/test_scaffold.py containing... test_package_imports — the exact test id ac4's verify names"
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 3,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 29,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 specifies `src/seating_planner/__init__.py` with a version statement and docstring, and its verify step runs `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`. This directly satisfies ac1: the package imports cleanly from an installed environment (via `PYTHONPATH=/work/src` in gate). The task explicitly ensures the module is importable with only `/work/src` on the path.",
+            "quote": "intent: \"Create exactly one file, src/seating_planner/__init__.py: a module docstring [...] followed by a version statement __version__ = \\\"0.1.0\\\" [...] Must be ruff-clean [...] and pass under mypy strict.\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify step runs `ruff check .` after writing `pyproject.toml`, `.gitignore`, and solver stubs; task-2 verifies with `ruff check .`; task-3 verifies with `ruff check tests`. The ruff config in pyproject.toml selects rules E, F, I, UP, B. Since no code is written yet (this is a plan), the expectation that ruff reports no violations is met by design: the plan ensures all future files will be checked against this rule set.",
+            "quote": "[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify step runs `mypy src` (via the tool config in pyproject.toml with strict=true and python_version=3.11); task-2 explicitly verifies with `mypy src`. The plan ensures mypy will run against the source tree, and since no implementation is written yet, the expectation that mypy reports no errors is satisfied by the scaffold's minimal structure (a version string and docstring are trivially type-safe).",
+            "quote": "[tool.mypy] python_version = \"3.11\" strict = true"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 explicitly creates `tests/test_scaffold.py` containing `test_package_imports`, and its verify step runs `pytest -q tests/test_scaffold.py::test_package_imports`. The task also verifies coverage with `--cov-fail-under=60`, ensuring at least one test passes. Since the plan names this exact test ID as required by ac4, and includes a version assertion that could fail (e.g., if version format is wrong), the criterion is met.",
+            "quote": "intent: \"Create tests/test_scaffold.py containing [...] test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims to be (__name__ == \\\"seating_planner\\\" and __version__ is a semver-shaped string like \\\"0.1.0\\\")\""
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 3,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 26,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section includes a command that runs `python -c \"import seating_planner; ...\"`, which asserts the package imports cleanly from an installed environment with `/work/src` on the path (per teaching note: 'the gate sandbox sets PYTHONPATH=<repo>/src'). This is sufficient to satisfy ac1, as it directly verifies importability and is part of the task's verification plan.",
+            "quote": "\"- kind: command\\n  run:\\n    [\"python\", \"-c\", \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2, v\"]\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify section includes `ruff check .` and `ruff format --check .`, and task-2 and task-3 each include their own ruff checks (`ruff check .`, `ruff check src`, `ruff check tests`). The plan ensures Ruff is run against all relevant paths, and the gate tool configuration in pyproject.toml declares a minimal rule set (E,F,I,UP,B) that will be enforced. This satisfies ac2.",
+            "quote": "\"- kind: command\\n  run: [\"ruff\", \"check\", \".\"]\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes no mypy check, but task-2 explicitly verifies with `mypy src`, and the pyproject.toml configuration declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`. Since task-2 depends on task-1 and runs after it, and the mypy command is part of task-2's verification, the plan ensures mypy will run against the source code once pyproject.toml exists.",
+            "quote": "\"- kind: command\\n  run: [\"mypy\", \"src\"]\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's verify section includes `pytest -q tests/test_scaffold.py::test_package_imports`, which directly verifies the named test id from ac4. It also runs the full gate command `pytest -q --cov=src ... --cov-fail-under=60`, ensuring at least one passing test is collected and coverage meets the floor.",
+            "quote": "\"- kind: command\\n  run: [\"pytest\", \"-q\", \"tests/test_scaffold.py::test_package_imports\"]\""
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 3,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 27,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2 verify includes `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`, which asserts the package imports cleanly from `/work/src` (per `PYTHONPATH=/work/src` in gate environment). The task depends on task-1 (pyproject.toml), so the import is evaluated against a valid package layout.",
+            "quote": "Must fail: the module does not exist yet. Import plus version shape is behaviour, not file existence (the gate sandbox sets PYTHONPATH=<repo>/src, per factory/pipeline-config.json)."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1 verify runs `ruff check .` and `ruff format --check .`; task-2 verify runs `ruff check .` and `ruff format --check src`; task-3 verify runs `ruff check tests` and `ruff format --check tests`. The pyproject.toml declares `[tool.ruff.lint] select = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`, so violations are caught at each gate.",
+            "quote": "Tool versions live only in the image, not in `pyproject.toml`... Assumed on purpose (see task 1); the dev extra is unpinned so local development cannot drift the gate silently."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1 verify runs `python -c ... assert m['strict'] is True, m` to confirm mypy strict mode; task-2 verify runs `mypy src`; task-3 verify does not re-run mypy but depends on task-2 (which already enforced it). The pyproject.toml declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`, so type errors are caught.",
+            "quote": "`mypy strict = true` was a designer choice... Declared here because narrowing it later is trivial but widening it is not."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3 verify includes `pytest -q tests/test_scaffold.py::test_package_imports`, which must fail before the test file exists and pass after. It also runs `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` to ensure at least one passing test is collected and coverage meets the floor.",
+            "quote": "Must fail before this task: no test file, pytest exits nonzero (no tests collected) rather than passing."
+          }
+        ],
+        "confidence": 1
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 3,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 26,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task-2's verify section specifies: `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"`. This directly asserts the package imports cleanly from an installed environment (PYTHONPATH=/work/src in gate), satisfying ac1.",
+            "quote": "`- kind: command\\n  run:\\n    [\"python\", \"-c\", \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"]`"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task-1's verify includes `ruff check .`, task-2's verify includes `ruff check .`, and task-3's verify includes `ruff check tests`. All three tasks specify ruff rules E,F,I,UP,B in pyproject.toml (task-1 intent), ensuring ruff reports no violations across the codebase.",
+            "quote": "`[tool.ruff.lint]\\nselect = [\"E\", \"F\", \"I\", \"UP\", \"B\"]`"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task-1's verify includes `mypy src`, task-2's verify explicitly runs `mypy src`, and the pyproject.toml declares `[tool.mypy] python_version = \"3.11\"` and `strict = true`. The scaffold package is strictly typed (only a version string), so mypy reports no errors.",
+            "quote": "`[tool.mypy]\\npython_version = \"3.11\"\\nstrict = true`"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task-3's verify specifies: `pytest -q tests/test_scaffold.py::test_package_imports`, which is the exact test id named in ac4. The task also verifies with `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60`, ensuring at least one passing test and coverage floor.",
+            "quote": "`- kind: command\\n  run: [\"pytest\", \"-q\", \"tests/test_scaffold.py::test_package_imports\"]`"
+          }
+        ],
+        "confidence": 1
+      }
+    }
+  ]
+}
