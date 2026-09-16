@@ -32,7 +32,14 @@ Two more, for the things a script cannot settle:
 ```
 factory policy            # what risk-policy.yaml does to each bean, as a table
 factory read              # record that a human read a run's two documents
+factory reaudit <run-dir> # run a finished run's audits again, N times, against a copy
 ```
+
+`reaudit` is for the question the seeded-defect harnesses cannot answer: when
+something about the judge changes — the token cap, the response grammar, what a
+field means — did it change anything on a **real** run? It never writes to the
+run directory, because a finished run is evidence, and it repeats, because this
+judge gives different verdicts for byte-identical input.
 
 ## What holds the line together
 

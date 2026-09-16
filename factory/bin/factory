@@ -49,6 +49,10 @@ factory — run the line against the repository you are standing in.
   factory policy            the tier every bean lands in, and the rule that put
                             it there — for reviewing risk-policy.yaml by its
                             consequences rather than by reading globs
+  factory reaudit <run-dir> run a finished run's audits again, against a COPY of
+                            it, N times — for answering "did that change to the
+                            judge do anything on a real run?" rather than on the
+                            seeded defects in bench/
 
 Steps in order: preflight spec audit-spec build gate audit-impl
                 doc audit-doc audit-package sync pr ci
@@ -713,6 +717,26 @@ The two documents this run produced:
   policy)
     require_target
     exec bash "$PIPE/policy-preview.sh" "$@"
+    ;;
+
+  reaudit)
+    # The bean is looked up from the run record, because typing it is the step
+    # that gets skipped and an audit without it reports on criteria nobody
+    # declared — which is the failure this whole command was written to measure.
+    require_target
+    rd="${1:-}"; [ -n "$rd" ] || die "usage: factory reaudit <run-dir> [--passes n] [--target t]"
+    shift
+    [ -d "$rd" ] || rd="$TARGET_ROOT/$rd"
+    [ -d "$rd" ] || die "no such run directory: ${1:-$rd}"
+    case " $* " in
+      *" --bean "*) ;;
+      *)
+        rb="$(jq -r '.bean_id // .bean // empty' "$rd/run.json" 2>/dev/null)"
+        [ -n "$rb" ] || die "no bean_id in $rd/run.json — pass --bean <bean.yaml> yourself"
+        by="$(bean_yaml_for "$rb")" || die "cannot find the bean YAML for $rb"
+        set -- --bean "$by" "$@" ;;
+    esac
+    exec bash "$PIPE/reaudit.sh" "$rd" "$@"
     ;;
 
   beans)
