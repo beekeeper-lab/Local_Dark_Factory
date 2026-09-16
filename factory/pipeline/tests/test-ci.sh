@@ -60,6 +60,9 @@ tasks:
     write_paths: ["pyproject.toml"]
 TY
 printf 'x\n' > src/a.py; printf 'y\n' > tests/test_a.py; printf 'z\n' > pyproject.toml
+# A workflow on the branch. Without one, ci.sh refuses immediately rather than
+# waiting for a check nothing can report — which is its own case, below.
+mkdir -p .github/workflows && printf 'name: gates\non: [pull_request]\n' > .github/workflows/gates.yml
 git add -A && git commit -q -m init
 HEAD_SHA="$(git rev-parse HEAD)"
 printf '{"schema_version":"run/1.0.0","run_id":"R","bean_id":"bean-001","bean":"bean-001","pr_url":"https://github.com/example/x/pull/1"}\n' > "$R/run.json"
@@ -205,6 +208,24 @@ printf '[{"name":"gates","state":"CANCELLED","bucket":"cancel","link":""}]\n' > 
 out="$(ci)"; rc=$?
 rc_is "a cancel is terminal"           "$rc" 9
 nope  "and not waited on"              "after 3s" "$out"
+
+# --------------------------------------------------------------------------
+printf '\n== required checks that nothing can produce ==\n\n'
+#
+# Forty-five minutes of polling ends at the same conclusion this can reach now.
+# The difference is that a run which halts immediately gets fixed, and one that
+# halts after forty-five minutes gets abandoned.
+clean
+printf '[{"name":"gates","state":"SUCCESS","bucket":"pass","link":""}]\n' > "$GH_CHECKS"
+git rm -rq .github/workflows/gates.yml && git commit -q -m "no workflows"
+out="$(ci)"; rc=$?
+rc_is "it refuses at once"             "$rc" 3
+check "saying what is impossible"      "CI IMPOSSIBLE" "$out"
+check "and that it did not wait"       "Not waiting" "$out"
+check "the question names both fixes"  "or remove" "$(cat "$R/QUESTIONS.md")"
+check "including how to install one"   "factory/scaffold.sh" "$(cat "$R/QUESTIONS.md")"
+nope  "and it is never green"          "CI PASS" "$out"
+git revert -q --no-edit HEAD
 
 # --------------------------------------------------------------------------
 printf '\n== a repository that names no required checks ==\n\n'

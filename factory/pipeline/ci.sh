@@ -67,10 +67,49 @@ fi
 printf '  ok    pull request            %s\n' "$PR_URL"
 printf '  ok    required                %s\n' "$REQUIRED"
 
+# The commit the checks have to be about, read before anything uses it. The
+# fail-fast branch below quotes it, and at first it was written above the line
+# that defines it — so the heredoc died on an unbound variable and wrote an empty
+# QUESTIONS.md while the step still printed its explanation to the terminal. The
+# operator would have been told to read a file with nothing in it.
+HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
+
+# Waiting is only worth doing for something that can happen. A repository that
+# names required checks and carries no workflows will never report one, and
+# forty-five minutes of polling ends at the same conclusion this line can reach
+# now — with the difference that a run which halts immediately gets fixed, and one
+# that halts after forty-five minutes gets abandoned.
+#
+# Checked against the branch, not the working tree: the pull request is about the
+# commit that was pushed, and what matters is whether a workflow exists there.
+if ! git -C "$ROOT" ls-tree -r --name-only HEAD -- .github/workflows 2>/dev/null | grep -q .; then
+  printf '  FAIL  workflows               none on this branch under .github/workflows\n'
+  cat > "$RUN_DIR/QUESTIONS.md" <<EOF
+# This repository requires checks that nothing can produce
+
+\`factory/repo.yaml\` names required checks —$( for c in $REQUIRED; do printf ' \`%s\`' "$c"; done ) —
+and the branch this pull request is from carries no \`.github/workflows\`. Nothing
+will ever report them, so waiting is only a slower way of finding that out.
+
+- pull request: $PR_URL
+- candidate: \`$HEAD_SHA\`
+
+Either install the workflow — \`factory/scaffold.sh <repo>\` copies it, and it runs
+the image \`gates.lock.yaml\` pins, which has to be published to a registry first
+(\`factory/gate-image/publish.sh --registry ghcr.io/<org>\`) — or remove
+\`required_checks\` from repo.yaml, which is the honest thing to do if this
+repository is not going to have CI.
+EOF
+  printf '\nCI IMPOSSIBLE — required checks are named and no workflow exists to report them.\n'
+  printf 'See QUESTIONS.md. Not waiting %ss to reach the same conclusion.\n' "$TIMEOUT"
+  exit 3
+fi
+printf '  ok    workflows               %s on this branch\n' \
+  "$(git -C "$ROOT" ls-tree -r --name-only HEAD -- .github/workflows 2>/dev/null | wc -l)"
+
 # The checks have to be about the commit that was pushed, not about whatever the
 # branch points at now. A green check on a different commit is not evidence about
-# this one — the same rule pr.sh applies to a verdict.
-HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
+# this one — the same rule pr.sh applies to a verdict. HEAD_SHA is read above.
 
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
 STATE=""; ROWS=""
