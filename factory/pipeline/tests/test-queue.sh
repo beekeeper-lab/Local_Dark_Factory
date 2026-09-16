@@ -236,5 +236,23 @@ check "it says nothing is ready"   "ready: nothing" "$out"
 # way the reason travels with the stop.
 check "and the queue's own summary" "refused: 1 bean(s) not approved" "$out"
 
+printf '\n== the loop stops at a halt, for real ==\n\n'
+#
+# Everything above is the queue deciding. This is `go` acting on it: the run
+# itself fails — here because preflight refuses a dirty tree, which is a real
+# refusal and not a stub — and what matters is that the queue stops rather than
+# carrying on to the next bean. Whatever stopped one bean would stop the next,
+# and a queue that kept going would turn one question into twenty.
+git -C "$REPO" checkout -q main
+rm -rf "$REPO/factory/runs"/*
+git -C "$REPO" branch -q -D bean/bean-001-x bean/bean-002-x bean/bean-003-x 2>/dev/null || true
+printf 'uncommitted\n' > "$REPO/dirty.txt"
+out="$(fac go --limit 2)"; rc=$?
+rc_is "it exits non-zero"            "$rc" 1
+check "it names the bean it stopped at" "STOPPED at bean-001" "$out"
+check "and says why it does not go on" "would stop the next bean too" "$out"
+nope  "the second bean is never started" "=== bean-002 ===" "$out"
+rm -f "$REPO/dirty.txt"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
