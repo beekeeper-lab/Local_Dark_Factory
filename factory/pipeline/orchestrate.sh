@@ -570,6 +570,7 @@ run_step() { # <step> [-- <extra args carried through to the child>]
         halt "$step" 8
       elif [ "$rc" -ne 0 ]; then
         printf '\nNO JUDGEMENT  %s — the judge did not produce one (exit %s).\n' "$step" "$rc"
+        say_advisory_exists
         record_failure "$step" "$rc" "the judge produced no judgement"
         "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
         halt "$step" "$rc"
@@ -584,6 +585,7 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # person instead of spending an attempt.
       if [ "$rc" -eq 7 ] && [ "$ADVISORY_AUDITS" != 1 ]; then
         printf '\nABSTAINED  %s — the judge could not form a judgement. A human decides.\n' "$step"
+        say_advisory_exists
         record_failure "$step" 7 "the judge abstained; routed to a human rather than retried"
         "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
         halt "$step" 7
@@ -866,6 +868,28 @@ handle_other_failure() { # a non-audit step failed: no findings, no blind retry
   local step="$1" rc="${2:-1}"
   record_failure "$step" "$rc" "a non-audit step failure carries no findings a retry could address"
   halt "$step" "$rc"
+}
+
+# say_advisory_exists — printed whenever an audit halts a run in blocking mode.
+#
+# `FACTORY_ADVISORY_AUDITS` defaults to 0, and that is deliberate: a default that
+# quietly weakens a gate is the fail-open shape this project keeps finding. But
+# "the judge did not produce a judgement" is, on today's measurement, the normal
+# outcome rather than an exception — twelve audits of a real run at the best known
+# configuration produced zero stampable verdicts — so an operator who hits this
+# halt is not looking at something unusual and should not have to read RESUME.md
+# to find that out.
+#
+# The strict thing stays the default. What changes is that the halt says the
+# choice exists and what it costs.
+say_advisory_exists() {
+  printf '\n  This may not be a defect in the artifact. As of 2026-09-16, twelve audits of\n'
+  printf '  a real run at the best known configuration produced zero verdicts the\n'
+  printf '  controller would stamp — see the audit section of RESUME.md, and\n'
+  printf '  `factory reaudit <run-dir>` to measure it here.\n'
+  printf '  To record audits and keep going instead of halting:\n'
+  printf '      FACTORY_ADVISORY_AUDITS=1  (or --advisory-audits)\n'
+  printf '  They are recorded either way; advisory means they do not block.\n'
 }
 
 handle_audit_failure() { # audit FAIL: route back to the authoring step with findings

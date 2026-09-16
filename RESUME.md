@@ -870,19 +870,42 @@ or not-applicable and say which. None failed.
 
 ## Next action
 
-**Two decisions for the owner, then Phase 2.** See "Still open" below for
-`required_checks`, and the Phase-1 invariant item in the plan for the
-run-002-through-006 versus re-read-the-predicate choice — both have a
-recommendation attached.
+**The line is blocked on one human action and it is the right one.** PR #1 is open
+and unmerged, so `factory queue` reports `pr_open` and nothing is ready. Merge it
+(or say why not) and `factory go` picks up bean-002, which now has hidden tests
+waiting for it.
 
-The instructions below still stand for the next bean. Everything is built,
-every step has been exercised, and no single real run has yet gone the whole way. Six
-defects stopped the first five attempts; all are fixed and all have tests.
+Three things the owner alone can do, each with the command:
+
+1. **Merge** https://github.com/beekeeper-lab/seating-planner-py/pull/1
+2. **Publish the gate image**, which is all that stands between the line and a
+   real CI step — see "Still open".
+3. **`factory read <run-dir>`** for bean-001, the one Phase-1 exit predicate a
+   script cannot settle.
+
+Then, for the next bean:
 
 ```
 cd /home/gregg/workspace/seating-planner-py
-FACTORY_ADVISORY_AUDITS=1 /home/gregg/workspace/Local_Dark_Factory/factory/bin/factory run bean-001
+/home/gregg/workspace/Local_Dark_Factory/factory/bin/factory go
 ```
+
+`factory go` runs the approved beans in order and stops at the first halt.
+`factory run bean-002` is one bean of it. Both snapshot the pipeline and run from
+the copy, so editing the repository mid-run is safe. `factory doctor` says whether
+the target is ready; it currently says ready.
+
+Advisory audits are **still off by default and still need the flag**:
+
+```
+FACTORY_ADVISORY_AUDITS=1 factory go        # or --advisory-audits
+```
+
+The default stays strict on purpose — a default that quietly weakens a gate is
+the fail-open shape this project keeps finding. What changed is that every audit
+halt now says the option exists and what today's measurement says about it, so an
+operator who hits one does not have to come here to learn that zero stampable
+verdicts is the normal outcome rather than a surprise.
 
 `factory run` is the entry point — it finds the config, snapshots the pipeline and runs from
 the copy, so editing the repository mid-run is safe. `factory doctor` says whether the

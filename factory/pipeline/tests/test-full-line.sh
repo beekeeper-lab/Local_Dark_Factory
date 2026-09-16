@@ -335,6 +335,14 @@ cat > "$RUN_DIR/verdicts/$TARGET.attempt-$n.judgement.json" <<JSON
  "judged_by":{"model":"stub","digest":"stub","num_ctx":0,"thinking":"none","seconds":0}}
 JSON
 printf 'JUDGE  %s  %s (stub)\n' "$TARGET" "${STUB_VERDICT:-accept}" >&2
+# STUB_JUDGE_SILENT: write nothing and fail, the way the real judge does when it
+# spends its budget reasoning, calls a tool that does not exist, or returns an
+# answer that is not JSON. On 2026-09-16 that was seven of twelve real audits.
+if [ "${STUB_JUDGE_SILENT:-0}" = 1 ]; then
+  rm -f "$RUN_DIR/verdicts/$TARGET.attempt-$n.judgement.json"
+  printf 'JUDGE  %s: the stub wrote no judgement\n' "$TARGET" >&2
+  exit 1
+fi
 exit 0
 STUB
 chmod +x "$WORK/pipeline/judge.sh"
@@ -789,6 +797,27 @@ nope  "so the run does not halt"        "HALT  spec" "$retry_out"
 # to an origin that already had the first one; pr.sh refused, correctly, and the
 # phase-1 audit reported pr(FAIL) for a run that had never been meant to open one.
 # This block now runs last and leaves the repository however it likes.
+
+printf '\n== an audit that halts the run says the advisory option exists ==\n\n'
+#
+# FACTORY_ADVISORY_AUDITS defaults to 0 and stays that way: a default that quietly
+# weakens a gate is the fail-open shape this project keeps finding. But on
+# 2026-09-16 twelve audits of a real run at the best known configuration produced
+# zero stampable verdicts, so an operator hitting this halt is looking at the
+# normal outcome, not an exception — and should not have to read RESUME.md to
+# find that out.
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+rm -f "$GH_CALLS"
+out="$(STUB_JUDGE_SILENT=1 run_line 2>&1 || true)"
+check "the halt names the judge"        "NO JUDGEMENT" "$out"
+check "and says it may not be the artifact" "may not be a defect in the artifact" "$out"
+check "with the measurement behind that" "zero verdicts the" "$out"
+check "and the flag that changes it"    "FACTORY_ADVISORY_AUDITS=1" "$out"
+check "and that advisory is not silent" "recorded either way" "$out"
+check "and how to measure it here"      "factory reaudit" "$out"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
