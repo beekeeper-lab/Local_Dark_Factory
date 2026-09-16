@@ -524,6 +524,37 @@ if [ "$(jq -r '.model // ""' <<<"$RESP" 2>/dev/null)" = "" ] \
 fi
 
 DONE_REASON="$(jq -r '.done_reason // "?"' <<<"$RESP" 2>/dev/null)"
+
+# How much of the window the request actually used.
+#
+# ollama returns prompt_eval_count and eval_count on the final response and this
+# script read neither, which left every "it stopped without finishing" diagnosis
+# guessing between three causes. On 2026-09-16 a doc audit returned 13,273 bytes
+# of well-formed JSON that stopped mid-string with done_reason=stop — not
+# `length`, so not the token cap, and the message could only say so and shrug.
+#
+# These two numbers settle it. prompt + generated against num_ctx says whether
+# the CONTEXT window is what ended the answer, which is a different lever from
+# JUDGE_NUM_PREDICT and lives in roles.json.
+PROMPT_TOK="$(jq -r '.prompt_eval_count // 0' <<<"$RESP" 2>/dev/null)"
+GEN_TOK="$(jq -r '.eval_count // 0' <<<"$RESP" 2>/dev/null)"
+USED_TOK=$(( PROMPT_TOK + GEN_TOK ))
+# Within 2% of the window, or over it. Not equality: the count excludes whatever
+# framing the server adds, so an answer stopped by the window lands near it
+# rather than on it.
+CTX_TIGHT=0
+if [ "$NUM_CTX" -gt 0 ] && [ "$USED_TOK" -gt 0 ] \
+   && [ "$(( USED_TOK * 100 / NUM_CTX ))" -ge 98 ]; then CTX_TIGHT=1; fi
+printf 'JUDGE  %s  tokens: %s prompt + %s generated = %s of %s ctx (%s%%)\n' \
+  "$TARGET" "$PROMPT_TOK" "$GEN_TOK" "$USED_TOK" "$NUM_CTX" \
+  "$([ "$NUM_CTX" -gt 0 ] && echo $(( USED_TOK * 100 / NUM_CTX )) || echo '?')" >&2
+if [ "$CTX_TIGHT" = 1 ]; then
+  printf 'JUDGE  %s: that is the CONTEXT WINDOW, not the token cap.\n' "$TARGET" >&2
+  printf '       Whatever is wrong with this answer, JUDGE_NUM_PREDICT (%s) is not the lever:\n' "$NUM_PREDICT" >&2
+  printf '       the request filled num_ctx. Raise .roles.judge.num_ctx in roles.json, or send\n' >&2
+  printf '       the judge fewer bytes. done_reason was `%s`, which does not say this.\n' "$DONE_REASON" >&2
+fi
+
 [ "$DONE_REASON" = "length" ] && printf 'JUDGE  %s: hit the %s-token cap before finishing\n' "$TARGET" "$NUM_PREDICT" >&2
 CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
 NTOOLS="$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)"

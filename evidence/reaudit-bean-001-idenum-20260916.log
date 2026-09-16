@@ -1,0 +1,50 @@
+# The same twelve audits, with the bean's criterion ids moved out of the prose
+# and into the response GRAMMAR as an enum on criteria[].id, with minItems.
+# Everything else identical to reaudit-bean-001-3pass-20260916.log.
+
+logs: /tmp/reaudit3.L7IFI6
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     0         revise     no        2 finding(s), 4 criteria, conf 0.5
+impl      1     1         -          no        JUDGE  impl: the model tried to call tools instead of answering (1 call(
+doc       1     1         -          no        JUDGE  doc: the answer is not JSON (done_reason=stop, 13273 bytes). jq: 
+package   1     1         -          no        JUDGE  package: it reasoned for 388 characters and then ended its turn (
+spec      2     0         revise     no        1 finding(s), 4 criteria, conf 0
+impl      2     1         -          no        JUDGE  impl: the model tried to call tools instead of answering (1 call(
+doc       2     1         -          no        JUDGE  doc: the answer is not JSON (done_reason=stop, 14168 bytes). jq: 
+package   2     0         accept     no        0 finding(s), 4 criteria, conf 1
+spec      3     0         revise     no        1 finding(s), 4 criteria, conf 0
+impl      3     1         -          no        JUDGE  impl: the model tried to call tools instead of answering (1 call(
+doc       3     1         -          no        JUDGE  doc: the model tried to call tools instead of answering (1 call(s
+package   3     0         accept     no        0 finding(s), 4 criteria, conf 0.99
+
+--- what it put in `criteria`, every time it answered ---
+1-spec       ["ac1","ac2","ac3","ac4"]
+2-spec       ["ac1","ac2","ac3","ac4"]
+2-package    ["ac1","ac2","ac3","ac4"]
+3-spec       ["ac1","ac2","ac3","ac4"]
+3-package    ["ac1","ac2","ac3","ac4"]
+
+the bean declares: ac1 ac2 ac3 ac4
+
+--- before the change, the same twelve slots ---
+1-spec       ["task-1","task-2"]
+1-package    ["test_files_presented"]
+2-spec       ["task-1","task-2"]
+3-spec       ["artifact-1","artifact-2","artifact-3","artifact-4","artifact-5"]
+3-impl       ["ac1"]
+3-package    ["importable-modules","module-docstrings"]
+
+--- why each of the twelve was refused now ---
+1-doc        doc: the judge wrote no judgement file.
+1-impl       impl: the judge wrote no judgement file.
+1-package    package: the judge wrote no judgement file.
+1-spec       spec: the judgement quotes text that is not on disk anywhere.
+2-doc        doc: the judge wrote no judgement file.
+2-impl       impl: the judge wrote no judgement file.
+2-package    package: the judgement quotes text that is not on disk anywhere.
+2-spec       spec: the judgement quotes text that is not on disk anywhere.
+3-doc        doc: the judge wrote no judgement file.
+3-impl       impl: the judge wrote no judgement file.
+3-package    package: the judgement quotes text that is not on disk anywhere.
+3-spec       spec: the judgement quotes text that is not on disk anywhere.

@@ -361,6 +361,34 @@ check "and that it is not a question"       "not a question for you" "$req"
 check "the note is in the artifact header"  "read as:" "$req"
 rm -f "$R/claims-check.json"
 
+printf '\n== how much of the window the request used, and whose lever that is ==\n\n'
+#
+# ollama returns prompt_eval_count and eval_count on the final response, and this
+# script read neither. So "it stopped without finishing" could be the token cap,
+# the context window, or the model just stopping, and the message could only name
+# the first — which is the wrong lever twice out of three.
+#
+# Real case: a doc audit returned 13,273 bytes of well-formed JSON that stopped
+# mid-string with done_reason=stop. Not `length`, so not the cap.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", prompt_eval_count:1000, eval_count:500,
+    message:{role:"assistant", content:$c}}')"
+out="$(judge)"
+check "the counts are reported"        "1000 prompt + 500 generated = 1500 of 32768" "$out"
+nope  "and a roomy request says nothing about the window" "CONTEXT WINDOW" "$out"
+
+printf '\n-- and a request that filled the window says whose lever it is --\n\n'
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", prompt_eval_count:30000, eval_count:2700,
+    message:{role:"assistant", content:$c}}')"
+out="$(judge)"
+check "it names the context window"    "that is the CONTEXT WINDOW, not the token cap" "$out"
+check "and the setting to change"      "roles.json" "$out"
+check "and what is NOT the lever"      "JUDGE_NUM_PREDICT" "$out"
+check "and that done_reason hid it"    "which does not say this" "$out"
+
 printf '\n== the criterion ids are in the grammar, not only in the prose ==\n\n'
 #
 # The prompt has said, in bold, "the criteria you report on are these, and only
