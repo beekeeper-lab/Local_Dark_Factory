@@ -29,14 +29,17 @@ Step → child skill mapping (args the child receives):
   build-task      factory-build-task   <run_dir> <task-id> <attempt-dir>
                   (one task of the build loop; build-loop.sh passes the extras)
   doc             factory-doc          <run_dir>
-  audit-<target>  factory-audit        <target> <run_dir>
   pr              factory-pr           <run_dir>
+
+Audits are NOT here. `orchestrate.sh` runs them itself — judge.sh over HTTP,
+then audit-check.sh — and run-step refuses an `audit-*` step name rather than
+offering a second way to do it. judge.sh's header has the measurement: as a pi
+session this model reaches for a `repo_browser` tool namespace that does not
+exist, gets nothing, and answers anyway.
 
 The `factory-` prefix keeps these from colliding with the identically-named
 skills in the global ~/.pi/agent/skills directory, which belongs to another
 project. A collision is not an error anywhere — it is a silent substitution.
-    (<target> ∈ spec impl doc package)
-
 Extra args after `--` are appended to the skill invocation — used for retries,
 e.g. passing the path of the FAIL verdict whose findings to address.
 
@@ -87,32 +90,25 @@ BEAN_ID="$(jq -r '.bean // empty' "$RUN_DIR/run.json")"
 # and the controller refused them. Two skills with one name is a coin toss, and
 # the run record would have said nothing about which one won.
 case "$STEP" in
-  spec)      SKILL="factory-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ; TARGET="" ;;
-  build-task) SKILL="factory-build-task"; SKILL_ARGS="$RUN_DIR"      ; TARGET="" ;;
-  doc)       SKILL="factory-doc";       SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
-  pr)        SKILL="factory-pr";        SKILL_ARGS="$RUN_DIR"         ; TARGET="" ;;
-  # NOTE, 2026-09-16: nothing in the live line reaches this branch.
+  spec)      SKILL="factory-spec";      SKILL_ARGS="$BEAN_ID $RUN_DIR" ;;
+  build-task) SKILL="factory-build-task"; SKILL_ARGS="$RUN_DIR"      ;;
+  doc)       SKILL="factory-doc";       SKILL_ARGS="$RUN_DIR"         ;;
+  pr)        SKILL="factory-pr";        SKILL_ARGS="$RUN_DIR"         ;;
+  # Audits do not run here, and asking for one is refused rather than served.
   #
-  # orchestrate.sh handles `audit-*` itself — judge.sh, then audit-check.sh — and
-  # never falls through to run-step for an audit. judge.sh's header explains why,
-  # and it is a measured reason rather than a preference: as a pi session this
-  # model reaches for a `repo_browser` tool namespace that does not exist, gets
-  # nothing, and answers anyway, producing a fluent audit of a document it never
-  # read.
+  # This branch used to build a `factory-audit` pi session. Nothing in the live
+  # line reached it — orchestrate.sh handles `audit-*` itself, judge.sh then
+  # audit-check.sh — so it was a second way to run an audit, and it was the way
+  # that was MEASURED NOT TO WORK: as a pi session this model reaches for a
+  # `repo_browser` tool namespace that does not exist, gets nothing, and answers
+  # anyway, producing a fluent audit of a document it never read.
   #
-  # So this is a second way to run an audit, and it is the way that was measured
-  # not to work. It is left in place only because `tests/test-role-routing.sh`
-  # drives run-step directly to assert that an audit step does not claim to be
-  # uncontained, and unpicking that is a bigger change than it looks. Removing
-  # both together is the right end state — the same call that removed checks.sh
-  # and factory-implement.
-  audit-*)   SKILL="factory-audit"; TARGET="${STEP#audit-}"
-             case "$TARGET" in
-               spec|impl|doc|package) ;;
-               *) die "unknown audit target '$STEP' (expected audit-spec|audit-impl|audit-doc|audit-package)" ;;
-             esac
-             SKILL_ARGS="$TARGET $RUN_DIR" ;;
-  *) die "unknown step '$STEP' (expected spec|implement|build-task|doc|pr|audit-<target>)" ;;
+  # Dead code that produces a plausible wrong answer is worse than no code. It
+  # is gone; the step name is now an error that says where audits live.
+  audit-*)
+    die "audits do not run through run-step.sh: orchestrate.sh runs judge.sh over HTTP and then audit-check.sh. As a pi session this model answers about files it never read - see judge.sh's header for the measurement."
+    ;;
+  *) die "unknown step '$STEP' (expected spec|build-task|doc|pr)" ;;
 esac
 
 ROOT="$(repo_root)"
@@ -345,7 +341,8 @@ done
 # outcome is the drift this already reports rather than a halted run — the step
 # can still do its work at another context, and `conditions.declared_matches_observed`
 # is where a reader finds out. FACTORY_ENSURE_LOADED=0 turns it off.
-# Only for a contained step, which is the only kind that is a real run.
+# Only for a contained step, which is the only kind that is a real run, and only
+# once the gateway is open — see the call site below.
 #
 # The first version preloaded unconditionally and the test suite went from two
 # minutes to over ten: every stubbed step asked ollama to load a 64GB model, on a
@@ -354,13 +351,15 @@ done
 # explicit opt-out, so containment is the honest signal for "a model is actually
 # about to be asked something" — and preloading 64GB for a shell stub is wrong
 # whether or not a test is watching.
-if [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] && [ "$CONTAIN" = 1 ] \
-   && [ -x "$PIPELINE_DIR/ensure-loaded.sh" ]; then
-  el_rc=0
+ensure_role_loaded() {
+  [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] || return 0
+  [ -x "$PIPELINE_DIR/ensure-loaded.sh" ] || return 0
+  local el_rc=0
   ROLES_FILE="$ROLES_FILE" "$PIPELINE_DIR/ensure-loaded.sh" "$ROLE" >&2 || el_rc=$?
   [ "$el_rc" -ge 2 ] && printf 'WARN   %s   could not preload %s; the step runs at whatever context the server has\n' \
     "$STEP" "$ROLE_MODEL" >&2
-fi
+  return 0
+}
 
 if [ "$CONTAIN" = 1 ]; then
   GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
@@ -369,6 +368,11 @@ if [ "$CONTAIN" = 1 ]; then
     GW_DIR="$("$PIPELINE_DIR/model-gateway.sh" start)" || die "could not open a model gateway; refusing to run the worker uncontained"
     GW_STARTED=1
   fi
+  # Load after the gateway, not before it. Loading first meant a run whose
+  # gateway would not open had already spent the minutes it takes to put 64GB on
+  # the GPU, for a step that then died. Nothing between here and the worker needs
+  # the model; the gateway is the cheap thing and it goes first.
+  ensure_role_loaded
   AGENT_DIR="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fagent.XXXXXX")"
   mkdir -p "$AGENT_DIR/sessions"
   cp "$HOME/.pi/agent/models.json" "$AGENT_DIR/models.json" 2>/dev/null \
@@ -529,9 +533,6 @@ false && [ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" != "$ROLE_CTX" 
   "$STEP" "$drift" >&2
 
 # -- bookkeeping in steps.jsonl --------------------------------------------------------
-is_audit=0
-[ -n "$TARGET" ] && is_audit=1
-
 # -- reconcile the attempt the child may or may not have recorded ---------------------
 # The child's skill opens (and sometimes closes) its own attempt via step.sh, or
 # records nothing at all (test children, crashes). Reconcile against steps.jsonl:
@@ -576,36 +577,11 @@ verdict_from_rc() {
 
 # End verdict for *this* attempt.
 END_VERDICT=""
-if [ "$is_audit" = 1 ]; then
-  # The child writes one verdict per attempt (verdicts/<target>.attempt-N.json),
-  # so the highest numbered file is THIS attempt's. Keying off it is what keeps
-  # an older attempt's PASS from masking the verdict we just wanted — and a
-  # freshly-passing retry from being stamped by the previous attempt's FAIL.
-  VFILE=""
-  BEST_N=0
-  for f in "$RUN_DIR/verdicts/$TARGET".attempt-*.json; do
-    [ -e "$f" ] || continue
-    # spec.attempt-1.judgement.json matches this glob too, and its attempt number
-    # parses as "1.judgement". pr.sh and package-check.sh already skip these; this
-    # loop and orchestrate's did not, and printed "integer expected" to stderr
-    # mid-step where it read like noise from something else.
-    case "$f" in *.judgement.json) continue ;; esac
-    nfile="${f##*attempt-}"; nfile="${nfile%.json}"
-    case "$nfile" in ''|*[!0-9]*) continue ;; esac
-    if [ "$nfile" -gt "$BEST_N" ]; then BEST_N="$nfile"; VFILE="$f"; fi
-  done
-  if [ -n "$VFILE" ]; then
-    # accept -> PASS; revise/block -> FAIL. The fork wrote PASS/FAIL directly;
-    # the factory's verdict schema uses the spec's three words (§10).
-    raw="$(jq -r '.verdict // "FAIL"' "$VFILE" 2>/dev/null || echo FAIL)"
-    case "$raw" in
-      accept|PASS) END_VERDICT="PASS" ;;
-      *)           END_VERDICT="FAIL" ;;
-    esac
-  else
-    END_VERDICT="FAIL"
-  fi
-elif [ "$CHILD_ENDS" -gt 0 ]; then
+# An `audit-*` step used to be read out of verdicts/<target>.attempt-N.json here.
+# That branch went with the audit routing above: audits are judge.sh's, and
+# orchestrate.sh stamps their verdicts itself. Nothing reachable from here has a
+# verdict file, so reading one would have been reading someone else's.
+if [ "$CHILD_ENDS" -gt 0 ]; then
   # Honour a verdict THIS child stamped; otherwise stamp from rc. A verdict from
   # an earlier attempt is not this attempt's result.
   EXISTING="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | last.verdict' "$STEPS")"
@@ -722,17 +698,8 @@ jq -sc \
 mv "$STEPS.tmp" "$STEPS"
 
 # -- exit code ------------------------------------------------------------------------
-if [ "$is_audit" = 1 ]; then
-  if [ "$END_VERDICT" = "PASS" ]; then
-    printf 'STEP   %s   PASS   session=%s\n' "$STEP" "${SESSION_FILE:--}"
-    exit 0
-  fi
-  printf 'STEP   %s   FAIL   verdict-file=%s session=%s\n' "$STEP" "${VFILE:--}" "${SESSION_FILE:--}" >&2
-  exit 1
-fi
-
 # BEAN-127: the exit code must follow the verdict that was written to
-# steps.jsonl, exactly like the audit path above. A child that stamped PASS
+# steps.jsonl. A child that stamped PASS
 # and exited non-zero is still a PASS — the raw `pi -p` exit status is
 # fallback evidence (used to derive the verdict when the child stamped
 # nothing), never an override of a verdict it did stamp. A step recorded

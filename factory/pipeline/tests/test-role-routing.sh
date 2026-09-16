@@ -92,13 +92,24 @@ check "prompt-template discovery is off" "--no-prompt-templates" "$out"
 check "context-file injection is off"   "--no-context-files" "$out"
 check "exactly the four tools, by name" "--tools read,write,edit,bash" "$out"
 
-# -- auditing steps run on the judge, and it must be a different model ----------
-out="$(run_step audit-spec)"
-check "audit-spec routes to judge"      "role=judge" "$out"
-check "judge uses a different model"    "--model ollama/gpt-oss:120b" "$out"
+# -- an audit cannot be run from here at all -----------------------------------
+# run-step used to build a `factory-audit` pi session for `audit-*`. Nothing in
+# the live line reached it, and it was the way that was measured not to work: as
+# a pi session this model reaches for a `repo_browser` namespace that does not
+# exist and answers anyway. It is gone, and the step name is now an error that
+# says where audits live — otherwise the next person to want one finds a branch
+# that runs and believes it.
+out="$(run_step audit-spec 2>&1 || true)"
+check "an audit step is refused here"   "audits do not run through run-step" "$out"
+check "and it names the path that works" "judge.sh" "$out"
+nope "no factory-audit session is built" "factory-audit" "$out"
 
-dev_model="$(jq -r '.roles[.step_roles.spec].model'       "$PIPELINE_DIR/roles.json")"
-jdg_model="$(jq -r '.roles[.step_roles["audit-spec"]].model' "$PIPELINE_DIR/roles.json")"
+# -- the judge must not be the developer's weights -----------------------------
+# Read .roles.judge directly, which is what judge.sh reads. It was read through
+# step_roles["audit-spec"] until that entry was removed with the dead branch —
+# an indirection through a table the judge never consulted.
+dev_model="$(jq -r '.roles[.step_roles.spec].model' "$PIPELINE_DIR/roles.json")"
+jdg_model="$(jq -r '.roles.judge.model'             "$PIPELINE_DIR/roles.json")"
 if [ "$dev_model" != "$jdg_model" ]; then
   printf '  ok    judge and developer are not the same weights\n'; PASS=$((PASS + 1))
 else
@@ -107,6 +118,7 @@ else
 fi
 
 # -- conditions are stamped, or runs are not comparable ------------------------
+out="$(run_step spec)"
 cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
 for field in role model digest thinking harness; do
   if [ "$(jq -r --arg f "$field" '.[$f] // "null"' <<<"$cond")" != "null" ]; then
@@ -122,7 +134,7 @@ done
 # Read the declared level rather than hardcoding one: this asserts that the
 # record is faithful to the configuration, not that any particular level is
 # configured. The judge's level has already changed once on measured grounds.
-declared_thinking="$(jq -r '.roles.judge.thinking' "$PIPELINE_DIR/roles.json")"
+declared_thinking="$(jq -r '.roles.developer.thinking' "$PIPELINE_DIR/roles.json")"
 check "conditions.declared retained"    "\"thinking\":\"$declared_thinking\"" "$(jq -c '.declared' <<<"$cond")"
 if [ "$(jq -r '.thinking' <<<"$cond")" = "$(jq -r '.declared.thinking' <<<"$cond")" ]; then
   printf '  ok    conditions.thinking is the observed level, matching what was asked for\n'; PASS=$((PASS + 1))
@@ -158,7 +170,7 @@ fi
 # The real case: roles.json asks for a thinking level, the model runs with it off,
 # and only the session file knows. That is the bug verbatim — the judge spent a
 # session with its reasoning disabled while the record claimed otherwise.
-out="$(STUB_PI_THINKING_OVERRIDE=off run_step audit-doc)"
+out="$(STUB_PI_THINKING_OVERRIDE=off run_step doc)"
 drift_cond="$(jq -rs '[.[] | select(.event == "end") | .conditions] | last' run/steps.jsonl)"
 check "drift is warned about"           "conditions drift" "$out"
 if [ "$(jq -r '.thinking' <<<"$drift_cond")" = "off" ] \
@@ -213,15 +225,19 @@ check "a name collision stops the run"    "skill name collision" "$out"
 check "and it names both directories"     "fake-global" "$out"
 
 # -- a frontier provider must be refused (spec §08) ----------------------------
-jq '.roles.judge.provider = "anthropic" | .roles.judge.model = "claude-opus-5"' \
+# On the developer role, because that is the one a reachable step resolves to.
+# These read `audit-impl` until run-step stopped serving audits; test-judge.sh
+# holds the same two refusals for the judge, on judge.sh, which is the path an
+# audit actually takes.
+jq '.roles.developer.provider = "anthropic" | .roles.developer.model = "claude-opus-5"' \
   "$PIPELINE_DIR/roles.json" > "$WORK/frontier-roles.json"
-out="$(ROLES_FILE="$WORK/frontier-roles.json" run_step audit-impl)"
+out="$(ROLES_FILE="$WORK/frontier-roles.json" run_step spec)"
 check "frontier provider refused"       "is not in the allow-list" "$out"
 
 # -- a model that is not installed must be refused, not silently substituted ---
-jq '.roles.judge.model = "definitely-not-pulled:70b"' \
+jq '.roles.developer.model = "definitely-not-pulled:70b"' \
   "$PIPELINE_DIR/roles.json" > "$WORK/missing-roles.json"
-out="$(ROLES_FILE="$WORK/missing-roles.json" run_step audit-impl)"
+out="$(ROLES_FILE="$WORK/missing-roles.json" run_step spec)"
 check "absent model refused"            "is not present in ollama" "$out"
 
 # -- the weights must be the ones the run started on ---------------------------
@@ -294,11 +310,29 @@ exit 0
 STUB
 chmod +x "$WORK/pipeline/model-gateway.sh"
 
+# And a stub preloader, because the real one loads the model.
+#
+# This is the only contained invocation in the suite, and until 2026-09-16 it ran
+# the real ensure-loaded.sh: every pass of this file asked ollama to put a 27b on
+# the GPU and then threw it away when the stub sandbox refused, three minutes
+# later, while a measurement was using the same GPU. Stubbing it makes the call
+# assertable instead of merely slow.
+cat > "$WORK/pipeline/ensure-loaded.sh" <<'STUB'
+#!/usr/bin/env bash
+printf 'STUB-ENSURE-LOADED role=%s\n' "${1:-}" >&2
+exit 0
+STUB
+chmod +x "$WORK/pipeline/ensure-loaded.sh"
+
 out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
        PATH="$WORK/bin:$PATH" TMPDIR_GW="$WORK/gw" \
        FACTORY_WORKER_LOCK="$WORK/worker.lock.yaml" \
        bash "$WORK/pipeline/run-step.sh" run spec 2>&1)"
 check "a refused sandbox stops the step"  "did NOT run on the host instead" "$out"
+# The contained path preloads, and preloads the step's own role. A contained run
+# is the only kind that does; every other invocation in this file asserts the
+# absence of this line by never producing it.
+check "a contained step preloads its role" "STUB-ENSURE-LOADED role=developer" "$out"
 check "and the refusal itself is shown"   "worker-sandbox: REFUSED" "$out"
 if grep -qF 'STUB-PI-ARGS' <<<"$out"; then
   printf '  FAIL  it must not fall back to running pi on the host\n'; FAIL=$((FAIL + 1))
@@ -331,12 +365,10 @@ out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
        bash "$PIPELINE_DIR/run-step.sh" run spec 2>&1)"
 check "an explicit opt-out is announced too" "FACTORY_CONTAIN_WORKER=0" "$out"
 
-# The judge is not a developer session and is not contained; saying "uncontained"
-# about it every time would train everyone to ignore the word.
-out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" \
-       FACTORY_WORKER_LOCK="$WORK/does-not-exist.yaml" \
-       bash "$PIPELINE_DIR/run-step.sh" run audit-impl 2>&1)"
-nope "an audit step does not claim to be uncontained" "UNCONTAINED" "$out"
+# There was a third assertion here: that an audit step does not claim to be
+# uncontained. It went with the audit branch — an audit can no longer reach
+# run-step at all, so what it would have said about containment is not a
+# question. The refusal at the top of this file is what covers that name now.
 
 # -- a step's recorded elapsed time is the time it actually took ---------------
 #
