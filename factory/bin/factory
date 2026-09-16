@@ -464,7 +464,15 @@ run from the working tree."
     GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""
     while [ $# -gt 0 ]; do
       case "$1" in
-        --limit) GO_LIMIT="${2:?--limit needs a number}"; shift 2 ;;
+        --limit)
+          GO_LIMIT="${2:?--limit needs a number}"
+          # Validated, because `[ abc -gt 0 ]` prints "integer expression
+          # expected" to stderr and evaluates false — so `--limit abc` would run
+          # the whole queue while the operator believed it would run one bean.
+          case "$GO_LIMIT" in
+            ''|*[!0-9]*) die "--limit takes a whole number, not '$GO_LIMIT'" ;;
+          esac
+          shift 2 ;;
         --dry-run) GO_DRY=1; shift ;;
         --bean) GO_ONE="${2:?--bean needs an id}"; shift 2 ;;
         # Passed through to every bean. The case it exists for: a repository whose

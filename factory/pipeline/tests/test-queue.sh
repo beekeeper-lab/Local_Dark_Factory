@@ -204,6 +204,13 @@ out="$(fac go --bean bean-003)"; rc=$?
 rc_is "a blocked bean is refused"   "$rc" 1
 check "naming what blocks it"       "bean-002(not built)" "$out"
 
+# `[ abc -gt 0 ]` prints an error and evaluates false, so an unvalidated --limit
+# would run the whole queue while the operator believed it would run one bean.
+out="$(fac go --limit abc)"; rc=$?
+rc_is "a non-numeric limit refuses"  "$rc" 1
+check "and says what it wanted"      "takes a whole number" "$out"
+nope  "and nothing was started"      "=== bean-" "$out"
+
 out="$(fac go --bean bean-404)"; rc=$?
 rc_is "an unknown bean is refused"  "$rc" 1
 check "and says so plainly"         "no bean 'bean-404'" "$out"
