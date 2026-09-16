@@ -55,6 +55,12 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
+# These drive a fake /api/chat, so there is no GPU to contend for — but the
+# harnesses now refuse while any other measurement or pipeline run is in flight,
+# and a suite that fails because a real measurement happens to be running is a
+# suite people learn to ignore. The one case that asserts the refusal clears this.
+export FACTORY_MEASURE_ANYWAY=1
+
 reply() { printf '%s' "$1" > "$WORK/reply.json"; }
 # One model, one level, so each case is one classification.
 fs() {

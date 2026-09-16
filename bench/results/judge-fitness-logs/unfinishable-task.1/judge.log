@@ -1,2 +1,0 @@
-JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=low cap=12000  (3 artifacts, 19857 bytes, one message each)
-JUDGE  spec  revise  1 finding(s)  257s  /tmp/tmp.vZp6qDAevb/unfinishable-task.1/verdicts/spec.attempt-1.judgement.json

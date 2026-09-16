@@ -109,8 +109,22 @@ PAD_ALL="$TMP/pad.txt"
 } > "$PAD_ALL"
 printf 'padding available: %s bytes\n' "$(wc -c < "$PAD_ALL")"
 
-CATCH="$(grep "^$CASE|" "$ROOT/bench/judge-fitness.sh" | head -1 | cut -d'|' -f4)"
-[ -n "$CATCH" ] || { echo "no catch phrases for case '$CASE' in judge-fitness.sh" >&2; exit 1; }
+# The case list out of judge-fitness.sh's own CASES block. A line-anchored grep
+# misses `clean`, which shares a line with `CASES='` — and more importantly an
+# unrecognised name makes `mutate` do nothing, so the sweep would pad and measure
+# an UNMUTATED spec while the record named a seeded defect.
+#
+# The old guard here was `[ -n "$CATCH" ]`, which catches a typo only because an
+# unknown case has no catchphrases. That is the right refusal for the wrong
+# reason: `clean` is a real case with no catchphrases either, so this refused it
+# too, and would have kept refusing it if anyone wanted to sweep the control.
+CASE_LINES="$(sed -n "/^CASES='/,/'$/p" "$ROOT/bench/judge-fitness.sh" | sed "s/^CASES='//; s/'$//")"
+if ! printf '%s\n' "$CASE_LINES" | grep -q "^$CASE|"; then
+  printf 'no such case: %s\n\nthe cases judge-fitness.sh defines are:\n' "$CASE" >&2
+  printf '%s\n' "$CASE_LINES" | cut -d'|' -f1 | sed 's/^/  /' >&2
+  exit 2
+fi
+CATCH="$(printf '%s\n' "$CASE_LINES" | grep "^$CASE|" | head -1 | cut -d'|' -f4)"
 
 refuse_if_inflight
 

@@ -141,7 +141,11 @@ else
   # that could produce a result, including the next one written.
   noprov=""
   for h in "$ROOT"/bench/*.sh; do
-    case "$(basename "$h")" in provenance.sh) continue ;; esac
+    # Two exclusions, both by what the file IS rather than by name-as-exception:
+    # provenance.sh emits the block, and inflight.sh is a guard neither of which
+    # writes a figure. A file that writes nothing to bench/results cannot carry
+    # provenance into it, and asking it to would be a check on nothing.
+    case "$(basename "$h")" in provenance.sh|inflight.sh) continue ;; esac
     grep -q 'provenance' "$h" || noprov="$noprov $(basename "$h")"
   done
   if [ -z "$noprov" ]; then
@@ -239,12 +243,17 @@ fi
 # ---------------------------------------------------------------- reproducibility --
 section "evidence is reproducible by someone who is not on this box"
 
-tracked_any=0
+# Files, not directories. The predicate is about FIGURES being reproducible by
+# someone who is not on this box; `judge-fitness-logs/` is per-case working state
+# the harness keeps so a strange answer can be read afterwards, and committing a
+# few hundred of those on every run buries the figures they sit beside. One that
+# evidences a claim belongs in `evidence/`, by hand, like everything else there.
+tracked_any=0; n_files=0
 for f in "$RESULTS"/*; do
-  [ -e "$f" ] || continue
+  [ -f "$f" ] || continue
+  n_files=$((n_files + 1))
   if git -C "$ROOT" ls-files --error-unmatch "$f" >/dev/null 2>&1; then tracked_any=$((tracked_any + 1)); fi
 done
-n_files="$(ls -1 "$RESULTS" 2>/dev/null | wc -l)"
 if [ "$tracked_any" -eq "$n_files" ] && [ "$n_files" -gt 0 ]; then
   ok "evidence.tracked" "all $n_files evidence files are committed"
 else

@@ -80,6 +80,12 @@ if [ ! -f "$SPEC" ] || [ ! -f "$TASKS" ] || [ -z "$BEAN" ]; then
   printf '\n0 passed, 0 failed\n'; exit 0
 fi
 
+# These drive a fake /api/chat, so there is no GPU to contend for — but the
+# harnesses now refuse while any other measurement or pipeline run is in flight,
+# and a suite that fails because a real measurement happens to be running is a
+# suite people learn to ignore. The one case that asserts the refusal clears this.
+export FACTORY_MEASURE_ANYWAY=1
+
 judgement() { # judgement <verdict> [evidence-text]
   jq -nc --arg v "$1" --arg e "${2:-nothing in particular}" \
     '{verdict:$v, criteria:[{id:"ac1", met:true, evidence:$e, quote:"the spec says something about it here"}],
@@ -161,20 +167,27 @@ printf '\n== it refuses to take the GPU from a run in flight ==\n\n'
 # VRAM, and it is a loaded gun pointed at any bean being built. Started during a
 # real spec audit it would evict the judge mid-request, and the run would record a
 # dead runner as the judge's answer.
-( exec -a "bash /tmp/orchestrate.sh fake" sleep 8 ) &
+# setsid, so the fake is genuinely another process group. The guard excludes our
+# own group — that is how it stops finding itself through a command substitution —
+# so a fixture that merely renames a background job of this script is excluded
+# with it, and the test would assert a refusal that never happened.
+setsid bash -c 'exec -a "bash /tmp/orchestrate.sh fake" sleep 8' &
 FAKE_RUN=$!
+sleep 0.3
 sleep 0.5
 out="$( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  FACTORY_MEASURE_ANYWAY=0 NO_EVICT=0 \
   bash "$BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" --bean "$BEAN" \
   --only clean --out "$WORK/refused.json" 2>&1 )"; rc=$?
 kill "$FAKE_RUN" 2>/dev/null
 eq "it refuses"                        "2" "$rc"
-check "and says why"                   "a pipeline run is in flight" "$out"
+check "and says why"                   "a pipeline run (orchestrate.sh) is in flight" "$out"
 check "with the escape named"          "FACTORY_MEASURE_ANYWAY=1" "$out"
 
 # And the escape works, saying what it costs rather than going quiet.
-( exec -a "bash /tmp/orchestrate.sh fake" sleep 8 ) &
+setsid bash -c 'exec -a "bash /tmp/orchestrate.sh fake" sleep 8' &
 FAKE2=$!
+sleep 0.3
 sleep 0.5
 out="$( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
   FACTORY_MEASURE_ANYWAY=1 bash "$BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" \
