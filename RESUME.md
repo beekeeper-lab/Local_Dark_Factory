@@ -18,6 +18,13 @@ One more, whenever you like: `factory read <run-dir>` in the target repo records
 that a human read the two rendered documents. It is the one Phase-1 exit predicate
 a script cannot settle.
 
+**What changed on 2026-09-16 that a reader should know before anything else:**
+hidden tests are built and bean-001 and bean-002 have suites; the judge's response
+grammar now carries the constraints that used to be prose, which produced this
+line's first stamped audit verdict; and `factory reaudit` measures whether a
+change to the judge does anything on a real run. The two sections that carry the
+detail are *"Then three changes in an afternoon"* and *"Hidden tests"*.
+
 ## The line is blocked on one human action, and correctly
 
 `factory go` runs the approved beans in dependency order. It ran bean-002 this
@@ -45,7 +52,11 @@ rather than planning around the missing precondition
 
 ## State: Phase 0 closed. Phase 1 is built end to end, and one real run has now finished — PR #1 is open.
 
-**Test coverage as of 2026-09-15 evening: 940 assertions across 26 suites, all green.**
+**Test coverage as of 2026-09-16 evening: 1533 assertions across 33 suites, all
+green, in about two minutes.** `factory/pipeline/tests/run-all.sh` runs both
+directories and leaves the count where the commit-msg hook can check it — several
+commit messages here have quoted a number written from memory, and each was a
+small false claim in a record whose entire value is that its claims are true.
 Nine of those suites are new that evening, written against the scripts that had no
 tests at all — the CLI, judge.sh, claims-check.py, preflight.sh, new-run.sh,
 policy-preview.sh, telemetry-report.sh, lib.sh and the new sync step. Every one of
