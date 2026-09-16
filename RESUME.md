@@ -783,13 +783,28 @@ Write the end-to-end test before the next long real run, not after it.
   **No hidden suite exists for seating-planner-py yet**, so the gate records
   `not configured`. Writing one is a human job: they have to be written from the
   bean's acceptance criteria by someone who is not the worker.
-- **Eleven figures in `bench/results/` carry no provenance block.** They were
-  measured before `bench/provenance.sh` existed, and writing one in now would be
-  inventing it. The cause is fixed — every harness emits one, and a new
-  `harnesses_emit_provenance` check in the Phase-0 audit keeps the next one from
-  skipping it — so the standing finding is about artifacts, not about code.
-  Re-measure when the GPU is free; `controller-fitness.sh` needs no GPU but does
-  need the target repo on `main`, which it now refuses without.
+- **Eleven figures in `bench/results/` carry no provenance block**, and
+  `bench/results/INDEX.md` now says, per artifact, whether a claim still rests on
+  one. That was the missing half: "eleven files lack provenance" is not
+  actionable, and "these two still carry a conclusion" is.
+
+  Of the eleven, **two** are load-bearing:
+  - `judge-fitness-gemma4-20260915T025711Z.json` — the gemma4 rejection, which has
+    a second independent measurement behind it (`format-support-20260916T111754Z`),
+    so the decision stands on something that does say where it was measured.
+  - `judge-variance-20260915T134814Z.json` — **and this is the uncomfortable one.**
+    The entire "the judge is not reproducible" finding rests on it, and advisory
+    audits plus `merge_mode: human_required` rest on that. Five identical runs at
+    temperature 0, two verdicts. ~25 minutes of GPU to re-measure; worth doing
+    precisely because the conclusion is load-bearing.
+
+  The rest are experiments whose conclusions were superseded. They are kept, not
+  deleted: a measurement records what was true, and the later work is only legible
+  next to it. `controller-fitness` was re-measured 2026-09-16 (needs no GPU) —
+  1 of 5 seeded defects named by a check, 4 not decidable, 0 false alarms.
+
+  The Phase-0 audit now also checks that INDEX.md covers the directory, because a
+  ledger that silently stops covering new files turns back into twenty timestamps.
 - **CI is built and waiting on one command.** The owner chose the registry, so:
   `factory/scaffold/.github/workflows/gates.yml` runs the image `gates.lock.yaml`
   pins, by digest; `factory/gate-image/publish.sh` pushes it and refuses if the

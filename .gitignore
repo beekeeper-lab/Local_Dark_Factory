@@ -28,6 +28,9 @@ bench/results/*
 # be compared with another, which makes it the last file that should live only on
 # this disk. It did, until the Phase-0 audit's evidence.tracked check caught it.
 !bench/results/judge-variance-*
+# The ledger that says what each of these measured and whether a claim still
+# rests on it. Without it the directory is twenty timestamps.
+!bench/results/INDEX.md
 # Per-case working state the fitness harness keeps so a strange answer can be
 # read afterwards — not a figure. Seventy-three of these were committed by a
 # `git add -A` on 2026-09-16 and would have churned on every run. One that

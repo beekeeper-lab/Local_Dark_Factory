@@ -122,8 +122,32 @@ else
   if [ -z "$missing" ] && [ -z "$incomplete" ]; then
     ok "figures_have_provenance" "every results JSON carries kernel + ollama version + GTT"
   else
+    # Count first, then name them. Eleven filenames in one line is a finding
+    # nobody reads twice, and the number is the part that changes.
     finding "figures_have_provenance" major \
-      "$([ -n "$missing" ] && printf 'no provenance block in:%s' "$missing")$([ -n "$missing" ] && [ -n "$incomplete" ] && printf '; ')$([ -n "$incomplete" ] && printf 'a provenance block with an empty required field in:%s' "$incomplete")"
+      "$(printf '%s file(s) without provenance' "$(printf '%s' "$missing" | wc -w)")$([ -n "$incomplete" ] && printf ', %s with an empty required field' "$(printf '%s' "$incomplete" | wc -w)") — see bench/results/INDEX.md for which of them a claim still rests on:$missing$incomplete"
+  fi
+
+  # 6b. The ledger covers the directory.
+  #
+  # INDEX.md is what makes the finding above actionable: it says, per artifact,
+  # whether anything still depends on it. A ledger that silently stops covering
+  # new files turns back into twenty timestamps, and the way that happens is
+  # nobody noticing — so it is checked rather than remembered.
+  INDEX="$RESULTS/INDEX.md"
+  if [ ! -f "$INDEX" ]; then
+    finding "results_ledger" major "no bench/results/INDEX.md — the directory cannot say which figures are load-bearing"
+  else
+    unlisted=""
+    for f in "$RESULTS"/*.json; do
+      [ -e "$f" ] || continue
+      grep -qF "$(basename "$f")" "$INDEX" || unlisted="$unlisted $(basename "$f")"
+    done
+    if [ -z "$unlisted" ]; then
+      ok "results_ledger" "INDEX.md accounts for every figure in bench/results"
+    else
+      finding "results_ledger" major "in bench/results but not in INDEX.md:$unlisted"
+    fi
   fi
 
   # And separately: can each harness still produce one? The artifact check above
