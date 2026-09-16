@@ -5,91 +5,285 @@
   "description": "A self-contained, agentic work packet authored by human + AI and admitted by a human. Lives at factory/beans/<id>.yaml in the target repo. risk_tier and allowed_write_paths are PROPOSALS the controller intersects/raises against policy. Runtime queue state is NOT stored here (see event.schema.json); status is the authoring lifecycle only.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version","id","repo","title","intent","status","allowed_write_paths","acceptance_criteria","definition_of_done"],
+  "required": [
+    "schema_version",
+    "id",
+    "repo",
+    "title",
+    "intent",
+    "status",
+    "allowed_write_paths",
+    "acceptance_criteria",
+    "definition_of_done"
+  ],
   "properties": {
-    "schema_version": { "const": "bean/2.0.0" },
-    "id": { "type": "string", "pattern": "^bean-[0-9]+$" },
-    "repo": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
-      "description": "GitHub owner/name of the target repository." },
-    "title": { "type": "string", "minLength": 1 },
-    "intent": { "type": "string", "minLength": 1,
-      "description": "The outcome in one or two sentences — what must be true afterward, not how." },
+    "schema_version": {
+      "const": "bean/2.0.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^bean-[0-9]+$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "description": "GitHub owner/name of the target repository."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The outcome in one or two sentences — what must be true afterward, not how."
+    },
     "status": {
-      "enum": ["draft","reviewed","approved","rejected","superseded"],
+      "enum": [
+        "draft",
+        "reviewed",
+        "approved",
+        "rejected",
+        "superseded"
+      ],
       "description": "Authoring lifecycle. Only approved beans may be queued; the controller refuses anything else."
     },
     "source": {
-      "type": "object", "additionalProperties": false,
-      "required": ["kind"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "enum": ["transcript","conversation","issue","manual"] },
-        "ref": { "type": "string", "description": "Path, URL, or issue id the bean was derived from." },
-        "date": { "type": "string", "format": "date" },
-        "excerpt": { "type": "string", "description": "The sentence(s) in the source that produced this bean." }
-      }
-    },
-    "approval": {
-      "type": "object", "additionalProperties": false,
-      "required": ["approved_by","approved_at"],
-      "properties": {
-        "approved_by": { "type": "string", "minLength": 1 },
-        "approved_at": { "type": "string", "format": "date-time" },
-        "order": { "type": "integer", "minimum": 0,
-          "description": "Human-chosen position in the run order; ties broken by id." }
-      }
-    },
-    "context": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "read_paths": { "type": "array", "items": { "type": "string" } },
-        "examples": { "type": "string" },
-        "background": { "type": "string",
-          "description": "What a reader with no knowledge of this codebase needs before starting. Carried into the spec document." }
-      }
-    },
-    "allowed_write_paths": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-    "acceptance_criteria": {
-      "type": "array", "minItems": 1,
-      "items": {
-        "type": "object", "additionalProperties": false,
-        "required": ["id","text","verify"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^ac[0-9]+$" },
-          "text": { "type": "string", "minLength": 1 },
-          "verify": { "$ref": "#/$defs/verify" }
+        "kind": {
+          "enum": [
+            "transcript",
+            "conversation",
+            "issue",
+            "manual"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "description": "Path, URL, or issue id the bean was derived from."
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "The sentence(s) in the source that produced this bean."
         }
       }
     },
-    "constraints": { "type": "array", "items": { "type": "string" } },
-    "suggested_risk_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
-    "size_budget": {
-      "type": "object", "additionalProperties": false,
-      "description": "Decomposition guardrail. A bean that cannot fit is split at intake, not forced through.",
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approved_by",
+        "approved_at"
+      ],
       "properties": {
-        "max_tasks": { "type": "integer", "minimum": 1, "default": 8 },
-        "max_files": { "type": "integer", "minimum": 1 },
-        "max_diff_lines": { "type": "integer", "minimum": 1 }
+        "approved_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Human-chosen position in the run order; ties broken by id."
+        }
       }
     },
-    "definition_of_done": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-    "non_goals": { "type": "array", "items": { "type": "string" } },
-    "dependencies": { "type": "array", "items": { "type": "string", "pattern": "^bean-[0-9]+$" } },
-    "invariants_ref": { "type": "string",
-      "description": "Path to an independently reviewed invariants file (human or different model family)." }
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "read_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "examples": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string",
+          "description": "What a reader with no knowledge of this codebase needs before starting. Carried into the spec document."
+        }
+      }
+    },
+    "allowed_write_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text",
+          "verify"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ac[0-9]+$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verify": {
+            "$ref": "#/$defs/verify"
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_risk_tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "size_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Decomposition guardrail. A bean that cannot fit is split at intake, not forced through.",
+      "properties": {
+        "max_tasks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 8
+        },
+        "max_files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_diff_lines": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "definition_of_done": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_goals": {
+      "type": "array",
+      "description": "What this bean is NOT for. A plain string is prose and remains the audit's to judge. An object may also carry forbidden_paths and forbidden_imports, which the controller checks by running something rather than by asking: at plan time against every task's write_paths, and at the gate against the diff. Nothing is required, and a bean written entirely as prose behaves exactly as before — but a non-goal about a PLACE (\"no CI workflow files\", \"no solver code\") is a statement about paths and imports, and the judge was measured accepting that kind of violation 7 to 9 times in 15.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the non-goal in words, for a human and for the audit"
+              },
+              "forbidden_paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "glob patterns, matched by the same matcher as allowed_write_paths. A task write_path or a changed file inside one of these contradicts the non-goal."
+              },
+              "forbidden_imports": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "module names. Grepped over the diff's ADDED lines; a removed import is the bean being obeyed. A text measure, and non-goals.sh says so in its own output."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^bean-[0-9]+$"
+      }
+    },
+    "invariants_ref": {
+      "type": "string",
+      "description": "Path to an independently reviewed invariants file (human or different model family)."
+    }
   },
   "$defs": {
     "verify": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "description": "How a machine (or, last resort, a human) proves this criterion. Everything but 'manual' is run by the controller inside the gate container.",
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "enum": ["command","test","gate","judge","manual"] },
-        "run": { "type": "array", "items": { "type": "string" },
-          "description": "argv array for kind=command; exit 0 = met." },
-        "test_id": { "type": "string", "description": "Test node id for kind=test (e.g. tests/api/test_payments.py::test_idempotent)." },
-        "gate_id": { "type": "string", "description": "Gate id from gates.lock.yaml for kind=gate." },
-        "rubric": { "type": "string", "description": "What the judge must find in the diff for kind=judge." },
-        "note": { "type": "string", "description": "Instructions for a human for kind=manual (forces human review)." }
+        "kind": {
+          "enum": [
+            "command",
+            "test",
+            "gate",
+            "judge",
+            "manual"
+          ]
+        },
+        "run": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "argv array for kind=command; exit 0 = met."
+        },
+        "test_id": {
+          "type": "string",
+          "description": "Test node id for kind=test (e.g. tests/api/test_payments.py::test_idempotent)."
+        },
+        "gate_id": {
+          "type": "string",
+          "description": "Gate id from gates.lock.yaml for kind=gate."
+        },
+        "rubric": {
+          "type": "string",
+          "description": "What the judge must find in the diff for kind=judge."
+        },
+        "note": {
+          "type": "string",
+          "description": "Instructions for a human for kind=manual (forces human review)."
+        }
       }
     }
   }

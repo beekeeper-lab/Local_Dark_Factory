@@ -850,6 +850,68 @@ renamed heading to prove they bite. This one fixture has been silently wrong thr
 times in three different ways and the assertions are the only thing that makes a
 fourth different from the first three.
 
+## A bean's non-goals, decided by running something
+
+`non_goals` was a list of English sentences, checked by asking the judge. That
+judge accepts about half the seeded defects put in front of it, and
+`contradicts-non-goal` — a spec planning work its own bean forbids — is one of the
+cases it misses; `bench/controller-fitness.sh` had it as *"not decidable from the
+documents, needs a judge"*.
+
+**Half of it is decidable.** A non-goal about a PLACE is a statement about paths
+and imports, and those are countable:
+
+```yaml
+non_goals:
+  - no seat-level positions          # a concept. Still the audit's.
+  - text: no rule model (bean-003)
+    forbidden_paths: ["src/seating_planner/domain/rule*.py", …]
+  - text: no database
+    forbidden_imports: [sqlite3, sqlalchemy, psycopg, pymongo, redis, shelve]
+```
+
+`factory/pipeline/non-goals.sh`, 33 assertions. Checked twice, in two places that
+ask different questions:
+
+- **spec-check**, over every task's `write_paths` — *before a model writes a line
+  of it*. This is the cheapest possible place to catch `contradicts-non-goal`.
+- **the gate**, over the diff — because a task can stay inside its declared write
+  paths and still add an import the bean forbids. The plan is a promise; the diff
+  is the change.
+
+Everything is optional and nothing about an existing bean changes: a plain string
+stays a plain string. The part that took care is what a bean with no annotations
+reports — **"nothing was checked", not "nothing is wrong"**, in the output, in
+`gate.json`, and as a *note* rather than a pass. The difference is whether the
+judge is still the only thing between a change and the bean's own statement of
+what it is not for.
+
+`forbidden_imports` is a grep over added diff lines and says so in its own record:
+it catches `import x`, `    import x` and `from x import y`, and not `__import__`
+or a dynamic loader. `forbidden_paths` is exact, because it is `contain.py` — the
+same matcher the containment check uses, rather than a second one that would
+eventually disagree with it.
+
+### For the owner: the other eighteen beans
+
+**bean-002 is annotated and bean-001 is not**, on purpose. bean-001's pull request
+is open and editing a bean mid-flight is how a run stops making sense.
+
+The other eighteen are your call, because `status: approved` is the human
+checkpoint and a bulk edit to approved content should not arrive from a script.
+**Recommendation: do it.** The annotation restates an existing sentence and cannot
+make the line do anything the bean did not ask for — it can only refuse, and a
+wrong pattern is caught by spec-check immediately with the pattern printed. Each
+bean's non-goal text stays byte-identical; only `text:` plus the lists are added.
+
+`factory doctor` reports the split (`2 of 33 machine-readable` today), so progress
+through the set is visible without reading twenty files.
+
+**The obvious extension, not built**: `constraints` are the same shape of
+statement — bean-002's "no solver imports" and "no persistence in this bean" are
+exactly `forbidden_imports` — and they are still prose. Same mechanism, one more
+field.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**

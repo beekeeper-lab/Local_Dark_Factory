@@ -494,5 +494,72 @@ else
 fi
 nope "and no test text in gate.json"   "test_h" "$(jq -c '.hidden_tests' ai/runs/R/gate.json)"
 
+printf '\n== the bean\x27s own non-goals, over the diff rather than the plan ==\n\n'
+#
+# spec-check decides this over the PLAN. The gate decides it over what was
+# actually written, which is not the same question: a task can stay inside its
+# declared write_paths and still add an import the bean forbids, and the plan is a
+# promise while the diff is the change.
+reset_branch
+cat > "$WORK/ng-bean.yaml" <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: e/x
+title: t
+intent: i
+status: approved
+allowed_write_paths: ["src/**"]
+acceptance_criteria:
+  - id: ac1
+    text: a
+    verify: { kind: command, run: ["true"] }
+non_goals:
+  - text: no solver code
+    forbidden_imports: [ortools]
+    forbidden_paths: ["src/**/solver/**"]
+YAML
+mkdir -p src && printf 'GOOD\n' > src/a.py
+commit_all "task-ng-clean"
+out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/ng-bean.yaml" --policy factory/risk-policy.yaml --no-sandbox 2>&1)"
+check "a clean diff passes the check"  "non-goals" "$out"
+if [ "$(jq -r '.non_goals.checkable_rules' ai/runs/R/gate.json 2>/dev/null)" = "1" ]; then
+  printf '  ok    and the gate record counts the rule\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.non_goals' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
+
+printf '\n-- an import the bean forbids, inside a path it allows --\n\n'
+#
+# `src/a.py` is inside allowed_write_paths, so containment is clean and every
+# gate is green. The only thing that catches this is the bean's own statement of
+# what it is not for.
+printf 'import ortools\nGOOD\n' > src/a.py
+commit_all "task-ng-import"
+out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/ng-bean.yaml" --policy factory/risk-policy.yaml --no-sandbox 2>&1)"; rc=$?
+check "the gate names the non-goal"    "no solver code" "$out"
+if [ "$rc" -ne 0 ]; then printf '  ok    and the gate fails\n'; PASS=$((PASS+1))
+else printf '  FAIL  a forbidden import left the gate green\n'; FAIL=$((FAIL+1)); fi
+if [ "$(jq -r '.non_goals.violations[0].kind' ai/runs/R/gate.json 2>/dev/null)" = "import" ]; then
+  printf '  ok    recorded as an import violation\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.non_goals' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
+
+printf '\n-- a bean whose non-goals are prose is a note, not a pass --\n\n'
+#
+# Nothing was checked, and the judge is still the only thing between the change
+# and the bean's own non-goals. Saying "pass" would claim a check that did not run.
+reset_branch
+mkdir -p src && printf 'GOOD\n' > src/a.py
+commit_all "task-ng-prose"
+out="$(gate --no-sandbox)"
+check "it says none are machine-readable" "none in machine-readable form" "$out"
+check "and whose job they remain"      "remain the audit" "$out"
+if grep -E '^(FAIL|fail)' <<<"$out" | grep -q 'non-goals'; then
+  printf '  FAIL  a prose-only bean was counted as a gate failure\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and it is not a failing part\n'; PASS=$((PASS+1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

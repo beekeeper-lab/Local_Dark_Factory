@@ -70,6 +70,24 @@ check "the secret scan, by count"      "2 suspicious line(s)" "$out"
 check "test integrity"                 "the tests pass with the change reverted" "$out"
 check "hidden tests, by count"         "hidden tests: failed — 3 failing" "$out"
 
+printf '\n-- and a contradicted non-goal, which is the bean\x27s own words --\n\n'
+gate '{"containment":{"contained":true,"violations":[]},"gates":[],"acceptance_criteria":[],"invariants":null,
+       "non_goals":{"checkable_rules":2,"violations":[
+          {"non_goal":"no solver code","kind":"path","patterns":["src/**/solver/**"],"offending":["src/a/solver/x.py"]},
+          {"non_goal":"no solver code","kind":"import","module":"ortools","lines":["+import ortools"]}]},
+       "overall":"fail"}'
+out="$(sum)"
+check "the path violation"             "non-goal \"no solver code\": src/a/solver/x.py is inside src/**/solver/**" "$out"
+check "and the import one"             "imports ortools" "$out"
+
+printf '\n-- a bean with no machine-readable non-goals says nothing here --\n\n'
+gate '{"containment":{"contained":true,"violations":[]},"gates":[{"id":"unit","status":"fail","exit_code":1}],
+       "acceptance_criteria":[],"invariants":null,
+       "non_goals":{"checkable_rules":0,"violations":[]},"overall":"fail"}'
+out="$(sum)"
+check "the real failure is shown"      "gate unit: exit 1" "$out"
+nope  "and non-goals are not"          "non-goal" "$out"
+
 printf '\n== a hidden-test failure never carries the tests ==\n\n'
 #
 # The output goes to a path outside the repository; this file is written inside

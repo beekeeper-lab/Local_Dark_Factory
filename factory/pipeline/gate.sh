@@ -309,6 +309,44 @@ else
   [ -f "$RUN_DIR/test-integrity.json" ] && TEST_INTEGRITY="$(cat "$RUN_DIR/test-integrity.json")"
 fi
 
+# ------------------------------------- 6b. the bean's own non-goals, over the diff --
+#
+# spec-check decided this over the PLAN. This decides it over what was actually
+# written, which is not the same question: a task can stay inside its declared
+# write_paths and still add an import the bean forbids, and the plan is a promise
+# while the diff is the change.
+#
+# A bean whose non-goals are prose reports that nothing was checked, and that is
+# a note rather than a pass — the judge is then still the only thing between the
+# change and the bean's own statement of what it is not for, and on 2026-09-16
+# that judge was measured missing this exact case 2 times in 3.
+NON_GOALS="null"
+if [ "$SKIP_GATES" = 1 ]; then
+  note skip "non-goals" "--skip-gates"
+else
+  # The diff, written here rather than reached for. orchestrate writes
+  # $RUN_DIR/diff.txt for the doc step, and the gate runs before it — so reading
+  # that path would work on a full-tier run and silently check an empty file on a
+  # small one, which is the shape of a check that passes because it looked at
+  # nothing.
+  NG_DIFF="$RUN_DIR/gate-diff.txt"
+  git -C "$ROOT" diff "$MERGE_BASE"...HEAD > "$NG_DIFF" 2>/dev/null \
+    || die "could not read the diff for the non-goal check; refusing to report that nothing is forbidden without having looked"
+  ng_rc=0
+  ng_out="$("$PIPELINE_DIR/non-goals.sh" --bean "$BEAN_FILE" --diff "$NG_DIFF" \
+    --json "$RUN_DIR/non-goals.json" 2>&1)" || ng_rc=$?
+  case "$ng_rc" in
+    0) if grep -q 'declares none in machine-readable form' <<<"$ng_out"; then
+         note note "non-goals" "none in machine-readable form; the bean's are prose and remain the audit's"
+       else
+         pass_part "non-goals" "$(printf '%s' "$ng_out" | sed 's/^non-goals: //')"
+       fi ;;
+    1) fail_part "non-goals" "$(printf '%s\n' "$ng_out" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' - | cut -c1-120)" ;;
+    *) fail_part "non-goals" "could not be checked — $(printf '%s' "$ng_out" | head -1)" ;;
+  esac
+  [ -f "$RUN_DIR/non-goals.json" ] && NON_GOALS="$(cat "$RUN_DIR/non-goals.json")"
+fi
+
 # --------------------------------------------- 7. tests the worker never saw --
 # Everything above runs code the worker could read. `allowed_write_paths` stops it
 # writing the tests; nothing stops it reading them, and code written against
@@ -348,7 +386,7 @@ jq -n \
   --argjson tier "$TIER_JSON" \
   --argjson gates "$GATE_ROWS" --argjson acs "$AC_ROWS" --argjson inv "$INV_ROW" \
   --arg secrets "$SECRETS" --argjson ti "$TEST_INTEGRITY" \
-  --argjson ht "$HIDDEN_TESTS" \
+  --argjson ht "$HIDDEN_TESTS" --argjson ng "$NON_GOALS" \
   --argjson ok "$([ "$FAILED" -eq 0 ] && echo true || echo false)" \
   --arg gates_ref "$(realpath --relative-to="$ROOT" "$GATES" 2>/dev/null || printf '%s' "$GATES")" \
   --arg gate_image "$("$PIPELINE_DIR/yaml2json.sh" "$GATES" 2>/dev/null | jq -r '.image // ""')" \
@@ -361,7 +399,7 @@ jq -n \
     secret_scan: {suspicious_lines: ($secrets | if . == "" then [] else split("\n") end)},
     gates: $gates, acceptance_criteria: $acs, invariants: $inv,
     test_integrity: $ti,
-    hidden_tests: $ht,
+    hidden_tests: $ht, non_goals: $ng,
     overall: (if $ok then "pass" else "fail" end),
     note:"gate_manifest names the image these gates ran in. Every \"the gates passed\" is a claim about a specific toolchain, and until 2026-09-15 this record did not say which one — the manifest pinned it and the result forgot it."}' > "$RESULT"
 

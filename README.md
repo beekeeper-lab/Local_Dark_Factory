@@ -59,6 +59,8 @@ And where a model has to be constrained, the constraint goes in the **grammar**,
 
 Both the worker and the verification gates run in containers with no network at all. The worker reaches exactly one model endpoint, over a unix socket bridged to a single address — there is no route to widen. See `RESUME.md` for what that cost and why it is built the way it is.
 
+A bean's `non_goals` can say where as well as what. A non-goal about a place — "no CI workflow files", "no solver code" — is a statement about paths and imports, so it may carry `forbidden_paths` and `forbidden_imports`, and then `spec-check` refuses a task that plans to write into one *before a model writes a line of it* and the gate refuses a diff that lands in one. A bean without them reports that nothing was checked, which is not the same as nothing being wrong.
+
 One check is not in the repository at all. `allowed_write_paths` stops the worker writing the tests it will be measured by; nothing stops it reading them, and code written against visible assertions satisfies exactly those. `hidden_tests` in the pipeline config names a directory **outside** the repo — refused if it is inside — mounted read-only into the gate container at a path the worker never had. What comes back is a count: no names, no assertions, no output, and the full log is written outside the repo too, because the run directory is in it.
 
 | File | Role |

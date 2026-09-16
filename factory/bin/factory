@@ -406,6 +406,30 @@ run from the working tree."
       good "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT"
     fi
 
+    # How much of the bean set's own non-goals a script can decide.
+    #
+    # A non-goal about a PLACE is a statement about paths and imports, and those
+    # are checkable; one about a concept is not. The judge was measured on
+    # 2026-09-16 accepting a spec that plans work its bean forbids in 2 attempts
+    # out of 3, so the split between the two is worth knowing at a glance rather
+    # than by reading twenty files.
+    NG_TOTAL=0; NG_CHECKABLE=0; NG_BEANS=0
+    while IFS= read -r by; do
+      [ -f "$by" ] || continue
+      bj="$("$PIPE/yaml2json.sh" "$by" 2>/dev/null)" || continue
+      t="$(jq '(.non_goals // []) | length' <<<"$bj" 2>/dev/null || echo 0)"
+      c="$(jq '[(.non_goals // [])[] | select(type == "object") | select(((.forbidden_paths // []) | length) > 0 or ((.forbidden_imports // []) | length) > 0)] | length' <<<"$bj" 2>/dev/null || echo 0)"
+      NG_TOTAL=$((NG_TOTAL + t)); NG_CHECKABLE=$((NG_CHECKABLE + c))
+      [ "${c:-0}" -gt 0 ] && NG_BEANS=$((NG_BEANS + 1))
+    done < <(find "$TARGET_ROOT/factory/beans" -name bean.yaml 2>/dev/null)
+    if [ "$NG_TOTAL" -eq 0 ]; then
+      say note "non-goals" "no bean declares any"
+    elif [ "$NG_CHECKABLE" -eq 0 ]; then
+      say note "non-goals" "$NG_TOTAL across the set, none machine-readable — every one is the audit's to judge, and the judge was measured missing this case 2 times in 3"
+    else
+      good "non-goals" "$NG_CHECKABLE of $NG_TOTAL machine-readable, across $NG_BEANS bean(s); the rest are prose and remain the audit's"
+    fi
+
     # Hidden tests: configured or not, and if configured, actually hidden.
     #
     # "Not configured" is said out loud rather than omitted. A doctor that is

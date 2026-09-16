@@ -145,6 +145,32 @@ else
   ok "write_paths" "every task is inside the bean's $(jq 'length' <<<"$BEAN_PATHS") allowed path(s)"
 fi
 
+# ------------------------------------------ 3b. and out of the bean's non-goals --
+#
+# The same containment question with the sense flipped. A non-goal about a PLACE
+# — "no CI workflow files", "no solver code" — is a statement about paths, and a
+# task planning to write into one is `contradicts-non-goal`: the seeded defect the
+# judge was measured missing 2 times in 3, and which controller-fitness had as
+# "not decidable from the documents, needs a judge". It is decidable when the bean
+# says where, and here is the cheapest place to decide it — before a model writes
+# a line of the work.
+NG_PATHS="$(jq -c '[.tasks[].write_paths[]?] | unique' <<<"$TASKS_JSON")"
+ng_rc=0
+NG_OUT="$("$PIPELINE_DIR/non-goals.sh" --bean "$BEAN_FILE" --paths "$NG_PATHS" \
+  --json "$RUN_DIR/non-goals.json" 2>&1)" || ng_rc=$?
+case "$ng_rc" in
+  0) if grep -q 'declares none in machine-readable form' <<<"$NG_OUT"; then
+       # Not a pass. The bean's non-goals are prose and nothing here looked at
+       # them; saying "ok" without that word would claim a check that did not run.
+       note_or_ok="$(printf '%s' "$NG_OUT" | sed 's/^non-goals: //')"
+       ok "non-goals" "nothing to check — $note_or_ok"
+     else
+       ok "non-goals" "$(printf '%s' "$NG_OUT" | sed 's/^non-goals: //')"
+     fi ;;
+  1) bad "non-goals" "$(printf '%s\n' "$NG_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
+  *) bad "non-goals" "could not be checked — $(printf '%s' "$NG_OUT" | head -1)" ;;
+esac
+
 # ------------------------------------------- 4. every acceptance criterion claimed --
 CLAIMED="$(jq -c '[.tasks[].satisfies // []] | flatten | unique' <<<"$TASKS_JSON")"
 UNCLAIMED="$(jq -r --argjson c "$CLAIMED" '[(.acceptance_criteria // [])[].id] - $c | join(", ")' <<<"$BEAN_JSON")"

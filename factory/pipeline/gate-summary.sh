@@ -50,5 +50,11 @@ jq -r '
      else empty end),
   (if (.test_integrity != null and .test_integrity.fails_on_revert != null and .test_integrity.fails_on_revert.result == "no")
      then "  - test integrity: " + (.test_integrity.fails_on_revert.why // "the tests pass with the change reverted")
+     else empty end),
+  (if (.non_goals != null and ((.non_goals.violations // []) | length) > 0)
+     then (.non_goals.violations[]
+           | "  - non-goal \"" + .non_goal + "\": "
+             + (if .kind == "path" then (.offending | join(", ")) + " is inside " + (.patterns | join(", "))
+                else "imports " + .module end))
      else empty end)
 ' "$GATE"
