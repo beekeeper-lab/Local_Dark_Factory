@@ -41,6 +41,61 @@ a script cannot settle.
 The one sentence worth carrying out of all of it: **on this model a constraint in
 the grammar is a rule and the same constraint in prose is a suggestion.**
 
+## The judge, in one place
+
+Eight sections below carry pieces of this, written as each was measured. This is
+the whole of it, in the order a reader needs, with where to look for each.
+
+**What it does.** Given a spec and a bean, it fabricates the evidence for a verdict
+it has already reached. On a real run, **six of six answers quoted text that is on
+disk nowhere** — not paraphrases, invented requirements: *"`src/pyproject.toml`
+must be present"*, *"The repository does not contain a .gitignore file"* (it does).
+`evidence/judge-invented-quotes-20260916.md` has the list, including one where it
+quoted its own instructions as text from the document under audit.
+
+**How often it is wrong.** 4 false accepts in 15 seeded defects at the best
+configuration, 9 before the prompt was fixed. A false accept is the failure the
+line exists to prevent. And **the clean control is rejected 3 of 3 in every
+configuration measured** — it has never once passed a spec with nothing wrong.
+
+**What has been tried, and what each was worth.**
+
+| | fitness (seeded) | reaudit (real run) |
+| --- | --- | --- |
+| token cap 12000 → 16000 | cut-offs 4/18 → 0/18 | — |
+| `thinking: medium` → `low` | fewer cut-offs | fewer generated tokens at medium |
+| five grammar constraints | no change | conformance ~0% → 100%, **first stamped verdict** |
+| prompt stopped contradicting itself | **9 → 4 false accepts** | 1 stamped → 0 |
+| a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
+
+**The two numbers are different questions and only one has ever moved.**
+`judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
+whether it produces a verdict the controller will stamp on a real run. The second
+has never exceeded **1 in 12**.
+
+**What follows, and what the line already does about it.**
+
+1. **Advisory audits are the best-supported decision in this repository**, and not
+   a holding position. `merge_mode: human_required` carries the weight.
+2. **Move work out of the judge rather than into prompting it.** Done today:
+   `bean-forbids.sh` takes `contradicts-non-goal` — 3 of 5 seeded defects now
+   decided by the controller, against 1. Hidden tests measure the build against
+   something nobody in the loop can read.
+3. **Do not weaken the quote check.** It is the instrument catching the
+   fabrication, and its refusal rate is the measurement. I nearly redesigned it
+   before reading what it had refused.
+4. **The one untried lever** is the size of the question — one criterion at a
+   time. Built (`bench/judge-per-criterion.sh`), unmeasured for accuracy, and
+   stopped on cost: 260 seconds a criterion, because every sub-request re-processes
+   a 12,000-token prompt that could be cached if the criteria list moved after the
+   artifacts.
+
+Sections with the detail: *"OPEN and important"*, *"Removing a contradiction"*,
+*"Then three changes in an afternoon"*, *"The judge's token cap"*, *"The untried
+lever"*, *"Why bean-001 has no binding audit verdict"*, *"The judge has been
+running at the one thinking level that does not work"*, *"The judge does not run
+as an agent"*.
+
 ## The line is blocked on one human action, and correctly
 
 `factory go` runs the approved beans in dependency order. It ran bean-002 this
