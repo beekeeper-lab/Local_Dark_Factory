@@ -482,6 +482,30 @@ independent_invariant_ran: not_applicable    (bean-001 declares none; bean-006 i
 Three pass, one waits on a person (`factory read <run>`), three are not-exercised
 or not-applicable and say which. None failed.
 
+## The line is blocked on one human action, and correctly
+
+`factory go` runs the approved beans in dependency order. It ran bean-002 this
+morning and stopped, because bean-001's work is in an **open pull request**, not
+on `main`, and `main` is what the next bean builds against. `merge_mode:
+human_required` means that is by design.
+
+```
+$ factory queue
+bean-001   pr_open   Project scaffold with linting…   pull request open, not merged: …/pull/1
+ready: nothing
+waiting on a human to merge: bean-001
+```
+
+**Merging https://github.com/beekeeper-lab/seating-planner-py/pull/1 unblocks the
+whole chain** — bean-002 becomes ready, and `factory go` will work down the
+dependency order from there. Read the two documents posted as comments on it
+first; that is the review the pull request asks for.
+
+The developer model found this before the queue did: it opened bean-002's tree,
+saw no `src/`, cross-checked bean-001's own spec and gate record, and stopped
+rather than planning around the missing precondition
+(`evidence/bean-002-worker-questions-20260916.md`).
+
 ## Next action
 
 **Two decisions for the owner, then Phase 2.** See "Still open" below for
