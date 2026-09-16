@@ -518,7 +518,15 @@ phase_2_exit:
   frontier_provider_refused:  pass
   human_merge_required:       verified
 ```
-- [ ] Exit verified   - [ ] Audit generated   - [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-2-COMPLETE` committed
+- [x] Audit generated — `bench/phase2-audit.sh`, 2026-09-16. It does not read this plan:
+  it runs the suites that hold each predicate and looks for the specific assertions by
+  name, so a renamed or deleted assertion reports as missing. Thirteen predicates,
+  13 ok, 0 findings — with `remote_ci_failure_tests` reported as **`pass_in_tests`**,
+  because `gates.lock.yaml` still pins a `localhost/` image that CI cannot pull, so that
+  fault has only ever met a stubbed `gh`.
+- [ ] Exit verified — waiting on the one thing above: publish the gate image, install the
+  workflow, and let a real required check fail once. Everything else is computed green.
+- [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-2-COMPLETE` committed
 
 ---
 
