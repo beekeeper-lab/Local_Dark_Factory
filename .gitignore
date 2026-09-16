@@ -28,6 +28,10 @@ bench/results/*
 # be compared with another, which makes it the last file that should live only on
 # this disk. It did, until the Phase-0 audit's evidence.tracked check caught it.
 !bench/results/judge-variance-*
+# `factory reaudit` output: which audits of a real run produced a stampable
+# verdict, at a named configuration. The figure the seeded-defect harnesses
+# cannot produce.
+!bench/results/reaudit-*
 # The ledger that says what each of these measured and whether a claim still
 # rests on it. Without it the directory is twenty timestamps.
 !bench/results/INDEX.md

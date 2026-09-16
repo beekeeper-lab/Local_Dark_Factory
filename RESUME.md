@@ -584,10 +584,62 @@ rather than discouraged — and `bench/format-support.sh` already measured that 
 model holds a schema at `low`. A re-measurement against the baseline of zero is
 the next thing to do here.
 
-**What this means for the decision**, plainly: advisory audits are not a temporary
-accommodation while the judge is tuned. On today's evidence the audit stage does
-not produce a binding verdict on this line's artifacts at all, and
-`merge_mode: human_required` is carrying the weight the audits were meant to.
+**What this meant for the decision, as of that measurement**: advisory audits were
+not a temporary accommodation while the judge was tuned. The audit stage did not
+produce a binding verdict on this line's artifacts at all.
+
+## Then three changes in an afternoon, and they are all the same change
+
+**The first stamped audit verdict this line has produced**:
+`evidence/first-stamped-verdict-20260916.json` — an impl audit of bean-001,
+`accept` at confidence 0.9, all four criteria, two quotes verified against the
+artifacts, the controller's measured `test_integrity`, tier 2.
+
+```
+enum on criteria[].id    criterion compliance: 1 of 6 answers partly right
+                         → 5 of 5 answers exactly right
+tools: []                the field was ABSENT, not empty. The system prompt has
+                         said "you have NO tools" for days; the model called
+                         repo_browser.open_file 9 times out of 9. With an empty
+                         list declared: 0 out of 8
+maxLength on free text   `evidence` was arriving with a unified diff and a whole
+                         Python module in it, or the model's own reasoning
+                         followed by a nested ```json answer. It fills the field
+                         with everything it would otherwise have said, runs long,
+                         and the string never closes
+```
+
+**On this model a constraint in the grammar is a rule and the same constraint in
+prose is a suggestion.** Three for three, against a 12-attempt baseline of zero.
+That is the transferable finding; the three fixes are the illustration.
+
+Two things made it findable rather than guessable:
+
+- `prompt_eval_count` and `eval_count`, read off the response for the first time.
+  "It stopped without finishing" was a choice between the token cap, the context
+  window and the model simply stopping, and `35% of 32768 with 84 generated
+  tokens` rules out two of them in one line. Every judge call logs it now, and a
+  request that fills the window says which knob is not the lever.
+- `verdicts/<target>.unparseable.json`, which keeps the whole answer. The
+  `evidence`-contains-a-Python-module finding is unavailable without it.
+
+And a contract that could not be satisfied: `verdict.schema.json` REQUIRES
+`test_integrity` on an impl audit, and judge.sh's response schema does not contain
+the field — so the judge was never asked for it and an impl verdict could never
+validate. `audit-check.sh` fills it from `test-integrity.json`: the controller
+measured it, the verdict is the controller's document, and the judge should never
+have been asked to restate a number it was handed.
+
+**Still true**: one stamped verdict in three passes is not a working audit stage,
+and the other two refusals were right (one quoted nothing long enough to prove
+anything; one quoted a `SeatingPlanner` import and a poetry dev-dependencies block
+that exist in neither file — the quote check catching invented evidence, which is
+what it is for). `merge_mode: human_required` still carries the weight. What has
+changed is that the failures are now specific and the lever that moves them is
+known.
+
+`factory reaudit <run-dir>` is the harness for all of this: a finished run's
+audits, N times, against a copy, never writing to the run.
 
 ## OPEN: the snapshot launcher died on its own last line, after succeeding
 
