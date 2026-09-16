@@ -211,7 +211,16 @@ PY
 BAD_PATHS=""
 while IFS=$'\t' read -r tid pat; do
   [ -n "$tid" ] || continue
-  if ! printf '%s\n' "$pat" | python3 "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS_JSON" >/dev/null 2>&1; then
+  # Exit 1 is "outside the paths", which is the answer. Exit 2 is contain.py
+  # refusing to run, and `! cmd` treats both the same — so an unreadable pattern
+  # list made every task look out of bounds, which is a refusal for the wrong
+  # reason and sends the next person to edit the bean.
+  crc=0
+  printf '%s\n' "$pat" | python3 "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS_JSON" >/dev/null 2>&1 || crc=$?
+  if [ "$crc" -ge 2 ]; then
+    die "containment could not be computed for $tid (contain.py exit $crc). The task paths may be fine; the check did not run."
+  fi
+  if [ "$crc" -ne 0 ]; then
     BAD_PATHS="$BAD_PATHS
   $tid: $pat"
   fi
@@ -623,8 +632,28 @@ EOF
       # -- containment ---------------------------------------------------------
       # Both bounds, every attempt: the task's own paths, and the bean's. The
       # task-list check at startup is an early warning; this is the guarantee.
-      VIOL_TASK="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | python3 "$PIPELINE_DIR/contain.py" --patterns "$TASK_PATHS_JSON" || true)"
-      VIOL_BEAN="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | python3 "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS_JSON" || true)"
+      # `|| true` is right for exit 1 — that is "violations found", and the
+      # output is the answer. It is wrong for exit 2, which is contain.py
+      # refusing to run at all (patterns that are not JSON, an unreadable list).
+      # Both produce empty output, so `|| true` alone makes a crashed containment
+      # check report a clean diff and the attempt passes the one boundary the
+      # build loop exists to enforce.
+      #
+      # gate.sh was fixed for this on 2026-09-15 and this copy was not — the
+      # taxonomy entry in RESUME.md names the gate and stops there. The gate is
+      # the second line of defence; this is the first, and it runs per attempt.
+      contained_or_die() { # contained_or_die <patterns-json> <what>
+        local out rc=0
+        out="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | python3 "$PIPELINE_DIR/contain.py" --patterns "$1")" || rc=$?
+        if [ "$rc" -ge 2 ]; then
+          printf 'CONTAINMENT UNCOMPUTABLE — contain.py exit %s against the %s paths.\n' "$rc" "$2" >&2
+          printf 'Refusing to record an attempt as contained when the check did not run.\n' >&2
+          exit 5
+        fi
+        printf '%s' "$out"
+      }
+      VIOL_TASK="$(contained_or_die "$TASK_PATHS_JSON" "task's")"
+      VIOL_BEAN="$(contained_or_die "$BEAN_PATHS_JSON" "bean's")"
       jq -cn --argjson task_paths "$TASK_PATHS_JSON" --argjson bean_paths "$BEAN_PATHS_JSON" \
         --argjson changed "$(printf '%s\n' "$CHANGED" | sed '/^$/d' | jq -Rsc 'split("\n") | map(select(length > 0))')" \
         --argjson viol_task "$(printf '%s\n' "$VIOL_TASK" | jq -Rsc 'split("\n") | map(select(length > 0))')" \

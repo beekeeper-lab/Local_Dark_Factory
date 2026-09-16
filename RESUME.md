@@ -139,6 +139,16 @@ preflight's bean lookup. A skipped input needs a row saying it was skipped, or t
 is a confident answer about a question that was quietly narrowed.
 
 `contain.py || true` swallowed exit 2 — "I could not run" —
+alongside exit 1. Fixed in `gate.sh` on 2026-09-15 **and not in `build-loop.sh`,
+where the same two lines sat until 2026-09-16.** The gate is the second line of
+defence; the build loop is the first, and it runs once per attempt. A taxonomy
+entry that names one call site is an entry that leaves the others — grep for the
+pattern, not the file. The loop's startup check had a third variant: `! cmd`
+treats "outside the paths" and "could not run" alike, so an unreadable pattern
+list made every task look out of bounds, which is a refusal for the wrong reason
+and sends the next person to edit the bean.
+
+The original, for the record:
 alongside exit 1 — "violations found". Both print nothing, so a crashed
 containment check reported a clean diff and the gate recorded `contained: true`.
 Also: spec-check skipping schema validation with a `note`, preflight's bean lookup

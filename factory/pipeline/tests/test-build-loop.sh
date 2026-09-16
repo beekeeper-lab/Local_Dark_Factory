@@ -676,5 +676,44 @@ else
   printf '  FAIL  duration_s on the end line is %s, for work that took at least 2\n' "${bt_dur:--1}"; FAIL=$((FAIL + 1))
 fi
 
+printf '\n== a containment check that cannot run does not mean contained ==\n\n'
+#
+# `|| true` swallows exit 1 (violations found, output is the answer) and exit 2
+# (contain.py refusing to run) alike, and both produce empty output — so a crashed
+# check reports a clean diff and the attempt passes the one boundary this loop
+# exists to enforce. gate.sh was fixed for this and this copy was not; the gate is
+# the second line of defence, and this is the first, running once per attempt.
+reset_run
+rm -f "$WORK/actions"/*
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+# A contain.py that refuses. Shadowed on PATH is not enough — the loop calls it by
+# path — so the fixture points PIPELINE_DIR's copy at a stub for one run.
+BROKEN="$WORK/broken-pipeline"; rm -rf "$BROKEN"; cp -r "$PIPELINE_DIR" "$BROKEN"
+cat > "$BROKEN/contain.py" <<'PYSTUB'
+import sys
+print("contain.py: patterns are not JSON", file=sys.stderr)
+sys.exit(2)
+PYSTUB
+out="$(PI_BIN="$WORK/stub-pi" PI_SESSIONS_DIR="$WORK/sessions" STUB_ACTIONS="$WORK/actions" \
+  FACTORY_CONTAIN_WORKER=0 bash "$BROKEN/build-loop.sh" "$RUN_DIR" \
+  --bean "$REPO/bean.yaml" --tasks "$REPO/tasks.yaml" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ]; then
+  printf '  ok    it refuses rather than passing (exit %s)\n' "$rc"; PASS=$((PASS + 1))
+else
+  printf '  FAIL  a broken containment check let the loop proceed\n'; FAIL=$((FAIL + 1))
+fi
+check "and says the check did not run" "the check did not run" "$out"
+# nope() in this file takes a COMMAND, not a string — the one above and this one
+# are different helpers than in the other suites, and passing text here runs it.
+if grep -qF "outside the bean" <<<"$out"; then
+  printf '  FAIL  it blamed the task paths for a check that did not run\n'; FAIL=$((FAIL + 1))
+else
+  printf '  ok    and does not blame the task paths\n'; PASS=$((PASS + 1))
+fi
+nope  "no attempt is recorded contained"  "a broken check must not produce a contained record" \
+      grep -rq 'contained": true' "$RUN_DIR/build" 2>/dev/null
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
