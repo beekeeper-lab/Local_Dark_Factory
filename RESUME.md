@@ -559,8 +559,17 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 ./bench/phase0.sh --provenance-only
 ```
 
-Expected: `455 assertions, 0 failed` (~64s, and it names any suite that fails);
-audit `0 findings (green)`; `8 schemas, 0 invalid`; `20 bean(s) ... 0 invalid`; GTT 96 GB.
+And, for a run that has finished, the phase-1 exit predicates:
+
+```
+./bench/phase1-audit.sh <run-dir> --repo <target-repo>
+```
+
+Expected as of 2026-09-16: **`1111 assertions, 0 failed`** (~115s, and it names any
+suite that fails); phase-0 audit `1 finding` — the eleven figures that predate
+`bench/provenance.sh`, which is an artifact finding and not a code one;
+`8 schemas, 0 invalid`; `20 bean(s) ... 0 invalid`; GTT 96 GB. phase-1 on the
+bean-001 run: 4 ok, 4 findings, none of them `fail`.
 
 `run-all.sh` replaces naming individual suites — it discovers them, so a suite written
 after this was typed is still covered. `--fast` skips the end-to-end ones. The audit's `--with-models` flag re-runs the
