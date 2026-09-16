@@ -10,11 +10,20 @@ From inside the repository the line should build in:
 
 ```
 factory doctor            # is this repo ready to be run against?
-factory beans             # the approved beans, in run order
-factory run bean-001      # the whole line: preflight → pull request
+factory queue             # what is runnable, and what blocks the rest
+factory go                # run the approved beans in order, stopping at the first halt
 factory status            # what the newest run did, stage by stage
 factory runs              # every run, newest first, and how each ended
 ```
+
+`factory go` is the line; `factory run bean-001` is one bean of it. The queue
+takes the order and the dependencies from the beans themselves, refuses anything
+that is not `status: approved`, and stops the moment something halts — whatever
+stopped one bean would stop the next.
+
+With `merge_mode: human_required` it also stops when a bean's pull request is
+open and unmerged, because the next bean builds against the default branch and
+that is where the work is not yet. That is the line working, not the line broken.
 
 `factory` is `factory/bin/factory`. It finds the target repo's config, snapshots the pipeline and runs from the copy, so the line can be edited while a bean is building.
 
@@ -36,7 +45,7 @@ The controller decides; the models write. Anything decidable by running somethin
 | `factory/worker-image/`, `factory/gate-image/` | the two pinned containers: one writes code, one judges whether it works |
 | `schemas/*.json` | the eight contracts: bean, task, verdict, event, gate-manifest, risk-policy, repo-config, run-record |
 | `bench/` | measurement — fitness harnesses, phase audits, conformance probes |
-| `factory/pipeline/tests/` | `run-all.sh` runs every suite (~500 assertions, ~80s) |
+| `factory/pipeline/tests/`, `bench/tests/` | `run-all.sh` runs every suite in both, ~1200 assertions in ~two minutes |
 
 Both the worker and the verification gates run in containers with no network at all. The worker reaches exactly one model endpoint, over a unix socket bridged to a single address — there is no route to widen. See `RESUME.md` for what that cost and why it is built the way it is.
 
