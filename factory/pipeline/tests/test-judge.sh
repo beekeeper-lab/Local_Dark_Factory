@@ -189,6 +189,38 @@ want  "what it managed is kept"        "verdicts/spec.truncated.json should exis
       test -s "$R/verdicts/spec.truncated.json"
 
 # --------------------------------------------------------------------------
+printf '\n-- and an answer that stops without the server saying `length` --\n\n'
+#
+# The case the old message could not tell apart. A judge-fitness pass hit this
+# branch and left a 578-byte log ending mid-string: the answer looked cut off,
+# the message said the model had ignored the schema, and done_reason said `stop`.
+# Whether the bytes really stopped unterminated or the 400-char print did was
+# unanswerable, because nothing was kept.
+clean_verdicts
+reply "$(jq -nc --arg c '{"verdict":"revise","criteria":[{"id":"ac1","met":false,"evidence":"no source files were provided' \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c, thinking:""}}')"
+out="$(judge)"; rc=$?
+rc_is "exit 1, not 8"                  "$rc" 1
+check "it reports the real done_reason" "done_reason=stop" "$out"
+check "and what jq objected to"        "at EOF" "$out"
+check "and says the cap may not be it" "may do nothing" "$out"
+want  "all of it is kept"              "verdicts/spec.unparseable.json should exist" \
+      test -s "$R/verdicts/spec.unparseable.json"
+# Kept whole, not to the 400 characters the message used to print.
+want  "kept whole, not truncated"      "the file should be the full answer" \
+      test "$(wc -c < "$R/verdicts/spec.unparseable.json")" -eq 97
+
+printf '\n-- an answer that is not JSON at all is a different sentence --\n\n'
+clean_verdicts
+reply "$(jq -nc --arg c 'I have reviewed the specification and it looks good to me.' \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c, thinking:""}}')"
+out="$(judge)"; rc=$?
+rc_is "it fails"                       "$rc" 1
+check "it blames the decode"           "decode failing rather than the model choosing" "$out"
+nope  "and not the token budget"       "JUDGE_NUM_PREDICT" "$out"
+want  "what it sent is kept"           "verdicts/spec.unparseable.json should exist" \
+      test -s "$R/verdicts/spec.unparseable.json"
+
 printf '\n== it tried to call tools that do not exist ==\n\n'
 clean_verdicts
 reply '{"model":"test-judge:latest","done":true,"done_reason":"stop","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"repo_browser.open_file"}},{"function":{"name":"repo_browser.search"}}]}}'

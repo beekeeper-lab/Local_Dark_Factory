@@ -284,7 +284,15 @@ while IFS='|' read -r name should_reject description catchwords; do
     # would divide the catch rate by a denominator that omits its own failures —
     # a metric that flatters itself is worse than no metric.
     [ "$should_reject" = yes ] && { SEEDED=$((SEEDED+1)); NO_ANSWER=$((NO_ANSWER+1)); }
-    verdict="none"; outcome="no judgement (rc=$rc): $(tail -1 "$RD/judge.log" 2>/dev/null | head -c 90)"
+    # The diagnosis line, not the last line. judge.sh writes a one-line verdict on
+    # what went wrong and then two or three lines of what to do about it, so
+    # `tail -1` reported the advice and hid the cause: a whole pass of this
+    # harness recorded `"evidence": "No source files were provided...` — a
+    # fragment of the model's answer — where the log's own first line said
+    # exactly which of three failures it was.
+    diag="$(grep -m1 '^JUDGE  [a-z-]*: ' "$RD/judge.log" 2>/dev/null || true)"
+    [ -n "$diag" ] || diag="$(tail -1 "$RD/judge.log" 2>/dev/null || true)"
+    verdict="none"; outcome="no judgement (rc=$rc): $(printf '%s' "${diag#JUDGE  }" | head -c 100)"
   else
     verdict="$(jq -r '.verdict' "$J")"
     body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"

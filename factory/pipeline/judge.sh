@@ -483,8 +483,35 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
     printf '       What it managed is in verdicts/%s.truncated.json. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
     exit 8
   fi
-  printf 'JUDGE  %s: the answer is not JSON despite constrained decoding:\n%s\n' \
-    "$TARGET" "$(printf '%s' "$CONTENT" | head -c 400)" >&2
+  # Not `length`, and still not JSON. Keep ALL of it and say what jq objected to.
+  #
+  # This branch printed 400 characters to stderr and kept nothing. A judge-fitness
+  # pass on 2026-09-16 hit it, and the 578-byte judge.log it left behind ends
+  # mid-string — so the answer LOOKS cut off, while the message says the model
+  # ignored the schema and done_reason said `stop`. Three different causes, and
+  # the run had thrown away the evidence that would tell them apart: whether the
+  # bytes really stop unterminated, or the 400-char print is what stopped.
+  #
+  # A diagnostic that names a cause has to keep what it named it from.
+  PARSE_ERR="$(jq -e . 2>&1 >/dev/null <<<"$CONTENT" | head -1)"
+  printf '%s' "$CONTENT" > "$RUN_DIR/verdicts/$TARGET.unparseable.json" 2>/dev/null || true
+  printf 'JUDGE  %s: the answer is not JSON (done_reason=%s, %s bytes). %s\n' \
+    "$TARGET" "$DONE_REASON" "${#CONTENT}" "$PARSE_ERR" >&2
+  case "$PARSE_ERR" in
+    *"at EOF"*)
+      # Unterminated. The server did not say `length`, so raising
+      # JUDGE_NUM_PREDICT is a guess, not the fix — the answer stopped for a
+      # reason the server did not report.
+      printf '       It stops unterminated, but done_reason is %s and not `length`: the server\n' "$DONE_REASON" >&2
+      printf '       ended the answer without saying it ran out of room. Raising JUDGE_NUM_PREDICT\n' >&2
+      printf '       may do nothing. All of it is in verdicts/%s.unparseable.json.\n' "$TARGET" >&2
+      ;;
+    *)
+      printf '       Constrained decoding cannot emit invalid JSON by choice, so this is the\n' >&2
+      printf '       decode failing rather than the model choosing. All of it is in\n' >&2
+      printf '       verdicts/%s.unparseable.json.\n' "$TARGET" >&2
+      ;;
+  esac
   exit 1
 fi
 

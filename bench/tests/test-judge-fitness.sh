@@ -143,6 +143,27 @@ check "it is named as such"            "abstained — a bad day, not a false app
 eq "and is not a false accept"         "0" "$(jq -r '.false_accepts' "$WORK/out.json")"
 eq "nor a catch"                       "0" "$(jq -r '.rejected' "$WORK/out.json")"
 
+printf '\n-- no judgement at all reports the cause, not the advice --\n\n'
+#
+# judge.sh writes a one-line diagnosis and then two or three lines of what to do
+# about it. This harness read the LAST line, so a real pass on 2026-09-16
+# recorded `"evidence": "No source files were provided for analysis...` — a
+# fragment of the model's own answer — as the reason there was no judgement,
+# while the log's first line said which of three failures it actually was.
+jq -nc --arg c '{"verdict":"revise","criteria":[{"id":"ac1","met":false,"evidence":"no source files' \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}' \
+  > "$WORK/reply.json"
+out="$(fit contradicts-non-goal)"
+check "it says there was no judgement" "no judgement (rc=1)" "$out"
+check "and names the cause"            "the answer is not JSON" "$out"
+nope_frag="no source files"
+if grep -qF -- "$nope_frag" <<<"$(grep -m1 'contradicts-non-goal' <<<"$out")"; then
+  printf '  FAIL  the outcome quotes the answer instead of the diagnosis\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and not a fragment of the answer it could not parse\n'; PASS=$((PASS+1))
+fi
+eq "it is counted as no answer"        "1" "$(jq -r '.no_answer' "$WORK/out.json")"
+
 printf '\n== the clean control ==\n\n'
 #
 # The control is the case that says whether any of the other numbers mean
