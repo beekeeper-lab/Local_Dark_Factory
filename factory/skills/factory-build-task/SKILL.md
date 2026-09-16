@@ -78,6 +78,27 @@ and against the bean's own allowed paths, and then runs `verify`. Then one of:
 - **attempts exhausted** — the bean is blocked and a human reads the evidence,
   including every one of your attempts.
 
+## You will also be measured by tests you cannot see
+
+After every task is verified, the whole change goes to a gate. Some repositories
+give that gate a set of tests written from the bean's acceptance criteria by
+someone who is not you, kept outside this repository so that nothing in the tree
+you can read contains them.
+
+You are told this on purpose. You are not being trapped; you are being told the
+rule and not the answers. What follows from it is simple and it is the whole
+reason they exist:
+
+**Implement what the criterion says, not what the visible test checks.** Code
+written to satisfy exactly the assertions in `tests/` satisfies exactly those
+assertions. A criterion that says "rejects a capacity below one" means every
+value below one, not the one value a test happens to pass in.
+
+If the hidden tests fail you are told **how many**, and nothing else — no names,
+no assertions, no output. There is nothing to reverse-engineer, and guessing at
+them is time spent away from the thing that would actually work: reading the
+acceptance criteria again.
+
 ## Report
 
 End with: what you changed (files), what the change does, whether you ran the

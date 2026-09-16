@@ -22,6 +22,27 @@ One directory per bean. `hidden_tests.dir` carries `<bean>` and the run's bean i
 replaces it, so bean-001's tests are never run against bean-007's tree. A bean
 with no directory here has no hidden tests, which the gate records as a note.
 
+## The worker is told the rule, not the answers
+
+`factory/skills/factory-build-task/SKILL.md` says that some repositories measure
+the finished change against tests written from the bean's criteria by someone who
+is not the worker, kept outside the repository, and that a failure comes back as
+a count and nothing else.
+
+That is deliberate. A hidden test is not a trap: the point is not to catch a model
+out, it is to remove the incentive to write code that satisfies the visible
+assertions and nothing else. A worker that knows it will be measured on the
+criterion rather than on the test has a reason to implement the criterion. One
+that does not know simply optimises against what it can read, which is exactly
+the behaviour these exist to defeat.
+
+It also tells it there is nothing to reverse-engineer from a count, so guessing at
+them is time spent away from re-reading the acceptance criteria.
+
+**Unmeasured.** Whether saying this changes what the model writes is a question
+for a run with hidden tests configured, and bean-002 is the first bean that will
+have them.
+
 ## What is here
 
 | repo / bean | assertions | what they can check |
