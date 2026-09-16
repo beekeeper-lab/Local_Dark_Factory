@@ -1,0 +1,63 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "ac1",
+      "met": false,
+      "evidence": "The repository does not contain a file named `pyproject.toml`. Therefore the requirement that the top‑level pyproject.toml exist cannot be satisfied, and any checks on its contents (such as required Python version or dependencies) are moot at this stage. The absence of the file also means the test suite will have no configuration to locate it, causing pytest verification to fail.",
+      "quote": "The repository must contain a file named pyproject.toml at the top level."
+    },
+    {
+      "id": "ac2",
+      "met": false,
+      "evidence": "There is no `.gitignore` file in the repository, so it cannot be verified that it contains a line for `factory/runs/`. The required line is missing entirely.",
+      "quote": ".gitignore must contain a line for \"factory/runs/\"."
+    },
+    {
+      "id": "ac3",
+      "met": false,
+      "evidence": "`src/seating_planner/__init__.py` does not exist, so the condition that it defines `__version__ = \"0.1.0\"` and imports nothing else cannot be satisfied.",
+      "quote": "The repository must contain a file src/seating_planner/__init__.py that defines __version__ = \"0.1.0\" and imports nothing else."
+    },
+    {
+      "id": "ac4",
+      "met": false,
+      "evidence": "`tests/test_scaffold.py` does not exist, so the required test function `test_package_imports` with at least one assert statement cannot be verified.",
+      "quote": "The repository must contain a test file tests/test_scaffold.py with a function named test_package_imports that contains at least one assert statement."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Missing pyproject.toml prevents verification of project metadata and tool configuration requirements (including Python version, dependencies, and mypy/ruff settings).",
+      "evidence": "File 'pyproject.toml' not found."
+    },
+    {
+      "severity": "major",
+      "summary": ".gitignore file is absent; required entries cannot be verified.",
+      "evidence": "File '.gitignore' not found."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing src/seating_planner/__init__.py means the package does not exist and its version string cannot be checked.",
+      "evidence": "File 'src/seating_planner/__init__.py' not found."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing tests/test_scaffold.py; pytest will report no tests collected, causing the verification step for ac4 to fail.",
+      "evidence": "Test file 'tests/test_scaffold.py' does not exist."
+    }
+  ],
+  "confidence": 0.99,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 64
+  }
+}

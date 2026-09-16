@@ -313,14 +313,19 @@ jq -n \
   --argjson gates "$GATE_ROWS" --argjson acs "$AC_ROWS" --argjson inv "$INV_ROW" \
   --arg secrets "$SECRETS" --argjson ti "$TEST_INTEGRITY" \
   --argjson ok "$([ "$FAILED" -eq 0 ] && echo true || echo false)" \
+  --arg gates_ref "$(realpath --relative-to="$ROOT" "$GATES" 2>/dev/null || printf '%s' "$GATES")" \
+  --arg gate_image "$("$PIPELINE_DIR/yaml2json.sh" "$GATES" 2>/dev/null | jq -r '.image // ""')" \
   '{schema:$schema, bean:$bean, base:$base, started_at:$started, finished_at:$finished,
+    gate_manifest: {ref:$gates_ref, image:$gate_image,
+                    digest:(if ($gate_image | test("@")) then ($gate_image | split("@")[1]) else null end)},
     diff: {files:$changed, file_count:$changed_n, changed_lines:$diff_lines},
     containment: {violations:$viol, contained: (($viol|length) == 0)},
     tier: $tier,
     secret_scan: {suspicious_lines: ($secrets | if . == "" then [] else split("\n") end)},
     gates: $gates, acceptance_criteria: $acs, invariants: $inv,
     test_integrity: $ti,
-    overall: (if $ok then "pass" else "fail" end)}' > "$RESULT"
+    overall: (if $ok then "pass" else "fail" end),
+    note:"gate_manifest names the image these gates ran in. Every \"the gates passed\" is a claim about a specific toolchain, and until 2026-09-15 this record did not say which one — the manifest pinned it and the result forgot it."}' > "$RESULT"
 
 printf '\n%s — %s\n' "$([ "$FAILED" -eq 0 ] && echo "GATE PASS" || echo "GATE FAIL")" "$RESULT"
 exit "$FAILED"

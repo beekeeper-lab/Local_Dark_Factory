@@ -1,0 +1,36 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "ac1",
+      "met": false,
+      "evidence": "The verification step at index 0 for artifact **ac1** checks that `tool.mypy.python_version` is the string \">=3.11\", while the description of this artifact explicitly requires the value to be exactly \"3.11\". These two requirements are mutually exclusive, making the verification contradictory and thus the artifact unsound.",
+      "quote": "\"The repository must contain a pyproject.toml file with a [tool.mypy] section that sets python_version = \\\"3.11\\\" and strict = true.\""
+    },
+    {
+      "id": "ac1",
+      "met": false,
+      "evidence": "Verification step at index 2 expects the command `mypy --version` to output a line containing \"All checks passed!\", which is not required (nor guaranteed) by the description. The description only requires that the pyproject.toml contain certain fields; it does not require any particular console output from running mypy.",
+      "quote": "\"- kind: command\\n  run: [\\\"mypy\\\", \\\"--version\\\"]\\n  exit_code: 0\\n  output_contains:\\n    - \\\"All checks passed!\\\""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Verification step for artifact ac1 expects `tool.mypy.python_version` to be \">=3.11\", contradicting the description that requires it to be exactly \"3.11\"; also a later verification step checks for an output string from mypy that is not mandated by the description.",
+      "evidence": "The yaml check in artifact ac1 expects `tool.mypy.python_version` = \">=3.11\\\", but the description states it must be \\\"3.11\\\"."
+    }
+  ],
+  "confidence": 0.9,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 223
+  }
+}

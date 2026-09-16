@@ -358,6 +358,24 @@ else
   printf '  SKIP  podman or the gate image unavailable; execution not exercised\n'
 fi
 
+printf '\n== the record says which image the gates ran in ==\n\n'
+#
+# gates.lock.yaml pins the image by digest precisely because a tag can be
+# repointed, and every "the gates passed" in this repo's history is a claim about
+# a specific toolchain. gate.json — the record of what the gates did — did not say
+# which one. The manifest pinned it and the result forgot it, so a reader of a run
+# directory could not tell what the green was about.
+out="$(gate --skip-gates)" || true
+want "gate.json names the manifest"   "gate_manifest.ref should be set" \
+     test -n "$(jq -r '.gate_manifest.ref // ""' ai/runs/R/gate.json)"
+want "and the image it pins"          "gate_manifest.image should be set" \
+     test -n "$(jq -r '.gate_manifest.image // ""' ai/runs/R/gate.json)"
+want "with the digest split out"      "gate_manifest.digest should be a sha256" \
+     bash -c "jq -re '.gate_manifest.digest | startswith(\"sha256:\")' ai/runs/R/gate.json >/dev/null"
+want "and it is the manifest's digest" "the record must agree with the file it read" \
+     test "$(jq -r '.gate_manifest.image' ai/runs/R/gate.json)" = \
+          "$(bash "$PIPELINE_DIR/yaml2json.sh" factory/gates.lock.yaml | jq -r '.image')"
+
 printf '\n== a found secret is located, never reproduced ==\n\n'
 #
 # The scan used to print the matching lines. A check that finds a credential and

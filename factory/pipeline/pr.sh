@@ -285,7 +285,7 @@ BODY="$(mktemp)"
     printf '| base | `%s` |\n' "$(git -C "$ROOT" merge-base HEAD "$DEFAULT_BRANCH_EARLY" 2>/dev/null || echo '—')"
     printf '| candidate | `%s` |\n' "$HEAD_SHA"
     printf '| binding tier | %s |\n' "$(jq -r '.tier.final_tier // "—"' "$RUN_DIR/gate.json" 2>/dev/null || echo '—')"
-    printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest_digest // .sandbox.image // "—"' "$RUN_DIR/gate.json" 2>/dev/null || echo '—')"
+    printf '| gate image | `%s` |\n' "$(jq -r '.gate_manifest.image // "—"' "$RUN_DIR/gate.json" 2>/dev/null || echo '—')"
     printf '| authorised by | the deterministic record; no judge verdict |\n'
   fi
   if [ -n "${V:-}" ]; then
@@ -322,9 +322,15 @@ BODY="$(mktemp)"
   ADV=( "$RUN_DIR"/failed-attempts/*.advisory.* )
   if [ -e "${ADV[0]}" ]; then
     printf '\n## Audits that did not accept\n\n'
-    printf 'This run was made with **advisory audits**: the judge ran, wrote a judgement\n'
-    printf 'and the controller stamped a verdict from it, but a verdict short of accept\n'
-    printf 'did not stop the run. Every deterministic check stayed blocking.\n\n'
+    # Two different things end up in this list, and the first version of this
+    # paragraph described only one of them. On the run that first reached a pull
+    # request, five of the six were the other: the judge produced no judgement at
+    # all, and saying it "wrote a judgement the controller stamped" was false
+    # about them. Each line below says which; the preamble must not contradict it.
+    printf 'This run was made with **advisory audits**, and two different things are\n'
+    printf 'listed below. Some are a judge that wrote a judgement the controller stamped\n'
+    printf 'into a verdict short of accept. Some are a judge that produced no judgement at\n'
+    printf 'all. Each line says which. Every deterministic check stayed blocking throughout.\n\n'
     printf 'Read these before approving:\n\n'
     for a in "${ADV[@]}"; do
       [ -e "$a" ] || continue
