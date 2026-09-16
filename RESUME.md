@@ -970,9 +970,28 @@ tight grammar, and a wrong answer on ac2 no longer contaminates ac1. The verdict
 becomes arithmetic over the five — which is the controller's job anyway, and would
 remove `verdict` from the model's hands entirely.
 
-What it costs: five requests per audit instead of one. At 21–56 seconds each that
-is roughly what a single audit costs today, because the long ones are long
-precisely because the model is trying to do everything at once.
+What it costs — **measured, and my estimate was wrong by a factor of twenty.** I
+guessed "roughly what a single audit costs today, because the long ones are long
+precisely because the model is trying to do everything at once". The first case of
+the first pass:
+
+```
+JUDGE spec  tokens: 12177 prompt + 516 generated = 12693 of 32768 ctx (38%)
+JUDGE spec  revise  4 finding(s)  166s
+```
+
+**166 seconds per criterion.** Four criteria is eleven minutes per audit, against
+21–56 seconds for the single ask. The question being smaller did not make the
+answer cheaper: the model spends a full reasoning effort on each one, and the
+12,000-token prompt is re-processed every time.
+
+**The obvious refinement, not built.** Every sub-request sends the same artifacts
+and differs only in which criterion it names — and the criteria list is in the
+PREAMBLE, which comes before the artifacts, so the shared prefix diverges at
+message 1 and ollama's prefix cache is useless. Moving the per-criterion question
+after the artifacts would make four requests share one processed prompt. That is a
+change to the prompt order, which is measured territory, so it waits for a reason:
+if the accuracy is no better, the cost does not matter.
 
 **Built, 2026-09-16**: `bench/judge-per-criterion.sh`, 20 assertions. It calls
 `judge.sh` once per criterion with a bean carrying only that criterion — so the
