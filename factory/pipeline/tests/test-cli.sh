@@ -123,11 +123,13 @@ RC
 out="$(fac doctor)"
 check "the check is named"           "gates" "$out"
 check "and so is the absence of CI"  "no .github/workflows" "$out"
+check "naming where it looked"       "the working tree has no" "$out"
+check "and what the ci step will do"  "refuse rather than wait" "$out"
 check "as a note, not a pass"        "note   required_checks" "$out"
 mkdir -p "$REPO/.github/workflows" && printf 'name: gates\n' > "$REPO/.github/workflows/gates.yml"
 out="$(fac doctor)"
-check "workflows change the wording" "workflows exist" "$out"
-check "but it is still not enforced" "no pipeline step waits on them" "$out"
+check "workflows change the wording" ".github/workflows exists in the working tree" "$out"
+check "and points at the branch check" "the ci step asks the same of the branch" "$out"
 rm -rf "$REPO/.github"
 
 # --------------------------------------------------------------------------

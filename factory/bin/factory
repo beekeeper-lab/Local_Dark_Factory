@@ -401,11 +401,16 @@ run from the working tree."
     if [ -f "$TARGET_ROOT/factory/repo.yaml" ]; then
       RCHECKS="$("$PIPE/yaml2json.sh" "$TARGET_ROOT/factory/repo.yaml" | jq -r '[.required_checks[]?] | join(", ")')"
       if [ -n "$RCHECKS" ]; then
+        # The working tree, and it says so. `ci.sh` asks the same question of the
+        # branch at HEAD, because a pull request is about a commit and not about
+        # what is lying around unstaged. The two can disagree, and a check that
+        # does not name what it looked at is how that disagreement becomes a
+        # mystery.
         if [ -d "$TARGET_ROOT/.github/workflows" ] \
            && [ -n "$(ls -A "$TARGET_ROOT/.github/workflows" 2>/dev/null)" ]; then
-          say note "required_checks" "$RCHECKS — workflows exist; no pipeline step waits on them yet"
+          say note "required_checks" "$RCHECKS — .github/workflows exists in the working tree; the ci step asks the same of the branch"
         else
-          say note "required_checks" "$RCHECKS — but this repo has no .github/workflows, so nothing produces them and no step waits on them"
+          say note "required_checks" "$RCHECKS — but the working tree has no .github/workflows, so nothing produces them; the ci step will refuse rather than wait"
         fi
       fi
     fi
