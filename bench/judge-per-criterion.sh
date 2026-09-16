@@ -80,7 +80,7 @@ mkdir -p "$RUN_DIR/verdicts"
 N=1
 while [ -f "$RUN_DIR/verdicts/$TARGET.attempt-$N.judgement.json" ]; do N=$((N + 1)); done
 
-CRITERIA='[]'; ANSWERED=0; ASKED=0
+CRITERIA='[]'; ANSWERED=0; ASKED=0; DOC_QUALITY=null
 printf 'judge-per-criterion: %s criteria, one request each\n' "$(printf '%s\n' "$IDS" | wc -l)" >&2
 while IFS= read -r id; do
   [ -n "$id" ] || continue
@@ -126,8 +126,33 @@ while IFS= read -r id; do
   ANSWERED=$((ANSWERED + 1))
   conf="$(jq -r '.confidence // 0.5' "$J")"
   printf '  %-6s met=%s conf=%s\n' "$id" "$(jq -r '.met' <<<"$entry")" "$conf" >&2
+  # document_quality, folded conservatively.
+  #
+  # verdict.schema.json REQUIRES it on a spec_audit or a pre_pr_audit, and a
+  # composition that dropped it could never be stamped for either — the same
+  # contract-that-cannot-be-satisfied that test_integrity was until this morning.
+  # Each sub-answer may carry one; a field is true only if EVERY sub-answer that
+  # expressed a view said true, which is the same rule as taking the lowest
+  # confidence. One dissent is a dissent.
+  dq="$(jq -c '.document_quality // null' "$J")"
   CRITERIA="$(jq -c --argjson e "$entry" --argjson c "$conf" \
     '. + [$e + {_confidence: $c}]' <<<"$CRITERIA")"
+  if [ "$dq" != "null" ]; then
+    if [ "$DOC_QUALITY" = "null" ]; then DOC_QUALITY="$dq"
+    else
+      # Both sides named, because a fold that merges one INTO the other loses the
+      # value it is supposed to be comparing against. The first version did
+      # exactly that and returned true for a field one sub-answer had called
+      # false — a conservative fold that was not conservative, which is worse than
+      # no fold because it looks like one.
+      DOC_QUALITY="$(jq -nc --argjson old "$DOC_QUALITY" --argjson new "$dq" '
+        (($old // {}) + ($new // {})) | keys as $ks
+        | reduce $ks[] as $k ({};
+            .[$k] = (if ($old[$k] == false or $new[$k] == false) then false
+                     else (if $new[$k] == null then $old[$k] else $new[$k] end) end))' \
+        2>/dev/null || printf '%s' "$DOC_QUALITY")"
+    fi
+  fi
 done <<< "$IDS"
 
 if [ "$ANSWERED" -eq 0 ]; then
@@ -162,6 +187,7 @@ jq -n --arg sv "judgement/1.0.0" --arg target "$TARGET" \
   --argjson prov "$J_PROV" \
   --arg verdict "$VERDICT" --argjson c "$CRITERIA" \
   --argjson asked "$ASKED" --argjson answered "$ANSWERED" \
+  --argjson dq "$DOC_QUALITY" \
   --arg stage "$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)" \
   '{schema_version:$sv, stage:$stage, target:$target, verdict:$verdict,
     criteria: [$c[] | del(._confidence)],
@@ -175,7 +201,9 @@ jq -n --arg sv "judgement/1.0.0" --arg target "$TARGET" \
                         evidence:"The remaining criteria produced no usable judgement. They are recorded as not met, because silence is not agreement."}]
                  else [] end),
     confidence: ([$c[]._confidence] | min),
-    asked_per_criterion:{asked:$asked, answered:$answered},
+    asked_per_criterion:{asked:$asked, answered:$answered}}
+   + (if $dq != null then {document_quality:$dq} else {} end)
+   + {
     judged_by:{model:$model, digest:$digest, thinking:$thinking,
                composed_by:"bench/judge-per-criterion.sh"},
     provenance:$prov}' \

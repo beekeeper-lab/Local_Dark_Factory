@@ -56,9 +56,13 @@ mkdir -p "$R/verdicts"
 # the assertion in the composition section: the composed verdict must come from
 # the met flags and not from the model's own word.
 jq -n --arg i "$id" --argjson m "$met" --argjson c "${STUB_CONF:-0.9}" \
+  --argjson dq "$(if [ "$id" = ac2 ]; then echo false; else echo true; fi)" \
   '{verdict:"accept", confidence:$c,
     criteria:[{id:$i, met:$m, evidence:("about " + $i), quote:"a real line of text here"}],
-    findings:[]}' > "$R/verdicts/$T.attempt-1.judgement.json"
+    findings:[],
+    document_quality:{risk_called_out:true, blast_radius_called_out:$dq,
+                      code_blocks_teach:true, no_assumed_stack_knowledge:true, matches_diff:true}}' \
+  > "$R/verdicts/$T.attempt-1.judgement.json"
 STUB
 chmod +x "$SNAP/judge.sh"
 
@@ -157,6 +161,18 @@ eq "the model is named"                "test-judge-or-real" \
    "$(jq -r 'if (.judged_by.model // "") != "" then "test-judge-or-real" else "MISSING" end' <<<"$(J)")"
 eq "and how it was composed"           "bench/judge-per-criterion.sh" "$(jq -r '.judged_by.composed_by' <<<"$(J)")"
 check "with a provenance block"        "kernel" "$(jq -c '.provenance' <<<"$(J)")"
+
+printf '\n== document_quality is folded conservatively, one dissent is a dissent ==\n\n'
+#
+# verdict.schema.json REQUIRES it on a spec_audit and a pre_pr_audit, so a
+# composition that dropped it could never be stamped for either — the same
+# contract-that-cannot-be-satisfied that `test_integrity` was until this morning.
+# A field is true only if every sub-answer that expressed a view said true, which
+# is the same rule as taking the lowest confidence.
+fresh
+pc >/dev/null 2>&1
+eq "a field all three agreed on"       "true"  "$(jq -r '.document_quality.risk_called_out' <<<"$(J)")"
+eq "and one where ac2 dissented"       "false" "$(jq -r '.document_quality.blast_radius_called_out' <<<"$(J)")"
 
 printf '\n== a bean with no criteria falls through to judge.sh ==\n\n'
 printf 'schema_version: bean/2.0.0\nid: bean-x\nrepo: e/x\ntitle: t\nintent: i\nstatus: approved\nallowed_write_paths: ["src/**"]\n' \
