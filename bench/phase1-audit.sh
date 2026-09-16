@@ -67,17 +67,60 @@ esac
 # `implement` and before the package audit existed. What it means is: every step
 # this run's tier declares, ending in PASS. Counting to seven would be counting
 # the wrong thing.
-missing=""
+# A step that did not exist when the run was made cannot be missing from it.
+#
+# `EXPECTED_STEPS` is today's tier. A run recorded under an older pipeline version
+# is not a failing run; it is a run of a different line, and saying "not PASS: ci"
+# about a run made before `ci` existed is a true sentence about the wrong thing —
+# the same shape of error as calling a previous attempt's file this attempt's
+# output. A step that was NEVER recorded, in a run whose pipeline_version is not
+# this one, is reported as what it is.
+RUN_PV="$(jq -r '.conditions.pipeline_version // empty' "$RUNJSON" 2>/dev/null || true)"
+NOW_PV="$(cat "$ROOT/factory/pipeline/VERSION" 2>/dev/null || echo unknown)"
+missing=""; predates=""
 for s in $EXPECTED_STEPS; do
   v="$(jq -rs --arg s "$s" '[.[] | select(.step == $s and .event == "end")] | last.verdict // "none"' "$STEPS" 2>/dev/null)"
-  [ "$v" = PASS ] || missing="$missing $s($v)"
+  [ "$v" = PASS ] && continue
+  seen="$(jq -rs --arg s "$s" '[.[] | select(.step == $s)] | length' "$STEPS" 2>/dev/null || echo 0)"
+  # A record with no pipeline_version at all predates the version stamp itself,
+  # which is the strongest evidence available that it predates anything else.
+  if [ "$seen" = 0 ] && [ "${RUN_PV:-unstamped}" != "$NOW_PV" ]; then
+    predates="$predates $s"
+  else
+    missing="$missing $s($v)"
+  fi
 done
-if [ -z "$missing" ]; then
+if [ -z "$missing" ] && [ -z "$predates" ]; then
   ok "seven_stages_completed" "all $(wc -w <<<"$EXPECTED_STEPS") steps of the $TIER tier ended PASS"
   pred seven_stages_completed pass
+elif [ -z "$missing" ]; then
+  ok "seven_stages_completed" "every step this run's pipeline had ended PASS; the $TIER tier has since gained:$predates (run: ${RUN_PV:-unstamped}, now: $NOW_PV)"
+  pred seven_stages_completed pass_for_its_version
 else
   bad "seven_stages_completed" blocker "not PASS:$missing"
   pred seven_stages_completed fail
+fi
+
+# ----------------------------------------------- 1b. the record conforms --
+# run-record.schema.json is one of the eight declared contracts, and until
+# 2026-09-15 nothing validated the thing that produces it, so records drifted:
+# `bean` where the schema says `bean_id`, and no schema_version, corpus or
+# conditions at all. A run whose own record does not conform cannot say what
+# input it derives from or what it ran on, which is most of what a later reader
+# wants. Reported here rather than assumed, because reading around a missing
+# block is how it stayed missing.
+RSCHEMA="$ROOT/schemas/run-record.schema.json"
+if [ -f "$RSCHEMA" ] && [ -x "$ROOT/.venv/bin/python" ]; then
+  if rout="$("$ROOT/.venv/bin/python" "$ROOT/bench/validate.py" run-record "$RUNJSON" 2>&1)"; then
+    ok "run_record_conforms" "run.json validates against run-record.schema.json"
+    pred run_record_conforms pass
+  else
+    # The validator's own words, trimmed of its leading whitespace. A grep that
+    # reshapes them risks saying something the validator did not.
+    bad "run_record_conforms" major \
+      "run.json does not validate — $(printf '%s\n' "$rout" | sed -n 's/^ *<root>: //p' | tr '\n' '@' | sed 's/@$//; s/@/; /g')"
+    pred run_record_conforms fail
+  fi
 fi
 
 # ---------------------------------------- 2. three_verdicts_schema_valid --
