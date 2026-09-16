@@ -265,5 +265,30 @@ if [ -n "$WAITING" ]; then
   printf 'waiting on a human to merge: %s\n' "$WAITING"
   printf '  `merge_mode: human_required` means the line stops here by design. Until these\n'
   printf '  land on %s, everything downstream builds against a tree without them.\n' "$DEFAULT_BRANCH"
+  # And what merging buys. "ready: nothing" is a true and unhelpful answer to the
+  # question the operator is actually asking, which is what happens next — and
+  # that is computable from the same dependency graph this queue already walked.
+  # A bean whose ONLY remaining blocker is one of these becomes ready the moment
+  # it lands.
+  # `$open | index($d)`, with the dep BOUND first.
+  #
+  # Written as `$open | index(.)` this reported every blocked bean as unblocked,
+  # including ones two dependencies deep. Inside `$open | ...` the `.` is $open,
+  # so `index(.)` asks whether the array contains itself — 0, truthy, every dep
+  # "found", every bean "ready on merge". The same class as `jq -e` on a string:
+  # a jq expression that is valid, runs, and answers a different question.
+  UNBLOCKS="$(jq -r --argjson rows "$ROWS" '
+    ($rows | map(select(.state == "pr_open") | .id)) as $open
+    | [ $rows[]
+        | select(.state == "blocked")
+        | . as $b
+        | select([ $b.deps[]? | . as $d | select(($open | index($d)) | not) ] | length == 0)
+        | select([ $b.deps[]? | . as $d | select($open | index($d)) ] | length > 0)
+        | .id ]
+    | join(" ")' <<<'null')"
+  if [ -n "$UNBLOCKS" ]; then
+    printf '  Merging %s makes these ready: %s\n' \
+      "$(printf '%s' "$WAITING" | tr ' ' ',' | sed 's/,$//')" "$UNBLOCKS"
+  fi
 fi
 printf '\n'

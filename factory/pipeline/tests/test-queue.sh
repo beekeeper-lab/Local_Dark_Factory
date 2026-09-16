@@ -148,6 +148,18 @@ check "the dependent names the cause" "bean-001(pull request not merged)" "$out"
 check "and the summary asks for the human" "waiting on a human to merge: bean-001" "$out"
 check "saying it is by design"       "stops here by design" "$out"
 
+# What merging actually unblocks. "ready: nothing" is a true and unhelpful answer
+# to the question the operator is asking, and it is computable from the graph this
+# queue has already walked: bean-002's only blocker is the open pull request, so it
+# becomes ready the moment that lands. bean-003 waits on bean-002 and does not.
+#
+# The first version reported BOTH, and every other blocked bean with it. It asked
+# `$open | index(.)` — and inside `$open | ...` the `.` is $open, so that asks
+# whether the array contains itself: 0, truthy, every dependency "found". Valid jq
+# that runs and answers a different question, the same class as `jq -e` on a string.
+check "it says what merging unblocks"  "Merging bean-001 makes these ready: bean-002" "$out"
+nope  "and not a bean two deep"        "bean-002 bean-003" "$out"
+
 printf '\n-- and merging it moves the line on --\n\n'
 merge_it bean-001
 out="$(q --all)"
