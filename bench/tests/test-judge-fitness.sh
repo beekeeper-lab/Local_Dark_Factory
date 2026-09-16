@@ -215,6 +215,11 @@ eq "the thinking level is recorded"    "low" "$(jq -r '.judge.thinking' "$WORK/o
 # right — only that whatever the run used is what the artifact records.
 _cap="$(grep -oE 'JUDGE_NUM_PREDICT:-[0-9]+' "$BENCH/judge-fitness.sh" | head -1 | sed 's/.*:-//')"
 eq "so is the token cap"               "$_cap" "$(jq -r '.judge.num_predict' "$WORK/out.json")"
+# And WHICH PROMPT. The rubric is spliced into the judge's prompt verbatim, and
+# editing it changes what is being measured — on 2026-09-16 a one-word correction
+# to it moved the judge from 21-56 seconds per case to 229-437. Two figures that
+# differ only by a file nobody recorded are two figures nobody can compare.
+check "and which prompt produced it"   "factory-audit@" "$(jq -r '.judge.prompt_version' "$WORK/out.json")"
 eq "and one pass is marked as not a measurement" "true" \
    "$(jq -r '.one_pass_is_not_a_measurement' "$WORK/out.json")"
 check "the provenance block is there"  "kernel" "$(jq -c '.provenance' "$WORK/out.json")"

@@ -433,9 +433,10 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
   --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
   --arg judge_cmd "$(basename "$JUDGE_CMD")" \
+  --arg prompt_version "$(_pv="$PIPE/../skills/factory-audit/SKILL.md"; [ -f "$_pv" ] && printf 'factory-audit@%s' "$(sha256sum "$_pv" | cut -c1-12)" || echo 'factory-audit@unknown')" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
-    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd},
+    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd, prompt_version:$prompt_version},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
