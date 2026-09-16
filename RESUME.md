@@ -1017,6 +1017,19 @@ records which was asked. The number to beat is **7 to 9 false accepts in 15**.
 The live path is untouched. `roles.json` still says gpt-oss:120b at `low`, and
 `judge.sh` is still what `orchestrate.sh` calls.
 
+**Still unmeasured for accuracy, and stopped on cost.** The first case of the first
+pass took **1,049 seconds** — four criteria at roughly 260 seconds each, against
+21–56 seconds for the whole audit as a single question. Eighteen cases would have
+been five hours of GPU for one number, so it was stopped and the GPU spent on the
+cheaper experiment (the rubric fix below), which tests a change made for a
+well-evidenced reason.
+
+What the stopped run did establish is the cost, and it is the thing to fix first:
+the prompt-order refinement above would make four requests share one processed
+prompt instead of re-processing 12,000 tokens each time. Do that, then measure the
+accuracy. `JUDGE_CMD=bench/judge-per-criterion.sh bench/judge-fitness.sh … --repeat 3`
+is the command; 7 to 9 false accepts in 15 is the number to beat.
+
 **The cheaper question was asked first, and it is answered.** Is any other model on
 this box better on the same corpus?
 
