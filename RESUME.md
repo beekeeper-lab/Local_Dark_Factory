@@ -538,9 +538,34 @@ Write the end-to-end test before the next long real run, not after it.
 
 - **`risk-policy.yaml` has not had a human read.** Marked `[~]` since Phase 0. It governs
   what tier a path change lands in, so a wrong rule here is a review that never happens.
-- **The byte budget on audit artifacts is unset.** `spec-check.sh` counts and reports; the
-  number should come from a repeat-measured size sweep, not taste. The first sweep was
-  invalidated by the variance finding.
+- **The byte budget on audit artifacts stays unset, and now for a stronger reason.**
+  `spec-check.sh` counts and reports. The number was meant to come from a repeat-measured
+  size sweep; the sweep has now been run three times at each of four sizes
+  (`size-sweep-20260916T100658Z.json`) and **it cannot answer the question**:
+
+  ```
+  padding      0      5000    10000   20000      (bytes of real padding)
+  pass 1     revise  revise   none   revise
+  pass 2     revise  revise   none   revise
+  pass 3     revise  revise   none   revise
+  named        no      no      -       no
+  ```
+
+  Two findings, neither of them a budget:
+
+  1. **The judge never named the defect, at any size, including none.** The case was
+     chosen as "the one the judge has actually caught and named before, so a fall-off is
+     legible" — and there is nothing to fall off from. A size sweep needs a baseline where
+     the judge succeeds, and on three passes at zero padding there is no such point.
+  2. **At exactly 10,000 bytes of padding it produces no judgement, reproducibly.** All
+     three passes, and not the token cap: it answered `{"path": "", "depth": 3}` — valid
+     JSON, not a judgement, the shape of a file-browsing tool call leaking into the
+     content. `judge.sh` refused it and kept it beside the run, which is the only reason
+     this was findable. The sweep now records *why* a point produced nothing, because
+     "the judge gets worse with size" and "the judge falls out of the schema at this size"
+     are different claims and the second is the more interesting one.
+
+  A budget set from this data would be a number with nothing behind it.
 - **`OLLAMA_CONTEXT_LENGTH` is system-wide** and affects the user's other projects. Left
   alone deliberately; the contained worker sets its own context in the mounted
   `models.json` instead.

@@ -1,0 +1,171 @@
+{
+  "schema": "size-sweep/2.0.0",
+  "measured_at": "2026-09-16T10:41:44Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T10:41:44Z",
+    "pipeline_version": "1.2.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "case": "contradicts-non-goal",
+  "judge": "gpt-oss:120b",
+  "passes": 3,
+  "one_pass_is_not_a_sweep": false,
+  "points": [
+    {
+      "pass": 1,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 340
+    },
+    {
+      "pass": 1,
+      "padding_bytes": 5000,
+      "total_artifact_bytes": 25841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 118
+    },
+    {
+      "pass": 1,
+      "padding_bytes": 10000,
+      "total_artifact_bytes": 30841,
+      "verdict": "none",
+      "named_the_defect": "-",
+      "seconds": 42
+    },
+    {
+      "pass": 1,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 95
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 181
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 5000,
+      "total_artifact_bytes": 25841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 184
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 10000,
+      "total_artifact_bytes": 30841,
+      "verdict": "none",
+      "named_the_defect": "-",
+      "seconds": 14
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 248
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 352
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 5000,
+      "total_artifact_bytes": 25841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 185
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 10000,
+      "total_artifact_bytes": 30841,
+      "verdict": "none",
+      "named_the_defect": "-",
+      "seconds": 180
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40841,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 147
+    }
+  ],
+  "by_size": {
+    "0": {
+      "verdicts": [
+        "revise",
+        "revise",
+        "revise"
+      ],
+      "named": [
+        "no",
+        "no",
+        "no"
+      ],
+      "agree": true
+    },
+    "10000": {
+      "verdicts": [
+        "none",
+        "none",
+        "none"
+      ],
+      "named": [
+        "-",
+        "-",
+        "-"
+      ],
+      "agree": true
+    },
+    "20000": {
+      "verdicts": [
+        "revise",
+        "revise",
+        "revise"
+      ],
+      "named": [
+        "no",
+        "no",
+        "no"
+      ],
+      "agree": true
+    },
+    "5000": {
+      "verdicts": [
+        "revise",
+        "revise",
+        "revise"
+      ],
+      "named": [
+        "no",
+        "no",
+        "no"
+      ],
+      "agree": true
+    }
+  },
+  "note": "One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it. With passes > 1 the same point is measured repeatedly, because this judge gives different verdicts for identical input and a single reading per size cannot tell a trend from the spread."
+}

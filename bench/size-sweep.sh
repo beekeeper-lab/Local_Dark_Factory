@@ -109,7 +109,7 @@ CATCH="$(grep "^$CASE|" "$ROOT/bench/judge-fitness.sh" | head -1 | cut -d'|' -f4
 [ -n "$CATCH" ] || { echo "no catch phrases for case '$CASE' in judge-fitness.sh" >&2; exit 1; }
 
 printf '\nsize sweep — case %s\n\n' "$CASE"
-printf '%-10s %-10s %-9s %-7s %s\n' PADDING TOTAL VERDICT NAMED SECONDS
+printf '%-10s %-10s %-9s %-7s %-7s %s\n' PADDING TOTAL VERDICT NAMED SECONDS WHY-NOT
 
 RESULTS='[]'
 for _pass in $(seq 1 "$REPEAT"); do
@@ -133,8 +133,29 @@ for pad in $SIZES; do
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
   if [ ! -f "$J" ]; then
+    # "none" covers three different failures and the distinction is the finding.
+    #
+    # The 2026-09-16 sweep produced `none` at exactly one size, in all three
+    # passes, and the cause was not the judge running out of room: it answered
+    # with `{"path": "", "depth": 3}` — valid JSON, not a judgement, the shape of
+    # a file-browsing tool call leaking into the content. judge.sh refused it and
+    # kept it beside the run, which is the only reason that was findable at all.
+    #
+    # A sweep that records all three as "none" cannot tell "the judge gets worse
+    # with size" from "the judge falls out of the schema at this size", and the
+    # second is the more interesting claim.
     verdict="none"; named="-"
+    if [ -f "$J.rejected" ]; then
+      reason="not a judgement: $(jq -cr 'keys | join(",")' "$J.rejected" 2>/dev/null || echo unparseable)"
+    elif [ -f "$RD/verdicts/spec.truncated.json" ]; then
+      reason="cut off at the token cap"
+    elif [ -s "$RD/verdicts/spec.thinking.txt" ]; then
+      reason="reasoned and wrote no answer"
+    else
+      reason="no response (exit $rc)"
+    fi
   else
+    reason=""
     verdict="$(jq -r '.verdict' "$J")"
     body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"
     named=no
@@ -144,10 +165,12 @@ for pad in $SIZES; do
     done
   fi
 
-  printf '%-10s %-10s %-9s %-7s %s\n' "$pad" "$total" "$verdict" "$named" "$((t1-t0))"
+  printf '%-10s %-10s %-9s %-7s %-7s %s\n' "$pad" "$total" "$verdict" "$named" "$((t1-t0))" "${reason:-}"
   RESULTS="$(jq -c --argjson p "$pad" --argjson t "$total" --arg v "$verdict" \
-    --arg n "$named" --argjson s "$((t1-t0))" --argjson pass "$_pass" \
-    '. + [{pass:$pass, padding_bytes:$p, total_artifact_bytes:$t, verdict:$v, named_the_defect:$n, seconds:$s}]' \
+    --arg n "$named" --argjson s "$((t1-t0))" --argjson pass "$_pass" --arg why "${reason:-}" \
+    '. + [{pass:$pass, padding_bytes:$p, total_artifact_bytes:$t, verdict:$v,
+           named_the_defect:$n, seconds:$s}
+          + (if $why == "" then {} else {no_judgement_because:$why} end)]' \
     <<<"$RESULTS")"
 done
 done
