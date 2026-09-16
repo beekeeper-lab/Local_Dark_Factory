@@ -79,7 +79,16 @@ mkdir -p "$KEEP"
 # Said, not enforced. This is an operator command and the operator may have a
 # reason; a measurement that silently competes for the GPU with another one is
 # how a 212-second case became a 395-second cut-off, so it is worth a line.
-if pgrep -f 'judge-fitness.sh|judge-variance.sh|size-sweep.sh|format-support.sh' >/dev/null 2>&1; then
+# `bench/` in the pattern, not a bare filename. `pgrep -f` matches whole command
+# lines, so a bare `judge-variance.sh` matches any shell that merely MENTIONS it —
+# including the watcher loop `until ! pgrep -f 'judge-variance.sh'`, which matches
+# itself and therefore never exits. Both of those were running when this note
+# first fired, and neither was a harness.
+#
+# This is the sixth time in this project that matching a process by pattern has
+# matched the wrong thing; the rule is by pid, and where a pattern is
+# unavoidable it has to be specific enough that only the real invocation matches.
+if pgrep -f 'bench/(judge-fitness|judge-variance|size-sweep|format-support)\.sh' >/dev/null 2>&1; then
   printf 'NOTE  a bench harness is running. Both will be slower and neither number will be clean.\n\n' >&2
 fi
 

@@ -1096,6 +1096,16 @@ was the 262144 default context, not model speed.
 
 ## Four live gotchas
 
+**Matching a process by pattern, the sixth time.** `reaudit.sh` printed "a bench
+harness is running" when none was. `pgrep -f` matches whole command lines, so a
+bare `judge-variance.sh` matched two shells that merely *mentioned* it — including
+`until ! pgrep -f 'judge-variance.sh'; do sleep 30; done`, a watcher that matches
+itself and therefore never exits. Both had been spinning for an hour. The pattern
+is `bench/(judge-fitness|judge-variance|...)\.sh` now, specific enough that only a
+real invocation matches. The rule stays: **by pid, never by pattern** — and where
+a pattern is unavoidable, it has to be narrow enough that the thing looking for
+the process cannot be the thing it finds.
+
 1. **pi silently drops `--thinking` for models its catalog doesn't mark `reasoning: true`.**
    This had the judge running with reasoning *off* while `roles.json` said `"high"`, and
    `run-step.sh` would have stamped `conditions.thinking: high` into the run record anyway.
