@@ -1,2 +1,2 @@
-JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=medium cap=12000  (3 artifacts, 20754 bytes, one message each)
-JUDGE  spec  revise  5 finding(s)  187s  /tmp/tmp.w9xLIxAwGP/tautological-verify.1/verdicts/spec.attempt-1.judgement.json
+JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=low cap=12000  (3 artifacts, 20754 bytes, one message each)
+JUDGE  spec  block  3 finding(s)  284s  /tmp/tmp.vZp6qDAevb/tautological-verify.1/verdicts/spec.attempt-1.judgement.json

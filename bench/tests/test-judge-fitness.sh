@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+# test-judge-fitness.sh — the scoring that produces the number this project cites.
+#
+# "2 of 15 named, 2 false accepts" is the sentence the advisory-audits decision
+# rests on. It comes from nine lines of shell classifying a verdict against an
+# expectation, and the distinctions in it are the whole point: a judge that
+# rejects for the wrong reason is not a judge that caught the defect, and a judge
+# that abstains is having a bad day rather than approving something broken.
+#
+# Each branch is driven against a fake /api/chat returning a chosen verdict, one
+# case at a time with --only, so the classification under test is the only thing
+# varying. No model, no GPU, no variance.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BENCH="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$BENCH/.." && pwd)"
+WORK="$(mktemp -d)"
+SERVER_PID=""
+cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; rm -rf "$WORK"; }
+trap cleanup EXIT
+
+PASS=0; FAIL=0
+check() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
+  else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
+eq() {
+  if [ "$2" = "$3" ]; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
+  else printf '  FAIL  %s — expected "%s", got "%s"\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
+}
+
+# /api/chat answers from a file; /api/ps answers empty so nothing is evicted.
+cat > "$WORK/server.py" <<'PY'
+import http.server, sys
+REPLY = sys.argv[2]
+class H(http.server.BaseHTTPRequestHandler):
+    def _send(self, body):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        self._send(open(REPLY, "rb").read())
+    def do_GET(self):
+        self._send(b'{"models":[]}')
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+PORT=18947
+python3 "$WORK/server.py" "$PORT" "$WORK/reply.json" & SERVER_PID=$!
+printf '{}' > "$WORK/reply.json"
+for _ in $(seq 1 50); do
+  curl -s -o /dev/null -X POST "http://127.0.0.1:$PORT/api/chat" -d '{}' && break
+  sleep 0.1
+done
+
+mkdir -p "$WORK/bin"
+cat > "$WORK/bin/ollama" <<'STUB'
+#!/usr/bin/env bash
+[ "${1:-}" = list ] && printf 'test-judge:latest\tfeedface\t1 GB\n'
+exit 0
+STUB
+chmod +x "$WORK/bin/ollama"
+export PATH="$WORK/bin:$PATH"
+
+cat > "$WORK/roles.json" <<'RJ'
+{"provider_allowlist":["ollama"],
+ "roles":{"judge":{"provider":"ollama","model":"test-judge:latest","num_ctx":32768,"thinking":"low"},
+          "developer":{"provider":"ollama","model":"test-judge:latest","num_ctx":32768,"thinking":"low"}}}
+RJ
+
+SPEC="$ROOT/evidence/bean-001-spec-20260915.md"
+TASKS="$ROOT/evidence/bean-001-tasks-20260915.yaml"
+BEAN="$(ls -d /home/gregg/workspace/seating-planner-py/factory/beans/bean-001-*/bean.yaml 2>/dev/null | head -1)"
+if [ ! -f "$SPEC" ] || [ ! -f "$TASKS" ] || [ -z "$BEAN" ]; then
+  printf '  SKIP  the evidence spec/tasks or the bean are not here\n'
+  printf '\n0 passed, 0 failed\n'; exit 0
+fi
+
+judgement() { # judgement <verdict> [evidence-text]
+  jq -nc --arg v "$1" --arg e "${2:-nothing in particular}" \
+    '{verdict:$v, criteria:[{id:"ac1", met:true, evidence:$e, quote:"the spec says something about it here"}],
+      findings:[{severity:"major", summary:$e, quote:"the spec says something about it here"}],
+      confidence:0.9}'
+}
+reply() { # reply <verdict> [evidence]
+  jq -nc --arg c "$(judgement "$1" "${2:-}")" \
+    '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}' \
+    > "$WORK/reply.json"
+}
+fit() { # fit <case> -> the one result line
+  ( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+    NO_EVICT=1 bash "$BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" --bean "$BEAN" \
+    --only "$1" --out "$WORK/out.json" 2>&1 )
+}
+
+printf '\n== a seeded defect, rejected for the right reason ==\n\n'
+#
+# The catchwords for this case include "outside the bean". A rejection that
+# quotes it is the judge naming the defect; a rejection that does not is the
+# judge being right by accident, and the two must not be one number.
+reply revise "the plan adds solver code, which is outside the bean"
+out="$(fit contradicts-non-goal)"
+check "it is counted as caught"        "caught, and named it" "$out"
+eq "and named in the record"           "1" "$(jq -r '.named_the_defect' "$WORK/out.json")"
+eq "with nothing falsely accepted"     "0" "$(jq -r '.false_accepts' "$WORK/out.json")"
+
+printf '\n-- rejected for something else is not the same thing --\n\n'
+reply revise "the formatting of section three could be tidier"
+out="$(fit contradicts-non-goal)"
+check "it is caught but not named"     "rejected, but for something else" "$out"
+eq "rejected counts it"                "1" "$(jq -r '.rejected' "$WORK/out.json")"
+eq "named does not"                    "0" "$(jq -r '.named_the_defect' "$WORK/out.json")"
+
+printf '\n== the one that matters: a seeded defect accepted ==\n\n'
+#
+# A judge that misses and says so costs a retry. A judge that misses and accepts
+# is the failure the line exists to prevent, and it is invisible from outside.
+reply accept "looks fine to me"
+out="$(fit contradicts-non-goal)"
+check "it is called a false accept"    "FALSE ACCEPT — it passed a seeded defect" "$out"
+eq "and counted as one"                "1" "$(jq -r '.false_accepts' "$WORK/out.json")"
+eq "not as a catch"                    "0" "$(jq -r '.rejected' "$WORK/out.json")"
+
+printf '\n-- an abstention is a bad day, not an approval --\n\n'
+reply abstain "I could not tell"
+out="$(fit contradicts-non-goal)"
+check "it is named as such"            "abstained — a bad day, not a false approval" "$out"
+eq "and is not a false accept"         "0" "$(jq -r '.false_accepts' "$WORK/out.json")"
+eq "nor a catch"                       "0" "$(jq -r '.rejected' "$WORK/out.json")"
+
+printf '\n== the clean control ==\n\n'
+#
+# The control is the case that says whether any of the other numbers mean
+# anything: a judge that rejects everything scores well on seeded defects.
+reply accept "nothing wrong here"
+out="$(fit clean)"
+check "accepting it is correct"        "accepted the clean control, correctly" "$out"
+
+reply revise "I do not like the tone"
+out="$(fit clean)"
+check "rejecting it is called out"     "REJECTED THE CONTROL — a judge that fails everything is not a judge" "$out"
+
+printf '\n== the record says how it was asked ==\n\n'
+#
+# A fitness figure that does not say the thinking level cannot be compared with
+# another one — which is the entire reason this file exists today.
+reply accept "fine"
+fit clean > /dev/null
+eq "the thinking level is recorded"    "low" "$(jq -r '.judge.thinking' "$WORK/out.json")"
+eq "and one pass is marked as not a measurement" "true" \
+   "$(jq -r '.one_pass_is_not_a_measurement' "$WORK/out.json")"
+check "the provenance block is there"  "kernel" "$(jq -c '.provenance' "$WORK/out.json")"
+
+printf '\n== it refuses to take the GPU from a run in flight ==\n\n'
+#
+# Evicting models is how this harness stops a fitness score being a measurement of
+# VRAM, and it is a loaded gun pointed at any bean being built. Started during a
+# real spec audit it would evict the judge mid-request, and the run would record a
+# dead runner as the judge's answer.
+( exec -a "bash /tmp/orchestrate.sh fake" sleep 8 ) &
+FAKE_RUN=$!
+sleep 0.5
+out="$( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" --bean "$BEAN" \
+  --only clean --out "$WORK/refused.json" 2>&1 )"; rc=$?
+kill "$FAKE_RUN" 2>/dev/null
+eq "it refuses"                        "2" "$rc"
+check "and says why"                   "a pipeline run is in flight" "$out"
+check "with the escape named"          "--no-evict" "$out"
+
+printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]
