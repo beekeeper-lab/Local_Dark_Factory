@@ -136,7 +136,23 @@ fi
 UNMET="$(jq '[.[] | select(.met == false)] | length' <<<"$CRITERIA")"
 if [ "$ANSWERED" -lt "$ASKED" ] || [ "$UNMET" -gt 0 ]; then VERDICT=revise; else VERDICT=accept; fi
 
+# Provenance on the composed judgement, the same block every figure in
+# bench/results carries. This one is not in bench/results — it is a judgement in a
+# run directory — and it needs the block for a better reason: it is the ONLY
+# record of which model produced it. judge.sh stamps `judged_by` on each
+# sub-answer; those live in temp directories that are deleted when this exits, so
+# a composed judgement that said "see the per-criterion logs" pointed at nothing.
+# shellcheck source=provenance.sh
+[ -f "$HERE/provenance.sh" ] && source "$HERE/provenance.sh"
+J_MODEL="$(jq -r '.roles.judge.model // "?"' "${ROLES_FILE:-$PIPE/roles.json}" 2>/dev/null)"
+J_PROV='{}'
+declare -F provenance_block >/dev/null 2>&1 && J_PROV="$(provenance_block "$J_MODEL")"
+
 jq -n --arg sv "judgement/1.0.0" --arg target "$TARGET" \
+  --arg model "$J_MODEL" \
+  --arg digest "$(ollama list 2>/dev/null | awk -v m="$J_MODEL" '$1 == m {print $2; exit}')" \
+  --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}" 2>/dev/null)}" \
+  --argjson prov "$J_PROV" \
   --arg verdict "$VERDICT" --argjson c "$CRITERIA" \
   --argjson asked "$ASKED" --argjson answered "$ANSWERED" \
   --arg stage "$(case "$TARGET" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac)" \
@@ -153,7 +169,9 @@ jq -n --arg sv "judgement/1.0.0" --arg target "$TARGET" \
                  else [] end),
     confidence: ([$c[]._confidence] | min),
     asked_per_criterion:{asked:$asked, answered:$answered},
-    judged_by:{model:"see the per-criterion logs beside this file", composed_by:"bench/judge-per-criterion.sh"}}' \
+    judged_by:{model:$model, digest:$digest, thinking:$thinking,
+               composed_by:"bench/judge-per-criterion.sh"},
+    provenance:$prov}' \
   > "$RUN_DIR/verdicts/$TARGET.attempt-$N.judgement.json"
 
 printf 'judge-per-criterion: %s of %s answered, verdict %s (composed, not the model'"'"'s)\n' \

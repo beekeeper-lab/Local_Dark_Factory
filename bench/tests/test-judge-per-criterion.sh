@@ -145,6 +145,19 @@ fresh
 out="$(STUB_CONF=0.4 pc)"
 eq "the minimum is carried"            "0.4" "$(jq -r '.confidence' <<<"$(J)")"
 
+printf '\n== the composed judgement says which model produced it ==\n\n'
+#
+# judge.sh stamps `judged_by` on each sub-answer, and those live in temp
+# directories deleted when this exits. A composed judgement that said "see the
+# per-criterion logs beside this file" pointed at nothing, which makes it the ONLY
+# record of the model and therefore the one that has to carry it.
+fresh
+pc >/dev/null 2>&1
+eq "the model is named"                "test-judge-or-real" \
+   "$(jq -r 'if (.judged_by.model // "") != "" then "test-judge-or-real" else "MISSING" end' <<<"$(J)")"
+eq "and how it was composed"           "bench/judge-per-criterion.sh" "$(jq -r '.judged_by.composed_by' <<<"$(J)")"
+check "with a provenance block"        "kernel" "$(jq -c '.provenance' <<<"$(J)")"
+
 printf '\n== a bean with no criteria falls through to judge.sh ==\n\n'
 printf 'schema_version: bean/2.0.0\nid: bean-x\nrepo: e/x\ntitle: t\nintent: i\nstatus: approved\nallowed_write_paths: ["src/**"]\n' \
   > "$WORK/nocrit.yaml"
