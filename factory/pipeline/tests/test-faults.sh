@@ -193,7 +193,18 @@ case "$prompt" in
     [ -n "${STUB_BUILD_EXTRA:-}" ] && eval "$STUB_BUILD_EXTRA"
     ;;
   *factory-doc*)
-    run_dir="${prompt##* }"
+    # The findings path, when there is one, is inside the run dir; otherwise the
+    # run dir is the last token. Parsing by position alone writes nowhere on a
+    # retry, which this file has done before.
+    run_dir="$(printf '%s' "$prompt" | tr ' ' '\n' | grep '/doc-findings.md$' | head -1)"
+    run_dir="${run_dir:+$(dirname "$run_dir")}"
+    [ -n "$run_dir" ] || run_dir="${prompt##* }"
+    if [ -n "${STUB_DOC_PARTIAL:-}" ]; then
+      # Write a fragment and then hang, so a signal arrives mid-document. What a
+      # killed doc session leaves on disk is the thing being tested.
+      printf '# What was built\n\n## Summary\n\nThe beginning of a sen' > "$run_dir/impl-detail.md"
+      sleep 120
+    fi
     cp "${STUB_DOC:-/dev/null}" "$run_dir/impl-detail.md" ;;
 esac
 exit 0
@@ -551,6 +562,74 @@ check "and finishes the build"          "BUILD COMPLETE" "$o"
 check "with every task"                 "task(s) verified" "$o"
 want  "and nothing was left half-committed" "the branch should carry one commit per verified task" \
       test "$(git -C "$REPO" rev-list --count "main..bean/bean-001-scaffold" 2>/dev/null || echo 0)" -eq 2
+
+printf '\n== the controller is killed mid-document, and the partial one is refused ==\n\n'
+#
+# The stage where real kills have actually happened: five of bean-001's six doc
+# attempts ended in something other than the model finishing, and one of them was
+# a SIGTERM that arrived 1022 seconds in, after the document was written.
+#
+# That produced the rule in run-step that a step which wrote its output is not
+# undone by how it exited — and the obvious worry about that rule is the case
+# here: a session killed PART of the way through a write. The answer is that the
+# exit code was never the thing protecting anyone. doc-check reads the document,
+# and a fragment fails on its contents.
+reset_repo
+rm -f "$WORK/o-killdoc" "$WORK/o-docresume"
+PI_SESSIONS_DIR="$WORK/sessions" \
+STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
+STUB_DOC="$WORK/doc-good.md" STUB_DOC_PARTIAL=1 \
+SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
+FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
+PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+  setsid bash "$WORK/pipeline/orchestrate.sh" bean-001 --stop-after doc > "$WORK/o-killdoc" 2>&1 &
+DOC_PID=$!
+for _ in $(seq 1 120); do
+  grep -q 'STEP   doc' "$WORK/o-killdoc" 2>/dev/null && break
+  sleep 0.5
+done
+# Let the fragment reach the disk before signalling.
+DOC_R="$(ls -1dt "$REPO"/factory/runs/*/ 2>/dev/null | head -1)"
+for _ in $(seq 1 40); do
+  [ -s "${DOC_R}impl-detail.md" ] && break
+  sleep 0.5
+done
+want "a fragment reached the disk"      "the fixture must actually write a partial document" \
+     test -s "${DOC_R}impl-detail.md"
+FRAGMENT="$(cat "${DOC_R}impl-detail.md" 2>/dev/null || true)"
+
+# The same group-vs-pid care as the build kill above.
+TEST_PGID2="$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')"
+DOC_PGID="$(ps -o pgid= -p "$DOC_PID" 2>/dev/null | tr -d ' ')"
+if [ -n "$DOC_PGID" ] && [ "$DOC_PGID" != "$TEST_PGID2" ] && [ "$DOC_PGID" = "$DOC_PID" ]; then
+  kill -TERM -"$DOC_PGID" 2>/dev/null
+else
+  kill -TERM "$DOC_PID" 2>/dev/null
+fi
+wait "$DOC_PID" 2>/dev/null
+for _ in $(seq 1 40); do pgrep -P "$DOC_PID" >/dev/null 2>&1 || break; sleep 0.5; done
+
+dirty="$(git -C "$REPO" status --porcelain | grep -v '^?? factory/runs/' || true)"
+want "the tree is still clean"          "a killed doc step writes to the run dir, never to the tree: $dirty" \
+     test -z "$dirty"
+want "the fragment is still on disk"    "the evidence of what the killed session wrote must survive" \
+     test "$(cat "${DOC_R}impl-detail.md" 2>/dev/null || true)" = "$FRAGMENT"
+
+printf '\n-- and the fragment does not become the document --\n\n'
+#
+# This is the case the exit-code rule has to survive. run-step may well call the
+# killed attempt a PASS: it did write, during that attempt. The protection was
+# never the exit code — it is that doc-check reads what was written.
+rm -f "$DOC_R/QUESTIONS.md"
+STUB_DOC_PARTIAL="" run_line --resume "${DOC_R%/}" --stop-after doc > "$WORK/o-docresume" 2>&1 || true
+dres="$(cat "$WORK/o-docresume")"
+nope "the killed step is not skipped"  "SKIP   doc" "$dres"
+check "the document is written again"   "STEP   doc" "$dres"
+check "doc-check reads what it wrote"   "DOC CHECK" "$dres"
+check "and the run ends with a whole one" "DOC CHECK PASS" "$dres"
+want  "which is not the fragment"       "the document on disk must not still be the killed attempt's" \
+      bash -c "[ \"\$(cat '${DOC_R}impl-detail.md')\" != \"\$FRAGMENT\" ]"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

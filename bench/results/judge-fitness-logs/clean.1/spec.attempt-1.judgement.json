@@ -1,0 +1,63 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "bean-001",
+      "met": false,
+      "evidence": "\"artifact-1\", \"artifact-2\", and \"artifact-3\" all have the same bean_id 'bean-001', violating the requirement that each bean must have a unique identifier. Additionally, none of the beans contain a task whose `satisfies` list includes `'ac0'`, which is required for every bean to be considered sound. Finally, each task across all artifacts uses the identical ID \"task-1\", breaching the rule that each task must have a distinct ID. The `schema_version` fields also do not conform to the required pattern '^task/[0-9]+$' (they use 'task/0.2').\n\nThese violations mean the specification does not meet the defined criteria for soundness.",
+      "quote": "\"Each bean must contain at least one task that satisfies ac0.\""
+    },
+    {
+      "id": "artifact-001",
+      "met": false,
+      "evidence": "The artifact defines a single task with ID \"task-1\" and does not include any task whose `satisfies` list contains `'ac0'`. Therefore, the bean fails to meet the requirement of having at least one task that satisfies ac0. Additionally, the `bean_id` field is duplicated across artifacts (all three use 'bean-001'), violating the uniqueness constraint for beans.",
+      "quote": "\"Each bean must contain a unique identifier\""
+    },
+    {
+      "id": "artifact-002",
+      "met": false,
+      "evidence": "The task within this artifact also uses ID \"task-1\", which duplicates an existing task ID from another artifact. Task IDs must be unique across the entire repository.",
+      "quote": "\"Each task must have a unique ID\""
+    },
+    {
+      "id": "artifact-003",
+      "met": false,
+      "evidence": "The task within this artifact also uses ID \"task-1\", again violating the uniqueness requirement for task IDs. Moreover, no task in any bean satisfies `ac0`, as required.",
+      "quote": "\"Each bean must contain at least one task that satisfies ac0\""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "All three artifacts share the same `bean_id` ('bean-001'), but each bean is required to have a unique identifier.",
+      "evidence": "\"artifact-1\", \"artifact-2\", and \"artifact-3\" all contain `bean_id: bean-001`. The specification requires each bean to have its own distinct identifier."
+    },
+    {
+      "severity": "major",
+      "summary": "All tasks across the three artifacts are named 'task-1', violating the rule that each task must have a unique ID.",
+      "evidence": "\"id: task-1\" appears in every task definition (artifact-1, artifact-2, and artifact-3)."
+    },
+    {
+      "severity": "major",
+      "summary": "No bean includes a task whose `satisfies` list contains the required identifier `'ac0'`. The specification mandates that each bean must have at least one such task.",
+      "evidence": "artifact-1 satisfies ['ac1', 'ac2']; artifact-2 satisfies ['ac3']; artifact-3 satisfies ['ac2', 'ac4'] – none include `ac0`."
+    },
+    {
+      "severity": "major",
+      "summary": "`schema_version` values do not match the required pattern '^task/[0-9]+$'. All three artifacts use \"task/0.2\", which contains a dot after the slash.",
+      "evidence": "\"schema_version: task/0.2\" does not satisfy the regex ^task\\/[0-9]+$."
+    }
+  ],
+  "confidence": 0.99,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 132
+  }
+}
