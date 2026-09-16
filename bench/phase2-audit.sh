@@ -16,6 +16,12 @@
 # Slow on purpose — it runs real suites, about two minutes. A fast audit that
 # greps for strings in source files would pass on a test that is commented out.
 set -uo pipefail
+# An audit is a measurement of this repository at a moment, so it carries the
+# same provenance block as every figure under bench/results. "Which machine,
+# which ollama, which pipeline version" is the question asked of any other
+# number here, and there is no reason an audit should be exempt from it.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 TESTS="$ROOT/factory/pipeline/tests"
@@ -227,7 +233,8 @@ printf '\n%s ok, %s finding(s)\n' "$PASS_N" "$FAIL_N"
 if [ -n "$JSON_OUT" ]; then
   jq -n --argjson p "$PREDICATES" --argjson f "$FINDINGS" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{schema:"phase2-audit/1.0.0", audited_at:$ts, phase_2_exit:$p, findings:$f,
+    --argjson prov "$(provenance_block)" \
+    '{schema:"phase2-audit/1.0.0", audited_at:$ts, provenance:$prov, phase_2_exit:$p, findings:$f,
       note:"Computed by running the suites and looking for named assertions, not by reading the plan. A renamed assertion reports as missing, which is correct: this cannot tell a rename from a deletion, and neither can a reader of a checklist."}' \
     > "$JSON_OUT"
   printf 'written: %s\n' "$JSON_OUT"

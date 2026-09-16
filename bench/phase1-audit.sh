@@ -14,6 +14,12 @@
 #
 # Read-only. Loads no model.
 set -uo pipefail
+# An audit is a measurement of this repository at a moment, so it carries the
+# same provenance block as every figure under bench/results. "Which machine,
+# which ollama, which pipeline version" is the question asked of any other
+# number here, and there is no reason an audit should be exempt from it.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIPE="$ROOT/factory/pipeline"
 
@@ -353,9 +359,11 @@ printf '\n%s ok, %s finding(s)\n' "$PASS_N" "$FAIL_N"
 if [ -n "$JSON_OUT" ]; then
   mkdir -p "$(dirname "$JSON_OUT")"
   jq -n --argjson p "$PREDICATES" --argjson f "$FINDINGS" --arg run "$(basename "$RUN_DIR")" \
+    --argjson prov "$(provenance_block)" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{schema:"phase1-audit/1.0.0", measured_at:$ts, run:$run,
       phase_1_exit:$p, findings:$f,
+      provenance:$prov,
       green:(($f | length) == 0)}' > "$JSON_OUT"
   printf '%s\n' "$JSON_OUT"
 fi

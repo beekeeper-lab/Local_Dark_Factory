@@ -589,17 +589,20 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 ./bench/phase0.sh --provenance-only
 ```
 
-And, for a run that has finished, the phase-1 exit predicates:
+And the phase exits — phase 1 needs a finished run to point at, phase 2 runs the
+fault-injection suites and takes about two minutes:
 
 ```
 ./bench/phase1-audit.sh <run-dir> --repo <target-repo>
+./bench/phase2-audit.sh
 ```
 
 Expected as of 2026-09-16: **`1111 assertions, 0 failed`** (~115s, and it names any
 suite that fails); phase-0 audit `1 finding` — the eleven figures that predate
 `bench/provenance.sh`, which is an artifact finding and not a code one;
 `8 schemas, 0 invalid`; `20 bean(s) ... 0 invalid`; GTT 96 GB. phase-1 on the
-bean-001 run: 4 ok, 4 findings, none of them `fail`.
+bean-001 run: 4 ok, 4 findings, none of them `fail`. phase-2: 13 ok, 0 findings,
+with `remote_ci_failure_tests` at `pass_in_tests` until the gate image is published.
 
 `run-all.sh` replaces naming individual suites — it discovers them, so a suite written
 after this was typed is still covered. `--fast` skips the end-to-end ones. The audit's `--with-models` flag re-runs the

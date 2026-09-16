@@ -112,9 +112,15 @@ else
   # is the one that keeps the list from growing: five harnesses were added after
   # bench/phase0.sh and every one of them copied everything except the provenance
   # block, which is how eleven files accumulated before anything noticed.
+  # No name list. The exclusions were phase0-audit.sh and phase1-audit.sh, on the
+  # grounds that an audit is not a figure — which was never a good reason. An
+  # audit is a measurement of this repository at a moment, and "which machine,
+  # which ollama, which pipeline version" is the question asked of every other
+  # number here. They carry the block now, and the rule applies to everything
+  # that could produce a result, including the next one written.
   noprov=""
   for h in "$ROOT"/bench/*.sh; do
-    case "$(basename "$h")" in phase0-audit.sh|phase1-audit.sh|provenance.sh) continue ;; esac
+    case "$(basename "$h")" in provenance.sh) continue ;; esac
     grep -q 'provenance' "$h" || noprov="$noprov $(basename "$h")"
   done
   if [ -z "$noprov" ]; then
@@ -377,9 +383,11 @@ printf '%d checks passed, %d findings (%s blocker, %s major, %s minor)\n' \
 
 if [ -n "$JSON_OUT" ]; then
   jq -n --argjson f "$FINDINGS" --argjson p "$PASS_N" \
+    --argjson prov "$(provenance_block)" \
     --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sweep "${SWEEP:-}" \
     '{schema:"phase0-audit/1.0.0", audited_at:$at, sweep_artifact:$sweep,
       checks_passed:$p, findings:$f,
+      provenance:$prov,
       green:(($f | map(select(.severity=="blocker" or .severity=="major")) | length) == 0)}' > "$JSON_OUT"
   printf 'wrote %s\n' "$JSON_OUT"
 fi
