@@ -371,5 +371,43 @@ judgement "$two"
 out="$(run_check)"; rc=$?
 want  "an accept with none is fine"    "expected 0, got $rc: $out" test "$rc" -eq 0
 
+printf '\n== counts it was handed, restated correctly or the verdict is refused ==\n\n'
+#
+# verdict.schema.json requires test_integrity on an impl audit, and the controller
+# already counted deleted_tests and new_skips from the diff and handed the result
+# to the judge as an artifact. Two sources for one number is one source that will
+# disagree with itself — and disagreement here is evidence the judge did not read
+# what it was in its own messages, which is what this line has already been
+# burned by once.
+printf '{"test_integrity":{"deleted_tests":2,"new_skips":1,"removed_asserts":0,"added_asserts":3}}\n' \
+  > factory/runs/R/test-integrity.json
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.test_integrity = {deleted_tests:2, new_skips:1, weakened_asserts:false}' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "matching counts are accepted"   "expected 0, got $rc: $out" test "$rc" -eq 0
+check "and it says they match"         "the counts it restates match the ones it was given" "$out"
+
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.test_integrity = {deleted_tests:0, new_skips:1, weakened_asserts:false}' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "a contradicted count is refused" "expected 1, got $rc" test "$rc" -eq 1
+check "and names both numbers"         "deleted_tests(measured=2 claimed=0)" "$out"
+check "and says what it means"         "did not read it" "$out"
+check "and why it is not repaired"     "would hide that the judge contradicted its own evidence" "$out"
+want  "the judgement is kept"          "a rejected judgement should be on disk" \
+      test -s "$V/spec.attempt-1.json.rejected"
+
+printf '\n-- a judgement that claims nothing about them is not held to it --\n\n'
+#
+# The field is required for an impl audit by the schema, not by this check. A
+# spec audit has no tests to count and must not be refused for omitting a number
+# nobody measured for it.
+rm -f "$V/spec.attempt-1.json"
+judgement "$two"
+out="$(run_check)"; rc=$?
+want  "no test_integrity is fine here" "expected 0, got $rc: $out" test "$rc" -eq 0
+nope  "and nothing is claimed about it" "the counts it restates" "$out"
+rm -f factory/runs/R/test-integrity.json
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

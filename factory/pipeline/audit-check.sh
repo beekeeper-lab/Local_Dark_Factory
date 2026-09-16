@@ -222,6 +222,49 @@ if [ -n "$WANT_IDS" ]; then
     "$(printf '%s' "$WANT_IDS" | wc -w)" >&2
 fi
 
+# ------------ the counts it was handed, restated correctly or not restated at all --
+#
+# verdict.schema.json requires `test_integrity` on an impl audit: deleted_tests,
+# new_skips, weakened_asserts. The controller already counted the first two, from
+# the diff, and handed the judge the result as an artifact — so the judge is being
+# asked to restate a number it was given, and two sources for one number is one
+# source that will eventually disagree with itself.
+#
+# Disagreement is not a rounding error here. The judge was handed
+# test-integrity.json in its own message. Restating its numbers wrongly is
+# evidence it did not read what it was given, which is the same thing the quote
+# check is for and the same failure this line has already seen once: a fluent,
+# confident audit of a document the judge never opened.
+#
+# So: refused, with both numbers named. Not repaired — writing the controller's
+# count into the verdict would hide that the judge contradicted its own evidence,
+# and the verdict would then read as though the judge had got it right.
+#
+# `weakened_asserts` is not compared: the controller counts assertions removed
+# against assertions added and declines to call that a boolean, so there is no
+# measured value to compare a boolean to. The two that are counted are.
+TI_FILE="$RUN_DIR/test-integrity.json"
+if [ -f "$TI_FILE" ] && jq -e 'has("test_integrity")' <<<"$J" >/dev/null 2>&1; then
+  ti_bad=""
+  for field in deleted_tests new_skips; do
+    measured="$(jq -r --arg f "$field" '.test_integrity[$f] // empty' "$TI_FILE" 2>/dev/null)"
+    claimed="$(jq -r --arg f "$field" '.test_integrity[$f] // empty' <<<"$J" 2>/dev/null)"
+    [ -n "$measured" ] && [ -n "$claimed" ] || continue
+    [ "$measured" = "$claimed" ] || ti_bad="$ti_bad $field(measured=$measured claimed=$claimed)"
+  done
+  if [ -n "$ti_bad" ]; then
+    printf 'AUDIT %s: the judgement restates counts it was given, wrongly:%s\n' "$TARGET" "$ti_bad" >&2
+    printf '      test-integrity.json was in the judge\x27s own messages. A judgement that\n' >&2
+    printf '      contradicts an artifact it was handed did not read it, which is the same\n' >&2
+    printf '      failure the quote check exists for.\n' >&2
+    printf '      Refused rather than repaired: writing the measured count into the verdict\n' >&2
+    printf '      would hide that the judge contradicted its own evidence.\n' >&2
+    cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
+    exit 1
+  fi
+  printf 'AUDIT %s: the counts it restates match the ones it was given\n' "$TARGET" >&2
+fi
+
 # ------------------------------------------- did the judge read the artifact? --
 #
 # The first real judge this line asked for a verdict never read the spec. It
