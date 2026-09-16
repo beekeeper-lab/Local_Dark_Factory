@@ -280,6 +280,31 @@ What survives on other evidence:
   reported a syntax error, and was scored as having missed the defect — three times. Part of
   the "format fixation" it was accused of was, on that case, the judge being right.
 
+## The judge has been running at the one thinking level that does not work
+
+Measured 2026-09-16 (`format-support-20260916T111754Z.json`), under a **real 18KB
+payload** rather than a short probe — the distinction the harness exists for:
+
+```
+gpt-oss:120b      thinking=low      HOLDS the schema   110s
+gpt-oss:120b      thinking=medium   spends the whole budget thinking, writes nothing
+gpt-oss:120b      thinking=high     spends the whole budget thinking, writes nothing
+gpt-oss:20b       every level       empty content, 3s — it simply fails
+gemma4:26b        thinking=false    holds — and is the measured rubber stamp
+devstral:24b      —                 does not support thinking; non-JSON with it off
+```
+
+**The only eligible judge configuration on this box is `gpt-oss:120b` at
+`thinking=low`, and `roles.json` says `medium`.** That is very likely most of what
+"the judge produced no judgement" has meant all along: five of bean-001's audits
+ended that way, and "spent the whole budget thinking and wrote nothing" is exactly
+the shape.
+
+roles.json's own note already carried the revisit condition — *"Revisit if the
+judge's catch rate on bench/judge-fitness.sh is poor at medium"* — and it is poor.
+A fitness run at `low`, three passes, is the comparison; `judge-fitness.sh
+--thinking low` exists for it and stamps the level into the artifact.
+
 **So the judge is advisory for now.** `--advisory-audits` lets it run, write a judgement and
 have a verdict stamped, without a verdict short of accept stopping the run. Only the model's
 opinion is softened; every deterministic check stays blocking. The advisory is written into

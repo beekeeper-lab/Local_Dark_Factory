@@ -1,0 +1,135 @@
+{
+  "schema": "format-support/2.0.0",
+  "measured_at": "2026-09-16T11:17:54Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T11:17:54Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "results": [
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "false",
+      "holds": false,
+      "seconds": 27,
+      "what": "empty content (done_reason=?)"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "low",
+      "holds": true,
+      "seconds": 110,
+      "what": "{\"verdict\":\"revise\",\"confidence\":0.98}"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 125,
+      "what": "spent the whole budget thinking and wrote nothing"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 125,
+      "what": "spent the whole budget thinking and wrote nothing"
+    },
+    {
+      "model": "gpt-oss:20b",
+      "thinking": "false",
+      "holds": false,
+      "seconds": 11,
+      "what": "empty content (done_reason=stop)"
+    },
+    {
+      "model": "gpt-oss:20b",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 3,
+      "what": "empty content (done_reason=stop)"
+    },
+    {
+      "model": "gpt-oss:20b",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 3,
+      "what": "empty content (done_reason=stop)"
+    },
+    {
+      "model": "gpt-oss:20b",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 3,
+      "what": "empty content (done_reason=stop)"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false",
+      "holds": true,
+      "seconds": 21,
+      "what": "{\"verdict\":\"accept\",\"confidence\":1.0}"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 4,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 1,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 1,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "false",
+      "holds": false,
+      "seconds": 312,
+      "what": "not JSON: {\n  \"verdict\": \"accept\",\n  \"criteria\": ["
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    }
+  ],
+  "eligible_judges": [
+    {
+      "model": "gpt-oss:120b",
+      "thinking": "low"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false"
+    }
+  ]
+}
