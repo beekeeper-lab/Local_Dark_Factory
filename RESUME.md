@@ -936,6 +936,46 @@ hidden tests check that one structurally instead. Whether that belongs in the be
 as a third kind of rule, or stays where it is, is a design question and not an
 oversight.
 
+## The untried lever: ask the judge one question at a time
+
+Everything measured on 2026-09-16 points the same way, and the conclusion is not
+"tune the prompt".
+
+- The judge holds a tight grammar perfectly and answers the question badly.
+  Criterion ids, shapes, counts, confidence — all exactly right once the grammar
+  says so. Verdicts: 7 to 9 false accepts in 15.
+- Its quotes are invented in 5 of 7 answers, including one where it quoted its own
+  instructions as text from the artifact.
+- Long free-form reasoning is where it comes apart: 20,417 characters of thinking
+  and no answer; `evidence` fields containing whole Python modules; a nested
+  ```json block inside a string.
+
+**The shape of the ask has never been varied.** Every audit this project has ever
+run gives the model 25–36KB of artifacts and asks one question — *is this sound?*
+— expecting a verdict, per-criterion judgements, findings, quotes and a confidence
+in a single object.
+
+The obvious alternative: **one criterion at a time.** Five small requests instead
+of one large one. `criteria[ac2]: {met, evidence, quote}` is a much smaller thing
+to get right than the whole judgement, the model has already shown it can hold a
+tight grammar, and a wrong answer on ac2 no longer contaminates ac1. The verdict
+becomes arithmetic over the five — which is the controller's job anyway, and would
+remove `verdict` from the model's hands entirely.
+
+What it costs: five requests per audit instead of one. At 21–56 seconds each that
+is roughly what a single audit costs today, because the long ones are long
+precisely because the model is trying to do everything at once.
+
+How to find out, without touching the live path: a bench harness that asks
+per-criterion and scores with `judge-fitness`'s existing classifier. The false
+accept rate is the number it has to beat, and that number is 7 to 9 in 15.
+
+**Before building it**, finish the cheaper question already in flight: whether any
+other model on this box does better on the same corpus. `qwen3-coder-next` and
+`gemma4:26b` both hold the schema on real artifacts
+(`evidence/format-support-candidates-20260916.log`). If one of them is
+substantially better, the shape of the ask matters less.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**
