@@ -367,6 +367,20 @@ $(cat "$FEEDBACK")"
 fi
 
 # ---------------------------------------------------------------- the shape --
+# `confidence` as an enum, because minimum/maximum are not enforced.
+#
+# This field carried `"minimum": 0, "maximum": 1` for days and the judge returned
+# **100** — twice, months apart, most recently 2026-09-16. So llama.cpp's grammar
+# conversion honours `enum` and (on the evidence of the free-text caps below)
+# `maxLength`, and does not honour numeric bounds. Worth knowing before reaching
+# for any other numeric constraint.
+#
+# audit-check refuses a confidence outside the range rather than clamping it,
+# because "certain" and "percent" cannot be told apart by guessing and clamping
+# 100 to 1 invents a claim the model never made. An enum makes 100 unemittable
+# instead — and one decimal place is the honest precision for a number a model
+# produces by feel.
+#
 # maxLength on every free-text field, and it is not tidiness.
 #
 # 2026-09-16, impl audits of a real run: the JSON-level shape was correct — the
@@ -409,7 +423,9 @@ SCHEMA='{
     "feedback_to_worker": { "type": "string" },
     "suggested_tier": { "type": "integer", "minimum": 0, "maximum": 3 },
     "suggested_human_review": { "type": "boolean" },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confidence": { "type": "number",
+                    "enum": [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+                    "description": "how confident you are, 0 to 1. One decimal place." },
     "document_quality": { "type": "object", "properties": {
       "risk_called_out": { "type": "boolean" }, "blast_radius_called_out": { "type": "boolean" },
       "code_blocks_teach": { "type": "boolean" }, "no_assumed_stack_knowledge": { "type": "boolean" },

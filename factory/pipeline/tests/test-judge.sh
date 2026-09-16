@@ -459,6 +459,31 @@ eq "in the bean's order"               '["ac1","ac2","ac3"]' "$(jq -c '[.criteri
 eq "carrying each entry's fields"      "e1" "$(jq -r '.criteria[0].evidence' "$J" 2>/dev/null)"
 eq "and its met value"                 "false" "$(jq -r '.criteria[0].met' "$J" 2>/dev/null)"
 
+printf '\n== confidence is an enum, because numeric bounds are not enforced ==\n\n'
+#
+# This field has carried `"minimum": 0, "maximum": 1` for days and the judge
+# returned **100** — twice, months apart, most recently 2026-09-16 on a real impl
+# audit that had passed every other check. llama.cpp's grammar conversion honours
+# `enum` and does not honour numeric bounds, which is worth knowing before
+# reaching for any other numeric constraint.
+#
+# audit-check refuses a confidence outside the range rather than clamping,
+# because clamping 100 to 1 invents a claim the model never made. An enum makes
+# 100 unemittable instead.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+conf="$(jq -c '.format.properties.confidence' "$WORK/last-request.json")"
+check "it is an enum"                  '"enum"' "$conf"
+check "bounded at one"                 "1" "$conf"
+nope  "and not a numeric maximum"      '"maximum"' "$conf"
+eq "with one decimal place of range"   "11" \
+   "$(jq -r '.format.properties.confidence.enum | length' "$WORK/last-request.json")"
+# 100 must not be in it. That is the value the model actually returned.
+eq "and 100 is not in the list"        "false" \
+   "$(jq -r '.format.properties.confidence.enum | any(. == 100)' "$WORK/last-request.json")"
+
 printf '\n== the token cap has one default, in three files ==\n\n'
 #
 # judge.sh sets it; bench/judge-fitness.sh and bench/judge-variance.sh record it

@@ -693,18 +693,32 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   enum, the empty tool list and the field length caps. It is ~75 minutes and it is
   the case-level measurement the advisory-audits decision actually rests on.
 
-- **`confidence` as an enum, because `minimum`/`maximum` are not enforced.** The
-  judgement schema has carried `"confidence": {"type":"number","minimum":0,"maximum":1}`
-  for days and the judge returned **100** again on 2026-09-16. So llama.cpp's
-  grammar conversion honours `enum` and (apparently) `maxLength`, and does **not**
-  honour numeric bounds — which is worth knowing before reaching for any other
-  numeric constraint.
+- ~~**`confidence` as an enum**~~ — **done 2026-09-16.** The keyword finding stands
+  and is the transferable part: the schema carried `{"minimum":0,"maximum":1}` for
+  days and the judge returned **100**. llama.cpp's grammar conversion honours
+  `enum` and `maxLength` and does **not** honour numeric bounds — worth knowing
+  before reaching for any other numeric constraint. It is `[0, 0.1, … 1]` now, and
+  one decimal place is the honest precision for a number a model produces by feel.
+  **Unmeasured**; the next `factory reaudit --passes 3` says whether it took.
 
-  `audit-check` refuses a confidence outside the range and refuses rather than
-  clamping, because "certain" and "percent" cannot be told apart by guessing. An
-  `enum` of `[0, 0.1, … 1]` makes 100 unemittable instead, and one decimal place
-  is the honest precision for this number anyway. Measure it with
-  `factory reaudit --passes 3`, one variable at a time.
+- **The quote is the remaining blocker, and it is the one field a JSON schema
+  cannot constrain.** Of the seven answers in the keyed-criteria run, five failed
+  on it: four quoting text that is on disk nowhere, one with nothing long enough
+  to prove anything. No keyword says "this string must appear in that other
+  string", so "put it in the grammar" does not directly apply.
+
+  The move that would: **number the lines of every artifact in the prompt and ask
+  for an artifact+line reference instead of a string**, with the controller
+  resolving it and writing the real text into the judgement. An invented quote
+  becomes unrepresentable, and the verdict ends up carrying actual artifact text
+  rather than the model's approximation of it — which is more useful to a human
+  reader, not less.
+
+  What it costs: `quote` currently proves "a judge that read the artifact can copy
+  from it". A line reference proves something weaker — the judge picked a line
+  that exists. Worth doing anyway, on the evidence that the current field is
+  refusing five answers in seven, but worth doing deliberately rather than at the
+  end of a long session. `factory reaudit --passes 3` is how you would find out.
 
 ## Queued for an idle pipeline
 
