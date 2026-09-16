@@ -130,6 +130,21 @@ check "the criterion ids are recorded"  "ac1" "$(jq -c '.rows[0].criteria_ids' "
 want "and it carries provenance"       "every figure in bench/results needs one" \
      bash -c 'jq -e ".provenance.kernel and .provenance.measured_at" "$1" >/dev/null' _ "$WORK/r.json"
 
+printf '\n== the refusal reasons, tallied, because that is the number ==\n\n'
+#
+# "Five of seven answers quoted text that is on disk nowhere" is the most
+# informative thing this harness produces about the judge — a measurement of how
+# often it invents the evidence for a verdict it has already reached — and it was
+# only ever available by reading twelve log files.
+out="$(STUB_CHECK=refuse re --passes 2 --target spec --keep "$WORK/k7" --json "$WORK/t2.json")"
+check "the tally is printed"           "why the rest were refused" "$out"
+check "with a count"                   "2  " "$out"
+eq "and the JSON carries it"           "2" "$(jq -r '.refused_because[0].count' "$WORK/t2.json")"
+check "with the reason"                "refused by the stub" "$(jq -r '.refused_because[0].reason' "$WORK/t2.json")"
+
+out="$(re --passes 1 --target spec --keep "$WORK/k8")"
+nope "a fully stamped run has no tally" "why the rest were refused" "$out"
+
 printf '\n== it records the thinking level, because that is the variable ==\n\n'
 #
 # The thinking level is the difference between a judge that answers and one that

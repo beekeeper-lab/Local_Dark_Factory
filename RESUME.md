@@ -775,24 +775,28 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   one decimal place is the honest precision for a number a model produces by feel.
   **Unmeasured**; the next `factory reaudit --passes 3` says whether it took.
 
-- **The quote is the remaining blocker, and it is the one field a JSON schema
-  cannot constrain.** Of the seven answers in the keyed-criteria run, five failed
-  on it: four quoting text that is on disk nowhere, one with nothing long enough
-  to prove anything. No keyword says "this string must appear in that other
-  string", so "put it in the grammar" does not directly apply.
+- ~~**The quote is the remaining blocker**~~ — **read the quotes first.** This was
+  queued as "redesign the field so an invented quote is unrepresentable: number the
+  artifact lines, ask for an artifact+line reference, let the controller resolve
+  it". Then I read what the judge had actually put in that field
+  (`evidence/judge-invented-quotes-20260916.md`):
 
-  The move that would: **number the lines of every artifact in the prompt and ask
-  for an artifact+line reference instead of a string**, with the controller
-  resolving it and writing the real text into the judgement. An invented quote
-  becomes unrepresentable, and the verdict ends up carrying actual artifact text
-  rather than the model's approximation of it — which is more useful to a human
-  reader, not less.
+  ```
+  [tool.poetry] name = "seating-planner"        ← the project uses setuptools
+  [tool.ruff] line-length = 120 select = [...]  ← the real file says 100, and different rules
+  from .planner import SeatingPlanner            ← no such module; this bean is a scaffold
+  Your answer must be a JSON object with ...     ← its own instructions, cited as the artifact
+  ```
 
-  What it costs: `quote` currently proves "a judge that read the artifact can copy
-  from it". A line reference proves something weaker — the judge picked a line
-  that exists. Worth doing anyway, on the evidence that the current field is
-  refusing five answers in seven, but worth doing deliberately rather than at the
-  end of a long session. `factory reaudit --passes 3` is how you would find out.
+  **The quote check is not the blocker. It is the detector.** Five refusals in
+  seven answers is a measurement of how often this judge invents the evidence for a
+  verdict it has already reached, and the redesign would have replaced the one
+  instrument that is telling the truth with one that cannot: a line reference
+  resolves to real text whether or not the judge read anything, so the guarantee
+  drops to nothing precisely where it is doing the most work.
+
+  Do not weaken it. If anything, the number to watch is the refusal rate, and it
+  belongs in the reaudit record beside the false-accept rate.
 
 ## The tautological-verify fixture was not seeding the defect, for the second time
 

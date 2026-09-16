@@ -187,6 +187,27 @@ for pass in $(seq 1 "$PASSES"); do
 done
 
 printf '\n%s of %s audit run(s) produced a verdict the controller stamped.\n' "$STAMPED_N" "$TOTAL"
+
+# The refusal reasons, tallied.
+#
+# "Five of seven answers quoted text that is on disk nowhere" is the single most
+# informative number this harness produces about the judge, and it was only ever
+# available by reading twelve log files. It is a measurement of how often the
+# judge invents the evidence for a verdict it has already reached — see
+# evidence/judge-invented-quotes-20260916.md for what that looks like — and it
+# belongs beside the stamped count rather than under it.
+TALLY="$(jq -r '[.[] | select(.stamped | not) | .refused_because
+                 | if . == "" then "(no reason recorded)"
+                   elif test("quotes text that is not on disk") then "quoted text that is on disk nowhere"
+                   elif test("no quote long enough") then "no quote long enough to prove anything"
+                   elif test("wrote no judgement") then "no judgement at all"
+                   elif test("does not report on the criteria") then "wrong criteria"
+                   elif test("zero findings") then "revise with no findings"
+                   elif test("confidence") then "confidence outside 0..1"
+                   else (.[0:52]) end]
+               | group_by(.) | map({r: .[0], n: length}) | sort_by(-.n)
+               | .[] | "  \(.n)  \(.r)"' <<<"$ROWS")"
+[ -n "$TALLY" ] && printf '\nwhy the rest were refused:\n%s\n' "$TALLY"
 if [ "$STAMPED_N" -lt "$TOTAL" ]; then
   printf '\nWhy each of the rest was refused:\n'
   jq -r '.[] | select(.stamped | not) | "  \(.pass)-\(.target)  \(.refused_because)"' <<<"$ROWS"
@@ -206,7 +227,9 @@ if [ -n "$JSON" ]; then
     --argjson stamped "$STAMPED_N" --argjson total "$TOTAL" --argjson passes "$PASSES" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPELINE_DIR/roles.json}" 2>/dev/null)}" \
-    '{schema:"reaudit/1.2.0", measured_at:$ts, provenance:$prov, run:$run, bean:$bean, passes:$passes, thinking:$thinking,
+    --argjson tally "$(jq -c '[.[] | select(.stamped | not) | .refused_because] | group_by(.) | map({reason: .[0], count: length}) | sort_by(-.count)' <<<"$ROWS")" \
+    '{schema:"reaudit/1.3.0", measured_at:$ts, provenance:$prov, run:$run, bean:$bean, passes:$passes, thinking:$thinking,
+      refused_because:$tally,
       stamped:$stamped, total:$total, rows:$r,
       note:"Nothing was written to the run directory. Each row is a fresh copy of it with an empty verdicts/."}' \
     > "$JSON"
