@@ -45,6 +45,8 @@ judge gives different verdicts for byte-identical input.
 
 The controller decides; the models write. Anything decidable by running something is decided by running it, and the judge is asked only for what counting cannot reach — see `bench/controller-fitness.sh` for which is which.
 
+And where a model has to be constrained, the constraint goes in the **grammar**, not in the prompt. The judge's response schema carries an `enum` of the bean's actual criterion ids, an explicit empty `tools` list, and a `maxLength` on every free-text field. Each of those replaced an instruction that had been in the prompt, in bold, for days and was ignored: criterion compliance went from roughly none to complete, tool calls into a namespace that does not exist went from nine of nine to none, and `evidence` fields stopped arriving with entire Python modules in them. **On this model a constraint in the grammar is a rule and the same constraint in prose is a suggestion** — see `RESUME.md`.
+
 | Where | What |
 | --- | --- |
 | `factory/pipeline/` | the controller: one script per stage, each refusing rather than degrading |
@@ -52,7 +54,8 @@ The controller decides; the models write. Anything decidable by running somethin
 | `factory/worker-image/`, `factory/gate-image/` | the two pinned containers: one writes code, one judges whether it works |
 | `schemas/*.json` | the eight contracts: bean, task, verdict, event, gate-manifest, risk-policy, repo-config, run-record |
 | `bench/` | measurement — fitness harnesses, phase audits, conformance probes |
-| `factory/pipeline/tests/`, `bench/tests/` | `run-all.sh` runs every suite in both, ~1200 assertions in ~two minutes |
+| `hidden-tests/` | tests written from a bean's criteria, kept where the worker cannot read them |
+| `factory/pipeline/tests/`, `bench/tests/` | `run-all.sh` runs every suite in both, ~1500 assertions in ~two minutes |
 
 Both the worker and the verification gates run in containers with no network at all. The worker reaches exactly one model endpoint, over a unix socket bridged to a single address — there is no route to widen. See `RESUME.md` for what that cost and why it is built the way it is.
 
