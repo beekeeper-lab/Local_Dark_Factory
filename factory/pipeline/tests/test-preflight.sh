@@ -255,5 +255,53 @@ out="$(pfc bean-001)"; rc=$?
 rc_is "it refuses"                     "$rc" 1
 check "and says pi would substitute"   "fall back to a default model" "$out"
 
+# --------------------------------------------------------------------------
+printf '\n== hidden tests, checked before the build rather than after it ==\n\n'
+#
+# The gate checks all of this. The gate runs after the build, so a config error
+# costs an hour of model time to discover a fact that is knowable now.
+# The section above left a broken judge model in the copy's roles.json on purpose.
+# Put it back, or every assertion here measures that instead.
+cp "$WORK/roles.json" "$PIPE_COPY/roles.json"
+CFG="$REPO/factory/pipeline-config.json"
+# Committed each time, because clean-tree is check 1 and would otherwise be the
+# only thing any of these assertions measured.
+cfg_set() {
+  python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d["hidden_tests"]=json.loads(sys.argv[2]); json.dump(d,open(p,"w"))' "$CFG" "$1"
+  ( cd "$REPO" && git add -A && git commit -q -m "hidden_tests fixture" )
+}
+
+HIDDEN_OK="$WORK/hidden-ok"; mkdir -p "$HIDDEN_OK"
+printf 'def test_h():\n    assert True\n' > "$HIDDEN_OK/test_h.py"
+cfg_set "$(jq -nc --arg d "$HIDDEN_OK" '{dir:$d}')"
+out="$(pfc bean-001)"; rc=$?
+rc_is "a suite outside the repo passes" "$rc" 0
+check "and it is counted"              "outside the repository" "$out"
+
+printf '\n-- inside the repository is the one that matters --\n\n'
+#
+# The worker mounts the whole tree at /work. A hidden test in the repo is a test
+# it reads, and the failure is invisible: the tests run, they pass, and nothing
+# says the worker had already read them.
+mkdir -p "$REPO/hidden-inside"
+printf 'def test_h():\n    assert True\n' > "$REPO/hidden-inside/test_h.py"
+cfg_set "$(jq -nc --arg d "$REPO/hidden-inside" '{dir:$d}')"
+out="$(pfc bean-001)"; rc=$?
+rc_is "it refuses"                     "$rc" 1
+check "and says what reads it"         "mounts the whole tree" "$out"
+
+printf '\n-- an empty hidden suite is worse than none --\n\n'
+EMPTY="$WORK/hidden-empty"; mkdir -p "$EMPTY"
+cfg_set "$(jq -nc --arg d "$EMPTY" '{dir:$d}')"
+out="$(pfc bean-001)"; rc=$?
+rc_is "it refuses"                     "$rc" 1
+check "and says why"                   "reads exactly like a check that passed" "$out"
+
+printf '\n-- and a directory that is not there --\n\n'
+cfg_set '{"dir":"/definitely/not/here"}'
+out="$(pfc bean-001)"; rc=$?
+rc_is "it refuses"                     "$rc" 1
+check "before the build, not after"    "after the build" "$out"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

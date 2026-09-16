@@ -402,6 +402,34 @@ run from the working tree."
       good "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT"
     fi
 
+    # Hidden tests: configured or not, and if configured, actually hidden.
+    #
+    # "Not configured" is said out loud rather than omitted. A doctor that is
+    # silent about a check nobody set up reads the same as a doctor reporting it
+    # green, and the whole value of hidden tests is that a reader knows whether
+    # the worker was measured by something it could not read.
+    HT="$(jq -c '.hidden_tests // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -z "$HT" ]; then
+      say note "hidden tests" "none configured — every check in this repo runs code the worker could read"
+    else
+      HTDIR="$(jq -r '.dir // empty' <<<"$HT")"
+      case "$HTDIR" in
+        ""|/*) ;;
+        *) HTDIR="$(cd "$(dirname "$CONFIG")" && pwd)/$HTDIR" ;;
+      esac
+      if [ -z "$HTDIR" ] || [ ! -d "$HTDIR" ]; then
+        bad "hidden tests" "hidden_tests.dir is not a directory: ${HTDIR:-<unset>}"
+      else
+        HTDIR="$(cd "$HTDIR" && pwd)"
+        HTN="$(find "$HTDIR" -type f -name '*.py' 2>/dev/null | wc -l)"
+        case "$HTDIR/" in
+          "$TARGET_ROOT"/*) bad "hidden tests" "$HTDIR is inside the repository — the worker mounts the whole tree, so these are tests it can read" ;;
+          *) if [ "$HTN" -gt 0 ]; then good "hidden tests" "$HTN file(s) outside the repository"
+             else bad "hidden tests" "$HTDIR has no .py files — an empty hidden suite reads like a check that passed"; fi ;;
+        esac
+      fi
+    fi
+
     # required_checks names checks that must be green before a merge. Nothing in
     # the line produces them and nothing reads them: there is no CI step, and
     # merge_mode is human_required, so the human merging is the one who looks at

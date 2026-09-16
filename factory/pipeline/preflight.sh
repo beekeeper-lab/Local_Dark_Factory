@@ -185,4 +185,37 @@ done < <(jq -r '.roles | to_entries[]
            | [.key, .value.provider, .value.model] | @tsv' "$ROLES_JSON")
 pass "role-thinking" "every thinking role maps to a reasoning-capable model in pi's catalog"
 
+# 7. If this repository has hidden tests, they are runnable and they are hidden.
+#
+#    The gate checks all of this, and the gate runs after the build. A config
+#    error here costs an hour of model time before anyone finds out, for a fact
+#    that is knowable in milliseconds and knowable now.
+#
+#    `dir` inside the repository is the one that matters. The worker mounts the
+#    whole tree at /work, so a hidden test in the repo is a test it reads and
+#    writes code against — and the failure is invisible: the tests run, they pass,
+#    and nothing says the worker had already read them.
+HT_CFG=""
+[ -f "$CONFIG_PATH" ] && HT_CFG="$(jq -c '.hidden_tests // empty' "$CONFIG_PATH" 2>/dev/null || true)"
+if [ -z "$HT_CFG" ]; then
+  pass "hidden-tests" "none configured for this repository"
+else
+  ht_dir="$(jq -r '.dir // empty' <<<"$HT_CFG")"
+  [ -n "$ht_dir" ] || fail "hidden-tests" "hidden_tests is configured with no dir"
+  case "$ht_dir" in
+    /*) ;;
+    *)  ht_dir="$(cd "$(dirname "$CONFIG_PATH")" && pwd)/$ht_dir" ;;
+  esac
+  [ -d "$ht_dir" ] || fail "hidden-tests" \
+    "hidden_tests.dir does not exist: $ht_dir — the gate would refuse, after the build"
+  ht_dir="$(cd "$ht_dir" && pwd)"
+  case "$ht_dir/" in
+    "$(repo_root)"/*) fail "hidden-tests" \
+      "hidden_tests.dir is inside the repository ($ht_dir). The worker mounts the whole tree at /work, so these are tests it can read — and code written against assertions it can read satisfies exactly those." ;;
+  esac
+  [ "$(find "$ht_dir" -type f -name '*.py' | wc -l)" -gt 0 ] || fail "hidden-tests" \
+    "no test files in $ht_dir — an empty hidden suite that reports success reads exactly like a check that passed"
+  pass "hidden-tests" "$(find "$ht_dir" -type f -name '*.py' | wc -l) file(s), outside the repository"
+fi
+
 echo "PASS  preflight: all checks passed for $BEAN_ID"
