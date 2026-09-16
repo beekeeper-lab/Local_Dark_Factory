@@ -147,6 +147,26 @@ merged() { # merged <bean-id> — is this bean's work on the default branch?
   git -C "$ROOT" merge-base --is-ancestor "$sha" "$DEFAULT_BRANCH" 2>/dev/null
 }
 
+# halted_run_for <bean-id> — the newest run of this bean that stopped for a human.
+#
+# A bean can be `ready` and still have a halted run sitting beside it: bean-002
+# halted on a missing precondition that merging bean-001's pull request fixes, so
+# the moment that merge lands the bean is runnable and the old run directory is
+# still there. `factory go` would start a second one and leave the first, which is
+# the right behaviour — the halt had an external cause and the evidence should not
+# be overwritten — but an operator who is not told will wonder which run the line
+# is talking about, at exactly the moment they are least able to check.
+halted_run_for() {
+  local id="$1" d
+  for d in $(ls -1dt "$RUNS_ROOT/$id"-*/ 2>/dev/null); do
+    [ -f "$d/run.json" ] || continue
+    if [ "$(jq -r '.status // ""' "$d/run.json" 2>/dev/null)" = halted ]; then
+      printf '%s' "${d%/}"; return 0
+    fi
+  done
+  return 1
+}
+
 # ---------------------------------------------------------------- the queue --
 ROWS='[]'
 while IFS= read -r id; do
@@ -193,8 +213,12 @@ while IFS= read -r id; do
       fi
     fi
   fi
-  ROWS="$(jq -c --argjson r "$row" --arg s "$state" --arg w "$why" \
-    '. + [$r + {state:$s, why:$w}]' <<<"$ROWS")"
+  halted=""
+  case "$state" in
+    ready|blocked) halted="$(halted_run_for "$id" || true)" ;;
+  esac
+  ROWS="$(jq -c --argjson r "$row" --arg s "$state" --arg w "$why" --arg h "$halted" \
+    '. + [$r + {state:$s, why:$w} + (if $h == "" then {} else {halted_run:$h} end)]' <<<"$ROWS")"
 done < <(jq -r 'sort_by([(.order // 9999), .id]) | .[].id' <<<"$ALL")
 
 if [ "$AS_JSON" = 1 ]; then
@@ -221,6 +245,15 @@ jq -r '.[] | [.id, .state, (.title[0:42]), .why] | @tsv' <<<"$ROWS" \
 if [ "$SHOW_ALL" != 1 ]; then
   HIDDEN="$(jq -r '[.[] | select(.state != "ready" and .state != "refused" and .state != "pr_open")] | length' <<<"$ROWS")"
   [ "${HIDDEN:-0}" -gt 0 ] && printf '\n(%s more, blocked or done — `factory queue --all`)\n' "$HIDDEN"
+fi
+
+# A halted run beside a runnable bean, said before the operator runs anything.
+HALTED="$(jq -r '[.[] | select(.halted_run) | "  \(.id) — \(.halted_run)"] | join("\n")' <<<"$ROWS")"
+if [ -n "$HALTED" ]; then
+  printf '\nhalted run(s) still on disk for beans that are not finished:\n%s\n' "$HALTED"
+  printf '  A new run starts in a new directory; these are left alone, because the halt\n'
+  printf '  is evidence and QUESTIONS.md in them is often the most useful thing the run\n'
+  printf '  produced. Read them, then delete them if you do not want them counted.\n'
 fi
 
 READY="$(jq -r '[.[] | select(.state == "ready") | .id] | join(" ")' <<<"$ROWS")"

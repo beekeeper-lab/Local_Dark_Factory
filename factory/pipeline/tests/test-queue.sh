@@ -277,5 +277,29 @@ else
   printf '  ok    (the same assertion, vacuous here by construction)\n'; PASS=$((PASS+1))
 fi
 
+printf '\n== a halted run beside a bean that is not finished ==\n\n'
+#
+# bean-002 halted on a precondition that merging bean-001's pull request fixes.
+# The moment that merge lands the bean is runnable and the old run directory is
+# still there — `factory go` starts a second one and leaves the first, which is
+# right (the halt had an external cause and the evidence should not be
+# overwritten) and confusing if nobody says so, at exactly the moment the operator
+# is least able to check.
+mkdir -p "$REPO/factory/runs/bean-001-20260101T000000Z"
+printf '{"run_id":"r","bean":"bean-001","status":"halted"}\n' \
+  > "$REPO/factory/runs/bean-001-20260101T000000Z/run.json"
+out="$(q)"
+check "the halted run is named"        "halted run(s) still on disk" "$out"
+check "with the bean and the path"     "bean-001 — " "$out"
+check "and that a new run does not touch it" "left alone" "$out"
+check "and why they are worth reading" "QUESTIONS.md in them is often the most useful" "$out"
+
+printf '\n-- a finished run is not reported as one --\n\n'
+printf '{"run_id":"r","bean":"bean-001","status":"complete"}\n' \
+  > "$REPO/factory/runs/bean-001-20260101T000000Z/run.json"
+out="$(q)"
+nope "a complete run says nothing"     "halted run(s) still on disk" "$out"
+rm -rf "$REPO/factory/runs/bean-001-20260101T000000Z"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
