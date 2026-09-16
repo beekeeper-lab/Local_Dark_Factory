@@ -89,7 +89,15 @@ same bug in its walkthrough coverage. Both were refusing the shape the authoring
 skill explicitly asks for, so the only document that could pass was one nothing
 asks for. **The model said so in its own retry report and was right.**
 
-**2. Failing open.** `contain.py || true` swallowed exit 2 — "I could not run" —
+**2. Failing open.** The recurring shape, named because it keeps coming back in new
+code: **a loop that skips what it cannot read reports on a subset it never names.**
+`queue.sh` did `|| continue` on a bean.yaml that would not parse, so a malformed bean
+vanished from the queue — twenty beans in the directory, nineteen in the queue, and the
+difference visible only to someone who thought to count both. The same shape is below in
+preflight's bean lookup. A skipped input needs a row saying it was skipped, or the output
+is a confident answer about a question that was quietly narrowed.
+
+`contain.py || true` swallowed exit 2 — "I could not run" —
 alongside exit 1 — "violations found". Both print nothing, so a crashed
 containment check reported a clean diff and the gate recorded `contained: true`.
 Also: spec-check skipping schema validation with a `note`, preflight's bean lookup
