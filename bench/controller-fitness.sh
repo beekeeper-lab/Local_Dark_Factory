@@ -120,7 +120,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 # case | should_reject | what a controller catch looks like in its output
 CASES='clean|no|
 tautological-verify|yes|every verify already passes
-contradicts-non-goal|yes|outside the bean
+contradicts-non-goal|yes|contradicts its own non-goal
 invented-current-behaviour|yes|describes files that are not there
 unfinishable-task|yes|
 criterion-not-really-met|yes|'
@@ -153,7 +153,13 @@ while IFS='|' read -r name should_reject catchphrase; do
 
   rejected=no; [ "$rc" -ne 0 ] && rejected=yes
   what=""
-  if [ -n "$catchphrase" ] && grep -qiF -- "$catchphrase" <<<"$out"; then
+  # A catch requires a REJECTION. Without this, a catchphrase that also appears in
+  # a passing line scores a miss as a catch — and one just did: `non-goals` is in
+  # both spec-check's pass line and its failure, so a phrase matching the check's
+  # NAME would credit a bean whose non-goals are prose and were never looked at.
+  # The phrase now names the failure, and this makes that belt-and-braces: a check
+  # that did not refuse did not catch anything, whatever it printed.
+  if [ "$rejected" = yes ] && [ -n "$catchphrase" ] && grep -qiF -- "$catchphrase" <<<"$out"; then
     what="$(grep -iF -- "$catchphrase" <<<"$out" | head -1 | sed 's/^ *//' | cut -c1-58)"
   fi
 
@@ -195,6 +201,19 @@ jq -n --argjson r "$RESULTS" --argjson seeded "$SEEDED" --argjson caught "$CAUGH
 printf '\nof %s seeded defects: named by a check %s · not decidable %s · false alarms %s\n' \
   "$SEEDED" "$CAUGHT" "$MISSED" "$FALSE_ALARM"
 printf '%s\n' "$OUT"
+# "Not decidable" and "not decidable FOR THIS BEAN" are different sentences.
+#
+# contradicts-non-goal became decidable on 2026-09-16 for any bean that says where
+# its non-goals live. Against one whose non_goals are prose there is nothing to
+# check, and reporting that as "the judge'"'"'s actual job" would hide a mechanism
+# that exists and is simply unused here.
+NG_CHECKABLE="$("$PIPE/yaml2json.sh" "$BEAN" 2>/dev/null \
+  | jq '[(.non_goals // [])[] | select(type == "object") | select(((.forbidden_paths // []) | length) > 0 or ((.forbidden_imports // []) | length) > 0)] | length' 2>/dev/null || echo 0)"
 printf '\nThe ones marked not decidable are the judge'"'"'s actual job. Everything above\n'
 printf 'them used to be, and was being done badly.\n'
+if [ "${NG_CHECKABLE:-0}" -eq 0 ]; then
+  printf '\nExcept contradicts-non-goal, if it is among them: %s declares no non-goal in\n' "$(jq -r '.id // "this bean"' <<<"$("$PIPE/yaml2json.sh" "$BEAN" 2>/dev/null || echo '{}')")"
+  printf 'machine-readable form, so there was nothing for the controller to check. The\n'
+  printf 'mechanism exists (factory/pipeline/non-goals.sh); this bean does not use it.\n'
+fi
 [ "$FALSE_ALARM" -eq 0 ]

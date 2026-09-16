@@ -907,6 +907,15 @@ bean's non-goal text stays byte-identical; only `text:` plus the lists are added
 `factory doctor` reports the split (`2 of 33 machine-readable` today), so progress
 through the set is visible without reading twenty files.
 
+**What annotating buys, measured**: `bench/controller-fitness.sh` against a bean
+whose "no solver code" carries `forbidden_paths` scores `contradicts-non-goal` as
+**named by a check** where the same harness against bean-001's prose says *"not
+decidable from the documents, needs a judge"*. That is **3 of 5 seeded defects
+decided by the controller** for an annotated bean, against 2 of 5 this morning and
+1 of 5 before the fixture bug was found. Each one moved out of the judge is one
+the judge cannot accept by mistake, and it accepts about half of what it is
+shown.
+
 **The obvious extension, not built**: `constraints` are the same shape of
 statement — bean-002's "no solver imports" and "no persistence in this bean" are
 exactly `forbidden_imports` — and they are still prose. Same mechanism, one more

@@ -167,7 +167,7 @@ case "$ng_rc" in
      else
        ok "non-goals" "$(printf '%s' "$NG_OUT" | sed 's/^non-goals: //')"
      fi ;;
-  1) bad "non-goals" "$(printf '%s\n' "$NG_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
+  1) bad "non-goals" "contradicts its own non-goal: $(printf '%s\n' "$NG_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
   *) bad "non-goals" "could not be checked — $(printf '%s' "$NG_OUT" | head -1)" ;;
 esac
 

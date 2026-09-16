@@ -1,0 +1,29 @@
+{
+  "schema": "controller-fitness/1.0.0",
+  "measured_at": "2026-09-16T19:49:18Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T19:49:18Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "measured_against": {
+    "repo": "main",
+    "head": "de7749c9875c99b175b801fd58c97df692f8ce8f"
+  },
+  "seeded_defects": 1,
+  "caught_by_name": 1,
+  "not_decidable": 0,
+  "false_alarms": 0,
+  "cases": [
+    {
+      "case": "contradicts-non-goal",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  non-goals                  contradicts its own non-g",
+      "seconds": 5
+    }
+  ],
+  "note": "Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."
+}
