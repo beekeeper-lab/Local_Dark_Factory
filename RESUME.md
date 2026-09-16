@@ -123,7 +123,15 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Seven ways a check goes wrong, found on 2026-09-15 and 16
+## Eight ways a check goes wrong, found on 2026-09-15, 16
+
+**(8) Two causes, one symptom, and the message names the likelier.** ollama returns
+200 with a zero-valued struct both when a runner is killed for memory and when the
+grammar rejects a token the model emitted. judge.sh said "free VRAM and retry" —
+true half the time, and the half it was wrong about cost a measurement cycle on an
+idle GPU. A diagnostic that names one of two indistinguishable causes has to name
+both, say which is fixable by retrying, and say where the difference is visible.
+
 
 Every one of these was in code written here, most of it written the same day, and
 each was found by a real run rather than by a test. They are listed because the
@@ -976,9 +984,22 @@ this box better on the same corpus?
 ```
 gpt-oss:120b        7–9 false accepts in 15, and not reproducible
 qwen3-coder-next    15 of 15, and PERFECTLY reproducible
-gemma4:26b          the ollama runner died on 14 of 18; being re-run with the GPU free
+gemma4:26b          cannot be driven under constrained decoding at all
 devstral:24b        cannot hold the schema on real artifacts at all
 ```
+
+gemma4 is the one worth knowing about, because it cost a cycle. It emits
+`<unused49>`, the grammar has no rule that accepts it, llama.cpp throws — and
+**ollama answers 200 with a zero-valued struct**, which at the client is
+byte-identical to a runner killed for memory. The diagnostic said "free VRAM and
+retry"; I did, on an idle GPU, and it died the same way. The truth was in
+`journalctl -u ollama --since -5min | grep grammar` the whole time, and judge.sh
+now names both causes and says which one retrying cannot fix.
+
+`bench/format-support.sh` had seen the same token for as long as it has existed —
+`not JSON: <unused49><unused49>` — and nobody connected the two, because one
+harness reports a malformed answer and the other reports a dead server and they
+are the same event.
 
 `qwen3-coder-next` accepts everything, every time. That pairing is worth more than
 the number: this project has spent two days treating reproducibility as the thing
