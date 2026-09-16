@@ -215,8 +215,8 @@ fi
 [ -n "$TIER" ] || TIER="full"
 
 case "$TIER" in
-  small) STEPS=(preflight spec build gate audit-impl audit-package sync pr) ;;
-  full)  STEPS=(preflight spec audit-spec build gate audit-impl doc audit-doc audit-package sync pr) ;;
+  small) STEPS=(preflight spec build gate audit-impl audit-package sync pr ci) ;;
+  full)  STEPS=(preflight spec audit-spec build gate audit-impl doc audit-doc audit-package sync pr ci) ;;
   *) die "unknown pipeline tier '$TIER' in $BEAN_MD (expected small|full)" ;;
 esac
 
@@ -485,6 +485,20 @@ run_step() { # <step> [-- <extra args carried through to the child>]
   local step="$1"; shift
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
+    ci)
+      # Exit 9 is the remote gates disagreeing with the local ones, which is a
+      # finding rather than a failure of the step: ci.sh wrote what failed, which
+      # tasks it touches, and a rewind. The step did its job.
+      local crc=0
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" start
+      "$PIPELINE_DIR/ci.sh" "$RUN_DIR" || crc=$?
+      if [ "$crc" -eq 0 ] || [ "$crc" -eq 9 ]; then
+        "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end PASS
+        return 0
+      fi
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$step" end FAIL
+      return "$crc"
+      ;;
     sync)
       # Exit 9 is sync doing its job rather than failing at it: the branch was
       # behind, it is not any more, and the step succeeded. What changes is what
@@ -946,7 +960,7 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
   # sync is never skipped. It asks a question about the world outside the run —
   # has the base moved? — and the answer it gave an hour ago is not evidence
   # about now.
-  if [ "$STEP" != sync ] && [ -z "${FORCE_STEP[$STEP]:-}" ] && step_is_pass "$STEP"; then
+  if [ "$STEP" != sync ] && [ "$STEP" != ci ] && [ -z "${FORCE_STEP[$STEP]:-}" ] && step_is_pass "$STEP"; then
     printf 'SKIP   %-14s already PASS\n' "$STEP"
   else
     existing="$(failed_count "$STEP")"

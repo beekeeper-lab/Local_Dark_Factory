@@ -96,6 +96,21 @@ for f in "$SRC"/templates/*.html; do
   copy "$f" "factory/templates/$(basename "$f")"
 done
 
+# The workflow that makes `required_checks` true.
+#
+# Until this existed, repo.yaml named a check nothing produced — protection that
+# reads as in force and is not. The workflow runs the SAME image the manifest
+# pins, by digest, so a green on GitHub and a green on this machine are the same
+# claim. It fails loudly when the image has not been published to a registry
+# rather than skipping, because a required check that passes because it could not
+# run is the failure mode this whole repository is about.
+if [ -d "$HERE/scaffold/.github/workflows" ]; then
+  for f in "$HERE/scaffold/.github/workflows"/*.yml; do
+    [ -e "$f" ] || continue
+    copy "$f" ".github/workflows/$(basename "$f")"
+  done
+fi
+
 # Invariants: acceptance fixtures from outside the developer's reach (§05). They
 # are tier 3 and absent from repo_allowed_paths, so the line can run them and
 # never edit them — which is the only reason their passing means anything.

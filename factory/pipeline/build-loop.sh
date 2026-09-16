@@ -270,7 +270,27 @@ log_event() { printf '%s\n' "$1" >> "$TASKS_LOG"; }
 
 task_json() { jq -c --arg i "$1" '.tasks[] | select(.id == $i)' <<<"$TASKS_JSON"; }
 
+# A task the remote gates sent back is not verified any more, whatever this run
+# recorded earlier.
+#
+# `<run>/reopened-tasks.txt` is written by ci.sh when a required check fails: one
+# task id per line, the tasks whose write paths the failure names. Re-opening
+# only those is what "targeted" means in the plan's "remote-CI failure returns to
+# build with targeted tasks" — the alternative is rebuilding the whole bean
+# because one gate found one thing, which throws away work that CI did not
+# object to and makes the second attempt harder to compare with the first.
+#
+# The earlier `verified` line stays in tasks.jsonl. It happened: the task passed
+# its verify here, and what changed is that something else found a problem this
+# machine's checks did not. Deleting it would lose exactly the fact worth keeping.
+task_is_reopened() {
+  local f="$RUN_DIR/reopened-tasks.txt"
+  [ -f "$f" ] || return 1
+  grep -qxF -- "$1" "$f"
+}
+
 task_is_verified() {
+  task_is_reopened "$1" && return 1
   jq -rs --arg i "$1" '[.[] | select(.event == "task" and .task == $i and .result == "verified")] | length > 0' \
     "$TASKS_LOG" 2>/dev/null | grep -q true
 }

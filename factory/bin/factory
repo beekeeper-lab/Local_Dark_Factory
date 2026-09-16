@@ -30,7 +30,7 @@ factory — run the line against the repository you are standing in.
   factory run <bean-id> [--stop-after <step>] [--resume <run-dir>]
                             the whole line, or as much of it as you ask for
   factory step <step> <bean-id>
-                            one step: spec, build, gate, doc, sync, pr,
+                            one step: spec, build, gate, doc, sync, pr, ci,
                             or audit-{spec,impl,doc,package}
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
@@ -47,7 +47,7 @@ factory — run the line against the repository you are standing in.
                             consequences rather than by reading globs
 
 Steps in order: preflight spec audit-spec build gate audit-impl
-                doc audit-doc audit-package sync pr
+                doc audit-doc audit-package sync pr ci
 
 These are the names the pipeline uses. `specify` and `document` read better and
 were in this text for a while, and `--stop-after specify` is refused by the
