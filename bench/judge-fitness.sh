@@ -54,6 +54,19 @@ PIPE="$ROOT/factory/pipeline"
 if [ -n "${JUDGE_CMD:-}" ] && [ ! -f "$JUDGE_CMD" ]; then
   printf 'no such judge command: %s\n' "$JUDGE_CMD" >&2; exit 2
 fi
+# And re-pointed INTO the snapshot, because an absolute path escapes it.
+#
+# This harness re-execs itself through bench/snapshot.sh so that editing it
+# mid-run cannot corrupt the run — and then `JUDGE_CMD=$PWD/bench/judge-per-criterion.sh`
+# walked straight back out to the live tree. Editing that file during a
+# measurement produced `line 157: \`done <<< "$IDS"'` in the middle of a run, which
+# is the byte-offset hazard the launcher exists to prevent, arriving through the
+# one path the launcher does not control: an argument.
+#
+# A knob that can point outside the snapshot is a knob that can undo it.
+if [ -n "${JUDGE_CMD:-}" ] && [ -f "$HERE/$(basename "$JUDGE_CMD")" ]; then
+  JUDGE_CMD="$HERE/$(basename "$JUDGE_CMD")"
+fi
 JUDGE_CMD="${JUDGE_CMD:-$PIPE/judge.sh}"
 
 usage() {

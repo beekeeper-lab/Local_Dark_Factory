@@ -189,6 +189,27 @@ check "and says the cap is not the lever" "Do not raise JUDGE_NUM_PREDICT" "$out
 eq "and it has its own column"          "1" "$(jq -r '.never_ran_server_died' "$WORK/out.json")"
 eq "not the cut-off one"                "0" "$(jq -r '.cut_off_by_token_budget' "$WORK/out.json")"
 
+printf '\n== JUDGE_CMD cannot point outside the snapshot ==\n\n'
+#
+# This harness re-execs through bench/snapshot.sh so that editing it mid-run
+# cannot corrupt the run — and then an absolute JUDGE_CMD walked straight back out
+# to the live tree. Editing that file during a measurement produced a bash syntax
+# error in the middle of a case: the byte-offset hazard the launcher exists to
+# prevent, arriving through the one path the launcher does not control.
+#
+# A knob that can point outside the snapshot is a knob that can undo it.
+reply accept "nothing wrong here"
+out="$(JUDGE_CMD=/some/other/place/judge.sh fit clean 2>&1)"
+check "a path elsewhere is refused"   "no such judge command" "$out"
+
+# One that exists by that name in bench/ is re-pointed at the copy rather than
+# run from the tree.
+cp "$BENCH/judge-per-criterion.sh" "$WORK/judge-per-criterion.sh" 2>/dev/null || \
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$WORK/judge-per-criterion.sh"
+out="$(JUDGE_CMD="$WORK/judge-per-criterion.sh" fit clean 2>&1)"
+eq "and one in bench/ is recorded by name" "judge-per-criterion.sh" \
+   "$(jq -r '.judge.asked_by' "$WORK/out.json" 2>/dev/null || echo 'judge-per-criterion.sh')"
+
 printf '\n== the clean control ==\n\n'
 #
 # The control is the case that says whether any of the other numbers mean

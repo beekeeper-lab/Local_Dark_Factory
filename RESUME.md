@@ -1717,7 +1717,17 @@ time something in a judgement is wrong, before writing another paragraph of
 instruction. Revisit if a grammar constraint ever measurably makes an answer
 worse — `reaudit` is how you would find out.
 
-## Five live gotchas
+## Six live gotchas
+
+**An argument can walk out of a snapshot.** `bench/judge-fitness.sh` re-execs
+through `bench/snapshot.sh` so that editing it mid-run cannot corrupt the run —
+and `JUDGE_CMD=$PWD/bench/judge-per-criterion.sh` pointed straight back out to the
+live tree. Editing that file during a measurement produced ``line 157: `done <<<
+"$IDS"'`` in the middle of a case: the byte-offset hazard the launcher exists to
+prevent, arriving through the one path the launcher does not control. It is
+re-pointed into the snapshot now. **A knob that can point outside the snapshot is
+a knob that can undo it** — check any new one for this.
+
 
 **Matching a process by pattern, the sixth time.** `reaudit.sh` printed "a bench
 harness is running" when none was. `pgrep -f` matches whole command lines, so a
