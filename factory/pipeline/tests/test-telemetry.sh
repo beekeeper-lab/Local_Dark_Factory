@@ -87,6 +87,14 @@ eq "the build step got only its own"   "500"  "$(jq -r '.steps[] | select(.step=
 eq "its error is counted"              "1"    "$(jq -r '.steps[] | select(.step=="build") | .errors' <<<"$T")"
 eq "and its tool use"                  "1"    "$(jq -r '.steps[] | select(.step=="build") | .tools.write' <<<"$T")"
 eq "durations come from the step log"  "300"  "$(jq -r '.steps[] | select(.step=="spec") | .duration_s' <<<"$T")"
+# And when the end line carries a measured duration, that wins: both boundaries
+# of a model step are written after the work, so the gap between them is zero for
+# exactly the steps that take the time.
+printf '{"ts":"2026-09-15T14:00:00.000Z","step":"doc","event":"start","attempt":1,"verdict":null}\n' >> "$R/steps.jsonl"
+printf '{"ts":"2026-09-15T14:00:00.006Z","step":"doc","event":"end","attempt":1,"verdict":"PASS","duration_s":947}\n' >> "$R/steps.jsonl"
+out="$(tr_)"
+eq "a measured duration wins over the gap" "947" \
+   "$(jq -r '.steps[] | select(.step=="doc") | .duration_s' "$R/telemetry.json")"
 eq "the mean is per turn, not per event" "1500" "$(jq -r '.steps[] | select(.step=="spec") | .mean_input_tokens_per_turn' <<<"$T")"
 eq "totals add the steps up"           "3500" "$(jq -r '.totals.input' <<<"$T")"
 

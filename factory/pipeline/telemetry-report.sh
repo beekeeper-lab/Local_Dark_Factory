@@ -143,7 +143,13 @@ def mean_in($m): if $m.turns > 0 then (($m.input / $m.turns * 10 | round) / 10) 
         ended_at: $ended,
         open: ($en == null),
         verdict: (if $en != null then ($en.verdict // null) else null end),
-        duration_s: (if $ended != null then ((($ended) | epoch) - (($s.ts) | epoch)) else null end),
+        # The step measures its own duration now, in the process that ran it.
+        # Prefer that; fall back to the gap between the two lines. Both are here
+        # because the gap is right for controller-run steps and was silently zero
+        # for model steps, where both boundaries were written after the work.
+        duration_s: (if $en != null and ($en.duration_s // null) != null then $en.duration_s
+                     elif $ended != null then ((($ended) | epoch) - (($s.ts) | epoch))
+                     else null end),
         session_file: (if $en != null then ($en.session_file // null) else null end) }
   )) as $rows
 |
