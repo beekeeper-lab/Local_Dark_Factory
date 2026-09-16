@@ -289,6 +289,28 @@ BODY="$(mktemp)"
       printf -- '- independent invariants: %s (`%s`)\n' \
         "$(jq -r '.invariants.status' "$RUN_DIR/gate.json")" "$(jq -r '.invariants.ref' "$RUN_DIR/gate.json")"
     fi
+    # Hidden tests, said out loud in both directions.
+    #
+    # This is the line a human reviewer most wants and cannot get anywhere else:
+    # whether the change was measured by something the model that wrote it could
+    # not read. "None configured" is printed too, because a pull request silent
+    # about them reads exactly like one where they passed — and the whole value of
+    # the mechanism is that a reader knows which.
+    #
+    # A count and a hash. No names, no assertions, no output: this body is public,
+    # and a reviewer who wants the detail has the path in gate.json.
+    ht="$(jq -r '.hidden_tests.status // "absent"' "$RUN_DIR/gate.json")"
+    case "$ht" in
+      passed)   printf -- '- hidden tests: **passed** — %s file(s) written from the bean, kept outside this repository, never readable by the model that wrote this change (`%s`)\n' \
+                  "$(jq -r '.hidden_tests.test_files // 0' "$RUN_DIR/gate.json")" \
+                  "$(jq -r '(.hidden_tests.dir_sha256 // "")[0:12]' "$RUN_DIR/gate.json")" ;;
+      failed)   printf -- '- hidden tests: **FAILED**, %s of them — full output outside this repository, see `hidden_tests.output_path` in gate.json\n' \
+                  "$(jq -r '.hidden_tests.failed_count // "?"' "$RUN_DIR/gate.json")" ;;
+      could_not_run) printf -- '- hidden tests: **did not run** — %s. Not a pass.\n' \
+                  "$(jq -r '.hidden_tests.why // "no reason recorded"' "$RUN_DIR/gate.json")" ;;
+      not_configured) printf -- '- hidden tests: none for this bean. Every check above ran code the model could read.\n' ;;
+      *) ;;
+    esac
   fi
 
   printf '\n### Provenance\n\n'

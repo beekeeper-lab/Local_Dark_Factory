@@ -277,5 +277,48 @@ check "and the binding tier"         "binding tier" "$body"
 check "it names what was audited"    "What was audited, by hash" "$body"
 check "with the artifact hashes"     "sha256" "$body"
 
+printf '\n== the pull request says whether hidden tests ran, in both directions ==\n\n'
+#
+# This is the line a reviewer most wants and cannot get anywhere else: was this
+# change measured by something the model that wrote it could not read? A pull
+# request silent about hidden tests reads exactly like one where they passed, and
+# the entire value of the mechanism is that a reader knows which.
+#
+# A count and a hash. No names, no assertions, no output: this body is public.
+gate_with() { jq --argjson h "$1" '.hidden_tests = $h' "$WORK/gate.base" > $R/gate.json; }
+cp $R/gate.json "$WORK/gate.base"
+
+gate_with '{"status":"passed","test_files":11,"dir_sha256":"abc123def456789","failed_count":0}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "a pass says so"                 "hidden tests: **passed**" "$body"
+check "with how many"                  "11 file(s)" "$body"
+check "and what makes them hidden"     "never readable by the model that wrote this change" "$body"
+check "and which ones, by hash"        "abc123def456" "$body"
+
+gate_with '{"status":"failed","failed_count":3,"dir_sha256":"abc123def456789","output_path":"/outside/r.log","test_files":11}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "a failure says how many"        "**FAILED**, 3 of them" "$body"
+check "and where the output is not"    "outside this repository" "$body"
+if grep -qF 'assert' <<<"$body"; then
+  printf '  FAIL  the pull request body carries hidden test text\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and never the test text\n'; PASS=$((PASS+1))
+fi
+
+gate_with '{"status":"could_not_run","why":"no test files in /somewhere","failed_count":0}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "could-not-run is not a pass"    "did not run" "$body"
+check "and says so outright"           "Not a pass." "$body"
+
+gate_with '{"status":"not_configured"}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "none configured is still said"  "none for this bean" "$body"
+check "with what that means"           "ran code the model could read" "$body"
+cp "$WORK/gate.base" $R/gate.json
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
