@@ -1317,11 +1317,17 @@ was the 262144 default context, not model speed.
 
 ## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
 
-**The judge stays advisory**, and it is not a holding position. Twelve audits of a
-real run at the best configuration this project knows produced eight judgements
-and zero stampable verdicts. The three grammar changes moved the failures down a
-layer rather than removing them. **Revisit when a `factory reaudit --passes 3`
-stamps the majority of its rows**, which has not happened once.
+**The judge stays advisory**, and it is not a holding position — it is now the
+best-supported decision in this repository. Two case-level runs on fixtures that
+actually seed their defects: **9 false accepts in 15, then 7 in 15**. A false
+accept is the failure the line exists to prevent and it is invisible from outside.
+Separately, twelve audits of a real run at the best configuration produced eight
+judgements and one stampable verdict.
+
+**Revisit when both hold**: a `factory reaudit --passes 3` that stamps the
+majority of its rows, and a `judge-fitness --repeat 3` with false accepts in low
+single figures. Neither has happened once, and the second has never been below 7
+on an honest corpus.
 
 **`thinking: low` stands.** Two measurements agreed when it was set, and a third
 on 2026-09-16 found `medium` produced *fewer* generated tokens on a real impl
