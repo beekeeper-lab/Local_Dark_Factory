@@ -30,6 +30,11 @@ eq() {
   if [ "$2" = "$3" ]; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
   else printf '  FAIL  %s — expected "%s", got "%s"\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
 }
+want() {
+  local n="$1" d="$2"; shift 2
+  if "$@"; then printf '  ok    %s\n' "$n"; PASS=$((PASS+1))
+  else printf '  FAIL  %s — %s\n' "$n" "$d"; FAIL=$((FAIL+1)); fi
+}
 rc_is() {
   if [ "$2" = "$3" ]; then printf '  ok    %s (exit %s)\n' "$1" "$3"; PASS=$((PASS+1))
   else printf '  FAIL  %s — expected exit %s, got %s\n' "$1" "$3" "$2"; FAIL=$((FAIL+1)); fi
@@ -37,7 +42,15 @@ rc_is() {
 
 # A pipeline copy with a stub judge and a stub audit-check, so nothing here needs
 # a model or a repository.
-PIPE="$WORK/pipeline"; cp -r "$PIPELINE_DIR" "$PIPE"
+# Laid out like the repository — <root>/factory/pipeline with bench/ beside
+# factory/ — because reaudit.sh climbs to "$PIPELINE_DIR/../../bench" for the
+# provenance emitter, the way audit-check climbs to the schema validator. A stub
+# that puts pipeline/ at the top makes that climb land outside the fixture, and
+# the thing under test then silently does without.
+mkdir -p "$WORK/factory"
+PIPE="$WORK/factory/pipeline"; cp -r "$PIPELINE_DIR" "$PIPE"
+mkdir -p "$WORK/bench"
+cp "$PIPELINE_DIR/../../bench/provenance.sh" "$WORK/bench/provenance.sh"
 cat > "$PIPE/judge.sh" <<'STUB'
 #!/usr/bin/env bash
 # Writes a judgement whose shape comes from $STUB_JUDGE, into the run it is given.
@@ -111,6 +124,11 @@ eq "one row per pass"                   "2" "$(jq '.rows | length' "$WORK/r.json
 eq "the run is named"                   "$RUN" "$(jq -r '.run' "$WORK/r.json")"
 eq "and the stamped count"              "2" "$(jq -r '.stamped' "$WORK/r.json")"
 check "the criterion ids are recorded"  "ac1" "$(jq -c '.rows[0].criteria_ids' "$WORK/r.json")"
+# It writes to bench/results, which the Phase-0 audit checks. A figure without
+# provenance is a rumour, and `figures_have_provenance` went red on three reaudit
+# artifacts at once before this was here.
+want "and it carries provenance"       "every figure in bench/results needs one" \
+     bash -c 'jq -e ".provenance.kernel and .provenance.measured_at" "$1" >/dev/null' _ "$WORK/r.json"
 
 printf '\n== it records the thinking level, because that is the variable ==\n\n'
 #

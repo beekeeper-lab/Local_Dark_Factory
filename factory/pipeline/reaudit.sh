@@ -62,6 +62,17 @@ fi
 # shellcheck source=lib.sh
 source "$PIPELINE_DIR/lib.sh"
 
+# The same provenance block every figure in bench/results carries.
+#
+# This writes to bench/results and the Phase-0 audit checks that directory, so a
+# reaudit artifact without one goes red — correctly. One emitter, because two
+# lists of what a figure must record is one list that disagrees with itself; the
+# file lives in bench/ and this climbs to it the same way audit-check climbs to
+# the schema validator.
+PROV_SH="$PIPELINE_DIR/../../bench/provenance.sh"
+# shellcheck source=../../bench/provenance.sh
+[ -f "$PROV_SH" ] && source "$PROV_SH"
+
 usage() {
   cat <<'EOF'
 reaudit.sh — re-run a finished run's audits against a copy of it.
@@ -186,11 +197,16 @@ printf '\nlogs and copies: %s\n' "$KEEP"
 
 if [ -n "$JSON" ]; then
   mkdir -p "$(dirname "$JSON")"
+  PROV='{}'
+  if declare -F provenance_block >/dev/null 2>&1; then
+    PROV="$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPELINE_DIR/roles.json}" 2>/dev/null)")"
+  fi
   jq -n --argjson r "$ROWS" --arg run "$RUN_DIR" --arg bean "$BEAN" \
+    --argjson prov "$PROV" \
     --argjson stamped "$STAMPED_N" --argjson total "$TOTAL" --argjson passes "$PASSES" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPELINE_DIR/roles.json}" 2>/dev/null)}" \
-    '{schema:"reaudit/1.1.0", measured_at:$ts, run:$run, bean:$bean, passes:$passes, thinking:$thinking,
+    '{schema:"reaudit/1.2.0", measured_at:$ts, provenance:$prov, run:$run, bean:$bean, passes:$passes, thinking:$thinking,
       stamped:$stamped, total:$total, rows:$r,
       note:"Nothing was written to the run directory. Each row is a fresh copy of it with an empty verdicts/."}' \
     > "$JSON"

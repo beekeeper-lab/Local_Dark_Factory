@@ -93,6 +93,7 @@ import re, sys
 case, spec_path, tasks_path = sys.argv[1], sys.argv[2], sys.argv[3]
 spec = open(spec_path).read()
 tasks = open(tasks_path).read()
+spec_before, tasks_before = spec, tasks
 
 if case == "clean":
     pass
@@ -164,8 +165,23 @@ elif case == "contradicts-non-goal":
         "## Proposed change\n\nWe also add a small OR-Tools CP-SAT solver stub in\n"
         "`src/seating_planner/solver/cpsat.py` so later beans have somewhere to build\n"
         "from. It is only a stub and changes no behaviour.\n", 1)
-    tasks = tasks.replace("write_paths:",
-        "write_paths:\n      - src/seating_planner/solver/**", 1)
+    # Parsed and rewritten, not string-spliced.
+    #
+    # The splice produced
+    #     write_paths:
+    #       - src/seating_planner/solver/** [pyproject.toml, .gitignore]
+    # because the first `write_paths:` in this file is followed by an inline flow
+    # list on the SAME line, so inserting a block item swallowed it into one
+    # nonsense string and deleted the two real paths. Found 2026-09-16, the same
+    # hour as the tautological-verify skip, by applying every mutation and
+    # reading what came out.
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    _t["tasks"][0].setdefault("write_paths", [])
+    _t["tasks"][0]["write_paths"] = list(_t["tasks"][0]["write_paths"]) + ["src/seating_planner/solver/**"]
+    tasks = _y.safe_dump(_t, sort_keys=False, width=10000)
+    assert "src/seating_planner/solver/**" in _t["tasks"][0]["write_paths"]
+    assert len(_t["tasks"][0]["write_paths"]) >= 2, "the real write paths were lost"
 
 elif case == "invented-current-behaviour":
     # Describes code that does not exist, confidently.
@@ -175,6 +191,12 @@ elif case == "invented-current-behaviour":
         "returns a `Settings` dataclass. The scaffold work extends that module's "
         "existing `load_settings()` helper rather than creating anything new.\n\n",
         spec, count=1, flags=re.S)
+    # The regex has to have matched. A `## Current behaviour` heading that gets
+    # renamed leaves this a silent no-op and the case measures the clean spec.
+    assert "src/seating_planner/config.py" in spec, \
+        "invented-current-behaviour: the Current behaviour section was not replaced"
+    assert "README.md` — describes the factory arrangement only" not in spec, \
+        "invented-current-behaviour: the real Current behaviour section survived"
 
 elif case == "unfinishable-task":
     # One session could not finish this. The same lesson as above applies: the
@@ -200,6 +222,10 @@ elif case == "unfinishable-task":
                 m += 1
             break
     tasks = "\n".join(l for l in lines if l != "")
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    assert _t["tasks"][0]["intent"].lstrip().startswith("Implement the complete seating optimizer"), \
+        "unfinishable-task: the oversized intent did not land"
 
 elif case == "criterion-not-really-met":
     # The spec claims a criterion is satisfied by something that does not satisfy it.
@@ -209,6 +235,17 @@ elif case == "criterion-not-really-met":
 
 else:
     sys.exit(f"unknown case {case}")
+
+# Every mutation except the control must have changed something.
+#
+# Two of these have been silently wrong — a regex that stopped at a `]` inside a
+# Python string, and a skip loop that stopped at a comment — and each time the
+# harness produced a full set of numbers about a fixture that was not the defect.
+# The per-case assertions above check the specific property; this checks the one
+# thing true of all of them, so a new case cannot arrive without either.
+if case != "clean":
+    assert (spec, tasks) != (spec_before, tasks_before), \
+        f"{case}: the mutation changed nothing"
 
 open(spec_path, "w").write(spec)
 open(tasks_path, "w").write(tasks)

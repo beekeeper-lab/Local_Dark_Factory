@@ -1,0 +1,37 @@
+# The same twelve audits with `confidence` as an enum of [0, 0.1 … 1] instead of
+# a number with minimum/maximum, which the grammar conversion does not enforce.
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     0         revise     no        1 finding(s), 4 criteria, conf 0.9
+impl      1     0         accept     no        1 finding(s), 4 criteria, conf 0.9
+doc       1     1         -          no        doc: the answer is not JSON (done_reason=stop, 1154 bytes). jq: parse 
+package   1     0         accept     yes       0 finding(s), 4 criteria, conf 0.9
+spec      2     0         accept     no        1 finding(s), 4 criteria, conf 0.9
+impl      2     0         accept     no        2 finding(s), 4 criteria, conf 0.9
+doc       2     1         -          no        doc: the answer is not JSON (done_reason=stop, 1290 bytes). jq: parse 
+package   2     0         revise     no        0 finding(s), 4 criteria, conf 0.9
+spec      3     0         abstain    no        1 finding(s), 4 criteria, conf 0
+impl      3     1         -          no        impl: the answer is not JSON (done_reason=stop, 650 bytes). jq: parse 
+doc       3     1         -          no        doc: the answer is not JSON (done_reason=stop, 3107 bytes). jq: parse 
+package   3     0         accept     no        1 finding(s), 4 criteria, conf 0.9
+
+1 of 12 audit run(s) produced a verdict the controller stamped.
+
+--- why each of the rest was refused ---
+1-doc        the judge wrote no judgement file.
+1-impl       the judgement quotes text that is not on disk anywhere.
+1-package    
+1-spec       no quote long enough to prove anything (all under 12 chara
+2-doc        the judge wrote no judgement file.
+2-impl       the judgement quotes text that is not on disk anywhere.
+2-package    verdict "revise" with zero findings.
+2-spec       the judgement quotes text that is not on disk anywhere.
+3-doc        the judge wrote no judgement file.
+3-impl       the judge wrote no judgement file.
+3-package    no quote long enough to prove anything (all under 12 chara
+3-spec       the judge abstained — this goes to a human, not to a retry
+
+--- the run before this one, for comparison ---
+  answered   7 of 12  ->  8 of 12
+  stamped    0 of 12  ->  1 of 12
+  confidence 100 once  ->  0.9 on every one of the eight
