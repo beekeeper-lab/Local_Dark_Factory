@@ -139,10 +139,25 @@ response to measuring the judge, not a tidying exercise:
 | `test-integrity.sh` | do the tests fail with the source reverted | impl rubric |
 | `package-check.sh` | every arithmetic bullet — pairs, status, naming, tier | the whole package rubric |
 
-`bench/controller-fitness.sh` runs the judge's own six seeded cases through these: 2 of 5
-caught by name, 0 false alarms, 5 seconds a case, no variance. The other 3 are the judge's
-actual job. The audit rubric now states what was measured and asks only for what counting
-cannot reach.
+`bench/controller-fitness.sh` runs the judge's own six seeded cases through these.
+**Re-measured 2026-09-16 against a clean base** (`controller-fitness-20260916T003558Z.json`):
+the clean control passes, **1 of 5** caught by name, 0 false alarms, ~6 seconds a case, no
+variance. The other 4 are the judge's actual job.
+
+The earlier figure of 2 of 5 was measured with the target repo on a bean branch — the work
+already committed, so every verify already passed and the clean control failed. The harness
+refuses that state now. **1 of 5 is the honest number**, and the drop is a measurement
+improving, not a check regressing.
+
+The one that moved is worth naming, because the claim in the table above is narrower than it
+reads. The `tautological-verify` case replaces *one* of task-1's verifies with `test -d .`.
+verify-precheck names it — *"each task has a check that fails first; these do not, which may
+be fine: task-1[0] …"* — and passes, because its rule is that each task needs **at least one**
+check that can fail, and task-1 still has three. That rule is right: a task legitimately
+carries always-passing checks (`ruff check .` passes on a clean tree), and failing on them
+would make the check untrustworthy on good specs. So the precheck **surfaces** a single
+tautological verify and does not **catch** it. Whether one planted among several real ones
+should fail the spec is a judgement call, which is the definition of the judge's job.
 
 Three lessons are baked into those checks and are worth not relearning:
 
