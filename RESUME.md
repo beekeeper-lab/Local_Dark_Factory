@@ -545,8 +545,49 @@ Three things worth keeping from it:
    `judge.sh` now puts a `read as:` line on each artifact header — "written in the
    imperative and addressed to a DIFFERENT model", "a measurement the controller
    already took... not a question for you" — rather than saying it once in the
-   preamble. **Unmeasured.** One observation per target is not a finding, and the
-   next re-audit is what would say whether it helped.
+   preamble.
+
+**Measured, three passes × four targets** (`evidence/reaudit-bean-001-3pass-20260916.log`).
+The `read as:` change cannot be called either way — which targets answer moves
+between passes, spec going 0/1 → 3/3 and doc going 1/1 → 0/3 — and that movement
+is itself the more important result.
+
+**Twelve real audits of a real run at the best configuration this project knows,
+and not one produced a verdict the controller will stamp.**
+
+```
+ 6  no judgement at all   tool calls into a repo_browser namespace that does not
+                          exist (×3), reasoned then stopped (×2), unparseable (×1)
+ 4  wrong criteria        see below
+ 2  revise, zero findings
+```
+
+The criteria column is the finding. What it put in `criteria`:
+
+```
+task-1, task-2                          the task list's ids
+artifact-1 .. artifact-5                the numbering of the prompt's own delimiters
+test_files_presented                    invented
+importable-modules, module-docstrings   invented
+```
+
+One answer of six used a real id, and only one of the bean's four. The prompt has
+said, in bold, *"the criteria you report on are these, and only these — using
+exactly these ids"*, followed by the list, since the day the judge first invented
+`C001`. The model is not defying the instruction so much as filling the field from
+whatever enumerable thing is nearest, and prose cannot stop that.
+
+**So the ids are in the grammar.** `criteria[].id` carries an enum of the bean's
+ids and `minItems` is their count, built from the same jq that builds the prose
+list so the two cannot drift. Constrained decoding makes `task-1` unemittable
+rather than discouraged — and `bench/format-support.sh` already measured that this
+model holds a schema at `low`. A re-measurement against the baseline of zero is
+the next thing to do here.
+
+**What this means for the decision**, plainly: advisory audits are not a temporary
+accommodation while the judge is tuned. On today's evidence the audit stage does
+not produce a binding verdict on this line's artifacts at all, and
+`merge_mode: human_required` is carrying the weight the audits were meant to.
 
 ## OPEN: the snapshot launcher died on its own last line, after succeeding
 
