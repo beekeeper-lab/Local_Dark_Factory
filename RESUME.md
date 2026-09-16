@@ -623,6 +623,50 @@ the next thing to do here.
 not a temporary accommodation while the judge was tuned. The audit stage did not
 produce a binding verdict on this line's artifacts at all.
 
+## The largest single improvement today came from removing a contradiction
+
+`factory/skills/factory-audit/SKILL.md` is spliced into the judge's prompt
+verbatim. It said **"Open the files named below"** and **"Re-read the files"** —
+written when the audit was a pi session — in a prompt whose preamble says *"You
+have NO tools: no file system, no repo_browser, no way to open, search or list
+anything."*
+
+Same model, same grammar, same token cap, same fixtures, that one change
+(`evidence/judge-fitness-rubricfix-20260916.log`):
+
+```
+                        contradictory prompt      rubric fixed
+false accepts                 9 / 15                 4 / 15
+rejected                      5                     11
+NAMED the defect              2                      4
+no answer                     1                      0
+control rejected            3 of 3                 3 of 3
+seconds per case             21–56                 68–437
+```
+
+**False accepts more than halved.** And the part that is *not* explained by "it
+just rejects more": the defect was **named** four times against two. You cannot
+name a seeded defect by lowering a threshold.
+
+Three things to hold onto with it:
+
+- **The control is still rejected 3 of 3.** This judge has never once passed a
+  clean spec, in any configuration measured today. That is the most damning single
+  fact about it and this change did not touch it.
+- **It costs 5 to 10x the time.** The judge stopped reaching for a tool, failing,
+  and answering quickly from nothing; it now thinks for four to seven minutes.
+  That is a fair price for an audit stage and it is a real change to per-bean cost.
+- **n is 15, and this judge is not reproducible.** The direction is consistent
+  across all four columns and three cases went from mixed verdicts to `revise×3`,
+  which is more than the spread would give — but it is one run.
+
+**The lesson generalises past the judge.** Nobody had read the prompt as one
+document. judge.sh's preamble and the rubric it splices in were written months
+apart, edited separately, and contradicted each other in the one place that
+mattered — and the project spent two days treating the resulting `repo_browser`
+calls as a quirk of the model. The two files now say so in their own headers, and
+test-judge.sh asserts they agree.
+
 ## OPEN and important: the judge accepts about half the seeded defects, and always did
 
 `bench/judge-fitness.sh --repeat 3`, 2026-09-16 evening, on fixtures that are
@@ -1553,7 +1597,9 @@ was the 262144 default context, not model speed.
 ## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
 
 **The judge stays advisory**, and it is not a holding position — it is now the
-best-supported decision in this repository. It is also not a model choice:
+best-supported decision in this repository. Best measured figure: **4 false
+accepts in 15**, after the prompt stopped contradicting itself, with the clean
+control still rejected 3 of 3. It is also not a model choice:
 `qwen3-coder-next` accepts 15 of 15 and `devstral:24b` cannot hold the schema, so
 gpt-oss:120b is the best of what this box has. Two case-level runs on fixtures that
 actually seed their defects: **9 false accepts in 15, then 7 in 15**. A false

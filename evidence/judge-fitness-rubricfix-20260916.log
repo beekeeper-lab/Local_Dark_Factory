@@ -1,0 +1,59 @@
+bench snapshot: /tmp/factory-bench.QrWsQe/bench
+
+judge fitness — 2026-09-16T21:10:29Z
+
+CASE                         EXPECT    VERDICT   OUTCOME
+
+-- pass 1 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (244s)
+tautological-verify          yes       revise    rejected, but for something else  (344s)
+contradicts-non-goal         yes       accept    FALSE ACCEPT — it passed a seeded defect  (229s)
+invented-current-behaviour   yes       revise    caught, and named it  (68s)
+unfinishable-task            yes       revise    rejected, but for something else  (437s)
+criterion-not-really-met     yes       accept    FALSE ACCEPT — it passed a seeded defect  (345s)
+
+-- pass 2 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (239s)
+tautological-verify          yes       revise    rejected, but for something else  (329s)
+contradicts-non-goal         yes       revise    rejected, but for something else  (116s)
+invented-current-behaviour   yes       revise    caught, and named it  (145s)
+unfinishable-task            yes       revise    rejected, but for something else  (379s)
+criterion-not-really-met     yes       revise    caught, and named it  (419s)
+
+-- pass 3 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (221s)
+tautological-verify          yes       accept    FALSE ACCEPT — it passed a seeded defect  (250s)
+contradicts-non-goal         yes       accept    FALSE ACCEPT — it passed a seeded defect  (258s)
+invented-current-behaviour   yes       revise    rejected, but for something else  (93s)
+unfinishable-task            yes       revise    rejected, but for something else  (245s)
+criterion-not-really-met     yes       revise    caught, and named it  (169s)
+
+per case, across 3 passes — the spread is the point:
+
+CASE                         VERDICTS                           NAMED-THE-DEFECT
+clean                        revise×3                          0/3
+tautological-verify          accept×1 revise×2                0/3
+contradicts-non-goal         accept×2 revise×1                0/3
+invented-current-behaviour   revise×3                          2/3
+unfinishable-task            revise×3                          0/3
+criterion-not-really-met     accept×1 revise×2                2/3
+
+A case with more than one verdict in that column is not a result. It is the
+judge disagreeing with itself on identical input, and no amount of arithmetic
+over it produces a number worth acting on.
+
+of 15 seeded defects (5 case(s) × 3 pass(es)): rejected 11, NAMED the actual defect 4
+false accepts 4 · abstentions 0 · no answer at all 0
+/home/gregg/workspace/Local_Dark_Factory/bench/results/judge-fitness-rubricfix-20260916T211029Z.json
+
+The false-accept count is the one that matters. A judge that misses and says
+so costs a retry; a judge that misses and accepts is the failure the line exists
+to prevent, and it is invisible from the outside.
+
+ONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same
+question five times with identical input at temperature 0 and got two different
+verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an
+earlier run and missed in all five. Do not compare a number here against another
+number here and conclude something changed: establish the spread first, or the
+comparison is measuring the weather.
+RC=1

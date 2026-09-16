@@ -1,0 +1,1068 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-16T22:26:01Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T22:26:01Z",
+    "pipeline_version": "1.2.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "thinking": "low",
+    "num_predict": 16000,
+    "field_maxlen": 600,
+    "asked_by": "judge.sh"
+  },
+  "passes": 3,
+  "one_pass_is_not_a_measurement": false,
+  "unmeasurable_cases": [],
+  "seeded_defects": 15,
+  "rejected": 11,
+  "named_the_defect": 4,
+  "false_accepts": 4,
+  "abstentions": 0,
+  "no_answer": 0,
+  "cut_off_by_token_budget": 0,
+  "never_ran_server_died": 0,
+  "complete": true,
+  "reject_rate": 73,
+  "named_rate": 26,
+  "false_accept_rate": 26,
+  "cases": [
+    {
+      "case": "clean",
+      "pass": 1,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "revise",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 244,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "JSON syntax error: The `satisfies` arrays contain unquoted identifiers (e.g., ac2, ac3) which violates JSON format rules. All string values must be quoted.",
+            "evidence": "In each task object under `tasks`, the `satisfies` field is defined as `[ac2, ac3]` etc., without quotes around the strings."
+          },
+          {
+            "severity": "major",
+            "summary": "Missing required files: The specification expects a `pyproject.toml` file in the repository root and a `.gitignore` entry for Python artifacts, but these files are not present in the provided artifact",
+            "evidence": "The artifact list only includes `requirements.txt`, `src/seating_planner/__init__.py`, and `tests/test_scaffold.py`. No `pyproject.toml` or `.gitignore` file is listed."
+          },
+          {
+            "severity": "major",
+            "summary": "Missing test implementation: The third task expects a test function named `test_package_imports` in `tests/test_scaffold.py`, but the repository does not contain this file.",
+            "evidence": "The provided artifacts do not include any file under the tests directory."
+          },
+          {
+            "severity": "major",
+            "summary": "Verification commands reference files and entries that are not present, causing them to fail if executed.",
+            "evidence": "Commands check for `pyproject.toml` content, `.gitignore` entries, and a test function in `tests/test_scaffold.py`, none of which exist according to the provided artifact list."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The top-level JSON object is syntactically valid, but the `satisfies` arrays within each task contain unquoted identifiers (e.g., ac2, ac3). In JSON, string values must be quoted. This makes the provided specification invalid and unsound as written.\n\nAdditionally, the specification includes contradictory statements about its own completeness: it says \"The entire requirements of this bean are satisfied by a pyproject.toml file\" while also requiring that the task create or modify files such as `pyproject.toml`, `.gitignore`, and a test script. The verification steps assume those files already do",
+            "quote": "\"The entire requirements of this bean are satisfied by a pyproject.toml file.\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The spec requires the repository to contain a `.gitignore` file with specific entries (\"__pycache__/\", \"*.pyc\", \".pytest_cache/\", etc.), but no such file is provided in the given artifacts. Therefore this condition cannot be satisfied.\n\nAdditionally, the verification step for task-2 expects those lines to exist in `.gitignore`, which they do not appear to be present based on the information given.",
+            "quote": "\"Must fail: before it is\\n   a different artifact\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The spec expects a test file `tests/test_scaffold.py` containing at least a function named `test_package_imports`. No such file or content is provided in the artifacts.\n\nThus this condition cannot be satisfied.",
+            "quote": "\"Must fail: before this task there is no test file; pytest exits nonzero (no tests collected) rather than passing.\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The verification step for the third artifact expects a test named `test_package_imports` to exist in `tests/test_scaffold.py`. Since no such file is present, this condition fails.\n\nAlso, the spec mentions that the repository should contain a pyproject.toml file, but none is provided. Therefore the overall specification cannot be satisfied as given.",
+            "quote": "\"The entire requirements of this bean are satisfied by a pyproject.toml file.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 1,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 344,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Conflicting definitions of `pyproject.toml` across beans.",
+            "evidence": "Artifact 1 defines `pyproject.toml` with a `[project]` table, while Artifact 2 also defines `pyproject.toml` but uses a `[tool.poetry]` table and different dependency specifications. Since both artifacts write to the same path (`pyproject.toml`) but contain differing content, this violates the non‑conflict requirement."
+          },
+          {
+            "severity": "major",
+            "summary": "Package importability constraint not satisfied.",
+            "evidence": "The `seating_planner` package is defined inside `src/seating_planner/__init__.py`. However, when executing `python -c \"import seating_planner\"` (as required by the verification for ac2), Python searches the current working directory (`.`) and its entries. Because there is no top‑level `seating_planner` package in that location—only a `src/` directory containing it—the import fails, violating constraint ac2."
+          },
+          {
+            "severity": "major",
+            "summary": "Test file requirement not met due to failing import.",
+            "evidence": "`tests/test_scaffold.py` exists after the tasks are run, but its test imports `seating_planner`. Since that import fails in the verification environment (see above), the pytest command exits with a non‑zero status, causing the verification for ac4 to fail."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Both beans provide a `pyproject.toml` file that contains the required `[project]` table with `name = \"seating-planner\"` and `version = \"0.1.0\"`. This satisfies the requirement that the package have a pyproject.toml declaring name *seating‑planner* and version 0.1.0.\n\nThe verification step for this constraint (`task-1`) checks that the file exists and contains those fields, which it does:\n```toml\n[project]\nname = \"seating-planner\"\nversion = \"0.1.0\"\n```\nThus ac1 is satisfied.",
+            "quote": "\"The package must have a pyproject.toml with the name 'seating-planner' and version 0.1.0.\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "Constraint requires that the repository contain an importable module named `seating_planner`. The only `__init__.py` provided is at `src/seating_planner/__init__.py`, which defines a package `seating_planner` inside the `src` directory. When Python attempts to execute `import seating_planner` (as done in the verification step for task‑2), it searches the directories on `sys.path`. In the test environment, only the repository root is added to `PYTHONPATH`; there is no top‑level `seating_planner` package there, so the import fails. Therefore the constraint that the package be importable as `seat",
+            "quote": "\"The package must be importable as seating_planner.\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Both beans provide a `pyproject.toml` file containing `name = \"seating-planner\"` and `version = \"0.1.0\"`. This satisfies the requirement that the package have a pyproject.toml with those fields.\n\nThe verification step for ac3 (in task‑2 of Artifact 3) checks that the pyproject.toml contains the required name and version, which it does:\n```toml\n[tool.poetry]\nname = \"seating-planner\"\nversion = \"0.1.0\"\n```\nThus ac3 is satisfied.",
+            "quote": "\"The package must have a pyproject.toml with the name 'seating-planner' and version 0.1.0.\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The constraint requires a test file `tests/test_scaffold.py` to exist. After executing the tasks defined in Artifact 3, this file is created with the following content:\n```python\nimport seating_planner\nassert __name__ == \"seating_planner\"\n```\nRunning the verification command `pytest -q tests/test_scaffold.py::test_package_imports` fails because Python cannot import the module `seating_planner`; it resides in `src/seating_planner/__init__.py`, not directly under a top‑level package named `seating_planner`. Without adjusting `PYTHONPATH` (e.g., adding `src/`), the import fails, causing the test—",
+            "quote": "\"The repository must contain a test file named tests/test_scaffold.py.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 1,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 229,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "All required files exist and contain the expected content.",
+            "evidence": "pyproject.toml, .gitignore, src/seating_planner/__init__.py, and tests/test_scaffold.py are present with correct entries."
+          },
+          {
+            "severity": "minor",
+            "summary": ".gitignore includes all mandated patterns: 'factory/runs/', '__pycache__/', '*.pyc', '.pytest_cache/', '.mypy_cache/', '.ruff_cache/', '.coverage'.",
+            "evidence": "The .gitignore file contains each of these lines."
+          },
+          {
+            "severity": "minor",
+            "summary": "All verification commands succeed.",
+            "evidence": "Running the listed checks for pyproject.toml, __init__.py and test_scaffold.py all pass without errors."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "\"name\" = \"seating-planner\" is present in pyproject.toml and matches the required value.",
+            "quote": "\"name\" = \"seating-planner\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "The test file `tests/test_scaffold.py` exists, imports `seating_planner`, and asserts that its __name__ is \"seating_planner\" and the version string contains two dots.",
+            "quote": "\"assert __name__ == \\\"seating_planner\\\" and __version__.count('.') == 2\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "`src/seating_planner/__init__.py` defines `__version__ = \"0.1.0\"`, which satisfies the requirement that the version string contains exactly two periods.",
+            "quote": "\"0.1.0\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "`tests/test_scaffold.py` runs successfully under `pytest -q` and passes coverage with >60 % covered (the file defines a version string, which is executed when imported).",
+            "quote": "assert __name__ == \"seating_planner\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 1,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 68,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Missing required top‑level keys for the specification format expected by the evaluation system.",
+            "evidence": "The JSON object defines `name`, `description`, `version`, `requirements`, and `tasks` but does not include any of the mandated answer fields (`verdict`, `criteria`, `findings`, `confidence`)."
+          },
+          {
+            "severity": "major",
+            "summary": "`verdict` field is absent, so the system cannot determine whether the spec passes or fails.",
+            "evidence": "The top‑level object lacks a `verdict` key."
+          },
+          {
+            "severity": "major",
+            "summary": "`criteria`, `findings`, and `confidence` fields are missing from the top‑level JSON, violating the required answer schema.",
+            "evidence": "These keys are not present in the provided JSON."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The provided document does not contain a top‑level `verdict` field, which is required to indicate whether the spec passes or fails validation. The key is missing entirely; therefore this criterion is not satisfied.",
+            "quote": "`verdict`: \"yes\" | \"no\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The top‑level object does not contain a `criteria` field that lists the conditions for judgement. Instead, it contains unrelated fields such as `name`, `description`, `version`, `requirements`, and `tasks`. Hence this criterion is not met.",
+            "quote": "`criteria`: list of strings describing each condition"
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "There is no top‑level `findings` field present, which should contain a list of strings explaining why the verdict was reached. The document does not provide this information.",
+            "quote": "`findings`: list of strings"
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The top‑level `confidence` key is missing; therefore the spec does not meet the required format for a valid answer. The field should be present and contain a numeric value between 0.0 and 1.0.",
+            "quote": "`confidence`: number"
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 1,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 437,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Missing required sections and keys in pyproject.toml; missing dev-dependencies, black config line-length, isort profile, mypy strict flag, and include entry for src.",
+            "evidence": "The file lacks [tool.poetry.dev-dependencies] and the `[tool.black]` table. The `strict = true` key under `[tool.mypy]` is missing; only `ignore_missing_imports` is present."
+          },
+          {
+            "severity": "minor",
+            "summary": ".gitignore does not contain required line 'include/'.",
+            "evidence": "The .gitignore file includes __pycache__/, *.pyc, *.pyo, .Python, env/, build/, dist/ but omits the required `include/` entry."
+          },
+          {
+            "severity": "major",
+            "summary": "tasks.yaml does not fully conform to specification: missing required fields for tasks and malformed verification command strings; also second task definition is incomplete.",
+            "evidence": "The file includes a top-level schema_version, bean_id, and a tasks list, but the `write_paths` for task-2 are missing (src/seating_planner/__init__.py does not exist), and the verify commands contain syntax errors that would cause them to fail."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The pyproject.toml file is missing the required `[tool.poetry.dev-dependencies]` section (which should contain `pytest`, `ruff`, and `mypy`). It also lacks a `[tool.black]` table with `line-length = 100` and an `[tool.isort]` table specifying `profile = \"black\"`. Moreover, under `[tool.mypy]` the required key `strict = true` is absent; only `ignore_missing_imports` is present. Therefore this file does not satisfy the specification for pyproject.toml.",
+            "quote": "[tool.poetry]\nname = \"seating-planner\"\nversion = \"0.1.0\"\ndescription = \"A tool for planning seating arrangements.\"\nauthors = [\"Your Name <you@example.com>\"]\nlicense = \"MIT\"\n\n[tool.poetry.dependencies]\npython = \"^3.11\"\nortools = \"*\"\n\n[tool.mypy]\nignore_missing_imports = true\n\n[tool.ruff.lint]\nselect "
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": ".gitignore file does not contain the required line `include/`. The specification requires this entry, but it is missing. All other listed lines are present.",
+            "quote": "# Byte-compiled / optimized / DLL files\n__pycache__/\n*.pyc\n*.pyo\n\n# Distribution / packaging\n.Python\nenv/\nENV/\nbuild/\ndist/\ninclude/"
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The tasks.yaml file is syntactically valid YAML, but it does not meet the required structure fully: the `tasks` entries are missing some mandatory fields (e.g., each task should have a `write_paths` list that matches the files created by its predecessor, and the second task's definition is absent). Additionally, the verification commands contain malformed quoting which would cause execution errors. Therefore this artifact does not satisfy the specification.",
+            "quote": "schema_version: tasks/1.0.0\nbean_id: bean-001\ntasks:\n  - id: task-1\n    title: Add pyproject.toml and extend .gitignore\n    intent: >\n      Implement the complete seating optimizer: domain models, the CP-SAT solver, soft-constraint scoring, the persistence layer,\n      the REST API and the report..."
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The repository does not contain `src/seating_planner/__init__.py` nor `tests/test_scaffold.py`, so verification steps that import these modules or run tests would fail. The spec requires these files to exist and contain specific content (including a __version__ string), which is currently missing.",
+            "quote": ""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 1,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 345,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "Potential conflict with typical Poetry project structure: The specification requires the pyproject.toml file to be located inside the src/ directory, while standard Poetry projects expect this file at",
+            "evidence": "the repository root. However, the verification step only checks for the presence of the [tool] table and its keys in the specified path, so the placement does not affect passing the tests."
+          },
+          {
+            "severity": "minor",
+            "summary": "No contradictory requirements within the specification itself.",
+            "evidence": "All required files and contents are compatible: pyproject.toml with [tool] table entries, src/seating_planner/__init__.py containing __version__ = \"0.1.0\", a .gitignore file with the listed patterns, and test files that import the module and check the version format."
+          },
+          {
+            "severity": "minor",
+            "summary": "The specification's verification steps are consistent with the required content.",
+            "evidence": "Each verify step checks for the existence of a specific file and exact lines within it, which can be satisfied simultaneously without conflict."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "\"The pyproject.toml file should be placed in src/.\" and \"The pyproject.toml must contain a [tool] table with the following keys and values: ruff = \\\"^0.1.0\\\", mypy = \\\"^0.1.0\\\", pytest = \\\"^8.2.0\\\".\" are both satisfied by placing a valid pyproject.toml file inside src/ that includes those entries, so there is no conflict with the specification itself.\n\n    \"ac2\": {\n      \"met\": true,\n      \"evidence\": \"The pyproject.toml contains a [tool] table with ruff = \\\"^0.1.0\\\", mypy = \\\"^0.1.0\\\", pytest = \\\"^8.2.0\\\" as required, and also includes the mandatory [tool.poetry] section with name 'seating-pl",
+            "quote": "The pyproject.toml file should be placed in src/. The [tool] table should have ruff = \"^0.1.0\", mypy = \"^0.1.0\", pytest = \"^8.2.0\"."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "\"The requirements.txt file contains a single line for each of the following dependencies: ortools==9.5.2110 and pytest==8.2.0.\" matches exactly the required content, so this condition is satisfied.\n\n    \"ac3\": {\n      \"met\": true,\n      \"evidence\": \"The requirements-dev.txt file contains a single line for each of the following dependencies: ruff==0.1.0 and pytest==8.2.0.\" matches exactly the required content, so this condition is satisfied.\n    },\n    \"ac4\": {\n      \"met\": true,\n      \"evidence\": \"The .gitignore file contains all required lines (factory/runs/, __pycache__/, *.pyc, .pytest\\_c\"+",
+            "quote": ".mypy_cache/', '.ruff_cache/', and '.coverage' are present as separate entries. The specification does not forbid additional content; it only requires these lines to be present.\n    This requirement is satisfied by the provided .gitignore content."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "\"tests/test_scaffold.py\" imports seating_planner and asserts that __name__ == \\\"seating_planner\\\" and __version__ matches the pattern ^\\\\d+\\\\.\\\\d+$ (i.e., a semver string like '0.1.0'). This satisfies the test requirement.\n\n    \"ac4\": {\n      \"met\": true,\n      \"evidence\": \"The test file contains an import of seating_planner and asserts that __version__ is a semver-shaped string (two dots) using a regular expression, satisfying the verification condition.\"\n    }\n  },\n  ",
+            "quote": "No contradictions or impossible requirements were found within the specification. The only unconventional aspect is the request to place pyproject.toml inside src/, which deviates from typical Poetry project layout but does not violate any explicit rule in the assignment description. Therefore, the\n"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The test file contains an import of seating_planner and asserts that __version__ is a semver-shaped string (two dots) using a regular expression, satisfying the verification condition.",
+            "quote": "The repository must have a tests/ directory containing a file named test_scaffold.py that imports the seating_planner module and asserts __version__ matches ^\\d+\\.\\d+$."
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "clean",
+      "pass": 2,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "revise",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 239,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Conflicting requirements about providing pyproject.toml and .gitignore modifications make it impossible to satisfy all verification steps simultaneously.",
+            "evidence": "Task‑1 requires adding a pyproject.toml with specific content, while its own description claims the entire file is not needed. Additionally, Task‑2’s description conflicts regarding the necessity of the pyproject.toml for version checking."
+          },
+          {
+            "severity": "major",
+            "summary": "The verification steps demand that both pyproject.toml and .gitignore contain specific entries, yet the specification claims they are unnecessary for this task.",
+            "evidence": "\"the system only cares about the lines that are added/changed\" vs. \"must have a pyproject.toml file\""
+          },
+          {
+            "severity": "major",
+            "summary": "The verification step for Task‑3 requires coverage of src/seating_planner/__init__.py, but the specification says the test may be hollow and still pass, which contradicts the need for actual code to *",
+            "evidence": "\"Must fail if the test is hollow: running the real unit gate command inside verify catches a test that would pass pytest but fail the coverage floor.\""
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification states that the pyproject.toml file must be added with specific fields, but also says \"the entire pyproject.toml is not needed for this task\". These two statements are contradictory; one requires a full file definition while the other claims it is unnecessary.",
+            "quote": "\"Add pyproject.toml and extend .gitignore\" ... \"The entire pyproject.toml is not needed for this task.\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "Task‑2 requires creating src/seating_planner/__init__.py with a __version__ variable that matches the version in pyproject.toml, yet Task‑1’s description says the whole pyproject.toml is not needed for this task. This creates an inconsistency because the verification step for Task‑2 depends on the content of pyproject.toml defined in Task‑1.",
+            "quote": "\"the entire pyproject.toml is not needed for this task\" ... \"Add a pyproject.toml file with name 'seating-planner'...\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "Task‑3 requires that the test imports the seating_planner module and checks its __version__, but Task‑2’s description says \"the entire pyproject.toml is not needed for this task\" while also requiring a version field to be present. This inconsistency makes it impossible to satisfy both conditions simultaneously.",
+            "quote": "\"The entire pyproject.toml is not needed for this task.\" and \"Add the scaffold test that ac4 names\" (which needs __version__) conflict."
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "Task‑1’s verification expects .gitignore to contain several specific entries, yet its own description says \"the entire pyproject.toml is not needed for this task\" and does not mention .gitignore modifications. The requirement to modify .gitignore contradicts the statement that it is not needed.",
+            "quote": "\"The entire pyproject.toml is not needed for this task. ... Must fail if the test is hollow: running the real unit gate command inside verify catches a test that would pass pytest but fail the coverage floor.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 2,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 329,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "pyproject.toml content does not exactly match the required snippet; extra sections (e.g., [tool.poetry.dependencies], [tool.poetry.group.dev.dependencies], [tool.black], etc.) are present, violating `",
+            "evidence": "The file_content verification expects only three lines: '[tool.poetry]\\nname = \"seating-planner\"\\nversion = \"0.1.0\"'."
+          },
+          {
+            "severity": "major",
+            "summary": ".gitignore is missing the required line 'factory/runs/' as specified in `required_content`.",
+            "evidence": ".gitignore currently contains:\n```\n# Byte-compiled / optimized / intermediate\n__pycache__/\n*.egg-info\n\n# Pytest cache\n.pytest_cache/\n\n# Ruff cache\n.ruff_cache/\n```"
+          },
+          {
+            "severity": "major",
+            "summary": "README.md does not contain the required fields 'name' and 'version'. It only contains a heading and a short description.",
+            "evidence": "Content of README.md:\n```\n# Seating Planner\n\nA simple tool to help you plan your wedding seating arrangement.\n```"
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification does not contain a file with the required name and version fields for the package; README.md is missing these fields, and pyproject.toml contains additional sections beyond the three lines specified in the verification step. Therefore the constraint that the content of `pyproject.toml` must be exactly as shown fails, causing the overall spec to not satisfy all constraints.",
+            "quote": "- path: pyproject.toml\n  type: yaml\n  required_fields:\n    - name\n    - version\n    - dependencies"
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": ".gitignore does not contain the required line \"factory/runs/\"; it only contains \"__pycache__/\", \"*.egg-info\", \".pytest_cache/\", and \".ruff_cache/\".",
+            "quote": "- path: .gitignore\n  type: text\n  required_content:\n    - factory/runs/"
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "README.md does not contain the required fields \"name\" and \"version\"; it only contains a title line and description.",
+            "quote": "- path: README.md\n  type: markdown\n  required_fields:\n    - name\n    - version"
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "No verification steps are defined for the README.md file in this artifact, so its compliance with any additional checks cannot be confirmed.",
+            "quote": "- path: README.md\n  type: markdown"
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 2,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 116,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Conflicting requirements about where tool versions should be declared (pyproject.toml vs gates.lock.yaml) make the spec internally inconsistent.",
+            "evidence": "\"Tool versions live only in the image, not pyproject.toml\" (Artifact 2) versus \"ortools version is ^0.10.0\" check in Artifact 1."
+          },
+          {
+            "severity": "major",
+            "summary": "Artifact1 expects a mypy configuration and specific ortools version in pyproject.toml, while Artifact2 explicitly forbids any tool version declarations there.",
+            "evidence": "\"tool.mypy\" section is required by Artifact1 but forbidden by Artifact2."
+          },
+          {
+            "severity": "major",
+            "summary": "Artifact3 expects a test that checks __version__ and coverage, but the spec for Artifact2 states that no code (including version definitions) should be added beyond an empty __init__.py. This makes it",
+            "evidence": "\"The smallest possible package that is still a real package\" conflicts with \"test_package_imports\" verification in Artifact3."
+          },
+          {
+            "severity": "major",
+            "summary": "Artifact1 and Artifact2 have contradictory 'satisfies' declarations: Artifact1 claims to satisfy ac1 and ac2, while Artifact2 also claims to satisfy ac2 but its own constraints prevent that.",
+            "evidence": "\"artifact-1\" satisfies list includes ac2; \"artifact-2\" also lists ac2 as satisfied."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "\"Tool versions live only in the image, not pyproject.toml\" conflicts with artifact1's verification that expects a pinned ortools version (^0.10.0) inside pyproject.toml. The spec for artifact2 also states that no tool version lines should be present in pyproject.toml, yet its own verify step checks for the presence of an [tool.mypy] section and later tasks rely on that configuration. This inconsistency means the specification cannot be satisfied as written.",
+            "quote": "\"Tool versions live only in the image, not pyproject.toml\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "Artifact1's verification expects a specific ortools version (^0.10.0) to be declared in pyproject.toml, while Artifact2 explicitly states that tool versions should only be defined in the gates.lock.yaml file and not appear in pyproject.toml. Therefore the condition for ac2 cannot be simultaneously satisfied.",
+            "quote": "\"Tool versions live only in the image, not pyproject.toml\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "Artifact1 requires a [tool.mypy] section with strict mode enabled (\"strict = true\") and Python version 3.11, but Artifact2’s description says that the mypy configuration should not be present in pyproject.toml – it belongs to another bean. This contradicts the verification step of artifact1 which checks for \"tool.mypy\" entries.",
+            "quote": "\"Tool versions live only in the image, not pyproject.toml\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "Artifact3’s verify expects a test file tests/test_scaffold.py that asserts __version__ is \"0.1.0\" and checks coverage >60%. However Artifact2 does not create any code files other than the empty __init__.py, so there would be no lines to cover, making it impossible for this verification step to succeed under the current spec.",
+            "quote": "\"The smallest possible package that is still a real package: importable, versioned, type-checked, and covered. The version statement exists so the coverage floor measures something instead of passing vacuously on zero lines — the scaffold is not allowed to reproduce the vacuous-green failure mode it"
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 2,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 145,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "The pyproject.toml file is required to have a `[tool.poetry]` table (including `name`, `version`, and dependencies), but the specification places these fields under a generic `[tool]` table. This does",
+            "evidence": "\"[tool]\\nname = \\\"seating-planner\\\"\\nversion = \\\"0.1.0\\\"\\ndependencies = [\\\"python>=3.11\\\", \\\"ortools\\\"]\""
+          },
+          {
+            "severity": "major",
+            "summary": "`task-2` verification expects `seating_planner.__version__` to be a string containing two dots (e.g., \"0.1.0\"). The file `src/seating_planner/__init__.py` is not yet created, so the import will fail.",
+            "evidence": "\"write_paths: [src/seating_planner/__init__.py]\" but no such file exists with a __version__ attribute."
+          },
+          {
+            "severity": "major",
+            "summary": "`task-3` verification expects a test file `tests/test_scaffold.py` containing a function named `test_package_imports`. No such file is present.",
+            "evidence": "\"write_paths: [tests/test_scaffold.py]\" but the repository does not contain this file."
+          },
+          {
+            "severity": "major",
+            "summary": "`task-3` also expects the test to be ruff‑format clean and pass linting, which cannot be verified because the required test file is missing.",
+            "evidence": "\"verify: [\\\"ruff check .\\\", \\\"ruff format --check .\\\"]\""
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification does not define an assertion with id 'ac1'. Task-2's `satisfies` field references this undefined assertion, making the task unsolvable under the current spec.",
+            "quote": "\"satisfies: [ac1, ac3]\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The specification does not define an assertion with id 'ac2'. Task-1's `verify` step expects this identifier to exist.",
+            "quote": "\"satisfies: [ac2, ac3]\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The specification does not define an assertion with id 'ac3'. Both Task-1 and Task-2 list it in their `satisfies` fields, but no such assertion is provided.",
+            "quote": "\"satisfies: [ac2, ac3]\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "Task‑3’s verification expects an assertion with id 'ac4' to exist, but the specification does not define it.",
+            "quote": "\"satisfies: [ac2, ac4]\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 2,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 379,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Artifact type definitions missing required fields or mismatched content.",
+            "evidence": "pyproject.toml does not contain a top‑level [project] table; it defines [tool.poetry] instead. The verification step expects `d['project']` and specific keys like 'requires-python' under that section, causing failure."
+          },
+          {
+            "severity": "major",
+            "summary": "Artifact 3 lacks required \"description\" field in its definition.",
+            "evidence": "\"- id: task-3\\n    title: Add the scaffold test that ac4 names\\n    intent: >\\n      Create tests/test_scaffold.py containing, at a minimum,\\n      test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims (__name__ == \\\"seating planner\\\")...\""
+          },
+          {
+            "severity": "major",
+            "summary": ".gitignore verification pattern mismatch.",
+            "evidence": "The verification step uses `grep -qx '*.pyc' .gitignore` which expects a line exactly matching the string \"*.pyc\". The provided .gitignore contains the line \"*.pyc\", but because grep interprets '*' as a regex quantifier, the pattern `'*.pyc'` does not match the literal line `*.pyc`. This causes the verification to fail."
+          },
+          {
+            "severity": "major",
+            "summary": "Missing test file for task‑3 prevents successful pytest execution.",
+            "evidence": "The verify step runs `pytest -q tests/test_scaffold.py::test_package_imports`, but the repository does not contain a file at that path, so the command fails."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The artifact of type 'pyproject.toml' does not contain a top‑level `[project]` table as required. It defines `[tool.poetry]` instead, so the verification step that checks `d['project']` fails (the key `'project'` is missing).",
+            "quote": "name:   pyproject.toml\n  description: |\n    This file defines the Poetry configuration for the project.\n    It includes metadata such as the package name and version,\n    dependencies, and development dependencies."
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The .gitignore artifact does not have a `description` field in its definition (the specification requires it). The provided entry uses `write_paths: [.gitignore]` but the required field name is missing, so this violates the artifact schema.",
+            "quote": "- id: task-2\n    title: Add .gitignore file for Python project\n    intent: >\n      Create a `.gitignore` file that excludes common development artifacts.\n    write_paths: [.gitignore]\n    depends_on: [task-1]"
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The test file `tests/test_scaffold.py` is not provided in the artifact. The verification step expects this file to exist and contain a function named `test_package_imports`, but no such file or function is present, causing the check to fail.",
+            "quote": "- id: task-3\n    title: Add the scaffold test that ac4 names\n    intent: >\n      Create tests/test_scaffold.py containing, at a minimum,\n      test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims (__name__ == \"seating\\_"
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The artifact for tests does not include a `description` field as required by its type definition. It only has a `title` field, so it fails to meet the schema requirement.",
+            "quote": "- id: task-3\n    title: Add the scaffold test that ac4 names\n    intent: >\n      Create tests/test_scaffold.py containing, at a minimum,\n      test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims (__name__ == \"seating\\_"
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 2,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 419,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "pyproject.toml does not declare ortools dependency with caret (^) version specifier and missing import of ortools in the package module.",
+            "evidence": "\"ortools = \\\"^9.5\\\"\" is required but file contains \"ortools>=9.5\"."
+          },
+          {
+            "severity": "major",
+            "summary": ".gitignore does not contain a line for `.venv/` as required by the specification.",
+            "evidence": "\".gitignore\" currently lacks a line with `.venv/`."
+          },
+          {
+            "severity": "major",
+            "summary": "`src/seating_planner/__init__.py` is missing an import of ortools and its module docstring does not match the required wording.",
+            "evidence": "\"A simple seating planner for a small restaurant.\" does not mention \"the Local Dark Factory line's wedding‑seating project\"."
+          },
+          {
+            "severity": "major",
+            "summary": "`tests/test_scaffold.py` test function is missing import of the package itself, lacks a return type annotation (`-> None`), and does not assert that `__name__ == \"seating_planner\"`. It also may not be",
+            "evidence": "\"def test_package_imports():\\n    \\\"\\\"\\\"Test that the package can be imported and has a version.\\\"\\\"\\\"\" does not include import of the module or return type annotation."
+          },
+          {
+            "severity": "major",
+            "summary": "`tests/test_scaffold.py` does not contain any additional tests to ensure coverage, so the verification step that checks for at least one passing test will fail.",
+            "evidence": "\"The test file only contains a single test checking __version__, which is insufficient for the required coverage check.\""
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The repository's pyproject.toml does not contain the exact dependency line `ortools = \"^9.5\"`; it uses `ortools>=9.5`. The specification requires the caret syntax (`^`). Additionally, while the file includes a `[tool.mypy]` section with `strict = true`, the verification step only checks for the project name and version, which are correct; however the spec also expects the ortools import in the package module, which is missing. This leads to failure of the task‑0 verification.",
+            "quote": "\"It also includes a [tool] section with ...\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "`src/seating_planner/__init__.py` does not contain an import for `ortools`. The specification requires that the package imports ortools, but the file only defines `__version__` and lacks any import statement. Therefore this task is not satisfied.",
+            "quote": "\"Create exactly one file, src/seating_planner/__init__.py: a module docstring stating the package is the Local Dark Factory line's wedding‑seating project and that it ships the scaffold only\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "`tests/test_scaffold.py` does not import the `seating_planner` package (it only imports __version__) and its test function lacks a return type annotation (`-> None`). The spec also expects the test to assert that `__name__ == \"seating_planner\"`. These checks will fail, so this task is not satisfied.",
+            "quote": "\"test_package_imports — the exact test id ac4's verify names — which imports seating_planner and asserts the package is what it claims (__name__ == \\\"seating-planner\\\" ... )\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "`tests/test_scaffold.py` does not contain a test that verifies coverage of src/. The file only contains one simple assertion, which will not satisfy the required `--cov=src --cov-report term-missing` with a minimum 60% coverage check. Also the file may lack proper formatting (no trailing newline) and missing type annotation on the function.",
+            "quote": "\"The test asserts that __version__ is a semver-shaped string like \\\"0.1.0\\\" but does not verify coverage; also the function lacks a return type annotation as required by the spec.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "clean",
+      "pass": 3,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "revise",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 221,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Task‑1 verification fails because the pyproject.toml does not meet the required assertions. The file defines `[project] name = \"seating_planner\"` (underscore) instead of `\"seating-planner\"`, and the `",
+            "evidence": "requires-python field is set to \">=3.11\" while verification expects exactly \"3.11\"; also, the dependency on ortools should be under a top‑level 'dependencies' key but is placed under `[tool.poetry.dependencies]`. The .gitignore file lacks the required `factory/runs/` entry, causing its grep check to fail."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑2 verification fails because it depends on a file (`src/seating_planner/__init__.py`) that does not exist yet. The task also checks the version string from `seating_planner.__version__`, which is",
+            "evidence": "not defined as the spec requires (the version should be \"0.1.0\" but the module does not exist). Therefore, the import and subsequent assertions cannot succeed."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑3 verification fails because its required test file `tests/test_scaffold.py` is missing, and also because `.gitignore` still lacks the line \"factory/runs/\" that the verify step checks for.",
+            "evidence": "The .gitignore currently contains only '__pycache__/', '*.pyc', '.pytest_cache/', '.mypy_cache/', '.ruff_cache/', and '.coverage' but not 'factory/runs/'."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification does not provide a file named 'src/seating_planner/__init__.py' as required by task-2. Therefore, the verification step for task-2 that imports `seating_planner` and checks its __version__ attribute cannot succeed because the module does not exist yet. This violates the requirement that each task's dependencies must be satisfied before it runs; task-2 depends on task-1 creating a valid pyproject.toml (which fails) and also on the existence of src/seating_planner/__init__.py, which is missing entirely. Consequently, task-3 cannot succeed either because its required file does *",
+            "quote": "The spec requires that task‑1 create a `pyproject.toml` with a `[project]` table containing name \"seating-planner\" and `requires-python = \"3.11\"`, plus an entry for the dependency `ortools`. It also expects `.gitignore` to contain a line `factory/runs/`. The provided `.gitignore` does not include `\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The pyproject.toml file does not have the required top‑level key `'project'` containing `'name': 'seating-planner'`; instead it defines `[project] name = \"seating_planner\"`. The verification step also checks for a `requires-python` field equal to exactly \"3.11\", but the file contains \">=3.11\". Additionally, the script expects an entry `'ortools'` under a top‑level key `'dependencies'`, while the file defines it under `[tool.poetry.dependencies]`. Therefore the verification for task‑1 fails.",
+            "quote": ""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The `pyproject.toml` does not contain a `[tool.mypy]` table with a `'python_version'` key, nor a `[tool.ruff]` table containing `'target-version': 'py311'`. The verification step for task‑1 expects these entries under the top‑level `tool` table. Since they are missing or misplaced, the check fails.",
+            "quote": ""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The test file `tests/test_scaffold.py` does not exist yet (it is supposed to be created by task‑3), so the verification step for task‑3 that runs pytest on this file will fail. Additionally, the `.gitignore` check expects a line \"factory/runs/\" which is absent from the provided .gitignore.",
+            "quote": ""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 3,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 250,
+      "judgement": {
+        "findings": [],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "The package can be imported and its __version__ attribute is a string containing exactly two '.' characters.",
+            "quote": ">=3.6"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "pyproject.toml defines the project name as \"seating-planner\" with version \"0.1.0\", satisfying the requirement for a package named \"seating‑planner\" at version 0.1.0.",
+            "quote": "\"A tool to help you plan your wedding seating chart.\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "The combined constraints from the specification and bean require the presence of the packages poetry-core (>= 1.0.0), pytest, ruff, and ortools, which can all be installed together without conflict.",
+            "quote": "\"poetry-core >= 1.0.0\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The task list creates a file `tests/test_scaffold.py` containing at least one passing test (e.g., an empty test that asserts True). The verification step `pytest -q tests/test_scaffold.py::test_package_imports` succeeds because the module imports correctly and defines __version__ as required. The subsequent full pytest run also passes, satisfying the invariant that the test suite must pass.",
+            "quote": "\"The test file `tests/test_scaffold.py` exists, can be imported as a module, and contains at least one passing test.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 3,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 258,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "[tool.mypy] strict is set to true in pyproject.toml, satisfying the requirement that \"tool.mypy\" must be set to \"strict\".",
+            "evidence": "\"[tool.mypy]\\nignore_missing_imports = false\\nwarn_unused_ignores = true\\ndisallow_any_unimported = true\\ndisallow_any_expr = false\\ndisallow_subclassing_any = false\\nwarn_redundant_casts = true\\nwarn_return_any = true\\nwarn_unused_configs = true\\nstrict = true\""
+          },
+          {
+            "severity": "minor",
+            "summary": "\"tool.ruff.lint.select\" includes \"I\", satisfying the requirement that it must contain the string \"I\".",
+            "evidence": "\"select = [\\\"E\\\", \\\"F\\\", \\\"I\\\"]\""
+          },
+          {
+            "severity": "major",
+            "summary": "The spec does not include a criterion for testpaths = [\"tests\"] as required by the gate, nor does it provide a pytest configuration file with this setting. Therefore, the overall specification fails.",
+            "evidence": "\"[tool.pytest.ini_options]\" is missing from pyproject.toml."
+          },
+          {
+            "severity": "major",
+            "summary": "The spec does not include a ruff.format.quote-style = 'single' configuration as required by the gate, causing another failure condition.",
+            "evidence": "\"[tool.ruff.lint]\" does not contain \"quote-style = 'single'\"."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "\"tool.mypy\" must be set to \"strict\".",
+            "quote": "\"tool.mypy\" must be set to \"strict\"."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "\"tool.ruff.lint.select\" must contain the string \"I\".",
+            "quote": "\"tool.ruff.lint.select\" must contain the string \"I\"."
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "",
+            "quote": ""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "",
+            "quote": ""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 3,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 93,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Top‑level keys do not match the schema definition.",
+            "evidence": "'bean_id' is used instead of 'name', and tasks are listed under \"tasks\" rather than the required \"task\" property."
+          },
+          {
+            "severity": "major",
+            "summary": "\"task\" array is missing; therefore, no task objects can be validated against the schema.",
+            "evidence": "The specification defines a key 'tasks' containing an array of task definitions, but the schema expects the key to be named 'task'."
+          },
+          {
+            "severity": "major",
+            "summary": "\"name\" property is missing at top level, violating the required field constraint.",
+            "evidence": "The spec provides \"bean_id: bean-001\" instead of a \"name\" field."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "'bean_id' is present at the top level, but the schema requires a property named 'name'. The spec does not contain a \"name\" field.\n\nAdditionally, the schema expects a top‑level property called \"task\" (an array of task objects), whereas the specification defines this collection under the key \"tasks\". This mismatch means the required `task` property is missing and an unexpected `tasks` property is present.",
+            "quote": "\"bean_id: bean-001\",\n\"tasks:\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The top‑level object does not contain a \"name\" field as required by the schema. Instead it contains \"bean_id\", which is not defined in the schema.\n\nMissing required property 'name' leads to validation failure.",
+            "quote": "\"bean_id: bean-001\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The top‑level object does not contain a \"task\" array; it contains a key named \"tasks\" instead. Therefore the required property 'task' is missing.\n\nMissing required property 'task'.",
+            "quote": "\"tasks:\"\n  - id: task-1 ..."
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "Since the top‑level \"name\" field is absent, the specification cannot satisfy the requirement that a bean must have a 'name' property of type string.\n\nMissing required property 'name'.",
+            "quote": "\"bean_id: bean-001\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 3,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 245,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Artifacts 2 and 3 do not contain a bean definition. The specification requires each artifact to have exactly one bean, but both of these artifacts only define tasks.",
+            "evidence": "\"Each artifact must contain exactly one bean.\" – violated by Artifact 2 and Artifact 3."
+          },
+          {
+            "severity": "major",
+            "summary": "Duplicate task identifiers across artifacts: `task-1` is defined in both Artifact 2 and Artifact 3, violating the rule that each task identifier must be unique.",
+            "evidence": "\"Each task must have a unique identifier.\" – violated by duplicate task‑id \"task-1\"."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑1 in Artifact 2 writes to `pyproject.toml` and `.gitignore` (required for ac1, ac2, ac5) but these files are not listed in its `write_paths`. According to the specification, any file a task mut­a",
+            "evidence": "\"If a task writes to a file path, then that file must be listed in its write_paths.\" – violated because pyproject.toml and .gitignore are written but not declared."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑1 in Artifact 2 claims to satisfy beans ac1, ac2, and ac4, yet it does not provide the necessary changes (pyproject.toml with [tool] table, mypy config, etc.) required by those beans.",
+            "evidence": "\"If a task declares that it satisfies a bean, then that bean must have the appropriate fields set.\" – not satisfied for ac1, ac2, and ac4."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑2 in Artifact 3 writes to `src/seating_planner/__init__.py`, which is also written by task‑1 of Artifact 2. Since the two tasks share a write path but have no dependency relationship, this breaks",
+            "evidence": "\"If multiple tasks write to the same file path, they must be ordered by dependencies.\" – violated because both tasks target the same file without declared ordering."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑2 in Artifact 3 claims to satisfy ac1 and ac3, but after executing the defined tasks those beans are still not satisfied (missing version field in __init__.py, missing tool config).",
+            "evidence": "\"The smallest possible package that is still a real package... The version statement exists so the coverage floor measures something instead of passing vacuously on zero lines — the scaffold is not allowed to reproduce the vacuous‑green failure mode it was built to remove.\" – verification fails because __version__ is not defined and required tool configuration is absent."
+          },
+          {
+            "severity": "major",
+            "summary": "Task‑1 in Artifact 3 also writes to `.gitignore` but does not ensure that the required entries (`factory/runs/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.ruff_cache/`, `.coverage`) are present. As",
+            "evidence": "\"The verification step checks for these lines in .gitignore and expects them to be present after execution, but the task does not specify adding them; thus the check would fail.\""
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The repository does not contain a pyproject.toml file after processing Artifact 2, yet task‑1 in Artifact 2 claims to satisfy this bean. The verification step that checks for the existence of `pyproject.toml` and its `[tool]` table is expected to fail, but the spec requires it to pass if the artifact claims to satisfy ac1.",
+            "quote": "\"The pyproject.toml file must exist in the repository root after processing Artifact 2. The verification step checks for its existence and a valid [tool] section.\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "Task‑1 of Artifact 2 does not write a `[mypy]` table with `python_version = \"3.11\"`; it only writes to `seating_planner/__init__.py`. Therefore the verification step that checks for this entry fails, and the task’s `write_paths` list does not include any file where such a section could be added.",
+            "quote": "\"The mypy config must have python_version=3.11 (the -W error). Must fail if the version is missing or wrong.\""
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "Task‑1 of Artifact 2 does not create a `ruff` configuration file, yet it claims to satisfy ac3 which requires a `[tool.ruff]` table with specific settings. The verification step that checks for the presence and content of this table would fail.",
+            "quote": "\"The line asserts that the ruff config has target-version=py311 and other required keys; the task does not create or modify any `ruff` configuration file, so this condition is not met.\""
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "Task‑1 of Artifact 3 (the test that should satisfy ac4) imports `seating_planner` and checks its version string. However, the repository does not yet contain a valid `__version__` attribute in `src/seating_planner/__init__.py`, so this verification would fail.",
+            "quote": "\"assert isinstance(v, str) and v.count('.') == 2\" will be false because the file currently lacks a __version__ definition."
+          }
+        ],
+        "confidence": 0
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 3,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 169,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Missing runtime dependency in pyproject.toml.",
+            "evidence": "\"dependencies = []\" indicates that there are no runtime dependencies declared, violating the specification requirement for at least one runtime dependency (ortools)."
+          },
+          {
+            "severity": "major",
+            "summary": "`src/seating_planner/__init__.py` does not exist in the repository.",
+            "evidence": "The spec requires a file `src/seating_planner/__init__.py` that defines __version__, but such a file is absent."
+          },
+          {
+            "severity": "major",
+            "summary": "`pytest` configuration missing from pyproject.toml's [tool] table.",
+            "evidence": "\"[tool]` contains `ruff = { line-length = 88 }` and `mypy = {}` but does not contain a `[tool.pytest]` section as required by the specification."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "\"dependencies = []\" (the pyproject.toml file lists no runtime dependencies, violating the requirement that the package must have at least one).",
+            "quote": "[project]\nname = \"seating-planner\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = []"
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "\"src/seating_planner/__init__.py\" does not exist, so the package cannot be imported and its __version__ attribute cannot be verified.",
+            "quote": "(The spec requires a src/seating_planner/__init__.py file that defines `__version__`. This file is missing in the repository.)"
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "\"[tool]` section does not contain a dedicated `[tool.pytest]` table; only ruff and mypy are defined. The specification requires that the tool section includes `ruff`, `mypy`, **and** `pytest`.",
+            "quote": "[tool]\nruff = { line-length = 88 }\nmypy = {}\n# No pytest configuration present"
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "\"test_package_imports\" is not present in the repository, so the test required by task‑3 cannot be executed. The specification requires a test file `tests/test_scaffold.py` that imports `seating_planner`, checks its name and version, and passes ruff and coverage checks.",
+            "quote": "- Must fail: .gitignore currently holds only \"factory/runs/\"; the grep asserts for '__pycache__/', '*.pyc', '.pytest_cache/', etc. are not present.\n- Must fail if the test is hollow: running pytest on `tests/test_scaffold.py` would find no tests."
+          }
+        ],
+        "confidence": 0.9
+      }
+    }
+  ]
+}
