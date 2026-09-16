@@ -431,10 +431,20 @@ The judge setting its own `options.num_ctx` changes what `OLLAMA_CONTEXT_LENGTH`
 do: it no longer has to express two roles, only the developer's. These wait for no run
 in flight, and the first one restarts ollama:
 
-- `zz-factory.conf`: add `OLLAMA_CONTEXT_LENGTH=32768` (or 49152, the co-residency
-  probe's figure), `daemon-reload`, restart. Then `conditions.num_ctx` observed should
-  equal declared for the developer too, and the 262144 default that made the spec step
-  take eight minutes cannot recur.
+- ~~`zz-factory.conf`: add `OLLAMA_CONTEXT_LENGTH`~~ — **superseded 2026-09-16 and
+  deliberately not done.** That is one number for every role and every other project
+  on this machine, which is why it sat here unactioned. `factory/pipeline/ensure-loaded.sh`
+  does it per role instead: the API takes `options.num_ctx` per request and the loaded
+  instance keeps it — which is why `/api/ps` has always reported the judge at exactly
+  the number judge.sh asks for — so the controller loads the developer's model at its
+  declared context before the step and pi reuses what is loaded. run-step calls it for
+  contained steps only.
+
+  **Unproven in one respect**: whether pi's own request keeps the loaded context, or
+  makes ollama reload at its default. The next real bean answers it —
+  `conditions.declared_matches_observed` is exactly where it shows up, and that flag
+  started including num_ctx this morning. If it turns out pi forces a reload, the
+  global setting comes back onto this list.
 - Smoke step with `--no-skills --skill "$FACTORY_SKILLS"`; if the skill loads, add
   `--no-skills` to `HARNESS_FLAGS` and demote the collision check to a regression test.
 - Spike `pi --mode json` on a smoke step. If model, thinking level and tool calls arrive
