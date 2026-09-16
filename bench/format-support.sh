@@ -18,7 +18,8 @@
 # at a thinking level where it holds the real schema.
 #
 # The schema used here is judge.sh's own, read from the file, so this cannot drift
-# away from what the judge actually asks for.
+# away from what the judge asks for — with one stated exception, below: the
+# per-bean criterion enum is injected at runtime and is not in the literal.
 set -uo pipefail
 # Run from a copy, always, without anyone having to remember.
 #
@@ -49,7 +50,19 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PIPE="$HERE/../factory/pipeline"
 HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 
-# The real thing, not a copy of it.
+# The real thing, not a copy of it — but it is the literal, and the literal is not
+# quite what a real audit sends.
+#
+# judge.sh injects two things after this block, both of which it cannot put in the
+# literal because both depend on the run: an `enum` of the bean's criterion ids on
+# `criteria[].id` with `minItems` set to their count, and a per-target description
+# on `met`. So what this measures is "can the model hold the shape of a judgement",
+# which is the question, and NOT "can it hold the exact grammar of any particular
+# audit", which is `factory reaudit`'s question.
+#
+# Said out loud in the artifact, because the enum is the constraint that turned
+# criterion compliance from roughly none into complete, and a figure here that
+# implied it had been measured would be claiming the wrong thing.
 SCHEMA="$(sed -n "/^SCHEMA='/,/^}'$/p" "$PIPE/judge.sh" | sed "1s/^SCHEMA='//; \$s/'$//")"
 jq -e . >/dev/null 2>&1 <<<"$SCHEMA" || { echo "could not read the judgement schema out of judge.sh" >&2; exit 1; }
 
@@ -134,6 +147,13 @@ for m in "${MODELS[@]}"; do
       --argjson pay "$PAYLOAD" \
       '{model:$m, stream:false, format:$f,
         think:(if $t == "false" then false else $t end),
+        # The same empty tool list judge.sh sends. Absent and empty are not the
+        # same thing: with the field absent, gpt-oss:120b answered a real audit
+        # with a call to `repo_browser.open_file` nine times out of nine, and a
+        # tool call is the one route around `format` — the grammar constrains
+        # message.content and a tool call is not content. A probe that omits it
+        # is measuring a request the judge does not make.
+        tools: [],
         options:{temperature:0, num_predict:4000},
         messages:($pay + [{role:"user", content:$q}])}')"
     t0="$(date +%s)"
@@ -178,7 +198,8 @@ jq -n --argjson r "$RESULTS" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{schema:"format-support/3.0.0", measured_at:$ts, provenance:$prov,
     asked_with_artifacts:$with_artifacts, payload_bytes:$payload_bytes,
     short_question_only: ($with_artifacts | not), results:$r,
-    eligible_judges: [$r[] | select(.holds) | {model, thinking}]}' > "$OUT"
+    eligible_judges: [$r[] | select(.holds) | {model, thinking}],
+    schema_measured: "the SCHEMA literal in judge.sh. A real audit adds two things this cannot: an enum of the bean criterion ids on criteria[].id with minItems, and a per-target description on met. This measures whether the model can hold the SHAPE of a judgement; whether it holds a particular audit grammar is what factory reaudit measures."}' > "$OUT"
 
 printf '\neligible (model, thinking) pairs:\n'
 jq -r '.eligible_judges[] | "  \(.model)  thinking=\(.thinking)"' "$OUT"
