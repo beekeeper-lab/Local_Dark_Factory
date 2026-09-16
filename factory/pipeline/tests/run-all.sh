@@ -82,6 +82,11 @@ done < <(ordered)
 
 printf '\n  %s assertions, %s failed, %ss\n' \
   "$((TOTAL_PASS + TOTAL_FAIL))" "$TOTAL_FAIL" "$(( $(date +%s) - START ))"
+# Leave the count where a commit hook can check it. Several commit messages in
+# this repository quote an assertion count written from memory before the suite
+# was read, and every one of them is a small false claim in a record whose value
+# is that its claims are true.
+printf '%s\n' "$((TOTAL_PASS + TOTAL_FAIL))" > "${TMPDIR:-/tmp}/factory-last-suite-count" 2>/dev/null || true
 if [ -n "$FAILED_SUITES" ]; then
   printf '  failing:%s\n\n' "$FAILED_SUITES"
   exit 1

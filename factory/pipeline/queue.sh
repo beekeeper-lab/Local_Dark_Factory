@@ -107,6 +107,46 @@ pr_for() { # pr_for <bean-id> -> a pr url recorded by ANY run of it, or empty
   done
 }
 
+DEFAULT_BRANCH="$([ -f "$ROOT/factory/repo.yaml" ] && "$PIPELINE_DIR/yaml2json.sh" "$ROOT/factory/repo.yaml" 2>/dev/null | jq -r '.default_branch // "main"' || echo main)"
+
+merged() { # merged <bean-id> — is this bean's work on the default branch?
+  # The question the first version of this file never asked, and the one that
+  # matters: a pull request being OPEN is the finished state of a bean's own run,
+  # and it is not the finished state of the tree the next bean builds on.
+  #
+  # bean-002's spec step found this the hard way. bean-001's run recorded a pull
+  # request, the queue called it done, bean-002 started — and the developer model
+  # opened a tree with no `src/`, no `pyproject.toml` and no `tests/`, because
+  # `merge_mode: human_required` means PR #1 is still open. It cross-checked the
+  # tree against bean-001's own spec, refused to plan around a missing
+  # precondition, and stopped. It was right, and the queue was wrong.
+  #
+  # Answered from git rather than from GitHub: a merge is a fact about the
+  # default branch, the line runs offline by design, and `gh` would be a network
+  # call per dependency per queue computation.
+  local id="$1" br sha
+  br="$(branch_for "$id")"
+  if [ -n "$br" ]; then
+    sha="$(git -C "$ROOT" rev-parse "$br" 2>/dev/null)"
+  else
+    # The branch is gone, which after a merge is the usual outcome. Fall back to
+    # what the run recorded it as, if that ref still resolves.
+    local d
+    for d in $(ls -1dt "$RUNS_ROOT/$id"-*/ 2>/dev/null); do
+      [ -f "$d/run.json" ] || continue
+      sha="$(jq -r '.branch // empty' "$d/run.json" 2>/dev/null)"
+      [ -n "$sha" ] && sha="$(git -C "$ROOT" rev-parse "$sha" 2>/dev/null || true)"
+      [ -n "$sha" ] && break
+    done
+  fi
+  # No sha to test is not a merge. Blocking on an unknown is the safe direction:
+  # the cost is a bean that waits for a human who can look, and the cost of the
+  # other answer is a bean built against a tree that does not have its
+  # dependencies in it.
+  [ -n "$sha" ] || return 1
+  git -C "$ROOT" merge-base --is-ancestor "$sha" "$DEFAULT_BRANCH" 2>/dev/null
+}
+
 # ---------------------------------------------------------------- the queue --
 ROWS='[]'
 while IFS= read -r id; do
@@ -123,8 +163,14 @@ while IFS= read -r id; do
   else
     pr="$(pr_for "$id")"
     br="$(branch_for "$id")"
-    if [ -n "$pr" ]; then
-      state=done; why="a pull request was opened: $pr"
+    if [ -n "$pr" ] && merged "$id"; then
+      state=done; why="merged: $pr"
+    elif [ -n "$pr" ]; then
+      # The state this queue was missing, and the one `merge_mode: human_required`
+      # makes the normal case: the bean's work is finished and sitting in a pull
+      # request nobody has merged. Its own run is done; the next bean's BASE does
+      # not contain it.
+      state=pr_open; why="pull request open, not merged: $pr"
     elif [ -n "$br" ]; then
       state=in_progress; why="branch $br already exists"
     else
@@ -137,6 +183,7 @@ while IFS= read -r id; do
         if [ -z "$dstate" ]; then blocked="$blocked $dep(unknown)"
         elif [ "$dstate" != approved ]; then blocked="$blocked $dep($dstate)"
         elif [ -z "$(pr_for "$dep")" ]; then blocked="$blocked $dep(not built)"
+        elif ! merged "$dep"; then blocked="$blocked $dep(pull request not merged)"
         fi
       done < <(jq -r '.deps[]?' <<<"$row")
       if [ -n "$blocked" ]; then
@@ -162,7 +209,8 @@ printf '\nqueue — %s bean(s)\n\n' "$(jq 'length' <<<"$ROWS")"
 printf '%-10s %-12s %-44s %s\n' BEAN STATE TITLE WHY
 jq -r '.[] | [.id, .state, (.title[0:42]), .why] | @tsv' <<<"$ROWS" \
   | while IFS=$'\t' read -r id state title why; do
-      [ "$SHOW_ALL" = 1 ] || [ "$state" = ready ] || [ "$state" = refused ] || continue
+      [ "$SHOW_ALL" = 1 ] || [ "$state" = ready ] || [ "$state" = refused ] \
+        || [ "$state" = pr_open ] || continue
       printf '%-10s %-12s %-44s %s\n' "$id" "$state" "$title" "$why"
     done
 
@@ -170,4 +218,10 @@ READY="$(jq -r '[.[] | select(.state == "ready") | .id] | join(" ")' <<<"$ROWS")
 printf '\nready: %s\n' "${READY:-nothing}"
 REFUSED="$(jq -r '[.[] | select(.state == "refused") | .id] | length' <<<"$ROWS")"
 [ "$REFUSED" -gt 0 ] && printf 'refused: %s bean(s) not approved — §04 gates what enters the line\n' "$REFUSED"
+WAITING="$(jq -r '[.[] | select(.state == "pr_open") | .id] | join(" ")' <<<"$ROWS")"
+if [ -n "$WAITING" ]; then
+  printf 'waiting on a human to merge: %s\n' "$WAITING"
+  printf '  `merge_mode: human_required` means the line stops here by design. Until these\n'
+  printf '  land on %s, everything downstream builds against a tree without them.\n' "$DEFAULT_BRANCH"
+fi
 printf '\n'

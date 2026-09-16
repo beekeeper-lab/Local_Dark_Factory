@@ -61,14 +61,32 @@ bean bean-003 3 approved "The rules"         bean-002
 bean bean-004 4 draft    "Not approved yet"  bean-001
 bean bean-005 5 approved "Needs the draft"   bean-004
 printf 'x\n' > "$REPO/keep.txt"
+# Run directories are gitignored in a scaffolded repo, and the fixture has to
+# mirror that: without it, `git add -A` on a bean branch commits the run record
+# and checking out main deletes it — so the queue would see no runs at all, which
+# is a fixture failure that looks exactly like a queue bug.
+printf 'factory/runs/\n' > "$REPO/.gitignore"
 git -C "$REPO" add -A && git -C "$REPO" commit -q -m init
 
 q()  { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" "$@" 2>&1 ); }
 qj() { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" --json 2>/dev/null ); }
 fac(){ ( cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" "$FACTORY" "$@" 2>&1 ); }
-built() { # built <bean-id> — pretend it reached a pull request
+pr_opened() { # pr_opened <bean-id> — a run that reached a pull request, unmerged
   local d="$REPO/factory/runs/$1-20260101T000000Z"; mkdir -p "$d"
-  printf '{"run_id":"r","bean":"%s","pr_url":"https://github.com/x/y/pull/9"}\n' "$1" > "$d/run.json"
+  printf '{"run_id":"r","bean":"%s","branch":"bean/%s-x","pr_url":"https://github.com/x/y/pull/9"}\n' \
+    "$1" "$1" > "$d/run.json"
+  git -C "$REPO" branch -q "bean/$1-x" 2>/dev/null || true
+  # A branch with a commit on it, so "is this merged" has something to answer.
+  git -C "$REPO" checkout -q "bean/$1-x"
+  printf '%s\n' "$1" > "$REPO/$1.txt"
+  git -C "$REPO" add -A && git -C "$REPO" commit -q -m "$1 work"
+  git -C "$REPO" checkout -q main
+}
+merge_it() { # merge_it <bean-id> — a human merges the pull request
+  git -C "$REPO" merge -q --no-ff -m "merge $1" "bean/$1-x"
+}
+built() { # built <bean-id> — reached a pull request AND was merged
+  pr_opened "$1"; merge_it "$1"
 }
 
 # --------------------------------------------------------------------------
@@ -111,11 +129,35 @@ eq "its state is refused"              "refused" \
 nope "and it is never ready"           "bean-099" "$(jq -c '.ready' <<<"$(qj)")"
 rm -rf "$REPO/factory/beans/bean-099-broken"
 
+printf '\n== an open pull request is not a merged one ==\n\n'
+#
+# The distinction the first version of this file did not draw, found by running
+# it: bean-001's run recorded a pull request, the queue called it done, bean-002
+# started — and the developer model opened a tree with no `src/`, no
+# `pyproject.toml` and no `tests/`, because `merge_mode: human_required` means
+# that pull request is still open. It cross-checked the tree against bean-001's
+# own spec, refused to plan around a missing precondition, and stopped. It was
+# right and the queue was wrong.
+pr_opened bean-001
+out="$(q --all)"
+eq "the bean is pr_open, not done"   "pr_open" \
+   "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
+check "and says what is missing"     "pull request open, not merged" "$out"
+eq "nothing downstream is ready"     "" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+check "the dependent names the cause" "bean-001(pull request not merged)" "$out"
+check "and the summary asks for the human" "waiting on a human to merge: bean-001" "$out"
+check "saying it is by design"       "stops here by design" "$out"
+
+printf '\n-- and merging it moves the line on --\n\n'
+merge_it bean-001
+out="$(q --all)"
+eq "now it is done"                  "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
+eq "and the next is ready"            "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+
 printf '\n== building one unblocks exactly the next ==\n\n'
-built bean-001
 out="$(q --all)"
 eq "the built one is done"        "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
-check "and says how it knows"     "a pull request was opened" "$out"
+check "and says how it knows"     "merged: https" "$out"
 eq "the next is ready"            "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 eq "and only the next"            "1" "$(jq -r '.ready | length' <<<"$(qj)")"
 
