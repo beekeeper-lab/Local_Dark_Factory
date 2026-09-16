@@ -214,6 +214,6 @@ printf 'them used to be, and was being done badly.\n'
 if [ "${NG_CHECKABLE:-0}" -eq 0 ]; then
   printf '\nExcept contradicts-non-goal, if it is among them: %s declares no non-goal in\n' "$(jq -r '.id // "this bean"' <<<"$("$PIPE/yaml2json.sh" "$BEAN" 2>/dev/null || echo '{}')")"
   printf 'machine-readable form, so there was nothing for the controller to check. The\n'
-  printf 'mechanism exists (factory/pipeline/non-goals.sh); this bean does not use it.\n'
+  printf 'mechanism exists (factory/pipeline/bean-forbids.sh); this bean does not use it.\n'
 fi
 [ "$FALSE_ALARM" -eq 0 ]

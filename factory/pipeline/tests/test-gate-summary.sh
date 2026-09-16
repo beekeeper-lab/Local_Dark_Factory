@@ -72,18 +72,18 @@ check "hidden tests, by count"         "hidden tests: failed — 3 failing" "$ou
 
 printf '\n-- and a contradicted non-goal, which is the bean\x27s own words --\n\n'
 gate '{"containment":{"contained":true,"violations":[]},"gates":[],"acceptance_criteria":[],"invariants":null,
-       "non_goals":{"checkable_rules":2,"violations":[
-          {"non_goal":"no solver code","kind":"path","patterns":["src/**/solver/**"],"offending":["src/a/solver/x.py"]},
-          {"non_goal":"no solver code","kind":"import","module":"ortools","lines":["+import ortools"]}]},
+       "bean_forbids":{"checkable_rules":2,"violations":[
+          {"field":"non-goal","non_goal":"no solver code","kind":"path","patterns":["src/**/solver/**"],"offending":["src/a/solver/x.py"]},
+          {"field":"constraint","non_goal":"no solver imports","kind":"import","module":"ortools","lines":["+import ortools"]}]},
        "overall":"fail"}'
 out="$(sum)"
 check "the path violation"             "non-goal \"no solver code\": src/a/solver/x.py is inside src/**/solver/**" "$out"
-check "and the import one"             "imports ortools" "$out"
+check "and the import one"             "constraint \"no solver imports\": imports ortools" "$out"
 
 printf '\n-- a bean with no machine-readable non-goals says nothing here --\n\n'
 gate '{"containment":{"contained":true,"violations":[]},"gates":[{"id":"unit","status":"fail","exit_code":1}],
        "acceptance_criteria":[],"invariants":null,
-       "non_goals":{"checkable_rules":0,"violations":[]},"overall":"fail"}'
+       "bean_forbids":{"checkable_rules":0,"violations":[]},"overall":"fail"}'
 out="$(sum)"
 check "the real failure is shown"      "gate unit: exit 1" "$out"
 nope  "and non-goals are not"          "non-goal" "$out"

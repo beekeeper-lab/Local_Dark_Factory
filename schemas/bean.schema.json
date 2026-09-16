@@ -154,8 +154,43 @@
     },
     "constraints": {
       "type": "array",
+      "description": "What this bean may not do. Same shape of statement as non_goals and checked the same way: a plain string is prose and remains the audit's, and an object may carry forbidden_paths and forbidden_imports, which factory/pipeline/bean-forbids.sh decides at plan time and again over the diff. bean-002's \"no solver imports\" and \"no persistence in this bean\" are exactly forbidden_imports.",
       "items": {
-        "type": "string"
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the non-goal in words, for a human and for the audit"
+              },
+              "forbidden_paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "glob patterns, matched by the same matcher as allowed_write_paths. A task write_path or a changed file inside one of these contradicts the non-goal."
+              },
+              "forbidden_imports": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "module names. Grepped over the diff's ADDED lines; a removed import is the bean being obeyed. A text measure, and non-goals.sh says so in its own output."
+              }
+            }
+          }
+        ]
       }
     },
     "suggested_risk_tier": {

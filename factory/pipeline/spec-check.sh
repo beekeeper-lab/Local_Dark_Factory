@@ -156,19 +156,19 @@ fi
 # a line of the work.
 NG_PATHS="$(jq -c '[.tasks[].write_paths[]?] | unique' <<<"$TASKS_JSON")"
 ng_rc=0
-NG_OUT="$("$PIPELINE_DIR/non-goals.sh" --bean "$BEAN_FILE" --paths "$NG_PATHS" \
-  --json "$RUN_DIR/non-goals.json" 2>&1)" || ng_rc=$?
+NG_OUT="$("$PIPELINE_DIR/bean-forbids.sh" --bean "$BEAN_FILE" --paths "$NG_PATHS" \
+  --json "$RUN_DIR/bean-forbids.json" 2>&1)" || ng_rc=$?
 case "$ng_rc" in
   0) if grep -q 'declares none in machine-readable form' <<<"$NG_OUT"; then
        # Not a pass. The bean's non-goals are prose and nothing here looked at
        # them; saying "ok" without that word would claim a check that did not run.
-       note_or_ok="$(printf '%s' "$NG_OUT" | sed 's/^non-goals: //')"
-       ok "non-goals" "nothing to check — $note_or_ok"
+       note_or_ok="$(printf '%s' "$NG_OUT" | sed 's/^bean-forbids: //')"
+       ok "bean-forbids" "nothing to check — $note_or_ok"
      else
-       ok "non-goals" "$(printf '%s' "$NG_OUT" | sed 's/^non-goals: //')"
+       ok "bean-forbids" "$(printf '%s' "$NG_OUT" | sed 's/^bean-forbids: //')"
      fi ;;
-  1) bad "non-goals" "contradicts its own non-goal: $(printf '%s\n' "$NG_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
-  *) bad "non-goals" "could not be checked — $(printf '%s' "$NG_OUT" | head -1)" ;;
+  1) bad "bean-forbids" "contradicts its own non-goal: $(printf '%s\n' "$NG_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
+  *) bad "bean-forbids" "could not be checked — $(printf '%s' "$NG_OUT" | head -1)" ;;
 esac
 
 # ------------------------------------------- 4. every acceptance criterion claimed --

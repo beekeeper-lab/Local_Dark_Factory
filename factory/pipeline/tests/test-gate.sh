@@ -521,11 +521,11 @@ YAML
 mkdir -p src && printf 'GOOD\n' > src/a.py
 commit_all "task-ng-clean"
 out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/ng-bean.yaml" --policy factory/risk-policy.yaml --no-sandbox 2>&1)"
-check "a clean diff passes the check"  "non-goals" "$out"
-if [ "$(jq -r '.non_goals.checkable_rules' ai/runs/R/gate.json 2>/dev/null)" = "1" ]; then
+check "a clean diff passes the check"  "bean-forbids" "$out"
+if [ "$(jq -r '.bean_forbids.checkable_rules' ai/runs/R/gate.json 2>/dev/null)" = "1" ]; then
   printf '  ok    and the gate record counts the rule\n'; PASS=$((PASS+1))
 else
-  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.non_goals' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.bean_forbids' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
 fi
 
 printf '\n-- an import the bean forbids, inside a path it allows --\n\n'
@@ -539,10 +539,10 @@ out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/ng-bean.yaml" --poli
 check "the gate names the non-goal"    "no solver code" "$out"
 if [ "$rc" -ne 0 ]; then printf '  ok    and the gate fails\n'; PASS=$((PASS+1))
 else printf '  FAIL  a forbidden import left the gate green\n'; FAIL=$((FAIL+1)); fi
-if [ "$(jq -r '.non_goals.violations[0].kind' ai/runs/R/gate.json 2>/dev/null)" = "import" ]; then
+if [ "$(jq -r '.bean_forbids.violations[0].kind' ai/runs/R/gate.json 2>/dev/null)" = "import" ]; then
   printf '  ok    recorded as an import violation\n'; PASS=$((PASS+1))
 else
-  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.non_goals' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+  printf '  FAIL  gate.json non_goals: %s\n' "$(jq -c '.bean_forbids' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
 fi
 
 printf '\n-- a bean whose non-goals are prose is a note, not a pass --\n\n'

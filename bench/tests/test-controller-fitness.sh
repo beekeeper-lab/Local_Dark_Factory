@@ -116,7 +116,7 @@ printf '\n== not decidable, and not decidable FOR THIS BEAN ==\n\n'
 # reporting that as "the judge's actual job" hides a mechanism that exists.
 out="$(STUB_RC=0 cf --only contradicts-non-goal)"
 check "the closing text says which bean" "bean-001 declares no non-goal in" "$out"
-check "and that the mechanism exists"  "non-goals.sh" "$out"
+check "and that the mechanism exists"  "bean-forbids.sh" "$out"
 
 python3 - "$REPO/factory/bean.yaml" <<'PY'
 import sys

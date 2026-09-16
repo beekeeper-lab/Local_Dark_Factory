@@ -406,7 +406,11 @@ run from the working tree."
       good "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT"
     fi
 
-    # How much of the bean set's own non-goals a script can decide.
+    # How much of what the bean set forbids a script can decide.
+    #
+    # Both fields, because they are the same shape of statement: `non_goals` is
+    # what a bean is not for and `constraints` is what it may not do, and
+    # bean-002 has "no rule model" in one and "no solver imports" in the other.
     #
     # A non-goal about a PLACE is a statement about paths and imports, and those
     # are checkable; one about a concept is not. The judge was measured on
@@ -417,17 +421,17 @@ run from the working tree."
     while IFS= read -r by; do
       [ -f "$by" ] || continue
       bj="$("$PIPE/yaml2json.sh" "$by" 2>/dev/null)" || continue
-      t="$(jq '(.non_goals // []) | length' <<<"$bj" 2>/dev/null || echo 0)"
-      c="$(jq '[(.non_goals // [])[] | select(type == "object") | select(((.forbidden_paths // []) | length) > 0 or ((.forbidden_imports // []) | length) > 0)] | length' <<<"$bj" 2>/dev/null || echo 0)"
+      t="$(jq '((.non_goals // []) | length) + ((.constraints // []) | length)' <<<"$bj" 2>/dev/null || echo 0)"
+      c="$(jq '[((.non_goals // []) + (.constraints // []))[] | select(type == "object") | select(((.forbidden_paths // []) | length) > 0 or ((.forbidden_imports // []) | length) > 0)] | length' <<<"$bj" 2>/dev/null || echo 0)"
       NG_TOTAL=$((NG_TOTAL + t)); NG_CHECKABLE=$((NG_CHECKABLE + c))
       [ "${c:-0}" -gt 0 ] && NG_BEANS=$((NG_BEANS + 1))
     done < <(find "$TARGET_ROOT/factory/beans" -name bean.yaml 2>/dev/null)
     if [ "$NG_TOTAL" -eq 0 ]; then
-      say note "non-goals" "no bean declares any"
+      say note "bean forbids" "no bean declares a non-goal or a constraint"
     elif [ "$NG_CHECKABLE" -eq 0 ]; then
-      say note "non-goals" "$NG_TOTAL across the set, none machine-readable — every one is the audit's to judge, and the judge was measured missing this case 2 times in 3"
+      say note "bean forbids" "$NG_TOTAL across the set, none machine-readable — every one is the audit's to judge, and the judge was measured missing this case 2 times in 3"
     else
-      good "non-goals" "$NG_CHECKABLE of $NG_TOTAL machine-readable, across $NG_BEANS bean(s); the rest are prose and remain the audit's"
+      good "bean forbids" "$NG_CHECKABLE of $NG_TOTAL machine-readable, across $NG_BEANS bean(s); the rest are prose and remain the audit's"
     fi
 
     # Hidden tests: configured or not, and if configured, actually hidden.

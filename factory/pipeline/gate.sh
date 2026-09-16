@@ -322,7 +322,7 @@ fi
 # that judge was measured missing this exact case 2 times in 3.
 NON_GOALS="null"
 if [ "$SKIP_GATES" = 1 ]; then
-  note skip "non-goals" "--skip-gates"
+  note skip "bean-forbids" "--skip-gates"
 else
   # The diff, written here rather than reached for. orchestrate writes
   # $RUN_DIR/diff.txt for the doc step, and the gate runs before it — so reading
@@ -333,18 +333,18 @@ else
   git -C "$ROOT" diff "$MERGE_BASE"...HEAD > "$NG_DIFF" 2>/dev/null \
     || die "could not read the diff for the non-goal check; refusing to report that nothing is forbidden without having looked"
   ng_rc=0
-  ng_out="$("$PIPELINE_DIR/non-goals.sh" --bean "$BEAN_FILE" --diff "$NG_DIFF" \
-    --json "$RUN_DIR/non-goals.json" 2>&1)" || ng_rc=$?
+  ng_out="$("$PIPELINE_DIR/bean-forbids.sh" --bean "$BEAN_FILE" --diff "$NG_DIFF" \
+    --json "$RUN_DIR/bean-forbids.json" 2>&1)" || ng_rc=$?
   case "$ng_rc" in
     0) if grep -q 'declares none in machine-readable form' <<<"$ng_out"; then
-         note note "non-goals" "none in machine-readable form; the bean's are prose and remain the audit's"
+         note note "bean-forbids" "none in machine-readable form; the bean's are prose and remain the audit's"
        else
-         pass_part "non-goals" "$(printf '%s' "$ng_out" | sed 's/^non-goals: //')"
+         pass_part "bean-forbids" "$(printf '%s' "$ng_out" | sed 's/^bean-forbids: //')"
        fi ;;
-    1) fail_part "non-goals" "$(printf '%s\n' "$ng_out" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' - | cut -c1-120)" ;;
-    *) fail_part "non-goals" "could not be checked — $(printf '%s' "$ng_out" | head -1)" ;;
+    1) fail_part "bean-forbids" "$(printf '%s\n' "$ng_out" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' - | cut -c1-120)" ;;
+    *) fail_part "bean-forbids" "could not be checked — $(printf '%s' "$ng_out" | head -1)" ;;
   esac
-  [ -f "$RUN_DIR/non-goals.json" ] && NON_GOALS="$(cat "$RUN_DIR/non-goals.json")"
+  [ -f "$RUN_DIR/bean-forbids.json" ] && NON_GOALS="$(cat "$RUN_DIR/bean-forbids.json")"
 fi
 
 # --------------------------------------------- 7. tests the worker never saw --
@@ -399,7 +399,7 @@ jq -n \
     secret_scan: {suspicious_lines: ($secrets | if . == "" then [] else split("\n") end)},
     gates: $gates, acceptance_criteria: $acs, invariants: $inv,
     test_integrity: $ti,
-    hidden_tests: $ht, non_goals: $ng,
+    hidden_tests: $ht, bean_forbids: $ng,
     overall: (if $ok then "pass" else "fail" end),
     note:"gate_manifest names the image these gates ran in. Every \"the gates passed\" is a claim about a specific toolchain, and until 2026-09-15 this record did not say which one — the manifest pinned it and the result forgot it."}' > "$RESULT"
 

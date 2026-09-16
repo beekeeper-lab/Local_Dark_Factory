@@ -850,7 +850,7 @@ renamed heading to prove they bite. This one fixture has been silently wrong thr
 times in three different ways and the assertions are the only thing that makes a
 fourth different from the first three.
 
-## A bean's non-goals, decided by running something
+## What a bean forbids, decided by running something
 
 `non_goals` was a list of English sentences, checked by asking the judge. That
 judge accepts about half the seeded defects put in front of it, and
@@ -870,7 +870,7 @@ non_goals:
     forbidden_imports: [sqlite3, sqlalchemy, psycopg, pymongo, redis, shelve]
 ```
 
-`factory/pipeline/non-goals.sh`, 33 assertions. Checked twice, in two places that
+`factory/pipeline/bean-forbids.sh`, 33 assertions. Checked twice, in two places that
 ask different questions:
 
 - **spec-check**, over every task's `write_paths` — *before a model writes a line
@@ -904,7 +904,7 @@ make the line do anything the bean did not ask for — it can only refuse, and a
 wrong pattern is caught by spec-check immediately with the pattern printed. Each
 bean's non-goal text stays byte-identical; only `text:` plus the lists are added.
 
-`factory doctor` reports the split (`2 of 33 machine-readable` today), so progress
+`factory doctor` reports the split (`4 of 71` today, counting both fields), so progress
 through the set is visible without reading twenty files.
 
 **What annotating buys, measured**: `bench/controller-fitness.sh` against a bean
@@ -916,10 +916,21 @@ decided by the controller** for an annotated bean, against 2 of 5 this morning a
 the judge cannot accept by mistake, and it accepts about half of what it is
 shown.
 
-**The obvious extension, not built**: `constraints` are the same shape of
-statement — bean-002's "no solver imports" and "no persistence in this bean" are
-exactly `forbidden_imports` — and they are still prose. Same mechanism, one more
-field.
+### Constraints too, which is why the script is not called non-goals.sh
+
+`non_goals` is what a bean is not for; `constraints` is what it may not do. Same
+shape of statement, same mechanism, one script reading both and labelling which
+field each rule came from. bean-002 has "no rule model (bean-003)" in one and "no
+solver imports" in the other.
+
+**Four of bean-002's six statements are decided by running something**, where this
+morning all six were the judge's.
+
+The remaining extension, not built: a non-goal about a TYPE — "no rule model" in
+the sense of "no class called Rule" — is not expressible as a path, and bean-002's
+hidden tests check that one structurally instead. Whether that belongs in the bean
+as a third kind of rule, or stays where it is, is a design question and not an
+oversight.
 
 ## Queued for an idle pipeline
 
