@@ -332,6 +332,36 @@ for f in $EXPECTED; do
   fi
 done
 
+# Load the model at the context this role declares, before pi asks for it.
+#
+# pi has no context flag, so ollama serves whatever it was last asked for — and a
+# real run recorded `declared=65536 observed=262144`. The run record has been
+# honest about that since 2026-09-14 and unable to do anything about it. The API
+# does take `options.num_ctx` per request and the loaded instance keeps it, which
+# is why /api/ps reports the judge at exactly the number judge.sh asks for; so the
+# controller loads the model deliberately and pi reuses what is loaded.
+#
+# Advisory here, not fatal. If the server will not honour the context, the honest
+# outcome is the drift this already reports rather than a halted run — the step
+# can still do its work at another context, and `conditions.declared_matches_observed`
+# is where a reader finds out. FACTORY_ENSURE_LOADED=0 turns it off.
+# Only for a contained step, which is the only kind that is a real run.
+#
+# The first version preloaded unconditionally and the test suite went from two
+# minutes to over ten: every stubbed step asked ollama to load a 64GB model, on a
+# box where the GPU was busy with a measurement. Tests set
+# FACTORY_CONTAIN_WORKER=0 and the line refuses to run uncontained without an
+# explicit opt-out, so containment is the honest signal for "a model is actually
+# about to be asked something" — and preloading 64GB for a shell stub is wrong
+# whether or not a test is watching.
+if [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] && [ "$CONTAIN" = 1 ] \
+   && [ -x "$PIPELINE_DIR/ensure-loaded.sh" ]; then
+  el_rc=0
+  ROLES_FILE="$ROLES_FILE" "$PIPELINE_DIR/ensure-loaded.sh" "$ROLE" >&2 || el_rc=$?
+  [ "$el_rc" -ge 2 ] && printf 'WARN   %s   could not preload %s; the step runs at whatever context the server has\n' \
+    "$STEP" "$ROLE_MODEL" >&2
+fi
+
 if [ "$CONTAIN" = 1 ]; then
   GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
   GW_STARTED=0
