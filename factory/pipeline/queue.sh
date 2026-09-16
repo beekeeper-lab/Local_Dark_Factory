@@ -55,12 +55,24 @@ ROOT="$(repo_root)"
 
 # Every bean, as one JSON array. Read once: twenty yaml2json calls per question
 # is the sort of thing that makes a queue feel slow enough to skip.
+# A bean this cannot read is not a bean this may ignore.
+#
+# The first version did `|| continue` on a failed parse and on a missing id, so a
+# malformed bean.yaml simply vanished from the queue — no row, no reason, and
+# nothing anywhere saying a file under factory/beans/ had been skipped. That is
+# failing open against §04: the gate is "a human approved this", and a bean whose
+# status cannot be read has not been approved, it has been lost. It gets a row,
+# and `factory go` refuses it like any other non-approved bean.
 ALL='[]'
 for d in "$BEANS"/*/; do
   b="$d/bean.yaml"
   [ -f "$b" ] || continue
-  bj="$("$PIPELINE_DIR/yaml2json.sh" "$b" 2>/dev/null)" || continue
-  [ -n "$(jq -r '.id // empty' <<<"$bj")" ] || continue
+  if ! bj="$("$PIPELINE_DIR/yaml2json.sh" "$b" 2>/dev/null)" || [ -z "$(jq -r '.id // empty' <<<"$bj" 2>/dev/null)" ]; then
+    ALL="$(jq -c --arg path "$b" --arg id "$(basename "${d%/}")" \
+      '. + [{id: $id, title: "", status: "unreadable", order: null, deps: [],
+             tier: null, path: $path, parse_error: true}]' <<<"$ALL")"
+    continue
+  fi
   ALL="$(jq -c --argjson x "$bj" --arg path "$b" \
     '. + [{id: $x.id, title: ($x.title // ""), status: ($x.status // "unknown"),
            order: ($x.approval.order // null), deps: ($x.dependencies // []),
@@ -103,7 +115,9 @@ while IFS= read -r id; do
   status="$(jq -r '.status' <<<"$row")"
   state=""; why=""
 
-  if [ "$status" != approved ]; then
+  if [ "$(jq -r '.parse_error // false' <<<"$row")" = true ]; then
+    state=refused; why="$(jq -r '.path' <<<"$row") could not be read as a bean"
+  elif [ "$status" != approved ]; then
     # The rule that matters. Not "skipped" — refused, and the record says so.
     state=refused; why="status is '$status', not approved"
   else

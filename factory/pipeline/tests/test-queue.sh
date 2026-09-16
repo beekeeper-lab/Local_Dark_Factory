@@ -94,6 +94,23 @@ eq "it is blocked"                "blocked" \
 check "by the draft, named"       "bean-004(draft)" "$out"
 
 # --------------------------------------------------------------------------
+printf '\n-- a bean nobody can parse is refused, not lost --\n\n'
+#
+# `|| continue` on a failed parse made a malformed bean.yaml vanish: no row, no
+# reason, nothing anywhere saying a file under factory/beans/ had been skipped.
+# That is failing open against §04 — the gate is "a human approved this", and a
+# bean whose status cannot be read has not been approved, it has been lost.
+mkdir -p "$REPO/factory/beans/bean-099-broken"
+printf 'schema_version: bean/2.0.0\nid: bean-099\n  this: is not valid yaml: [\n' \
+  > "$REPO/factory/beans/bean-099-broken/bean.yaml"
+out="$(q --all)"
+check "the unreadable bean has a row"  "bean-099-broken" "$out"
+check "and says it could not be read"  "could not be read as a bean" "$out"
+eq "its state is refused"              "refused" \
+   "$(jq -r '.beans[] | select(.status == "unreadable" or .status == "no id") | .state' <<<"$(qj)" | head -1)"
+nope "and it is never ready"           "bean-099" "$(jq -c '.ready' <<<"$(qj)")"
+rm -rf "$REPO/factory/beans/bean-099-broken"
+
 printf '\n== building one unblocks exactly the next ==\n\n'
 built bean-001
 out="$(q --all)"
