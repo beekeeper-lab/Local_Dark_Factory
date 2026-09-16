@@ -52,7 +52,8 @@ thing that makes two of them comparable.
 
 | file | provenance | still load-bearing? |
 | --- | --- | --- |
-| `reaudit-20260916T163000Z.json` | yes (names run, bean, passes, thinking) | **yes** — the current configuration, measured: 12 audits, 8 judgements, 0 stamped, every answer carrying exactly four criteria. The baseline the next grammar change has to beat |
+| `reaudit-20260916T163000Z.json` | yes | superseded by 173000Z — 12 audits, 8 judgements, 0 stamped, 2 of 8 answers with duplicate criterion ids |
+| `reaudit-20260916T173000Z.json` | yes | **yes** — the current configuration: `criteria` keyed by id. 12 audits, 7 judgements, 0 stamped, **0 duplicates**. The baseline the next change has to beat, and the one that says the remaining blocker is the quote |
 
 The baselines it has to be read against are terminal logs rather than JSON,
 because `factory reaudit` did not exist when they were taken:
