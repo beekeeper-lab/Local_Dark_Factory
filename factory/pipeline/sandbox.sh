@@ -7,7 +7,10 @@
 #   the tree is the only writable mount   --volume <tree>:/work:rw,Z (+ a small tmpfs,
 #                                          because a read-only rootfs otherwise breaks
 #                                          every tool that writes a temp file)
-#   no container socket, no SSH agent     nothing is mounted but the tree
+#   no container socket, no SSH agent     nothing is mounted but the tree, and
+#                                          whatever --mount-ro was explicitly
+#                                          asked for (read-only, never inside the
+#                                          tree, never over /work or a system path)
 #   scrubbed environment                  podman passes no host env; we pass four
 #                                          variables and assert nothing else arrived
 #   dropped capabilities, no-new-privs    --cap-drop=ALL --security-opt=no-new-privileges
@@ -52,6 +55,13 @@ usage:
   --out <file>       write the captured output here (default: stdout)
   --env K=V          pass one extra variable (repeatable); refused for anything
                      that looks like a credential
+  --mount-ro H:C     mount host directory H read-only at container path C
+                     (repeatable). For material the command must run against but
+                     must not be able to change, and which does not belong in the
+                     repository: hidden tests are the reason this exists. Refused
+                     if H is inside --tree (then it is not hidden from anything
+                     that can read the tree), if C would shadow /work or a system
+                     directory, or if H is not a directory that exists.
 
 Exit: the command's own status, or 5 when the sandbox refused to run it.
 EOF
@@ -60,6 +70,7 @@ EOF
 TREE=""; IMAGE=""; GATES=""; NETWORK="none"; TIMEOUT=900
 MEMORY="4g"; CPUS="4"; PIDS="256"; MAX_OUTPUT=1000000; OUT=""; CHECK=0
 EXTRA_ENV=()
+MOUNTS_RO=()
 CMD=()
 
 while [ $# -gt 0 ]; do
@@ -75,6 +86,7 @@ while [ $# -gt 0 ]; do
     --max-output) MAX_OUTPUT="${2:?--max-output needs bytes}"; shift 2 ;;
     --out)        OUT="${2:?--out needs a path}"; shift 2 ;;
     --env)        EXTRA_ENV+=( "${2:?--env needs K=V}" ); shift 2 ;;
+    --mount-ro)   MOUNTS_RO+=( "${2:?--mount-ro needs HOSTDIR:CONTAINERPATH}" ); shift 2 ;;
     --check)      CHECK=1; shift ;;
     -h|--help)    usage; exit 0 ;;
     --version)    cat "$PIPELINE_DIR/VERSION"; exit 0 ;;
@@ -86,6 +98,46 @@ done
 refuse() { printf 'sandbox: REFUSED — %s\n' "$*" >&2; exit "$REFUSED_RC"; }
 
 command -v podman >/dev/null 2>&1 || refuse "podman is not installed; the sandbox is not optional"
+
+# -- extra read-only mounts ------------------------------------------------------
+# The header above says "nothing is mounted but the tree", and this is the one
+# exception, so it is bounded here rather than at the call site. Every clause is a
+# way the exception could quietly become a hole:
+#
+#   inside the tree      then it is readable by anything that can read /work, and
+#                        for hidden tests that is the entire point defeated.
+#   over /work           a mount at or under /work shadows the code under test;
+#                        the tests would run against the mount, not the work.
+#   over a system path   the image is pinned so that what runs is known; mounting
+#                        over /usr or /etc makes the pin a statement about nothing.
+#   read-write           there is exactly one writable mount and it is the tree.
+#
+# It is never inferred: no --mount-ro, no extra mount.
+MOUNT_ARGS=()
+for m in ${MOUNTS_RO+"${MOUNTS_RO[@]}"}; do
+  case "$m" in
+    *:*) ;;
+    *) refuse "--mount-ro wants HOSTDIR:CONTAINERPATH, got '$m'" ;;
+  esac
+  mh="${m%%:*}"; mc="${m#*:}"
+  [ -d "$mh" ] || refuse "--mount-ro source is not a directory: $mh"
+  mh="$(cd "$mh" && pwd)"
+  case "$mc" in
+    /*) ;;
+    *) refuse "--mount-ro target must be an absolute container path, got '$mc'" ;;
+  esac
+  case "$mc" in
+    /work|/work/*|/|/tmp|/tmp/*|/proc/*|/sys/*|/dev/*|/etc|/etc/*|/usr|/usr/*|/bin*|/sbin*|/lib*|/var|/var/*|/home|/home/*|/run|/run/*|/root|/root/*)
+      refuse "--mount-ro target '$mc' would shadow the tree or a system path" ;;
+  esac
+  if [ -n "$TREE" ] && [ -d "$TREE" ]; then
+    tree_abs="$(cd "$TREE" && pwd)"
+    case "$mh/" in
+      "$tree_abs"/*) refuse "--mount-ro source $mh is inside the tree; anything that can read /work can already read it" ;;
+    esac
+  fi
+  MOUNT_ARGS+=( --volume "$mh:$mc:ro,Z" )
+done
 
 # -- the image -------------------------------------------------------------------
 if [ -z "$IMAGE" ]; then
@@ -147,6 +199,17 @@ if [ "$CHECK" = 1 ]; then
   [ -n "$TREE" ] && printf '  .git in tree    absent (asserted)\n'
   printf '  network         %s\n' "$NETWORK"
   printf '  rootfs          read-only; %s is the only writable mount (plus a 64m tmpfs at /tmp)\n' "${TREE:-<tree>}"
+  # A contract report that does not list the exception is a contract report that
+  # lies by omission, and --check is what a reader trusts instead of reading this
+  # file.
+  if [ "${#MOUNT_ARGS[@]}" -gt 0 ]; then
+    for ma in "${MOUNT_ARGS[@]}"; do
+      case "$ma" in --volume) continue ;; esac
+      printf '  extra mount     %s (read-only, outside the tree)\n' "$ma"
+    done
+  else
+    printf '  extra mounts    none\n'
+  fi
   printf '  capabilities    all dropped, no-new-privileges\n'
   printf '  limits          %s memory · %s cpus · %s pids · %ss wall · %s bytes output\n' \
     "$MEMORY" "$CPUS" "$PIDS" "$TIMEOUT" "$MAX_OUTPUT"
@@ -192,6 +255,7 @@ RUN_ARGS=(
   # read on Fedora and the failure looks exactly like a broken command, which is
   # the most expensive kind of sandbox bug: it blames the worker.
   --volume "$TREE:/work:rw,Z"
+  ${MOUNT_ARGS+"${MOUNT_ARGS[@]}"}
   --tmpfs "/tmp:rw,size=64m,mode=1777"
   --workdir /work
   --cap-drop=ALL

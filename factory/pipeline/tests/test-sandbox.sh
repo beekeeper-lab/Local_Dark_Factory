@@ -141,6 +141,42 @@ out="$(bash "$PIPELINE_DIR/sandbox.sh" --check --tree "$TREE" --gates "$GATES" 2
 check "it names the pinned image"      "@sha256:" "$out"
 check "it asserts git is absent"       "git in image    absent (asserted)" "$out"
 check "it names the limits"            "capabilities    all dropped" "$out"
+check "and says there are no extra mounts" "extra mounts    none" "$out"
+
+printf '\n== --mount-ro is the one exception, and it is bounded ==\n\n'
+#
+# The header of sandbox.sh says "nothing is mounted but the tree". Hidden tests
+# need one exception: material the gate must run against and the worker must not
+# be able to read. Every clause below is a way that exception could quietly
+# become a hole, so each is a refusal rather than a warning.
+HMNT="$WORK/outside"; rm -rf "$HMNT"; mkdir -p "$HMNT"
+sbc() { bash "$PIPELINE_DIR/sandbox.sh" --check --tree "$TREE" --gates "$GATES" "$@" 2>&1; }
+
+out="$(sbc --mount-ro "$HMNT:/hidden")"
+check "a directory outside the tree is allowed" "extra mount" "$out"
+check "and it is mounted read-only"    ":ro" "$out"
+
+# Inside the tree: then anything that can read /work can already read it, which
+# for hidden tests is the entire point defeated.
+mkdir -p "$TREE/inside"
+out="$(sbc --mount-ro "$TREE/inside:/hidden")"
+check "inside the tree is refused"     "is inside the tree" "$out"
+check "and says why that matters"      "can already read it" "$out"
+
+# Over /work: the tests would run against the mount instead of the work.
+out="$(sbc --mount-ro "$HMNT:/work/hidden")"
+check "a target under /work is refused" "would shadow the tree" "$out"
+out="$(sbc --mount-ro "$HMNT:/usr/lib")"
+check "and so is a system path"        "would shadow the tree or a system path" "$out"
+
+# A source that is not there is a refusal, not an empty mount: an empty hidden
+# suite that reports success reads exactly like a check that passed.
+out="$(sbc --mount-ro "$WORK/not-here:/hidden")"
+check "a missing source is refused"    "source is not a directory" "$out"
+out="$(sbc --mount-ro "$HMNT")"
+check "and a malformed spec is too"    "wants HOSTDIR:CONTAINERPATH" "$out"
+out="$(sbc --mount-ro "$HMNT:hidden")"
+check "a relative target is refused"   "must be an absolute container path" "$out"
 
 printf '\n== no .git reaches the sandbox, at any depth ==\n\n'
 #

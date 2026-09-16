@@ -697,7 +697,38 @@ Write the end-to-end test before the next long real run, not after it.
 - **`OLLAMA_CONTEXT_LENGTH` is system-wide** and affects the user's other projects. Left
   alone deliberately; the contained worker sets its own context in the mounted
   `models.json` instead.
-- **Hidden tests** are in the gate's design and not built.
+- ~~**Hidden tests** are in the gate's design and not built.~~ **Built 2026-09-16.**
+  `factory/pipeline/hidden-tests.sh`, wired into `gate.sh` as section 7, 34
+  assertions. Configure with a `hidden_tests` block in the pipeline config:
+
+  ```json
+  "hidden_tests": {
+    "dir": "/somewhere/outside/the/repo",
+    "command": ["pytest", "-q"],
+    "mount_at": "/hidden",
+    "results_dir": "<default: a hidden-test-results dir beside dir>"
+  }
+  ```
+
+  Two properties, and the second is the one that is easy to lose:
+
+  1. **Where they live.** The worker mounts the whole tree at `/work`, so a test
+     in the repo is a test it can read, and code written against visible
+     assertions satisfies exactly those. A `dir` inside the repo is refused —
+     twice, once here and once by `sandbox.sh --mount-ro`, which also refuses a
+     target over `/work` or a system path.
+  2. **What comes back.** The run directory is *also* in the repo. So the full
+     output goes to `results_dir`, outside it, and `hidden-tests.json` carries
+     counts only: no names, no assertions, no output. That bounds the judge too,
+     whose findings reach the worker as `feedback_to_worker`.
+
+  Exit 3 (not configured) is a note, never a pass. Exit 2 (could not run) is a
+  gate FAILURE — a missing directory, an empty suite, or a sandbox refusal
+  arriving as silence is the fail-open this project keeps finding.
+
+  **No hidden suite exists for seating-planner-py yet**, so the gate records
+  `not configured`. Writing one is a human job: they have to be written from the
+  bean's acceptance criteria by someone who is not the worker.
 - **Eleven figures in `bench/results/` carry no provenance block.** They were
   measured before `bench/provenance.sh` existed, and writing one in now would be
   inventing it. The cause is fixed — every harness emits one, and a new

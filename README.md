@@ -49,6 +49,8 @@ The controller decides; the models write. Anything decidable by running somethin
 
 Both the worker and the verification gates run in containers with no network at all. The worker reaches exactly one model endpoint, over a unix socket bridged to a single address — there is no route to widen. See `RESUME.md` for what that cost and why it is built the way it is.
 
+One check is not in the repository at all. `allowed_write_paths` stops the worker writing the tests it will be measured by; nothing stops it reading them, and code written against visible assertions satisfies exactly those. `hidden_tests` in the pipeline config names a directory **outside** the repo — refused if it is inside — mounted read-only into the gate container at a path the worker never had. What comes back is a count: no names, no assertions, no output, and the full log is written outside the repo too, because the run directory is in it.
+
 | File | Role |
 | --- | --- |
 | `dark-factory-guide.html` | The specification (v5). Open in a browser. |

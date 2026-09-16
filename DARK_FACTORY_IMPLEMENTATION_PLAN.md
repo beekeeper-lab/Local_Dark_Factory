@@ -308,16 +308,28 @@ re-runnable audit, and a bean set approved to run against.
       `verify.sh`, `contain.py`, `factory-build-task`. What Phase 1 still has to prove
       is the loop with the **real** developer model on the other end; "in the gate
       container" waits on the sandbox.)*
-- [~] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
+- [x] `factory step gate` — full containment, tier computation, all gates + AC verifies + invariants + hidden tests + integrity checks
   > **Built,** with `tests/test-gate.sh` (44 assertions) and a run through the
-  > full-line test. `test_integrity` is new and real: the source half of the diff
-  > is reverted in a copy of the tree and the tests must stop passing, with a
-  > control run first so a missing binary cannot masquerade as a test doing its
-  > job. Hidden tests are still absent.
-      *(built and tested: `gate.sh` does containment, tier, size budget, secret scan, gates,
-      AC verifies and invariants, in the sandbox. **Hidden tests vs baseline and the
-      test-integrity counts are not built** — they need a baseline snapshot the controller
-      keeps, which is Phase-2 work.)*
+  > full-line test. `test_integrity` is real: the source half of the diff is
+  > reverted in a copy of the tree and the tests must stop passing, with a control
+  > run first so a missing binary cannot masquerade as a test doing its job. Its
+  > counts — deleted tests, new skips, assertions removed vs added — come from the
+  > diff text and say so.
+  >
+  > **Hidden tests landed 2026-09-16** (`hidden-tests.sh`, 34 assertions). Every
+  > other check in this line runs code the worker could read; `allowed_write_paths`
+  > stops it writing the tests and nothing stops it reading them. So the hidden
+  > suite lives outside the repository — refused if it is inside, because the
+  > worker mounts the tree whole — and `sandbox.sh --mount-ro` puts it into the
+  > gate container read-only at a path the worker never had, refusing a source
+  > inside the tree or a target over /work or a system path.
+  >
+  > The harder half is what comes back. The run directory is in the repo, so the
+  > full output goes outside it and the record carries counts: no names, no
+  > assertions, no output. That also bounds the judge, whose findings reach the
+  > worker as `feedback_to_worker`. Not-configured is exit 3 and a note, never a
+  > pass; could-not-run is a gate failure, because "they did not run" arriving as
+  > silence is the fail-open shape this project keeps finding.
 - [x] `factory step commit` — implementation candidate; `diff_sha256`, `gate_run_id`
   > The build loop commits per verified task, which is the implementation candidate:
   > `every_handoff_is_commit` in `bench/phase1-audit.sh` checks that the branch carries

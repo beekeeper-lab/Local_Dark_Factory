@@ -220,7 +220,7 @@ else
 fi
 
 # --------------------------------------------- 5. gates, AC, and invariants --
-GATE_ROWS="[]"; AC_ROWS="[]"; INV_ROW="null"
+GATE_ROWS="[]"; AC_ROWS="[]"; INV_ROW="null"; TREE=""
 if [ "$SKIP_GATES" = 1 ]; then
   note skip "gates" "--skip-gates"
 else
@@ -309,6 +309,34 @@ else
   [ -f "$RUN_DIR/test-integrity.json" ] && TEST_INTEGRITY="$(cat "$RUN_DIR/test-integrity.json")"
 fi
 
+# --------------------------------------------- 7. tests the worker never saw --
+# Everything above runs code the worker could read. `allowed_write_paths` stops it
+# writing the tests; nothing stops it reading them, and code written against
+# visible assertions satisfies those assertions. These do not live in the tree.
+#
+# not_configured is a note, not a pass: a repo with no hidden suite and a repo
+# whose hidden suite passed are different facts. could_not_run is a FAILURE,
+# because "the hidden tests did not run" reaching the audit as silence is the
+# whole fail-open shape this line keeps finding.
+HIDDEN_TESTS="null"
+if [ "$SKIP_GATES" = 1 ]; then
+  note skip "hidden tests" "--skip-gates"
+else
+  ht_args=( "$RUN_DIR" )
+  [ "$SANDBOX" = 1 ] && ht_args+=( --sandbox --gates "$GATES" --tree "$TREE" )
+  ht_args+=( ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} )
+  ht_rc=0
+  "$PIPELINE_DIR/hidden-tests.sh" "${ht_args[@]}" > "$RUN_DIR/hidden-tests.out" 2>&1 || ht_rc=$?
+  ht_why="$(jq -r '.why // "see hidden-tests.out"' "$RUN_DIR/hidden-tests.json" 2>/dev/null)"
+  case "$ht_rc" in
+    0) pass_part "hidden tests" "$ht_why" ;;
+    3) note note "hidden tests" "none configured for this repository" ;;
+    2) fail_part "hidden tests" "could not run — $ht_why" ;;
+    *) fail_part "hidden tests" "$ht_why" ;;
+  esac
+  [ -f "$RUN_DIR/hidden-tests.json" ] && HIDDEN_TESTS="$(cat "$RUN_DIR/hidden-tests.json")"
+fi
+
 # ------------------------------------------------------------------ record --
 jq -n \
   --arg schema "gate-run/1.0.0" \
@@ -320,6 +348,7 @@ jq -n \
   --argjson tier "$TIER_JSON" \
   --argjson gates "$GATE_ROWS" --argjson acs "$AC_ROWS" --argjson inv "$INV_ROW" \
   --arg secrets "$SECRETS" --argjson ti "$TEST_INTEGRITY" \
+  --argjson ht "$HIDDEN_TESTS" \
   --argjson ok "$([ "$FAILED" -eq 0 ] && echo true || echo false)" \
   --arg gates_ref "$(realpath --relative-to="$ROOT" "$GATES" 2>/dev/null || printf '%s' "$GATES")" \
   --arg gate_image "$("$PIPELINE_DIR/yaml2json.sh" "$GATES" 2>/dev/null | jq -r '.image // ""')" \
@@ -332,6 +361,7 @@ jq -n \
     secret_scan: {suspicious_lines: ($secrets | if . == "" then [] else split("\n") end)},
     gates: $gates, acceptance_criteria: $acs, invariants: $inv,
     test_integrity: $ti,
+    hidden_tests: $ht,
     overall: (if $ok then "pass" else "fail" end),
     note:"gate_manifest names the image these gates ran in. Every \"the gates passed\" is a claim about a specific toolchain, and until 2026-09-15 this record did not say which one — the manifest pinned it and the result forgot it."}' > "$RESULT"
 
