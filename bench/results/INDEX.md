@@ -38,21 +38,25 @@ not about the code.
 | `judge-fitness-fixedfixtures-20260915T131308Z.json` | no | no — superseded by the three-pass runs |
 | `judge-fitness-20260916T001225Z.json` | yes | superseded — 12000 cap, `thinking: medium` |
 | `judge-fitness-20260916T130042Z.json` | yes | **yes** — the 16000 half of the token-cap decision (0 of 18 cut off) |
-| `judge-variance-20260915T134814Z.json` | no | **yes, and this is the uncomfortable one** — the whole "the judge is not reproducible" finding rests on it. Two verdicts from five identical runs at temperature 0. It has no provenance block and it is the single most consequential figure in the directory |
+| `judge-variance-20260915T134814Z.json` | no | **the finding it carries has been partly overtaken** — two verdicts from five identical runs at temperature 0, which is where "the judge is not reproducible" came from. See 142555Z, which asked the same case again after the cap and prompt changed and got one verdict five times. Kept as the before half, and still the reason the older figure's missing provenance mattered |
+| `judge-variance-20260916T142555Z.json` | yes | **yes** — same case, 16000 cap, `met` defined per target, thinking low: **1 distinct verdict across 5 identical runs**, where the 2026-09-15 run gave 2. Not enough to reopen advisory audits: one case, three variables changed at once, and the content still swings (findings 4/0/4/3/1, confidence 0.5–0.99, the seeded defect named in none of the five) |
 | `size-sweep-20260915T134814Z.json` | no | superseded by 100658Z |
 | `size-sweep-20260916T100658Z.json` | yes | **yes** — three passes at four sizes, and the finding that it cannot answer the byte-budget question |
 
 ## What is missing, and why it is not being back-filled
 
-Eleven files carry no provenance. Only two of them still carry a claim:
-`judge-fitness-gemma4` and `judge-variance-20260915T134814Z`. The gemma4 rejection
-has a second, independent measurement behind it. The variance finding does not.
+Eleven files carry no provenance. One of them still carries a claim on its own:
+`judge-fitness-gemma4`, the gemma4 rejection — and that has a second, independent
+measurement behind it (`format-support-20260916T111754Z`, which rejects the same
+model on a different axis), so the decision stands on something that says where it
+was measured.
 
-Re-measuring variance is ~25 minutes of GPU and is worth doing; the reason it has
-not simply been re-run and the old file forgotten is that the conclusion drawn
-from it — advisory audits, `merge_mode: human_required` — is load-bearing for the
-whole line, and a finding that important should rest on a figure that says which
-machine and which ollama produced it.
+`judge-variance-20260915T134814Z` was the other, and it was re-measured on
+2026-09-16 (`142555Z`, with provenance) because the conclusion drawn from it —
+advisory audits, `merge_mode: human_required` — is load-bearing for the whole
+line. The re-measurement changed the answer on that case: one verdict five times
+where there had been two. It did **not** change the decision, and the reasons are
+on the row.
 
 The rest are experiments whose conclusions were superseded by later work. They are
 kept because the later work is only legible next to them.

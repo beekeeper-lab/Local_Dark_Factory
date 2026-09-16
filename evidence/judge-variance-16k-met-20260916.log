@@ -1,0 +1,16 @@
+bench snapshot: /tmp/factory-bench.qhoG55/bench
+
+judge variance — case criterion-not-really-met, 5 runs, identical input (sha 14fa569cd3c0fa50)
+
+RUN   VERDICT   NAMED   SECONDS NOTE
+1     revise    no      382     4 finding(s), confidence 0.92
+2     revise    no      180     0 finding(s), confidence 0.5
+3     revise    no      194     4 finding(s), confidence 0.99
+4     revise    no      443     3 finding(s), confidence 0.85
+5     revise    no      206     1 finding(s), confidence 0.9
+
+1 distinct verdict(s) across 5 identical runs: revise
+
+Reproducible on this case. A single run means something here.
+/tmp/factory-bench.qhoG55/bench/results/judge-variance-20260916T142555Z.json
+RC=0

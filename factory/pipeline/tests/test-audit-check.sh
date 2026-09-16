@@ -121,7 +121,11 @@ check "and it now reads PASS"      '"verdict":"PASS"' "$(tr -d ' ' < factory/run
 
 printf '\n== a revise is a failure the driver can route ==\n\n'
 rm -f "$V"/spec.attempt-*
-judgement "$(jq -c '. + {verdict:"revise", feedback_to_worker:"name a test that can fail"}' <<<"$BASE")"
+# With a finding, because a revise carrying none is refused — and rightly: it is
+# routed back into the authoring step, and with nothing attached the step is
+# asked the identical question again.
+judgement "$(jq -c '. + {verdict:"revise", feedback_to_worker:"name a test that can fail",
+  findings:[{severity:"major", summary:"the only named test cannot fail", evidence:"it asserts its own fixture"}]}' <<<"$BASE")"
 out="$(run_check)"; rc=$?
 check "it reports revise"          "AUDIT spec   revise" "$out"
 want  "and exits non-zero"         "a revise must not read as success" test "$rc" -ne 0
@@ -247,10 +251,125 @@ printf 'E   AssertionError: expected 3 but the function returned 4\n' \
   > factory/runs/R/build/task-1/attempt-1/verify-1.log
 judgement '{"verdict":"revise","confidence":0.8,
   "criteria":[{"id":"ac1","met":false,"evidence":"the check failed and says why","quote":"AssertionError: expected 3 but the function returned 4"}],
-  "findings":[]}'
+  "findings":[{"severity":"major","summary":"the check fails","evidence":"AssertionError: expected 3 but the function returned 4"}]}'
 out="$(run_check)"
 check "the deep quote is verified"  "quote(s) verified" "$out"
 nope  "and is not called invented"  "could not be found" "$out"
+
+printf '\n== the judgement reports on every criterion, and invents none ==\n\n'
+#
+# judge.sh puts the bean's criteria in the prompt by id and says "one entry per
+# line, using exactly these ids". Nothing read that back. Both halves are
+# measured failure modes of this model:
+#
+#   too few  — bean-001's doc audit came back `accept` with zero criteria for a
+#              bean with four, and the only thing that refused it was the quote
+#              check, by accident: a judgement with no criteria has no quotes.
+#   invented — without the id list in the prompt, this judge reported against
+#              criteria nobody asked about ("C001: the spec must be valid JSON").
+#
+# A two-criterion bean, so "reported on one of them" is expressible.
+cat > factory/beans/bean.yaml <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: e/x
+title: t
+intent: i
+status: approved
+allowed_write_paths: ["src/**"]
+acceptance_criteria:
+  - id: ac1
+    text: a exists
+    verify: { kind: command, run: ["true"] }
+  - id: ac2
+    text: b exists
+    verify: { kind: command, run: ["true"] }
+suggested_risk_tier: 1
+definition_of_done: ["ac1"]
+YAML
+Q='allowed_write_paths: ["src/**"]'
+two='{"schema_version":"judgement/1.0.0","stage":"spec_audit","target":"spec","verdict":"accept","confidence":0.9,"findings":[],
+ "document_quality":{"risk_called_out":true,"blast_radius_called_out":true,"code_blocks_teach":true,"no_assumed_stack_knowledge":true,"matches_diff":true},
+ "criteria":[{"id":"ac1","met":true,"evidence":"e","quote":"allowed_write_paths: [\"src/**\"]"},
+             {"id":"ac2","met":true,"evidence":"e","quote":"allowed_write_paths: [\"src/**\"]"}]}'
+judgement "$two"
+out="$(run_check)"; rc=$?
+want  "all of them is accepted"        "expected 0, got $rc" test "$rc" -eq 0
+check "and it says so"                 "all 2 criterion(s) reported on, none invented" "$out"
+
+printf '\n-- a verdict over some of them is not a verdict --\n\n'
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.criteria = [.criteria[0]]' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "it is refused"                  "expected 1, got $rc" test "$rc" -eq 1
+check "and names the one skipped"      "not reported on: ac2" "$out"
+check "and says what that shape is"    "the ones nobody looked at are the ones that were wrong" "$out"
+want  "the judgement is kept"          "a rejected judgement should be on disk"       test -s "$V/spec.attempt-1.json.rejected"
+want  "but no verdict is stamped"      "nothing may be stamped from it" test ! -f "$V/spec.attempt-1.json"
+
+printf '\n-- and a criterion the bean never declared --\n\n'
+judgement "$(jq -c '.criteria += [{id:"C001", met:true, evidence:"e", quote:"allowed_write_paths: [\"src/**\"]"}]' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "it is refused"                  "expected 1, got $rc" test "$rc" -eq 1
+check "and names the invention"        "reported on, but not in the bean: C001" "$out"
+check "and what the bean actually has" "bean-001 declares: ac1 ac2" "$out"
+
+printf '\n-- and an abstention is held to the same list --\n\n'
+#
+# The first version of this check exempted abstentions, reasoning that a judge
+# which cannot form a judgement should not be made to work through a list. The
+# exemption permitted nothing: verdict.schema.json already requires `criteria` to
+# be non-empty for every verdict, so the abstention was refused three lines later
+# with "criteria: [] should be non-empty" — the same outcome, from a message that
+# does not say which criteria. One rule, and the legible message.
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.verdict = "abstain" | .criteria = []' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "it is refused"                  "expected 1, got $rc" test "$rc" -eq 1
+check "by the criteria check"          "not reported on: ac1 ac2" "$out"
+nope  "not by the schema, later"       "should be non-empty" "$out"
+
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.verdict = "abstain"' <<<"$two")"
+out="$(run_check)"; rc=$?
+# 7, which is audit-check's code for "the judge abstained": not a pass, not a
+# revise, and routed to a human. The point here is that the criteria check did
+# not stand in its way.
+want  "an abstention that reports on all of them stands" "expected 7, got $rc: $out" test "$rc" -eq 7
+check "and still goes to a human"      "this goes to a human, not to a retry" "$out"
+
+printf '\n== a revise with nothing to revise is not a verdict ==\n\n'
+#
+# orchestrate re-enters the authoring step WITH the findings — that is the only
+# way an audit changes anything. A revise carrying none asks the identical
+# question again, burns an attempt, and the second failure halts the run for a
+# human whose only information is "the judge said revise".
+#
+# Not hypothetical: judge-variance, five identical runs at temperature 0, came
+# back `revise` every time with findings counts of 4, 0, 4, 3 and 1.
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.verdict = "revise" | .findings = []' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "it is refused"                  "expected 1, got $rc" test "$rc" -eq 1
+check "and says what findings are for" "routed back into the authoring step carrying its findings" "$out"
+check "and what to say instead"        "the verdict is \"abstain\"" "$out"
+
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.verdict = "block" | .findings = []' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "and so is a block with none"    "expected 1, got $rc" test "$rc" -eq 1
+
+# An abstention is the escape hatch, so it must not be caught by this.
+rm -f "$V/spec.attempt-1.json"
+judgement "$(jq -c '.verdict = "abstain" | .findings = []' <<<"$two")"
+out="$(run_check)"; rc=$?
+want  "an abstention with none stands" "expected 7, got $rc: $out" test "$rc" -eq 7
+
+# And an accept with none is the normal happy path.
+rm -f "$V/spec.attempt-1.json"
+judgement "$two"
+out="$(run_check)"; rc=$?
+want  "an accept with none is fine"    "expected 0, got $rc: $out" test "$rc" -eq 0
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

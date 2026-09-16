@@ -1,0 +1,61 @@
+{
+  "schema": "judge-variance/2.0.0",
+  "measured_at": "2026-09-16T14:49:20Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T14:49:21Z",
+    "pipeline_version": "1.2.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "case": "criterion-not-really-met",
+  "judge": {
+    "model": "gpt-oss:120b",
+    "thinking": "low",
+    "num_predict": 16000
+  },
+  "input_sha": "14fa569cd3c0fa50",
+  "runs": [
+    {
+      "run": 1,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 382,
+      "note": "4 finding(s), confidence 0.92"
+    },
+    {
+      "run": 2,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 180,
+      "note": "0 finding(s), confidence 0.5"
+    },
+    {
+      "run": 3,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 194,
+      "note": "4 finding(s), confidence 0.99"
+    },
+    {
+      "run": 4,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 443,
+      "note": "3 finding(s), confidence 0.85"
+    },
+    {
+      "run": 5,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 206,
+      "note": "1 finding(s), confidence 0.9"
+    }
+  ],
+  "distinct_verdicts": 1,
+  "reproducible": true,
+  "note": "Identical input every run: same spec, same task list, same prompt, temperature 0. Any difference between rows is the model, not the question."
+}

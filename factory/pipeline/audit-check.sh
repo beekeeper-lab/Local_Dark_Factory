@@ -134,10 +134,92 @@ if [ "$VERDICT" = "accept" ] && awk -v c="$CONF" -v f="$CONF_FLOOR" 'BEGIN{exit 
   VERDICT="abstain"
 fi
 
+# A `revise` with nothing to revise is not a verdict the line can act on.
+#
+# orchestrate.sh routes a failed audit back into the authoring step WITH THE
+# FINDINGS: that is the entire mechanism by which an audit changes anything. A
+# `revise` carrying zero findings re-enters the step with nothing attached, which
+# asks the identical question again and burns an attempt — and the second failure
+# halts the run for a human whose only information is "the judge said revise".
+#
+# Measured: judge-variance on 2026-09-16, five identical runs at temperature 0,
+# returned `revise` every time with findings counts of 4, 0, 4, 3 and 1. The
+# zero is not hypothetical and it is not rare.
+#
+# `abstain` is different and is left alone: it means "I cannot form a judgement",
+# it goes to a human rather than to a retry, and feedback_to_worker is where its
+# reason lives.
+NFIND="$(jq '[.findings[]?] | length' <<<"$J")"
+case "$VERDICT" in
+  revise|block)
+    if [ "$NFIND" -eq 0 ]; then
+      printf 'AUDIT %s: verdict "%s" with zero findings.\n' "$TARGET" "$VERDICT" >&2
+      printf '      A failed audit is routed back into the authoring step carrying its findings;\n' >&2
+      printf '      that is the only way an audit changes anything. With none, the step is asked\n' >&2
+      printf '      the identical question again and the second failure halts the run.\n' >&2
+      printf '      If there is genuinely nothing to point at, the verdict is "abstain".\n' >&2
+      cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
+      exit 1
+    fi ;;
+esac
+
 BLOCKERS="$(jq '[.findings[]? | select(.severity == "blocker")] | length' <<<"$J")"
 if [ "$BLOCKERS" -gt 0 ] && [ "$VERDICT" = "accept" ]; then
   printf 'AUDIT %s: %s blocker finding(s) with an "accept" verdict — recorded as "revise"\n' "$TARGET" "$BLOCKERS" >&2
   VERDICT="revise"
+fi
+
+# ------------------------------------ every criterion, and only the real ones --
+#
+# judge.sh puts the bean's criteria in the prompt by id and says "one entry in
+# `criteria` per line, using exactly these ids". Nothing checked that it happened.
+#
+# Both halves are measured failure modes of this model, not hypotheticals:
+#
+#   too few  — bean-001's doc audit came back `accept` with zero criteria for a
+#              bean with four. A partial audit presented as a complete one, and
+#              the only thing that refused it was the quote check, by accident:
+#              a judgement with no criteria also has no quotes, and "the
+#              judgement quotes nothing" is the wrong sentence about it.
+#   invented — without the id list in the prompt this judge reported against
+#              criteria nobody asked about ("C001: the spec must be valid JSON").
+#              The list was added; whether it is being followed was never read
+#              back.
+#
+# Before the quote machinery, for that reason: this is the cheaper check and the
+# more specific sentence.
+#
+# It applies to `abstain` too. The first version exempted abstentions, on the
+# reasoning that a judge which cannot form a judgement should not be pushed
+# toward working through a list. The exemption permitted nothing —
+# verdict.schema.json already requires `criteria` to be non-empty for every
+# verdict, so an abstention with none was refused a few lines later with
+# "criteria: [] should be non-empty". It only moved the refusal somewhere less
+# legible.
+BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")"
+BEAN_ID="$(jq -r '.id' <<<"$BEAN_JSON")"
+WANT_IDS="$(jq -r '[(.acceptance_criteria // [])[].id] | sort | .[]' <<<"$BEAN_JSON")"
+GOT_IDS="$(jq -r '[(.criteria // [])[].id] | sort | .[]' <<<"$J")"
+if [ -n "$WANT_IDS" ]; then
+  MISSING_IDS="$(comm -23 <(printf '%s\n' "$WANT_IDS") <(printf '%s\n' "$GOT_IDS") | tr '\n' ' ')"
+  EXTRA_IDS="$(comm -13 <(printf '%s\n' "$WANT_IDS") <(printf '%s\n' "$GOT_IDS") | tr '\n' ' ')"
+  MISSING_IDS="${MISSING_IDS% }"; EXTRA_IDS="${EXTRA_IDS% }"
+  if [ -n "$MISSING_IDS" ] || [ -n "$EXTRA_IDS" ]; then
+    printf 'AUDIT %s: the judgement does not report on the criteria it was given.\n' "$TARGET" >&2
+    [ -n "$MISSING_IDS" ] && printf '      not reported on: %s\n' "$MISSING_IDS" >&2
+    [ -n "$EXTRA_IDS" ] && printf '      reported on, but not in the bean: %s\n' "$EXTRA_IDS" >&2
+    printf '      %s declares: %s\n' "$BEAN_ID" "$(printf '%s' "$WANT_IDS" | tr '\n' ' ')" >&2
+    printf '\n      A verdict over some of the criteria, stamped as a verdict, is the shape of\n' >&2
+    printf '      a false accept: the ones nobody looked at are the ones that were wrong.\n' >&2
+    cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
+    exit 1
+  fi
+  # wc -w, not wc -l. The ids come back newline-separated with no trailing
+  # newline, so `wc -l` reports one fewer than there are and a two-criterion bean
+  # announced "all 1 criterion(s)" — a wrong count inside a passing message,
+  # which is where it is least likely to be questioned.
+  printf 'AUDIT %s: all %s criterion(s) reported on, none invented\n' "$TARGET" \
+    "$(printf '%s' "$WANT_IDS" | wc -w)" >&2
 fi
 
 # ------------------------------------------- did the judge read the artifact? --
@@ -212,8 +294,7 @@ fi
 printf 'AUDIT %s: %s quote(s) verified against the artifacts\n' "$TARGET" "$CHECKED" >&2
 
 # ------------------------------------------------------ the observable facts --
-BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")"
-BEAN_ID="$(jq -r '.id' <<<"$BEAN_JSON")"
+# BEAN_JSON and BEAN_ID are parsed above, by the criteria check.
 BASE_REF="$(jq -r '.base // "main"' "$RUN_DIR/run.json" 2>/dev/null)"
 BASE_SHA="$(git -C "$ROOT" rev-parse "$(git -C "$ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null || echo "$BASE_REF")" 2>/dev/null || echo unknown)"
 CAND_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"

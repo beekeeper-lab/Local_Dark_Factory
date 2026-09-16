@@ -241,13 +241,20 @@ Q="$(grep -v '^[#|`-]' "$src" 2>/dev/null | awk '{ if (length($0) > 40 && length
 [ -n "$Q" ] || Q="the stub judge could not find a line to quote"
 Q="${Q//\"/}"
 V="${STUB_VERDICT:-accept}"
+# Both criteria, because audit-check refuses a judgement that reports on some of
+# them. This stub carried only ac1 for a two-criterion bean, which is exactly the
+# partial-audit shape that check was added for — and it halted every fault case
+# at audit-spec, before the fault under test could happen. A fixture that would
+# be refused in production is not a fixture.
+#
 # A judge that is told to disbelieve the document sets matches_diff false, which
 # is what the pre-PR audit is supposed to act on.
 MD="true"; [ "${STUB_MATCHES_DIFF:-1}" = 0 ] && { MD="false"; V="revise"; }
 cat > "$RUN_DIR/verdicts/$TARGET.attempt-$n.judgement.json" <<JSON
 {"schema_version":"judgement/1.0.0","stage":"stub","target":"$TARGET",
  "verdict":"$V","confidence":0.9,
- "criteria":[{"id":"ac1","met":true,"evidence":"the stub judge read the artifact","quote":"$Q"}],
+ "criteria":[{"id":"ac1","met":true,"evidence":"the stub judge read the artifact","quote":"$Q"},
+             {"id":"ac2","met":true,"evidence":"the stub judge read the artifact","quote":"$Q"}],
  "findings":[],
  "document_quality":{"matches_diff":$MD,"risk_called_out":true,"blast_radius_called_out":true,"code_blocks_teach":true,"no_assumed_stack_knowledge":true},
  "test_integrity":{"deleted_tests":0,"new_skips":0,"weakened_asserts":false,"coverage_delta":"n/a"},
