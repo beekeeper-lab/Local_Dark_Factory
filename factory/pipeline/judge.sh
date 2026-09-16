@@ -84,7 +84,28 @@ jq -e --arg p "$PROVIDER" '.provider_allowlist | index($p)' "$ROLES_FILE" >/dev/
 # is that we did not let it finish. Two of six cases in one run, on different
 # defects each time, which made the fitness score partly a measurement of this
 # number. 12000 leaves room beside a ~6k-token prompt inside a 32k context.
-NUM_PREDICT="${JUDGE_NUM_PREDICT:-12000}"
+# 16000, raised from 12000 on 2026-09-16, on the one comparison the judge's
+# non-reproducibility does not poison.
+#
+# Everything else this harness reports is a verdict, and the same question asked
+# twice at temperature 0 gives different verdicts — so comparing a catch rate at
+# one cap against a catch rate at another measures the weather. "Was the answer
+# truncated by the token cap" is not a verdict. done_reason says `length` or it
+# does not, and that is mechanical.
+#
+#   12000, thinking=low, 3 passes over 6 cases:  4 of 18 cut off
+#   16000, thinking=low, 3 passes over 6 cases:  0 of 18 cut off
+#
+# Same cases, same model digest, same thinking level, same harness. A cut-off
+# case is not a judge that failed, it is a budget we set too low: judge-fitness
+# scores it in its own column and refuses to count it either way, and a run with
+# one in it is an incomplete measurement.
+#
+# The cap is a ceiling and not a target, so this costs time only on the answers
+# that were being truncated. What it did NOT fix: two cases still return no
+# judgement at all, now with done_reason=stop rather than length. That is a
+# different failure and the diagnostics added the same day say which.
+NUM_PREDICT="${JUDGE_NUM_PREDICT:-16000}"
 MODEL="$(jq -r '.roles.judge.model' "$ROLES_FILE")"
 NUM_CTX="$(jq -r '.roles.judge.num_ctx // 32768' "$ROLES_FILE")"
 # The thinking level is a measurable trade, not a preference. The judge's value is

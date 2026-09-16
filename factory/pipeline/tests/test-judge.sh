@@ -330,6 +330,32 @@ impl_met="$(jq -r '.format.properties.criteria.items.properties.met.description'
 check "it asks about the work as built" "the work as built" "$impl_met"
 nope "and not about a plan"             "would THE PLAN" "$impl_met"
 
+printf '\n== the token cap has one default, in three files ==\n\n'
+#
+# judge.sh sets it; bench/judge-fitness.sh and bench/judge-variance.sh record it
+# into their artifacts so a figure says what budget produced it. Three copies of
+# a number is two copies that will eventually be wrong, and the way it goes wrong
+# is silent: an artifact saying cap=12000 for a run that used 16000 is a figure
+# nobody can check afterwards.
+jcap="$(grep -oE 'JUDGE_NUM_PREDICT:-[0-9]+' "$PIPELINE_DIR/judge.sh" | head -1 | sed 's/.*:-//')"
+BENCHDIR="$(cd "$PIPELINE_DIR/../../bench" 2>/dev/null && pwd || true)"
+if [ -n "$jcap" ] && [ -n "$BENCHDIR" ]; then
+  drift=""
+  for h in judge-fitness.sh judge-variance.sh; do
+    [ -f "$BENCHDIR/$h" ] || continue
+    hcap="$(grep -oE 'JUDGE_NUM_PREDICT:-[0-9]+' "$BENCHDIR/$h" | head -1 | sed 's/.*:-//')"
+    [ "$hcap" = "$jcap" ] || drift="$drift $h=$hcap"
+  done
+  if [ -z "$drift" ]; then
+    printf '  ok    every file agrees the default is %s\n' "$jcap"; PASS=$((PASS+1))
+  else
+    printf '  FAIL  judge.sh says %s, but:%s — an artifact would record a budget the run did not use\n' "$jcap" "$drift"
+    FAIL=$((FAIL+1))
+  fi
+else
+  printf '  FAIL  could not read the token cap default out of judge.sh\n'; FAIL=$((FAIL+1))
+fi
+
 printf '\n== the runtime allow-list holds on this path too ==\n\n'
 #
 # judge.sh is the second place a model is chosen, and a hole here would be a hole

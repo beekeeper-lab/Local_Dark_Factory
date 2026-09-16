@@ -423,6 +423,60 @@ cannot. The collision check stays as the defence until then.
   provided for analysis"` was the model reading `met` as "the code satisfies this"
   and saying, correctly, that there is no code. Re-measure before comparing.
 
+## The judge's token cap is 16000, and that is the only number this measurement earned
+
+`JUDGE_NUM_PREDICT` went 12000 → 16000 on 2026-09-16, in `judge.sh` and in the two
+bench harnesses that record it (test-judge.sh asserts the three agree — three copies
+of a number is two copies that will eventually be wrong, silently, in an artifact
+nobody can check afterwards).
+
+Everything else judge-fitness reports is a verdict, and this judge gives different
+verdicts to the same question at temperature 0. So a catch rate at one cap against a
+catch rate at another measures the weather. **"Was the answer truncated by the token
+cap" is not a verdict** — `done_reason` says `length` or it does not — and that is the
+one comparison the non-reproducibility does not poison:
+
+```
+              cut off   false accepts   named   abstained   no answer
+12000, low     4 / 18         1           4         0           ?
+16000, low     0 / 18         0           2         4           2
+```
+
+Only the first column is a claim. The others are in the table because leaving them
+out would be picking the column that moved.
+
+What 16000 did **not** fix: two cases still return no judgement at all
+(`criterion-not-really-met`, `tautological-verify`), now with `done_reason=stop`
+rather than `length`. That is a different failure, and the diagnostics added the same
+day — the whole answer kept at `verdicts/<target>.unparseable.json`, with jq's own
+parse error and the real `done_reason` — say which one it is next time. Both are
+reported as `unmeasurable_cases`, so the run is an incomplete measurement and says so.
+
+Evidence: `evidence/judge-fitness-low-16k-20260916.log` beside
+`evidence/judge-fitness-low-20260916.log`, and
+`bench/results/judge-fitness-20260916T130042Z.json`.
+
+## OPEN: the snapshot launcher died on its own last line, after succeeding
+
+That 75-minute run finished, printed its whole summary, wrote its results file, and
+then `bench/snapshot.sh` exited 2 with
+
+```
+bench/snapshot.sh: line 61: unexpected EOF while looking for matching `"'
+```
+
+on a file that is sixty lines long and passes `bash -n`. bash reads a script by byte
+offset as it executes — the reason the launcher exists — and something rewrote the
+bytes between the read that started the harness and the read that should have
+followed it. **Nothing in that session edited this file**, and a short probe harness
+does not reproduce it. Cause not identified.
+
+The consequence is closed: everything after the harness call is now on one line, so
+bash has already read it before running the first command on it and there is nothing
+left to read afterwards. A successful measurement can no longer be reported as a
+failed launcher. If this recurs, the thing to catch is what is writing to
+`bench/snapshot.sh` — `inotifywait -m bench/snapshot.sh` during a long run.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**

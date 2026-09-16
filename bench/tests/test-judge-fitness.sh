@@ -185,7 +185,11 @@ fit clean > /dev/null
 eq "the thinking level is recorded"    "low" "$(jq -r '.judge.thinking' "$WORK/out.json")"
 # And the token cap. Cases are cut off by it, so two runs at different caps are
 # not comparable and the record has to say which one it was asked under.
-eq "so is the token cap"               "12000" "$(jq -r '.judge.num_predict' "$WORK/out.json")"
+# The default, read rather than typed. Hardcoding it here meant that raising the
+# cap on a measurement broke a test that has nothing to say about which number is
+# right — only that whatever the run used is what the artifact records.
+_cap="$(grep -oE 'JUDGE_NUM_PREDICT:-[0-9]+' "$BENCH/judge-fitness.sh" | head -1 | sed 's/.*:-//')"
+eq "so is the token cap"               "$_cap" "$(jq -r '.judge.num_predict' "$WORK/out.json")"
 eq "and one pass is marked as not a measurement" "true" \
    "$(jq -r '.one_pass_is_not_a_measurement' "$WORK/out.json")"
 check "the provenance block is there"  "kernel" "$(jq -c '.provenance' "$WORK/out.json")"

@@ -57,4 +57,23 @@ trap 'rm -rf "$SNAP"' EXIT
 
 printf 'bench snapshot: %s\n' "$SNAP/bench" >&2
 cd "$ROOT"
-FACTORY_BENCH_SNAPSHOTTED=1 bash "$SNAP/bench/$(basename "$HARNESS")" "$@"
+# Everything after the harness call is on this one line, deliberately.
+#
+# bash reads a script by byte offset as it executes — the reason this launcher
+# exists at all — and that applies to the launcher too. On 2026-09-16 a
+# seventy-five minute judge-fitness run finished, printed its whole summary and
+# wrote its results file, and then this script died with
+#
+#   bench/snapshot.sh: line 61: unexpected EOF while looking for matching `"'
+#
+# on a file that is sixty lines long and passes `bash -n`. RC=2, bash's
+# syntax-error code, for a measurement that had completely succeeded. What
+# rewrote the bytes between the read that started the run and the read that
+# should have followed it is NOT identified; nothing in this session edited this
+# file, and a short probe harness does not reproduce it.
+#
+# The cause is open. The consequence is closed: bash has already read this whole
+# line before it runs the first command on it, so there is nothing left to read
+# after the harness returns, and a successful measurement can no longer be
+# reported as a failed launcher.
+FACTORY_BENCH_SNAPSHOTTED=1 bash "$SNAP/bench/$(basename "$HARNESS")" "$@"; _rc=$?; trap - EXIT; rm -rf "$SNAP"; exit "$_rc"

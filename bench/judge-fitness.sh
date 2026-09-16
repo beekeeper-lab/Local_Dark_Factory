@@ -340,7 +340,7 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
-  --argjson cap "${JUDGE_NUM_PREDICT:-12000}" \
+  --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
     judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap},

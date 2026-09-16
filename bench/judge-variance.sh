@@ -168,7 +168,7 @@ jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg sha "$SHA" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
-  --argjson cap "${JUDGE_NUM_PREDICT:-12000}" \
+  --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
   '{schema:"judge-variance/2.0.0", measured_at:$ts, provenance:$prov, case:$case,
     judge:{model:$model, thinking:$thinking, num_predict:$cap},
     input_sha:$sha, runs:$r, distinct_verdicts:$distinct,
