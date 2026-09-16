@@ -748,7 +748,7 @@ don't design role-batching as if it were.
 **Context barely affects throughput** across 16K–49K. The old 39-minute InvTrac spec step
 was the 262144 default context, not model speed.
 
-## Three live gotchas
+## Four live gotchas
 
 1. **pi silently drops `--thinking` for models its catalog doesn't mark `reasoning: true`.**
    This had the judge running with reasoning *off* while `roles.json` said `"high"`, and
@@ -783,6 +783,19 @@ was the 262144 default context, not model speed.
    about an old run.** `bench/phase1-audit.sh` does this now for step coverage —
    a step that did not exist when a run was made reports `pass_for_its_version` rather
    than failing — and it is the same question every time.
+
+4. **Never `pkill -f` anything in this repository.** The pattern matches the shell
+   that invoked it, and the command dies mid-sentence with no indication why. It has
+   happened **five times** — four while chasing stray pipeline processes, once on
+   2026-09-16 while cleaning up a probe — and each time the first symptom is a tool
+   call returning a bare non-zero exit. `kill <pid>` only. The same rule is written
+   into `model-gateway.sh`, `test-faults.sh` and `build-loop.sh`, because each of
+   them had to learn it separately.
+
+   The related one: **`pgrep -f` finds you too.** A guard looking for other
+   processes matches its own wrapper shell and any subshell a command substitution
+   forks. `bench/inflight.sh` excludes both the process group and the ancestor
+   chain, and the comment there explains why neither alone is enough.
 
 ## Machine config as left (already applied, survives reboot)
 
