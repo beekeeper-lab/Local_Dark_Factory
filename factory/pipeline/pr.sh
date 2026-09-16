@@ -226,11 +226,32 @@ BODY="$(mktemp)"
     printf -- '---\n\n'
   fi
 
+  # The documents are posted as comments on this pull request, not linked by path.
+  #
+  # The body used to link `factory/runs/<run>/spec.html`. That directory is
+  # gitignored — deliberately, it is the run's evidence and not the project's
+  # source — so the links were dead for everyone except someone sitting at the
+  # machine that built the branch. A pull request that says "read the two
+  # documents, they are the point" and then points at nothing is worse than one
+  # that does not mention them.
+  #
+  # Comments rather than commits: committing the rendered documents onto the
+  # branch would change the candidate after the gate ran and after the audits
+  # judged it, and `candidate_sha` matching HEAD is the invariant the whole audit
+  # chain rests on. The diff a reviewer sees stays exactly the diff that was
+  # gated.
   printf '### Documents\n\n'
-  for pair in "The plan:spec.html" "What was built:impl-detail.html"; do
+  printf 'Posted as comments on this pull request — the plan first, then what was\n'
+  printf 'built. They are not in the diff: the run directory they come from is\n'
+  printf 'evidence rather than source, and committing them would change the commit\n'
+  printf 'the audits judged.\n'
+  for pair in "The plan:spec.md" "What was built:impl-detail.md"; do
     label="${pair%%:*}"; f="${pair#*:}"
-    [ -f "$RUN_DIR/$f" ] && printf -- '- %s — `%s`\n' "$label" "$(realpath --relative-to="$ROOT" "$RUN_DIR/$f")"
+    [ -f "$RUN_DIR/$f" ] && printf -- '\n- %s — %s bytes, sha256 `%s`' \
+      "$label" "$(wc -c < "$RUN_DIR/$f")" "$(sha256sum "$RUN_DIR/$f" | cut -c1-16)"
   done
+  printf '\n'
+
   printf '\n### Verdicts\n\n'
   printf '| Stage | Verdict | Tier | Findings |\n|---|---|---|---|\n'
   for f in "$RUN_DIR"/verdicts/*.attempt-*.json; do
@@ -374,6 +395,37 @@ rm -f "$BODY"
 jq -c --arg url "$URL" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '. + {pr_url: $url, pr_opened_at: $ts, status: "pr_open"}' "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" \
   && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
+
+# The documents themselves, as comments, so a reviewer has them where they are
+# reviewing. A failure here does not fail the step: the pull request is open and
+# is the deliverable, and a missing comment is visible in a way a missing pull
+# request is not.
+post_doc() { # post_doc <file> <heading>
+  local f="$1" heading="$2" tmp
+  [ -f "$f" ] || return 0
+  # GitHub caps a comment at 65536 characters. Both documents have run well under
+  # that; a longer one is truncated with the fact stated rather than silently.
+  tmp="$(mktemp)"
+  { printf '## %s\n\n' "$heading"
+    if [ "$(wc -c < "$f")" -gt 60000 ]; then
+      head -c 60000 "$f"
+      printf '\n\n---\n\n*Truncated at 60,000 of %s bytes by GitHub'"'"'s comment limit. The whole\n' "$(wc -c < "$f")"
+      printf 'document is `%s` in the run directory.*\n' "$(basename "$f")"
+    else
+      cat "$f"
+    fi
+  } > "$tmp"
+  if gh pr comment "$URL" --body-file "$tmp" >/dev/null 2>&1; then
+    printf '  ok    %-24s posted as a comment (%s bytes)\n' "$(basename "$f")" "$(wc -c < "$f")"
+  else
+    printf '  warn  %-24s could not be posted; it is in the run directory\n' "$(basename "$f")" >&2
+  fi
+  rm -f "$tmp"
+}
+if [ "$DRY" != 1 ]; then
+  post_doc "$RUN_DIR/spec.md" "The plan — what this bean set out to do"
+  post_doc "$RUN_DIR/impl-detail.md" "What was built — the implementation, explained"
+fi
 
 printf '\nPR OPEN  %s\n' "$URL"
 printf 'A human merges. This step does not, in any merge mode.\n'

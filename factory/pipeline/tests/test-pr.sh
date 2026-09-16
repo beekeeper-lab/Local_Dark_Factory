@@ -48,6 +48,7 @@ case "$1 $2" in
     echo "https://github.com/example/x/pull/1"
     ;;
   "pr view") echo "https://github.com/example/x/pull/1" ;;
+  "pr comment") : ;;
   *) exit 0 ;;
 esac
 GH
@@ -123,6 +124,10 @@ cat > $R/verdicts/package.attempt-1.judgement.json <<'JSON'
 JSON
 printf '<html>spec</html>' > $R/spec.html
 printf '<html>impl</html>' > $R/impl-detail.html
+# The Markdown too: it is what gets posted as a comment, and a fixture carrying
+# only the rendered HTML made the body silently omit both documents.
+printf '# Spec\n\nThe plan, in the form a reviewer reads.\n' > $R/spec.md
+printf '# What was built\n\nThe implementation, explained.\n' > $R/impl-detail.md
 
 pr() { bash "$PIPELINE_DIR/pr.sh" factory/runs/R --bean factory/beans/bean.yaml "$@" 2>&1; }
 
@@ -236,6 +241,13 @@ check "against the default branch"   "--base main" "$calls"
 nocheck "it never merges"            "pr merge" "$calls"
 nocheck "and never auto-merges"      "--auto" "$calls"
 check "the run records the PR"       '"status":"pr_open"' "$(tr -d ' ' < $R/run.json)"
+# And the two documents went with it. The body names them; these put them where
+# the reviewer is. Asserted on a real invocation, not a --dry-run, which posts
+# nothing by design.
+want  "the plan was posted"          "gh pr comment should have been called for each document" \
+      test "$(grep -c 'pr comment' "$GH_CALLS")" -eq 2
+check "and the step says so"         "spec.md" "$out"
+check "with the other one too"       "impl-detail.md" "$out"
 
 printf '\n== a second run does not open a second PR ==\n\n'
 out="$(pr)"
@@ -246,8 +258,15 @@ want "only one create was attempted per run" "expected 2 attempts, one per invoc
 printf '\n== the body carries what a reviewer needs ==\n\n'
 body="$(bash "$PIPELINE_DIR/pr.sh" factory/runs/R --bean factory/beans/bean.yaml --dry-run 2>&1)"
 check "it says no human wrote it"    "Nothing in this pull request was written by a human" "$body"
-check "it links both documents"      "spec.html" "$body"
-check "and the implementation doc"   "impl-detail.html" "$body"
+# The body used to link `factory/runs/<run>/spec.html`, which is gitignored, so
+# the links were dead for everyone except someone sitting at the machine that
+# built the branch. The documents are posted as comments now, and the body says
+# so and names their hashes.
+check "it says where the documents are" "Posted as comments on this pull request" "$body"
+check "and why not in the diff"         "would change the commit" "$body"
+check "the plan is named"               "The plan —" "$body"
+check "and the implementation document" "What was built —" "$body"
+check "each by hash"                    "sha256" "$body"
 check "it tables the verdicts"       "| Stage | Verdict | Tier | Findings |" "$body"
 check "it carries non-blocking findings" "the scaffold test is thin but real" "$body"
 check "it records the candidate"     "${HEAD_SHA:0:12}" "$body"

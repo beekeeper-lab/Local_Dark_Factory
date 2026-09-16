@@ -1,0 +1,45 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "teaching_note_missing",
+      "met": false,
+      "evidence": "Task 'task-3' does not contain a `teaching_note` field, which is required for every bean according to the specification. The other tasks do include this field, but task-3 violates the rule by omitting it entirely.\n\nAdditionally, in Task 1 (id: task-1) the second verification command attempts to use the variable `d` without assigning it a value from the parsed TOML file:\n```\n[sh, -c,\n \"python - <<'PY'\nimport tomllib\nassert 'project' in d and 'tool' in d\nPY\"]\n``` \nSince `d` is never defined (the script does not contain a line like `d = tomllib.load(...)`), the command will raise a NameError and therefore fail even after the task has created `pyproject.toml`. This violates the requirement that at least one verification step must succeed after the task’s changes are applied.\n\nThus, the specification is **not sound** as currently written. It needs:\n1. A `teaching_note` entry for Task 3 (id: task-3).\n2. The second verify command in Task 1 should be corrected to load the TOML file before accessing its contents, e.g.,\n```yaml\n- kind: command\n  run:\n    - bash\n    - -c\n    - \"python - <<'PY'\nimport tomllib, sys\nconfig = tomllib.load(open('pyproject.toml','rb'))\nassert 'project' in config and 'tool' in config\nPY\"\n``` \nAfter fixing these issues, the specification would satisfy all required constraints.\n\n**Verdict:** The current specification is not sound due to missing teaching_note for task‑3 and an invalid verification command in task‑1 that will never succeed as written. Adjustments are needed before it can be considered valid.",
+      "quote": "The 'teaching_note' field must be present for each bean, and the verify steps must include at least one command that passes after the task is applied."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "The spec does not contain a top-level \"description\" field.",
+      "evidence": "The specification file begins with the line `title: seating-planner`, but according to the schema it must also include a top‑level `description` key before any other keys."
+    },
+    {
+      "severity": "minor",
+      "summary": "Task 1's verification step that checks the content of pyproject.toml is malformed and will raise an error because variable `d` is never defined.",
+      "evidence": "The command listed as `python - <<'PY'\nimport tomllib\nassert 'project' in d and 'tool' in d\nPY` does not assign a value to `d`; therefore the assertion will raise a NameError even after the file has been created."
+    },
+    {
+      "severity": "minor",
+      "summary": "Task 2's verification steps are syntactically correct but do not explicitly verify that the version string contains exactly two dots as required.",
+      "evidence": "The command `python -c \"import seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2, v\" correctly checks the version format, satisfying the constraint."
+    },
+    {
+      "severity": "minor",
+      "summary": "All tasks have unique write_paths and dependencies refer to existing tasks. All `satisfies` entries reference defined atomic constraints. No duplicate file writes are present.",
+      "evidence": "Task‑1 writes pyproject.toml and .gitignore; Task‑2 writes src/seating_planner/__init__.py; Task‑3 writes tests/test_scaffold.py. Each task's `depends_on` references a valid preceding task, and each `satisfies` list contains existing atomic constraint IDs."
+    }
+  ],
+  "confidence": 0.9,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 166
+  }
+}
