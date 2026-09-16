@@ -28,7 +28,8 @@ not about the code.
 | `controller-fitness-20260915T124147Z.json` | no | superseded ×2 |
 | `controller-fitness-20260915T124249Z.json` | no | superseded ×2 |
 | `controller-fitness-20260916T003558Z.json` | yes | superseded by 142616Z |
-| `controller-fitness-20260916T142616Z.json` | yes | **yes** — 1 of 5 seeded defects named by a check, 4 not decidable, 0 false alarms |
+| `controller-fitness-20260916T142616Z.json` | yes | **wrong, and kept because it is** — 1 of 5 named, 4 "not decidable". The `tautological-verify` fixture was not seeding the defect it claimed, so the controller was scored as missing something it catches |
+| `controller-fitness-20260916T171328Z.json` | yes | **yes** — with the fixture fixed: **2 of 5 named by a check**, 3 not decidable, 0 false alarms. `tautological-verify` is decided by spec-check's verify precheck and always was |
 | `format-support-20260915T024138Z.json` | no | superseded — a 200-byte question, which cleared two models that then failed on real artifacts |
 | `format-support-real-payload-20260915T025711Z.json` | no | superseded by 111754Z |
 | `format-support-20260916T111754Z.json` | yes | **yes** — gpt-oss:120b holds the schema on an 18KB payload only at `low` |

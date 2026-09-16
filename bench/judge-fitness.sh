@@ -110,6 +110,22 @@ elif case == "tautological-verify":
     #
     # Rewritten to replace the whole `verify:` block of the first task, line by
     # line, so the result is valid YAML that is wrong in exactly the intended way.
+    #
+    # Then broken a SECOND way, found 2026-09-16. The skip loop was
+    #
+    #     while lines[i].strip().startswith("-"): i += 1
+    #
+    # and the line after the first item in this task list is a COMMENT, not a
+    # `-`. So it skipped nothing: the mutation prepended one tautological verify
+    # to four real ones, which is not a tautological task — it is the case
+    # spec-check documents as legitimate, "a lint that is green on an empty
+    # directory". controller-fitness duly reported "not decidable, needs a judge"
+    # about a defect that was never seeded, and judge-fitness scored the judge on
+    # it for days.
+    #
+    # Skip by INDENTATION instead: everything more indented than `verify:`
+    # belongs to it, comments and continuation lines included, and the block ends
+    # at the first non-blank line indented no further.
     lines = tasks.split("\n")
     out, i, done = [], 0, False
     while i < len(lines):
@@ -119,8 +135,13 @@ elif case == "tautological-verify":
             out.append(line)
             out.append(f'{indent}  - {{ kind: command, run: ["sh", "-c", "test -d ."] }}')
             i += 1
-            # Skip the items that were there.
-            while i < len(lines) and lines[i].strip().startswith("-"):
+            while i < len(lines):
+                nxt = lines[i]
+                if nxt.strip() == "":
+                    i += 1
+                    continue
+                if len(nxt) - len(nxt.lstrip()) <= len(indent):
+                    break
                 i += 1
             done = True
             continue
@@ -128,6 +149,14 @@ elif case == "tautological-verify":
         i += 1
     tasks = "\n".join(out)
     spec += "\n\nThe first task is verified by confirming the working directory exists.\n"
+    # The mutation asserts its own post-condition, because this one has now been
+    # silently wrong twice in two different ways and each time the number it
+    # produced looked like a measurement.
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    _v = _t["tasks"][0]["verify"]
+    assert len(_v) == 1, f"tautological-verify: task 0 has {len(_v)} verifies, expected exactly 1"
+    assert _v[0]["run"] == ["sh", "-c", "test -d ."], f"tautological-verify: wrong verify {_v[0]}"
 
 elif case == "contradicts-non-goal":
     # The bean's non_goals say no solver code. The spec plans some anyway.

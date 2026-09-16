@@ -720,6 +720,43 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   refusing five answers in seven, but worth doing deliberately rather than at the
   end of a long session. `factory reaudit --passes 3` is how you would find out.
 
+## The tautological-verify fixture was not seeding the defect, for the second time
+
+`bench/controller-fitness.sh` has reported "1 of 5 seeded defects named by a
+check, 4 not decidable" and closed with *"the ones marked not decidable are the
+judge's actual job"*. One of those four was not.
+
+The mutation is supposed to replace the first task's whole `verify:` block with a
+check that cannot fail. It skipped the existing items with
+
+```
+while lines[i].strip().startswith("-"): i += 1
+```
+
+and the line after the first item in this task list is a **comment**. So it
+skipped nothing: the mutation *prepended* one tautological verify to four real
+ones, which is not a tautological task — it is the case `spec-check` documents as
+legitimate ("a lint that is green on an empty directory"). The controller
+correctly did not flag it, and was scored as having missed a defect that was never
+seeded.
+
+That is the second time this one mutation has been silently wrong in a different
+way; the first, a regex that stopped at a `]` inside a Python string, ran for
+months. Both times the number it produced looked exactly like a measurement.
+
+Fixed by skipping on **indentation** rather than on a leading `-`, and the
+mutation now **asserts its own post-condition** — the first task has exactly one
+verify and it is the tautological one. A mutation that has been wrong twice does
+not get a third chance to be wrong quietly.
+
+**What it changes**: `tautological-verify` is decided by `spec-check`'s verify
+precheck and always was. Controller fitness is **2 of 5 named by a check, 3 not
+decidable, 0 false alarms** (`controller-fitness-20260916T171328Z.json`).
+
+**And what it invalidates**: every `judge-fitness` figure involving this case
+scored the judge against a fixture that was not the defect. That is one of six
+cases in every run since the rewrite.
+
 ## Queued for an idle pipeline
 
 - ~~**`run-step.sh`'s `audit-*` branch is dead and should go.**~~ **Done 2026-09-16.**
