@@ -413,6 +413,12 @@ run from the working tree."
       say note "hidden tests" "none configured — every check in this repo runs code the worker could read"
     else
       HTDIR="$(jq -r '.dir // empty' <<<"$HT")"
+      # doctor has no bean, so a per-bean path is reported as the root it is:
+      # which beans have a suite, and which do not. Resolving `<bean>` to nothing
+      # and calling the result a missing directory would report a healthy repo as
+      # broken, which is how a doctor gets ignored.
+      HTPB=0
+      case "$HTDIR" in *"<bean>"*) HTPB=1; HTDIR="${HTDIR%%<bean>*}" ;; esac
       case "$HTDIR" in
         ""|/*) ;;
         *) HTDIR="$(cd "$(dirname "$CONFIG")" && pwd)/$HTDIR" ;;
@@ -424,8 +430,19 @@ run from the working tree."
         HTN="$(find "$HTDIR" -type f -name '*.py' 2>/dev/null | wc -l)"
         case "$HTDIR/" in
           "$TARGET_ROOT"/*) bad "hidden tests" "$HTDIR is inside the repository — the worker mounts the whole tree, so these are tests it can read" ;;
-          *) if [ "$HTN" -gt 0 ]; then good "hidden tests" "$HTN file(s) outside the repository"
-             else bad "hidden tests" "$HTDIR has no .py files — an empty hidden suite reads like a check that passed"; fi ;;
+          *)
+            if [ "$HTPB" = 1 ]; then
+              HTB="$(find "$HTDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+              if [ "$HTN" -gt 0 ]; then
+                good "hidden tests" "$HTN file(s) for $HTB bean(s), outside the repository"
+              else
+                say note "hidden tests" "configured per bean, and no bean has one yet ($HTDIR)"
+              fi
+            elif [ "$HTN" -gt 0 ]; then
+              good "hidden tests" "$HTN file(s) outside the repository"
+            else
+              bad "hidden tests" "$HTDIR has no .py files — an empty hidden suite reads like a check that passed"
+            fi ;;
         esac
       fi
     fi

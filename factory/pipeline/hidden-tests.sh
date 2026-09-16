@@ -59,8 +59,17 @@ Configured in the pipeline config under `hidden_tests`:
 
   dir          REQUIRED. Must not be inside the repository: the worker mounts
                the whole tree, so a directory in it is one it can read.
+               `<bean>` in the path is replaced with the run's bean id. Hidden
+               tests are written from one bean's acceptance criteria, so one
+               directory for the whole repo would run bean-001's tests against
+               bean-007's tree. A bean with no directory of its own has no hidden
+               tests, which is exit 3 and says which bean.
   command      default ["pytest","-q"]; run with the mount point appended.
   mount_at     default /hidden.
+  control      default true. Run the suite once against an EMPTY tree first and
+               require it to FAIL. A hidden suite that passes against nothing is
+               not testing anything, and it is the one check nobody can eyeball —
+               the worker cannot see it and neither can the judge.
   results_dir  where the full output goes. Default: a `hidden-test-results`
                directory beside `dir`. Also refused inside the repository — the
                run directory is in the repo, which is why the log is not there.
@@ -68,10 +77,13 @@ Configured in the pipeline config under `hidden_tests`:
 Writes <run_dir>/hidden-tests.json (a count, no test text) and the full output to
 results_dir, whose path the record names.
 
+The suite is given HIDDEN_TREE: the tree under test, /work inside the container.
+
 Exit: 0 they ran and passed
       1 they ran and FAILED
-      2 configured, and could not be run — a refusal, a missing directory, or a
-        directory with no tests in it. Never reported as a pass.
+      2 configured, and could not be run — a refusal, a missing directory, a
+        directory with no tests in it, or a suite that passes against an empty
+        tree. Never reported as a pass.
       3 not configured for this repository
 EOF
 }
@@ -106,10 +118,11 @@ write_record() { # write_record <status> <exit_code> <why> <feedback> [count]
         --argjson files "${FILE_COUNT:-0}" \
         --argjson cmd "${CMD_JSON:-[]}" \
         --arg log "${LOG:-}" \
+        --arg control "${CONTROL_STATUS:-not run}" \
         --argjson failed "${FAILED_N:-0}" \
     '{schema_version:"hidden-tests/2.0.0", status:$st, exit_code:$ec, why:$why,
       dir:$dir, dir_sha256:$sha, test_files:$files, failed_count:$failed,
-      command:$cmd,
+      command:$cmd, control:$control,
       output_path:$log,
       worker_feedback:$fb,
       caveat:"This file lives in the run directory, which is inside the repository, which the worker mounts whole. So it carries counts and never test text: no names, no assertions, no output. The full output is at output_path, outside the repository. That also bounds what the judge can quote into feedback_to_worker, which is the other way a hidden test reaches the worker."}' \
@@ -137,6 +150,25 @@ if [ -z "$HT_DIR" ]; then
   printf 'hidden tests: REFUSED — hidden_tests has no dir\n' >&2
   exit 2
 fi
+# `<bean>` becomes this run's bean. Hidden tests are written from ONE bean's
+# acceptance criteria — that is what makes them worth writing and what makes them
+# safe to write, since whoever writes them is reading criteria rather than an
+# implementation. A single directory for the whole repository would run bean-001's
+# tests against bean-007's tree and call the result a failure.
+BEAN_ID="$(jq -r '.bean_id // empty' "$RUN_DIR/run.json" 2>/dev/null || true)"
+PER_BEAN=0
+case "$HT_DIR" in
+  *"<bean>"*)
+    PER_BEAN=1
+    if [ -z "$BEAN_ID" ]; then
+      write_record could_not_run 2 "hidden_tests.dir names <bean> but $RUN_DIR/run.json has no bean_id" \
+        "The hidden tests could not be run. This is a configuration problem, not yours."
+      printf 'hidden tests: REFUSED — dir names <bean> and the run record has no bean_id\n' >&2
+      exit 2
+    fi
+    HT_DIR="${HT_DIR//<bean>/$BEAN_ID}" ;;
+esac
+
 # Relative to the config file, which is where a reader would expect it to be
 # relative to — and which, for a config inside the repo, puts it inside the repo
 # and straight into the refusal below. That is the intended lesson.
@@ -146,6 +178,14 @@ case "$HT_DIR" in
 esac
 
 if [ ! -d "$HT_DIR" ]; then
+  # Per-bean and absent is a fact about the bean, not a broken config: hidden
+  # tests are written one bean at a time and most beans will not have them yet.
+  # Repo-wide and absent is a typo in a path someone meant to work.
+  if [ "$PER_BEAN" = 1 ]; then
+    write_record not_configured 3 "no hidden tests for $BEAN_ID (looked in $HT_DIR)" ""
+    printf 'hidden tests: none for %s — nothing at %s\n' "$BEAN_ID" "$HT_DIR"
+    exit 3
+  fi
   write_record could_not_run 2 "hidden_tests.dir does not exist: $HT_DIR" \
     "The hidden tests could not be run. This is a configuration problem, not yours."
   printf 'hidden tests: REFUSED — no such directory: %s\n' "$HT_DIR" >&2
@@ -215,9 +255,47 @@ printf 'hidden tests: %s file(s) from %s, mounted read-only at %s\n' \
   "$FILE_COUNT" "$HT_DIR" "$MOUNT_AT"
 printf '  %s\n\n' "${CMD[*]}"
 
+# The control: the same suite, against a tree with nothing in it.
+#
+# test-integrity does this and for the same reason — a check whose control run
+# also passes has not been shown to check anything. It matters more here, because
+# a hidden suite is the one thing in the line nobody eyeballs: the worker cannot
+# see it by design, and the judge is given a count. A vacuous one would report
+# green forever.
+# `// true`, not here. In jq only null and false are falsy, so `.control // true`
+# reads a configured `false` as unset and turns the control back on — the exact
+# trap this project has already written down once. Ask whether the key is there.
+CONTROL="$(jq -r 'if has("control") then .control else true end' <<<"$CFG_HT")"
+CONTROL_STATUS="not run"
+if [ "$CONTROL" = "true" ]; then
+  EMPTY_TREE="$(mktemp -d)"
+  ctl_rc=0
+  if [ "$SANDBOX" = 1 ]; then
+    cb=( --tree "$EMPTY_TREE" --mount-ro "$HT_DIR:$MOUNT_AT" --out "$RESULTS_DIR/$(basename "$RUN_DIR").control.log" )
+    [ -n "$GATES" ] && cb+=( --gates "$GATES" )
+    cb+=( --env "HIDDEN_TREE=/work" ${ENV_ARGS+"${ENV_ARGS[@]}"} )
+    "$PIPELINE_DIR/sandbox.sh" "${cb[@]}" -- "${CMD[@]}" || ctl_rc=$?
+  else
+    ( cd "$EMPTY_TREE" && HIDDEN_TREE="$EMPTY_TREE" "${CMD[@]/%$MOUNT_AT/$HT_DIR}" ) \
+      > "$RESULTS_DIR/$(basename "$RUN_DIR").control.log" 2>&1 || ctl_rc=$?
+  fi
+  rm -rf "$EMPTY_TREE"
+  if [ "$ctl_rc" -eq 0 ]; then
+    CONTROL_STATUS="PASSED against an empty tree"
+    write_record could_not_run 2 "the hidden suite passes against an EMPTY tree, so it is not testing this change" \
+      "The hidden tests could not be run. This is a configuration problem, not yours."
+    printf '\nhidden tests: REFUSED — the suite passes against a tree with nothing in it.\n' >&2
+    printf '  Whatever it asserts was true before any work was done. A hidden suite is the\n' >&2
+    printf '  one check nobody eyeballs, so a vacuous one reports green forever.\n' >&2
+    exit 2
+  fi
+  CONTROL_STATUS="failed against an empty tree, as it must"
+  printf '  control: %s\n' "$CONTROL_STATUS"
+fi
+
 rc=0
 if [ "$SANDBOX" = 1 ]; then
-  sb=( --tree "$TREE" --mount-ro "$HT_DIR:$MOUNT_AT" --out "$LOG" )
+  sb=( --tree "$TREE" --mount-ro "$HT_DIR:$MOUNT_AT" --out "$LOG" --env "HIDDEN_TREE=/work" )
   [ -n "$GATES" ] && sb+=( --gates "$GATES" )
   sb+=( ${ENV_ARGS+"${ENV_ARGS[@]}"} )
   "$PIPELINE_DIR/sandbox.sh" "${sb[@]}" -- "${CMD[@]}" || rc=$?
@@ -234,7 +312,7 @@ else
   # said out loud that it is uncontained. The mount does not exist, so the tests
   # are given their real directory instead.
   CMD[${#CMD[@]}-1]="$HT_DIR"
-  ( cd "$TREE" && "${CMD[@]}" ) > "$LOG" 2>&1 || rc=$?
+  ( cd "$TREE" && HIDDEN_TREE="$TREE" "${CMD[@]}" ) > "$LOG" 2>&1 || rc=$?
 fi
 
 if [ "$rc" -eq 0 ]; then

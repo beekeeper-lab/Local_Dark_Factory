@@ -202,12 +202,21 @@ if [ -z "$HT_CFG" ]; then
 else
   ht_dir="$(jq -r '.dir // empty' <<<"$HT_CFG")"
   [ -n "$ht_dir" ] || fail "hidden-tests" "hidden_tests is configured with no dir"
+  # `<bean>` is this bean. Hidden tests are written from one bean's criteria, so
+  # a bean without a directory of its own has none — a fact about the bean, and
+  # not the same as a path someone mistyped.
+  ht_per_bean=0
+  case "$ht_dir" in *"<bean>"*) ht_per_bean=1; ht_dir="${ht_dir//<bean>/$BEAN_ID}" ;; esac
   case "$ht_dir" in
     /*) ;;
     *)  ht_dir="$(cd "$(dirname "$CONFIG_PATH")" && pwd)/$ht_dir" ;;
   esac
-  [ -d "$ht_dir" ] || fail "hidden-tests" \
-    "hidden_tests.dir does not exist: $ht_dir — the gate would refuse, after the build"
+  if [ ! -d "$ht_dir" ]; then
+    [ "$ht_per_bean" = 1 ] && { pass "hidden-tests" "none for $BEAN_ID"; ht_dir=""; } \
+      || fail "hidden-tests" "hidden_tests.dir does not exist: $ht_dir — the gate would refuse, after the build"
+  fi
+fi
+if [ -n "$HT_CFG" ] && [ -n "${ht_dir:-}" ]; then
   ht_dir="$(cd "$ht_dir" && pwd)"
   case "$ht_dir/" in
     "$(repo_root)"/*) fail "hidden-tests" \

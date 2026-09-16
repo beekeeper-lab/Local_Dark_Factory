@@ -268,7 +268,7 @@ CFG="$REPO/factory/pipeline-config.json"
 # only thing any of these assertions measured.
 cfg_set() {
   python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d["hidden_tests"]=json.loads(sys.argv[2]); json.dump(d,open(p,"w"))' "$CFG" "$1"
-  ( cd "$REPO" && git add -A && git commit -q -m "hidden_tests fixture" )
+  ( cd "$REPO" && git add -A && git commit -q -m "hidden_tests fixture" >/dev/null 2>&1 || true )
 }
 
 HIDDEN_OK="$WORK/hidden-ok"; mkdir -p "$HIDDEN_OK"
@@ -302,6 +302,25 @@ cfg_set '{"dir":"/definitely/not/here"}'
 out="$(pfc bean-001)"; rc=$?
 rc_is "it refuses"                     "$rc" 1
 check "before the build, not after"    "after the build" "$out"
+
+printf '\n-- per bean: <bean> in the path, and a bean with none passes --\n\n'
+#
+# Hidden tests are written from one bean's criteria. Most beans will not have any
+# yet, and "this bean has none" must not read like "someone mistyped the path".
+PB="$WORK/per-bean"; mkdir -p "$PB/bean-001"
+printf 'def test_h():\n    assert True\n' > "$PB/bean-001/test_h.py"
+cfg_set "$(jq -nc --arg d "$PB/<bean>" '{dir:$d}')"
+out="$(pfc bean-001)"; rc=$?
+rc_is "the bean's own directory is found" "$rc" 0
+check "and counted"                    "1 file(s), outside the repository" "$out"
+
+# A per-bean root that has a directory for some other bean, asked about this one.
+PB2="$WORK/per-bean-2"; mkdir -p "$PB2/bean-007"
+printf 'def test_h():\n    assert True\n' > "$PB2/bean-007/test_h.py"
+cfg_set "$(jq -nc --arg d "$PB2/<bean>" '{dir:$d}')"
+out="$(pfc bean-001)"; rc=$?
+rc_is "and a bean with none still passes" "$rc" 0
+check "saying which bean has none"     "none for bean-001" "$out"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

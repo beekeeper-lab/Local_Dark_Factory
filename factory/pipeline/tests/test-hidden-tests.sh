@@ -99,13 +99,19 @@ printf '\n== they run against what was built ==\n\n'
 #
 # Uncontained here: the sandbox is exercised by test-sandbox.sh, and what this
 # file is about is the decision made from the result.
+# A stub that behaves like a real suite: it looks at the tree it was given. A
+# stub that ignores the tree passes against an empty one, which the control run
+# correctly refuses — so a tree-blind stub cannot exercise anything downstream of
+# it, and finding that out was the control run's first real catch.
 cat > "$WORK/fake-pytest" <<'STUB'
 #!/usr/bin/env bash
-# Passes or fails according to a file, so the outcome is the variable under test.
+# Fails when the tree has nothing in it, like any suite that tests something.
+[ -f "${HIDDEN_TREE:-/work}/built" ] || { echo "ERROR nothing to test"; exit 1; }
 cat "$FAKE_PYTEST_OUT"
 exit "$(cat "$FAKE_PYTEST_RC")"
 STUB
 chmod +x "$WORK/fake-pytest"
+printf 'the worker built this\n' > "$REPO/built"
 printf 'def test_hidden_seating_capacity():\n    assert True\n' > "$HID/test_hidden.py"
 printf '1 passed\n' > "$WORK/pytest.out"; printf '0\n' > "$WORK/pytest.rc"
 cfg "$(jq -nc --arg d "$HID" --arg p "$WORK/fake-pytest" '{hidden_tests:{dir:$d, command:[$p,"-q"]}}')"
@@ -181,6 +187,82 @@ rm -f "$RUN/hidden-tests.json"
 out="$(FAKE_PYTEST_OUT="$WORK/pytest.out" FAKE_PYTEST_RC="$WORK/pytest.rc" ht)"; rc=$?
 rc_is "it refuses"                     "$rc" 2
 check "and says what reads it"         "hidden test it can read" "$out"
+
+printf '\n== a suite that passes against nothing is refused ==\n\n'
+#
+# test-integrity runs a control for the same reason: a check whose control also
+# passes has not been shown to check anything. It matters more here, because a
+# hidden suite is the one thing nobody eyeballs — the worker cannot see it by
+# design and the judge is given a count — so a vacuous one reports green forever.
+cat > "$WORK/blind-pytest" <<'STUB'
+#!/usr/bin/env bash
+echo "1 passed"
+exit 0
+STUB
+chmod +x "$WORK/blind-pytest"
+cfg "$(jq -nc --arg d "$HID" --arg p "$WORK/blind-pytest" '{hidden_tests:{dir:$d, command:[$p,"-q"]}}')"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "it refuses"                     "$rc" 2
+check "and says what the control did"  "passes against a tree with nothing in it" "$out"
+check "and why that is the worst case" "nobody eyeballs" "$out"
+eq "recorded as could not run"         "could_not_run" "$(rec .status)"
+nope "and certainly not as a pass"     "\"status\":\"passed\"" "$(cat "$RUN/hidden-tests.json")"
+
+printf '\n-- and the control can be turned off, on the record --\n\n'
+#
+# Some suites legitimately cannot run against an empty tree. Turning the control
+# off is allowed and is written down, because "we did not check" and "we checked"
+# must not look the same in the record.
+cfg "$(jq -nc --arg d "$HID" --arg p "$WORK/blind-pytest" \
+  '{hidden_tests:{dir:$d, command:[$p,"-q"], control:false}}')"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "it runs"                        "$rc" 0
+eq "and the record says the control did not" "not run" "$(rec .control)"
+
+printf '\n== hidden tests are per bean, because they are written per bean ==\n\n'
+#
+# One directory for the whole repository would run bean-001's tests against
+# bean-007's tree and call the result a failure. `<bean>` in the path is the
+# run's bean id.
+printf '{"run_id":"R","bean_id":"bean-042"}\n' > "$RUN/run.json"
+mkdir -p "$WORK/per-bean/bean-042"
+printf 'def test_bean_042():\n    assert True\n' > "$WORK/per-bean/bean-042/test_b.py"
+cfg "$(jq -nc --arg d "$WORK/per-bean/<bean>" --arg p "$WORK/fake-pytest" \
+  '{hidden_tests:{dir:$d, command:[$p,"-q"]}}')"
+printf '1 passed\n' > "$WORK/pytest.out"; printf '0\n' > "$WORK/pytest.rc"
+rm -f "$RUN/hidden-tests.json"
+out="$(FAKE_PYTEST_OUT="$WORK/pytest.out" FAKE_PYTEST_RC="$WORK/pytest.rc" ht)"; rc=$?
+rc_is "the bean's own directory runs" "$rc" 0
+check "and the record names it"       "bean-042" "$(rec .dir)"
+eq "with a control that failed, as it must" "failed against an empty tree, as it must" "$(rec .control)"
+
+printf '\n-- a bean with none is a fact about the bean, not a broken config --\n\n'
+#
+# Most beans will not have hidden tests. That has to read differently from a
+# path someone mistyped, or the first is silently filed as the second.
+printf '{"run_id":"R","bean_id":"bean-999"}\n' > "$RUN/run.json"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "exit 3, not 2"                 "$rc" 3
+eq "recorded as not configured"       "not_configured" "$(rec .status)"
+check "and it says which bean"        "bean-999" "$out"
+
+printf '\n-- but a repo-wide path that is not there is still a typo --\n\n'
+cfg '{"hidden_tests":{"dir":"/definitely/not/here"}}'
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "exit 2, not 3"                 "$rc" 2
+
+printf '\n-- and <bean> with no bean in the run record is refused --\n\n'
+printf '{"run_id":"R"}\n' > "$RUN/run.json"
+cfg "$(jq -nc --arg d "$WORK/per-bean/<bean>" '{hidden_tests:{dir:$d}}')"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "it refuses"                    "$rc" 2
+check "and says what is missing"      "no bean_id" "$out"
+printf '{"run_id":"R","bean_id":"bean-001"}\n' > "$RUN/run.json"
 
 printf '\n== the record is written on every path ==\n\n'
 #
