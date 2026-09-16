@@ -1,0 +1,219 @@
+{
+  "schema": "gate-run/1.0.0",
+  "bean": "bean-001",
+  "base": "e9a5b33e9482f0b23d5678e96622f2c5a92a2a83",
+  "started_at": "2026-09-15T22:19:48Z",
+  "finished_at": "2026-09-15T22:19:53Z",
+  "diff": {
+    "files": [
+      ".gitignore",
+      "pyproject.toml",
+      "src/seating_planner/__init__.py",
+      "tests/test_scaffold.py"
+    ],
+    "file_count": 4,
+    "changed_lines": 64
+  },
+  "containment": {
+    "violations": [],
+    "contained": true
+  },
+  "tier": {
+    "final_tier": 2,
+    "terms": {
+      "policy": 2,
+      "bean_suggested": 1,
+      "judge_suggested": null
+    },
+    "binding_term": [
+      "policy"
+    ],
+    "policy_version": "risk/2026-09-14",
+    "paths": [
+      {
+        "path": ".gitignore",
+        "tier": 1,
+        "rule": null,
+        "reason": "no rule matched; default_tier 1"
+      },
+      {
+        "path": "pyproject.toml",
+        "tier": 2,
+        "rule": "{pyproject.toml,*.lock,uv.lock,poetry.lock,requirements*.txt}",
+        "reason": "dependencies change what the gates are running"
+      },
+      {
+        "path": "src/seating_planner/__init__.py",
+        "tier": 1,
+        "rule": null,
+        "reason": "no rule matched; default_tier 1"
+      },
+      {
+        "path": "tests/test_scaffold.py",
+        "tier": 1,
+        "rule": null,
+        "reason": "no rule matched; default_tier 1"
+      }
+    ],
+    "never_auto_merged": false
+  },
+  "secret_scan": {
+    "suspicious_lines": []
+  },
+  "gates": [
+    {
+      "id": "lint",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "ruff check .",
+      "ran_in": "sandbox",
+      "duration_s": 0.247,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/gate-lint.log",
+      "output_tail": [
+        "All checks passed!"
+      ],
+      "reason": null
+    },
+    {
+      "id": "format",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "ruff format --check .",
+      "ran_in": "sandbox",
+      "duration_s": 0.243,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/gate-format.log",
+      "output_tail": [
+        "3 files already formatted"
+      ],
+      "reason": null
+    },
+    {
+      "id": "types",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "mypy src",
+      "ran_in": "sandbox",
+      "duration_s": 0.648,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/gate-types.log",
+      "output_tail": [
+        "Success: no issues found in 1 source file"
+      ],
+      "reason": null
+    },
+    {
+      "id": "unit",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60",
+      "ran_in": "sandbox",
+      "duration_s": 0.441,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/gate-unit.log",
+      "output_tail": [
+        "..                                                                       [100%]",
+        "================================ tests coverage ================================",
+        "_______________ coverage: platform linux, python 3.12.14-final-0 _______________",
+        "",
+        "Name                              Stmts   Miss  Cover   Missing",
+        "---------------------------------------------------------------",
+        "src/seating_planner/__init__.py       1      0   100%",
+        "---------------------------------------------------------------",
+        "TOTAL                                 1      0   100%",
+        "Required test coverage of 60% reached. Total coverage: 100.00%",
+        "2 passed in 0.02s"
+      ],
+      "reason": null
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac1",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "python -c 'import seating_planner'",
+      "ran_in": "sandbox",
+      "duration_s": 0.243,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/ac-ac1.log",
+      "output_tail": [],
+      "reason": null
+    },
+    {
+      "id": "ac2",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "ruff check .",
+      "ran_in": "sandbox",
+      "duration_s": 0.249,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/ac-ac2.log",
+      "output_tail": [
+        "All checks passed!"
+      ],
+      "reason": null
+    },
+    {
+      "id": "ac3",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "mypy src",
+      "ran_in": "sandbox",
+      "duration_s": 0.308,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/ac-ac3.log",
+      "output_tail": [
+        "Success: no issues found in 1 source file"
+      ],
+      "reason": null
+    },
+    {
+      "id": "ac4",
+      "kind": "test",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q tests/test_scaffold.py::test_package_imports",
+      "ran_in": "sandbox",
+      "duration_s": 0.373,
+      "output_file": "factory/runs/bean-001-20260915T192025Z/ac-ac4.log",
+      "output_tail": [
+        ".                                                                        [100%]",
+        "1 passed in 0.00s"
+      ],
+      "reason": null
+    }
+  ],
+  "invariants": null,
+  "test_integrity": {
+    "schema": "test-integrity/1.0.0",
+    "base": "e9a5b33e9482f0b23d5678e96622f2c5a92a2a83",
+    "test_files": [
+      "tests/test_scaffold.py"
+    ],
+    "source_files": [
+      "pyproject.toml",
+      "src/seating_planner/__init__.py"
+    ],
+    "prose_files": [
+      ".gitignore"
+    ],
+    "fails_on_revert": {
+      "result": "yes",
+      "why": "the tests pass with the change and fail without it, so something in them depends on it",
+      "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60",
+      "exit_code": 1,
+      "control_exit_code": 0,
+      "caveat": "The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something."
+    },
+    "test_integrity": {
+      "deleted_tests": 0,
+      "new_skips": 0,
+      "removed_asserts": 0,
+      "added_asserts": 3,
+      "caveat": "Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place."
+    }
+  },
+  "overall": "pass"
+}
