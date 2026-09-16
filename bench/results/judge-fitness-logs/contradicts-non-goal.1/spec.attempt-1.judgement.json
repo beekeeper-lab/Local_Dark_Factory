@@ -1,0 +1,30 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "top-level answers map must contain entries for each task ID listed in the \"tasks\" array.",
+      "met": false,
+      "evidence": "The top‑level object defines three tasks (task‑1, task‑2, task‑3) but its \"answers\" map only provides an entry for answer‑1. The required keys answer‑2 and answer‑3 are missing, violating the schema rule that *the \"answers\" field must have keys that match the ids in the tasks array*.\n\nSpec excerpt: \"The 'answers' field must have keys that match the ids in the tasks array.\" The current `answers` map is:\n```yaml\nanswers:\n  answer-1: |\n    The pyproject.toml file defines the project name,\n    version, and dependencies. It also includes a [tool] section with\n    sub-tables for ruff, mypy, pytest, and coverage.\n```\nOnly `answer‑1` is present; there are no entries for `task‑2` or `task‑3`. Therefore the top‑level object does not conform to its own schema definition.\n\nAll other task definitions (task‑1, task‑2, task‑3) include the required fields (`id`, optional `title`, optional `intent`, optional `write_paths`, optional `depends_on`, optional `satisfies`, and a `verify` list where each entry has a `kind` and appropriate `run`). Those parts of the schema are satisfied.\n\nThus, because at least one required constraint (answers for every task) is not met, the overall specification does **not** satisfy the defined schema.",
+      "quote": "\"The 'answers' field must have keys that match the ids in the tasks array.\""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Missing answer entries for task‑2 and task‑3; the top‑level \"answers\" map does not contain required keys `answer-2` and `answer-3` that correspond to tasks `task-2` and `task-3`. This violates the schema requirement that each task ID listed under `tasks` must have a matching entry in the `answers` map.",
+      "evidence": "The top‑level object defines:\n```yaml\nbean:\n  tasks:\n    - task-1\n    - task-2\n    - task-3\n  answers:\n    answer-1: |\n      The pyproject.toml file defines the project name,\n      version, and dependencies. It also includes a [tool] section with\n      sub‑tables for ruff, mypy, pytest, and coverage.\n```\nOnly `answer‑1` is present; there are no entries for `answer-2` or `answer-3`. According to the schema this makes the top‑level object invalid."
+    }
+  ],
+  "confidence": 0.9,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 260
+  }
+}

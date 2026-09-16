@@ -95,9 +95,21 @@ if git -C "$ROOT" show-ref --verify --quiet "refs/remotes/origin/$DEFAULT_BRANCH
     if git -C "$ROOT" fetch --quiet origin "$DEFAULT_BRANCH" 2>/dev/null; then
       printf '  ok    fetch                    origin/%s\n' "$DEFAULT_BRANCH"
     else
-      # Offline is not a reason to stop: the check then measures against what is
-      # known locally and says so, rather than claiming currency it did not test.
-      printf '  warn  fetch                    could not reach origin — comparing against the last known %s\n' "$BASE_REF"
+      # This used to warn and carry on, comparing against the last known
+      # origin/main. That is failing open, in the precise sense the taxonomy in
+      # RESUME.md names: the step would print a warning nobody reads and then
+      # report SYNC CURRENT, which is a claim about the remote it did not test.
+      #
+      # A repository with no origin is a legitimate way to run this line and is
+      # handled by the branch below — nothing can be behind a base that does not
+      # exist. An origin that exists and cannot be reached is a different thing:
+      # the answer is unknown, and the next step pushes to that same origin
+      # anyway, so nothing is gained by guessing now.
+      printf '  FAIL  fetch                    origin exists and could not be reached\n'
+      printf '\nSYNC UNKNOWN — the last known %s may be stale, and "probably current" is not\n' "$BASE_REF"
+      printf 'something this step is willing to record. Fix the network, or run with\n'
+      printf '%s\n' '--no-fetch if you have just fetched by hand and know what you are doing.'
+      exit 1
     fi
   fi
 elif git -C "$ROOT" show-ref --verify --quiet "refs/heads/$DEFAULT_BRANCH"; then

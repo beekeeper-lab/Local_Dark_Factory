@@ -198,6 +198,30 @@ want  "and it did not rebase anyway"  "only one rebase should be recorded" \
       test "$(jq -r '[.rebases[]] | length' "$R/factory/runs/R/run.json")" = 1
 
 # --------------------------------------------------------------------------
+printf '\n== an origin that exists and cannot be reached ==\n\n'
+#
+# This warned and carried on, comparing against the last known origin/main and
+# reporting SYNC CURRENT — a claim about the remote it had not tested. That is
+# failing open in the exact sense the taxonomy names. A repo with NO origin is a
+# different case and still works: nothing can be behind a base that does not exist.
+use_repo unreachable
+git -C "$R" remote set-url origin "$WORK/there-is-no-repo-here.git"
+out="$( cd "$R" && bash "$PIPELINE_DIR/sync.sh" factory/runs/R 2>&1 )"; rc=$?
+rc_is "it refuses"                     "$rc" 1
+check "and says the origin is there"   "origin exists and could not be reached" "$out"
+check "and will not guess"             "SYNC UNKNOWN" "$out"
+check "naming what it will not claim"  "probably current" "$out"
+check "and how to override deliberately" "--no-fetch" "$out"
+nope  "it never says current"          "SYNC CURRENT" "$out"
+
+printf '\n-- but a repository with no origin at all is fine --\n\n'
+use_repo noorigin
+git -C "$R" remote remove origin
+out="$( cd "$R" && bash "$PIPELINE_DIR/sync.sh" factory/runs/R 2>&1 )"; rc=$?
+rc_is "it passes"                      "$rc" 0
+check "measuring against the local base" "local main (no origin)" "$out"
+
+# --------------------------------------------------------------------------
 printf '\n== preconditions ==\n\n'
 use_repo dirty
 advance_origin "so there is something to rebase onto"
