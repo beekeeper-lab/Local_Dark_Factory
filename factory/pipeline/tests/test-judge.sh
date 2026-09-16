@@ -274,8 +274,17 @@ printf '\n== the runner died mid-request ==\n\n'
 clean_verdicts
 reply '{"model":"","created_at":"","done":false,"message":{"role":"assistant","content":""}}'
 out="$(judge)"; rc=$?
-check "it is called out as the machine" "This is the machine, not the judge" "$out"
+check "it is called out as the machine" "a 200 with an empty struct" "$out"
 check "with what to do about it"        "ollama stop" "$out"
+# Both causes, because they look identical from here and only one is fixable by
+# retrying. On 2026-09-16 this message said "free VRAM and retry"; gemma4:26b was
+# dying because it emits `<unused49>`, the grammar stack empties and llama.cpp
+# throws — and a whole measurement cycle went into stopping models on an idle GPU
+# before the server log said so.
+check "it names both causes"           "out of VRAM" "$out"
+check "including the grammar one"      "the model emitted a token the constrained decode cannot" "$out"
+check "and that retrying will not fix that one" "not fixable by retrying" "$out"
+check "with where the truth is"        "journalctl -u ollama" "$out"
 want  "and no judgement is written"     "a dead runner must not produce a judgement" \
       test ! -f "$R/verdicts/spec.attempt-1.judgement.json"
 

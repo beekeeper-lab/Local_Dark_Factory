@@ -623,8 +623,15 @@ T1="$(date +%s)"
 # never fired on the very response it was written for. tostring, not //.
 if [ "$(jq -r '.model // ""' <<<"$RESP" 2>/dev/null)" = "" ] \
    && [ "$(jq -r '.done | tostring' <<<"$RESP" 2>/dev/null)" = "false" ]; then
-  printf 'JUDGE  %s: the model server returned nothing at all — its runner died mid-request.\n' "$TARGET" >&2
-  printf '       This is the machine, not the judge. Free VRAM (ollama stop <other-model>) and retry.\n' >&2
+  printf 'JUDGE  %s: the model server returned nothing at all — a 200 with an empty struct.\n' "$TARGET" >&2
+  printf '       ollama does this when its runner dies, and there are two reasons it does:\n' >&2
+  printf '         out of VRAM   — free some (ollama stop <other-model>) and retry\n' >&2
+  printf '         the GRAMMAR   — the model emitted a token the constrained decode cannot\n' >&2
+  printf '                         accept, llama.cpp threw, and ollama answered 200 anyway\n' >&2
+  printf '       The second is not fixable by retrying and looks identical from here. It is\n' >&2
+  printf '       in the server log: `journalctl -u ollama --since -5min | grep grammar`.\n' >&2
+  printf '       Measured 2026-09-16: gemma4:26b emits <unused49>, the grammar stack empties,\n' >&2
+  printf '       and every request after the first two dies this way — with the GPU idle.\n' >&2
   exit 9
 fi
 
