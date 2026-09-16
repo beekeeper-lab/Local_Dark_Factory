@@ -29,6 +29,14 @@ gates_ref: factory/gates.lock.yaml
 # Checks that must be green on the exact candidate SHA before any merge. The
 # controller compares verdict.candidate_sha against pr.head_sha first: a green
 # check on a different commit is not evidence about this one.
+#
+# Hidden tests are NOT in here and must not be. They live outside the repository
+# by construction, and a GitHub runner has only the repository — so nothing in CI
+# can produce that check and naming it here would make every merge wait forever
+# for a tick nobody emits. The hidden suite is a local gate result: it is in
+# gate.json, in the pull request body, and in the halt summary if it fails. A
+# merge gated only on CI is a merge that did not consider them, which is why the
+# body carries the line.
 required_checks:
   - gates
 
