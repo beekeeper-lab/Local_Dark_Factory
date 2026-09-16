@@ -539,7 +539,7 @@ phase_2_exit:
 - [ ] Joint review: split / merge / reject / reorder / fix dependencies; `manual` ACs flagged
 - [ ] Approval stamps `status: approved` + `approval {approved_by, approved_at, order}`
 - [ ] Intake branch `factory/intake-<date>` + PR opened; human merges
-- [ ] `factory go` refuses non-approved beans; queues approved beans in `order` respecting `dependencies`
+- [x] `factory go` refuses non-approved beans; queues approved beans in `order` respecting `dependencies` — `factory/pipeline/queue.sh` computes the queue and `factory go` runs it, one bean at a time, re-asking after each because a finished bean unblocks the next. `tests/test-queue.sh` (29). A bean is `ready`, `blocked` (with what it waits on named), `in_progress` (a branch exists — starting it again would cut a second branch off main), `done` (a run recorded a pull request), or **`refused`**: not approved. Refused rather than skipped, because in a list those look the same and mean opposite things, and `--bean <id>` goes through the same gate so a flag cannot bypass it. Serial by measurement, not simplification: `max_inflight: 1` and Phase 0 found the Q8 developer and the judge cannot co-reside.
 - [ ] During build-out only: same flow with Opus as the AI side produces byte-identical schema artifacts
 
 **Exit:**

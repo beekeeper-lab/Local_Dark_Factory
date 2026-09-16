@@ -32,6 +32,10 @@ factory — run the line against the repository you are standing in.
   factory step <step> <bean-id>
                             one step: spec, build, gate, doc, sync, pr, ci,
                             or audit-{spec,impl,doc,package}
+  factory go [--limit N] [--dry-run] [--bean <id>]
+                            run the approved beans in order, one at a time,
+                            stopping at the first halt
+  factory queue [--all]     what is runnable, and what blocks the rest
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
                             scratch space
@@ -436,6 +440,84 @@ run from the working tree."
     printf '\n'
     [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
     exit "$fail"
+    ;;
+
+  queue)
+    require_target
+    exec bash "$PIPE/queue.sh" "$@"
+    ;;
+
+  go)
+    # The line, rather than one bean of it.
+    #
+    # `factory run <id>` is right for one bean and the wrong shape for twenty:
+    # the order lives in the bean set, the dependencies live in the beans, and a
+    # person retyping both will eventually start bean-006 before bean-005 and
+    # spend an hour finding out. This asks queue.sh what is runnable, runs it,
+    # asks again — because a finished bean unblocks the next one — and stops the
+    # moment something halts.
+    #
+    # Serial, and not as a simplification: repo.yaml says `max_inflight: 1`, and
+    # Phase 0 measured why (the Q8 developer and the judge cannot co-reside, so a
+    # second concurrent bean would make two beans wait on the same model).
+    require_target
+    GO_LIMIT=0; GO_DRY=0; GO_ONE=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --limit) GO_LIMIT="${2:?--limit needs a number}"; shift 2 ;;
+        --dry-run) GO_DRY=1; shift ;;
+        --bean) GO_ONE="${2:?--bean needs an id}"; shift 2 ;;
+        *) die "usage: factory go [--limit N] [--dry-run] [--bean <id>]" ;;
+      esac
+    done
+
+    if [ -n "$GO_ONE" ]; then
+      # An explicit bean still goes through the queue, so "not approved" is
+      # refused here exactly as it would be in the automatic case. A flag that
+      # bypassed the gate would make the gate optional.
+      st="$(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .state')"
+      case "$st" in
+        "")      die "no bean '$GO_ONE' in this repository" ;;
+        refused) die "bean '$GO_ONE' is not approved, and §04 gates what enters the line.
+  $(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .why')" ;;
+        done)    die "bean '$GO_ONE' already reached a pull request" ;;
+        blocked) die "bean '$GO_ONE' is $(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .why')" ;;
+      esac
+    fi
+
+    GO_RAN=0
+    while :; do
+      if [ -n "$GO_ONE" ]; then
+        NEXT="$GO_ONE"
+      else
+        NEXT="$(bash "$PIPE/queue.sh" --json | jq -r '.ready[0] // empty')"
+      fi
+      [ -n "$NEXT" ] || { printf '\nNothing ready to run. `factory queue --all` says why.\n'; break; }
+      if [ "$GO_LIMIT" -gt 0 ] && [ "$GO_RAN" -ge "$GO_LIMIT" ]; then
+        printf '\nStopping at --limit %s. Next would be %s.\n' "$GO_LIMIT" "$NEXT"; break
+      fi
+      if [ "$GO_DRY" = 1 ]; then
+        printf 'would run  %s\n' "$NEXT"
+        [ -n "$GO_ONE" ] && break
+        # A dry run cannot ask "and then what?" without running something: the
+        # next bean is blocked until this one has a pull request. Say so rather
+        # than printing a list that assumes success.
+        printf '\n(and then whatever that unblocks — `factory queue --all` shows the chain)\n'
+        break
+      fi
+      printf '\n=== %s ===\n' "$NEXT"
+      GO_RC=0
+      bash "$0" run "$NEXT" || GO_RC=$?
+      GO_RAN=$((GO_RAN + 1))
+      if [ "$GO_RC" -ne 0 ]; then
+        printf '\nSTOPPED at %s (exit %s). The line does not move on from a halt: whatever\n' "$NEXT" "$GO_RC"
+        printf 'stopped it would stop the next bean too, and a queue that kept going would\n'
+        printf 'turn one question into twenty.\n'
+        exit "$GO_RC"
+      fi
+      [ -n "$GO_ONE" ] && break
+    done
+    printf '\n%s bean(s) run.\n' "$GO_RAN"
     ;;
 
   runs)
