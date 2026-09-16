@@ -39,6 +39,7 @@ not about the code.
 | `format-support-20260915T024138Z.json` | no | superseded — a 200-byte question, which cleared two models that then failed on real artifacts |
 | `format-support-real-payload-20260915T025711Z.json` | no | superseded by 111754Z |
 | `format-support-20260916T111754Z.json` | yes | **yes** — gpt-oss:120b holds the schema on an 18KB payload only at `low` |
+| `format-support-20260916T201730Z.json` | yes | **yes** — the other candidates on this box, with the real artifacts: `qwen3-coder-next` and `gemma4:26b` hold it with thinking off, `devstral:24b` is cut off mid-answer at 313s. The prerequisite for measuring any of them on the number that matters |
 | `judge-fitness-20260915T012448Z.json` | no | no — one pass, four cases, before the fixtures were right |
 | `judge-fitness-msgsep-20260915T023844Z.json` | no | no — one message per artifact vs one blob; single runs, and the judge is not reproducible |
 | `judge-fitness-gemma4-20260915T025711Z.json` | no | **partly** — gemma4:26b was rejected as a judge on this. Single run, so the comparison is weak; `format-support-20260916T111754Z.json` rejects it again on a different axis, which is why the decision stands |

@@ -438,6 +438,16 @@ re-runnable audit, and a bean set approved to run against.
 > `importable-modules`); two returned `revise` with no findings.
 > `evidence/reaudit-bean-001-3pass-20260916.log`.
 >
+> **And the answer to that was not only to tune the judge.** On 2026-09-16 a bean's
+> `non_goals` and `constraints` became machine-readable where they are statements
+> about a place: `forbidden_paths` and `forbidden_imports`, checked by
+> `factory/pipeline/bean-forbids.sh` at plan time over every task's write_paths
+> and again at the gate over the diff. `contradicts-non-goal` — a seeded defect the
+> judge misses — goes from "not decidable from the documents, needs a judge" to
+> "named by a check" for any bean that uses it. Three of five decidable by the
+> controller, against one this morning. Every case moved out of the judge is one it
+> cannot accept by mistake, and it accepts about half of what it is shown.
+>
 > The criteria half proved fixable by moving the rule out of the prose and into
 > the grammar — an `enum` of the bean's ids on `criteria[].id`, so the wrong ones
 > are unemittable rather than discouraged — and the first run after that change

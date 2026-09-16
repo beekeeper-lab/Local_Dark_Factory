@@ -1,0 +1,111 @@
+{
+  "schema": "format-support/3.0.0",
+  "measured_at": "2026-09-16T20:17:30Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T20:17:30Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "asked_with_artifacts": true,
+  "payload_bytes": 18292,
+  "short_question_only": false,
+  "results": [
+    {
+      "model": "qwen3-coder-next:latest",
+      "thinking": "false",
+      "holds": true,
+      "seconds": 35,
+      "what": "{\"verdict\":\"accept\",\"confidence\":0.9}"
+    },
+    {
+      "model": "qwen3-coder-next:latest",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"qwen3-coder-next:latest\" does not suppo)"
+    },
+    {
+      "model": "qwen3-coder-next:latest",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 1,
+      "what": "empty content (done_reason=\"qwen3-coder-next:latest\" does not suppo)"
+    },
+    {
+      "model": "qwen3-coder-next:latest",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"qwen3-coder-next:latest\" does not suppo)"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "false",
+      "holds": false,
+      "seconds": 313,
+      "what": "not JSON: {\n  \"verdict\": \"accept\",\n  \"criteria\": ["
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    },
+    {
+      "model": "devstral:24b",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 0,
+      "what": "empty content (done_reason=\"devstral:24b\" does not support thinking)"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false",
+      "holds": true,
+      "seconds": 20,
+      "what": "{\"verdict\":\"accept\",\"confidence\":1}"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "low",
+      "holds": false,
+      "seconds": 4,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "medium",
+      "holds": false,
+      "seconds": 1,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "high",
+      "holds": false,
+      "seconds": 1,
+      "what": "not JSON: <unused49><unused49><unused49><unused49>"
+    }
+  ],
+  "eligible_judges": [
+    {
+      "model": "qwen3-coder-next:latest",
+      "thinking": "false"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "thinking": "false"
+    }
+  ],
+  "schema_measured": "the SCHEMA literal in judge.sh. A real audit adds two things this cannot: an enum of the bean criterion ids on criteria[].id with minItems, and a per-target description on met. This measures whether the model can hold the SHAPE of a judgement; whether it holds a particular audit grammar is what factory reaudit measures."
+}

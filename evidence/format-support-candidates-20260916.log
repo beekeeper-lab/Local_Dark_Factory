@@ -1,0 +1,27 @@
+bench snapshot: /tmp/factory-bench.ldHoeP/bench
+payload: 2 artifact(s), 18292 bytes
+
+the judgement schema, by model and thinking level
+
+MODEL                          THINKING HOLDS   SECS   WHAT-CAME-BACK
+qwen3-coder-next:latest        false    yes     35     {"verdict":"accept","confidence":0.9}
+qwen3-coder-next:latest        low      no      0      empty content (done_reason="qwen3-coder-next:latest" does not suppo)
+qwen3-coder-next:latest        medium   no      1      empty content (done_reason="qwen3-coder-next:latest" does not suppo)
+qwen3-coder-next:latest        high     no      0      empty content (done_reason="qwen3-coder-next:latest" does not suppo)
+devstral:24b                   false    no      313    not JSON: {
+  "verdict": "accept",
+  "criteria": [
+devstral:24b                   low      no      0      empty content (done_reason="devstral:24b" does not support thinking)
+devstral:24b                   medium   no      0      empty content (done_reason="devstral:24b" does not support thinking)
+devstral:24b                   high     no      0      empty content (done_reason="devstral:24b" does not support thinking)
+gemma4:26b-a4b-it-q4_K_M       false    yes     20     {"verdict":"accept","confidence":1}
+gemma4:26b-a4b-it-q4_K_M       low      no      4      not JSON: <unused49><unused49><unused49><unused49>
+gemma4:26b-a4b-it-q4_K_M       medium   no      1      not JSON: <unused49><unused49><unused49><unused49>
+gemma4:26b-a4b-it-q4_K_M       high     no      1      not JSON: <unused49><unused49><unused49><unused49>
+
+eligible (model, thinking) pairs:
+  qwen3-coder-next:latest  thinking=false
+  gemma4:26b-a4b-it-q4_K_M  thinking=false
+
+/tmp/factory-bench.ldHoeP/bench/results/format-support-20260916T201730Z.json
+RC=0
