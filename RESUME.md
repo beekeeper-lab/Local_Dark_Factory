@@ -1275,6 +1275,12 @@ Write the end-to-end test before the next long real run, not after it.
   eleven pass against what the line actually built, which it wrote without ever
   seeing them.
 
+  **Rehearsed for bean-002 before the line depends on it**: run against the gate
+  container by hand, `<bean>` resolved to bean-002, the control fired, and the
+  suite reported 8 failing against bean-001's tree — correct, because that tree
+  has no `src/seating_planner/domain/`. The whole path works; what it will be
+  measuring the first time is whether the developer model built the right thing.
+
   **They cannot run in CI, and that is structural.** `required_checks` names checks
   GitHub reports, and a GitHub runner has only the repository — which is exactly
   where the hidden suite is not. So it is a local gate result: it appears in
