@@ -293,6 +293,41 @@ revise   4 findings   confidence 0.95   197s
 
 The defect was named in an earlier fitness run and in none of these five.
 
+**Re-measured 2026-09-16, and the verdict half changed.** Same case, same harness,
+after the token cap went to 16000 and `met` was given a per-target meaning
+(`judge-variance-20260916T142555Z.json`, `evidence/judge-variance-16k-met-20260916.log`):
+
+```
+revise   4 findings   confidence 0.92   382s
+revise   0 findings   confidence 0.50   180s     ← a revise with nothing to revise
+revise   4 findings   confidence 0.99   194s
+revise   3 findings   confidence 0.85   443s
+revise   1 finding    confidence 0.90   206s
+```
+
+**One verdict across five identical runs**, where the earlier run gave two. That is
+the first time this judge has been reproducible on anything.
+
+It does **not** reopen the advisory-audits decision, for three reasons stated
+plainly so nobody has to reconstruct them:
+
+1. One case. The finding above is at case level across six.
+2. Three variables changed at once — cap, prompt, thinking level — so nothing here
+   attributes the change to any of them.
+3. **The content is still random.** Findings 4/0/4/3/1, confidence 0.5 to 0.99, and
+   the seeded defect named in none of the five. A verdict that is stable while its
+   reasoning is not is a coin that has landed the same way five times.
+
+Run 2 is why `audit-check.sh` now refuses a `revise` or `block` carrying zero
+findings: orchestrate routes a failed audit back into the authoring step *with the
+findings*, and with none attached the step is asked the identical question again,
+burns an attempt, and halts the run for a human whose only information is "the
+judge said revise".
+
+The honest next step is a repeat of the **case-level** measurement at the new cap
+and prompt — `judge-fitness.sh --repeat 3`, about 75 minutes — which is what would
+actually bear on the decision.
+
 **Confirmed at case level, 2026-09-16** (`judge-fitness-20260916T001225Z.json`,
 `--repeat 3`: the same six cases, three times, byte-identical input, temperature 0):
 
