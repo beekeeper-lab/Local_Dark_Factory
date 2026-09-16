@@ -21,6 +21,34 @@
 # It also fixes the context: the API takes `options.num_ctx`, which pi does not
 # expose. This is the one place in the line where the declared context is the
 # served context because the controller sets it.
+#
+# --------------------------------------------------------------------------
+# What 2026-09-16 changed here, and the one sentence worth carrying:
+#
+#   **On this model a constraint in the grammar is a rule and the same constraint
+#   in prose is a suggestion.**
+#
+# Five changes, each measured against twelve real audits of a real run:
+#
+#   enum on criteria[].id     the prompt had said "using exactly these ids", in
+#                             bold, with the list, for days. The model answered
+#                             with task ids, artifact numbers and invented names.
+#                             With an enum: every answer, exactly right.
+#   criteria keyed by id      the enum left "four items, each from the list" and
+#                             nothing said distinct, so it repeated one. An object
+#                             with required keys cannot.
+#   tools: []                 the field was ABSENT, not empty. "You have NO tools"
+#                             in the system prompt; `repo_browser.open_file` nine
+#                             times out of nine. With an empty list: none.
+#   maxLength on free text    `evidence` was arriving with a unified diff and a
+#                             whole Python module in it. JUDGE_FIELD_MAXLEN.
+#   confidence as an enum     `{"minimum":0,"maximum":1}` for days, and it
+#                             returned 100. llama.cpp's grammar honours `enum` and
+#                             `maxLength` and does NOT honour numeric bounds.
+#
+# None of it is evidence that the judge is RIGHT. Conformance and judgement are
+# different things: on honest fixtures this judge accepts 7 to 9 seeded defects
+# out of 15, and every one of those answers is perfectly shaped. See RESUME.
 set -uo pipefail
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
