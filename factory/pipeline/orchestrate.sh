@@ -834,11 +834,13 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
       printf -- '- Last recorded verdict for `%s` in steps.jsonl: `%s`\n' "$step" "$rv"
       if [ -f "$RUN_DIR/gate.json" ] && [ "$(jq -r '.overall // ""' "$RUN_DIR/gate.json" 2>/dev/null)" = "fail" ]; then
         printf '\n- The gate failed. What it found, in `%s/gate.json`:\n' "$RUN_DIR"
-        jq -r '(if (.containment.contained | not) then "  - containment: " + (.containment.violations | join(", ")) else empty end),
-               (.gates[]? | select(.status != "pass") | "  - gate " + .id + ": exit " + (.exit_code|tostring)),
-               (.acceptance_criteria[]? | select(.status != "pass") | "  - " + .id + ": " + (.reason // .command // "failed")),
-               (if (.invariants != null and .invariants.status != "pass") then "  - invariants: " + (.invariants.reason // .invariants.ref) else empty end)' \
-          "$RUN_DIR/gate.json" 2>/dev/null
+        # The summary lives in gate-summary.sh, not here. Embedded, it could only be
+        # tested by driving a whole run to a failing gate — so it was not tested,
+        # and it was wrong: it knew about containment, gates, criteria and
+        # invariants, and nothing about the two checks added after it was written.
+        # A run halted by a hidden-test failure said "the gate failed" and then
+        # listed nothing.
+        "$PIPELINE_DIR/gate-summary.sh" "$RUN_DIR/gate.json" 2>/dev/null
       fi
       local blocked
       blocked="$(ls -1 "$RUN_DIR"/build/*/BLOCKED.md 2>/dev/null | head -1 || true)"
