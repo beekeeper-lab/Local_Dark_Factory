@@ -145,7 +145,11 @@ else
     # provenance.sh emits the block, and inflight.sh is a guard neither of which
     # writes a figure. A file that writes nothing to bench/results cannot carry
     # provenance into it, and asking it to would be a check on nothing.
-    case "$(basename "$h")" in provenance.sh|inflight.sh) continue ;; esac
+    # Excluded by what they are: helpers, not harnesses. provenance.sh emits the
+    # block, inflight.sh is a guard, snapshot.sh is a launcher. None writes a
+    # figure, and a file that writes nothing to bench/results cannot carry
+    # provenance into it.
+    case "$(basename "$h")" in provenance.sh|inflight.sh|snapshot.sh) continue ;; esac
     grep -q 'provenance' "$h" || noprov="$noprov $(basename "$h")"
   done
   if [ -z "$noprov" ]; then
