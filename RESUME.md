@@ -970,11 +970,25 @@ How to find out, without touching the live path: a bench harness that asks
 per-criterion and scores with `judge-fitness`'s existing classifier. The false
 accept rate is the number it has to beat, and that number is 7 to 9 in 15.
 
-**Before building it**, finish the cheaper question already in flight: whether any
-other model on this box does better on the same corpus. `qwen3-coder-next` and
-`gemma4:26b` both hold the schema on real artifacts
-(`evidence/format-support-candidates-20260916.log`). If one of them is
-substantially better, the shape of the ask matters less.
+**The cheaper question was asked first, and it is answered.** Is any other model on
+this box better on the same corpus?
+
+```
+gpt-oss:120b        7–9 false accepts in 15, and not reproducible
+qwen3-coder-next    15 of 15, and PERFECTLY reproducible
+gemma4:26b          the ollama runner died on 14 of 18; being re-run with the GPU free
+devstral:24b        cannot hold the schema on real artifacts at all
+```
+
+`qwen3-coder-next` accepts everything, every time. That pairing is worth more than
+the number: this project has spent two days treating reproducibility as the thing
+the judge lacks, with a harness built to measure it — and here is a judge that has
+it completely and is useless. **Reproducibility is a property of an instrument, not
+evidence that it measures anything.**
+
+So gpt-oss:120b is the best judge available here, at 7 to 9 false accepts in 15.
+Changing the model is not the lever; the shape of the ask has never been varied,
+and it is the one thing left.
 
 ## Queued for an idle pipeline
 
@@ -1450,7 +1464,9 @@ was the 262144 default context, not model speed.
 ## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
 
 **The judge stays advisory**, and it is not a holding position — it is now the
-best-supported decision in this repository. Two case-level runs on fixtures that
+best-supported decision in this repository. It is also not a model choice:
+`qwen3-coder-next` accepts 15 of 15 and `devstral:24b` cannot hold the schema, so
+gpt-oss:120b is the best of what this box has. Two case-level runs on fixtures that
 actually seed their defects: **9 false accepts in 15, then 7 in 15**. A false
 accept is the failure the line exists to prevent and it is invisible from outside.
 Separately, twelve audits of a real run at the best configuration produced eight
