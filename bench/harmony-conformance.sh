@@ -61,10 +61,16 @@ grep -qE "$LEAK_RE" <<<"$REASON" && bad "control tokens leaked into reasoning" \
 # -- 2. 'developer' role accepted ---------------------------------------------
 DEV_RESP="$(curl -s "$HOST/v1/chat/completions" -H 'Content-Type: application/json' -d "$(jq -n \
   --arg m "$JUDGE" '{model:$m, messages:[{role:"developer",content:"You answer with one word."},{role:"user",content:"Say READY"}], max_tokens:400}')")"
-if jq -e '.choices[0].message.content' >/dev/null 2>&1 <<<"$DEV_RESP"; then
+# Non-empty, not merely present. jq treats "" as TRUE — only null and false are
+# falsy — so a server that accepted the role and returned nothing would have been
+# recorded as accepting it, and this predicate is one of the six that closed
+# Phase 0. The same trap was found in phase0-audit's provenance check the same
+# morning; it is worth grepping for `jq -e '.field'` whenever a check reads a
+# string it did not itself write.
+if [ -n "$(jq -r '.choices[0].message.content // ""' <<<"$DEV_RESP")" ]; then
   ok "'developer' role accepted on the OpenAI endpoint"
 else
-  bad "'developer' role rejected: $(jq -rc '.error // .' <<<"$DEV_RESP")"
+  bad "'developer' role rejected or answered with nothing: $(jq -rc '.error // .' <<<"$DEV_RESP")"
 fi
 
 # -- 3. Native endpoint: thinking separated from content ----------------------

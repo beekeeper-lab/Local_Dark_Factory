@@ -112,7 +112,7 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Six ways a check goes wrong, all found on 2026-09-15
+## Seven ways a check goes wrong, found on 2026-09-15 and 16
 
 Every one of these was in code written here, most of it written the same day, and
 each was found by a real run rather than by a test. They are listed because the
@@ -164,6 +164,16 @@ A fifth, adjacent: **a diagnostic that points at the wrong cause.** "child exit 
 for a doc step that wrote nothing, and a "terminated" line from the container's
 own forwarder that read like an external kill and cost a real diagnosis session
 looking for a signal nobody sent.
+
+**5b. Reading a string with `jq -e` and calling it a check.** In jq only `null` and
+`false` are falsy — **`""` is true.** So `jq -e '.provenance.ollama_version and ...'`
+passed for a figure whose ollama_version was the empty string, and the Phase-0 audit
+reported "every results JSON carries kernel + ollama version" about a field with
+nothing in it. `provenance_block` fills that field from `ollama --version`, which
+produces nothing on a box without ollama — the exact machine someone would re-run
+these harnesses on. The same shape was in `harmony-conformance.sh`, deciding whether
+the OpenAI endpoint accepts a `developer` role. **Grep for `jq -e '.field'` whenever
+a check reads a string it did not write itself**; the fix is `(.field // "") != ""`.
 
 **6. Asking whether a thing exists when the question is who made it.** Added
 2026-09-15 evening, and it is category 1 wearing a different hat. run-step
