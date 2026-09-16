@@ -44,12 +44,33 @@ criteria, findings, confidence. Nothing else.'
 #
 # --artifacts <dir> loads spec.md and tasks.yaml from a run directory and sends
 # them the way judge.sh does: one message each, ahead of the question.
+usage() {
+  cat <<'EOF'
+format-support.sh — which (model, thinking) pairs hold the judgement schema.
+
+usage: format-support.sh [--artifacts <run-dir>] [--out <results.json>] [model ...]
+
+With no models named, every model ollama has except embedding and vision ones.
+--artifacts loads spec.md and tasks.yaml from a run directory and sends them the
+way judge.sh does — one message each, ahead of the question — because the
+failures this exists to find appear only under a full set of artifacts.
+EOF
+}
+
 ART_DIR=""
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --artifacts) ART_DIR="${2:?--artifacts needs a run directory}"; shift 2 ;;
-    *) ARGS+=( "$1" ); shift ;;
+    --out)       OUT="${2:?--out needs a path}"; shift 2 ;;
+    -h|--help)   usage; exit 0 ;;
+    # An unrecognised flag was being taken as a model name, so `--help` ran four
+    # requests against a model called "--help", printed a table of four failures,
+    # and wrote a results file. A harness that reads a flag as data produces a
+    # figure about nothing, and this one writes that figure to bench/results
+    # where it looks exactly like a measurement.
+    -*)          usage >&2; printf 'unknown flag: %s\n' "$1" >&2; exit 2 ;;
+    *)           ARGS+=( "$1" ); shift ;;
   esac
 done
 set -- ${ARGS+"${ARGS[@]}"}
