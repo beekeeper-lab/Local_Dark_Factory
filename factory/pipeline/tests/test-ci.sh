@@ -87,7 +87,7 @@ clean() { rm -f "$R/ci.json" "$R/rewind.json" "$R/ci-findings.md" "$R/ci-logs.tx
 # --------------------------------------------------------------------------
 printf '\n== every required check green ==\n\n'
 clean
-printf '[{"name":"gates","state":"SUCCESS","link":"https://github.com/example/x/actions/runs/7"}]\n' > "$GH_CHECKS"
+printf '[{"name":"gates","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/x/actions/runs/7"}]\n' > "$GH_CHECKS"
 out="$(ci)"; rc=$?
 rc_is "it passes"                      "$rc" 0
 check "it names the pull request"      "pull/1" "$out"
@@ -105,7 +105,7 @@ printf '\n== a required check that never reported ==\n\n'
 # A required check that does not run is not a check, and a step that waits for it
 # and then shrugs has converted a missing guarantee into a green tick.
 clean
-printf '[{"name":"something-else","state":"SUCCESS","link":""}]\n' > "$GH_CHECKS"
+printf '[{"name":"something-else","state":"SUCCESS","bucket":"pass","link":""}]\n' > "$GH_CHECKS"
 out="$(ci)"; rc=$?
 rc_is "it does not pass"               "$rc" 3
 check "and says what is missing"       "never reported" "$out"
@@ -118,7 +118,7 @@ nope  "it is not called slow"          "PENDING after" "$out"
 # --------------------------------------------------------------------------
 printf '\n== checks that never finish ==\n\n'
 clean
-printf '[{"name":"gates","state":"PENDING","link":""}]\n' > "$GH_CHECKS"
+printf '[{"name":"gates","state":"PENDING","bucket":"pending","link":""}]\n' > "$GH_CHECKS"
 out="$(ci)"; rc=$?
 rc_is "it refuses rather than assuming" "$rc" 3
 check "it says how long it waited"      "PENDING after 3s" "$out"
@@ -129,7 +129,7 @@ nope  "it never calls that green"       "CI PASS" "$out"
 # --------------------------------------------------------------------------
 printf '\n== a failing check sends the run back to build, for the right tasks ==\n\n'
 clean
-printf '[{"name":"gates","state":"FAILURE","link":"https://github.com/example/x/actions/runs/42"}]\n' > "$GH_CHECKS"
+printf '[{"name":"gates","state":"FAILURE","bucket":"fail","link":"https://github.com/example/x/actions/runs/42"}]\n' > "$GH_CHECKS"
 cat > "$GH_LOG" <<'LOG'
 gates  Run the gates  src/a.py:1:1: F401 imported but unused
 gates  Run the gates  Found 1 error in 1 file (checked 1 source file)
@@ -181,6 +181,30 @@ rc_is "it still reports the failure"   "$rc" 9
 want  "and re-opens nothing"           "reopened-tasks.txt must not exist" \
       test ! -f "$R/reopened-tasks.txt"
 check "saying so plainly"              "the logs name no file this bean wrote" "$out"
+
+printf '\n-- a skipped required check is not a passing one --\n\n'
+#
+# GitHub skips jobs for all sorts of good reasons — a path filter, a matrix
+# exclusion — and every one of them means the gates did not run on this commit,
+# which is the one thing `required_checks` exists to rule out.
+clean
+printf '[{"name":"gates","state":"SKIPPED","bucket":"skipping","link":""}]\n' > "$GH_CHECKS"
+out="$(ci)"; rc=$?
+rc_is "a skip is not green"            "$rc" 9
+check "and it says what a skip means"  "the gates did not run on this commit" "$out"
+nope  "never CI PASS"                  "CI PASS" "$out"
+
+printf '\n-- and a cancelled one is a failure, not a pending one --\n\n'
+#
+# `bucket` is gh's own normalisation of `state`; matching raw states means a check
+# reporting one this list has never seen reads as neither terminal nor failed, and
+# the step waits for it until the timeout. That is how a missing guarantee turns
+# into a slow one.
+clean
+printf '[{"name":"gates","state":"CANCELLED","bucket":"cancel","link":""}]\n' > "$GH_CHECKS"
+out="$(ci)"; rc=$?
+rc_is "a cancel is terminal"           "$rc" 9
+nope  "and not waited on"              "after 3s" "$out"
 
 # --------------------------------------------------------------------------
 printf '\n== a repository that names no required checks ==\n\n'

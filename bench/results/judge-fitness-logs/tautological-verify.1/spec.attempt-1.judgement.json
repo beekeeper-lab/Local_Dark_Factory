@@ -1,0 +1,50 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "task-1",
+      "met": false,
+      "evidence": "The verification step for task‑1 checks the key `'requires_python'` (with an underscore) while the pyproject file defines the field as `'requires-python'`. This mismatch causes a `KeyError`, so the condition that the pyproject file exists and contains the correct fields cannot be satisfied. In addition, the comment says the step *must fail* because the file does not exist yet, but the test also checks for the existence of the current directory (`test -d .`), which will succeed; thus the comment contradicts the actual command behavior.\n\nThe `.gitignore` verification uses `grep -qx '*.pyc'`, where `-x` expects an exact match. The pattern `'*.pyc'` is interpreted as a literal string, not a wildcard, so this test will never pass unless the line literally contains `*.pyc`. Moreover, the comment claims that the line should be present and preserved after appending, but the grep command does not allow for preceding characters before `*.pyc`, making the check contradictory.\n\nTask‑2’s verification includes a check that `seating_planner.__version__` is a string containing two dots (`assert isinstance(v, str) and v.count('.') == 2`). However, task‑1 defines `__version__ = \"0.1.0\"`, which contains only one dot, causing this assertion to fail.\n\nTask‑3’s verification expects the test file `tests/test_scaffold.py` to exist and contain a specific function name (`test_package_imports`). The spec does not provide any content for that file other than the requirement to import `seating_planner`, so unless the implementation adds such a test, this condition will also fail.\n\nFinally, the spec’s “satisfies” relationships are inconsistent: task‑1 claims to satisfy `ac2` and `ac3`, but those tasks depend on conditions (e.g., existence of a proper `.gitignore` entry and a correctly configured pyproject) that are not guaranteed by task‑1 as written. The spec also references `factory/gates.lock.yaml` in the teaching note, yet this file is never defined or created within any of the listed tasks.\n\nOverall, these inconsistencies mean the specification cannot be considered sound without clarification and correction.",
+      "quote": "The first task is verified by confirming the working directory exists. The spec also states that task‑1 must create a pyproject.toml with specific fields (including `requires-python`), but the verification step checks for an incorrectly named key (`requires_python`). Additionally, the .gitignore check uses a pattern that will never match the intended line because of the `-x` flag. Task‑2 expects a version string containing two dots while task‑1 defines it with only one dot (\"0.1.0\"). The spec also mentions a gates.lock.yaml file but does not provide or create it, yet later tasks depend on its existence. These contradictions indicate that the specification is not internally consistent.\n\nTherefore, the overall assessment is **unsound**: the verification steps do not align with the declared intents and dependencies, leading to inevitable failures unless corrected."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "KeyError due to mismatched key name in pyproject.toml validation step.",
+      "evidence": "The verify command uses `p['requires_python']` while the file defines `'requires-python'`. This mismatch will raise a KeyError and cause the verification to fail."
+    },
+    {
+      "severity": "major",
+      "summary": "Incorrect grep pattern prevents detection of required .gitignore entries.",
+      "evidence": "`grep -qx '*.pyc'` looks for an exact line consisting solely of \"*.pyc\"; however, the intended entry is `*.pyc` (any file ending with .pyc). The test will therefore fail even if the correct line exists."
+    },
+    {
+      "severity": "major",
+      "summary": "Version string format mismatch in task‑2 verification.",
+      "evidence": "`seating_planner.__version__` is set to \"0.1.0\" (one dot), but the test asserts that it contains two dots (`v.count('.') == 2`). This assertion will always fail."
+    },
+    {
+      "severity": "major",
+      "summary": "Missing gates.lock.yaml file despite being referenced in task‑3's teaching note and satisfies list.",
+      "evidence": "The spec lists `ac4` as satisfied but never creates the required `factory/gates.lock.yaml`, causing any verification that reads it to fail."
+    },
+    {
+      "severity": "minor",
+      "summary": "Inconsistent comment about expected failure of the first verification step.",
+      "evidence": "Comment says the step should fail because no pyproject.toml exists, yet the command checks for the existence of the current directory (`test -d .`), which will succeed."
+    }
+  ],
+  "confidence": 0.92,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "medium",
+    "repeat_penalty": 1.1,
+    "seconds": 187
+  }
+}

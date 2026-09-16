@@ -75,16 +75,23 @@ HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
 STATE=""; ROWS=""
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-  ROWS="$(gh pr checks "$PR_URL" --json name,state,link 2>/dev/null || true)"
+  # `bucket`, not `state`. gh documents bucket as the normalisation of state into
+  # pass/fail/pending/skipping/cancel, and it is the field that stays meaningful
+  # across check types — GitHub Actions, external statuses, and whatever the next
+  # integration reports. Matching on raw state works until a check reports one
+  # this list has never seen, at which point it reads as neither terminal nor
+  # failed and the step waits for it forever. `state` is kept for the message,
+  # because "FAILURE" is what a person will see in the GitHub UI.
+  ROWS="$(gh pr checks "$PR_URL" --json name,state,bucket,link 2>/dev/null || true)"
   if [ -z "$ROWS" ] || ! jq -e '. | type == "array"' >/dev/null 2>&1 <<<"$ROWS"; then
     sleep "$INTERVAL"; continue
   fi
   pending=0
   for c in $REQUIRED; do
-    st="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.state // "MISSING"' <<<"$ROWS")"
-    case "$st" in
-      SUCCESS|FAILURE|ERROR|CANCELLED|TIMED_OUT|SKIPPED) ;;
-      *) pending=1 ;;
+    b="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.bucket // "missing"' <<<"$ROWS")"
+    case "$b" in
+      pass|fail|cancel|skipping) ;;
+      *) pending=1 ;;      # pending, and missing: it may not have started yet
     esac
   done
   [ "$pending" = 0 ] && { STATE=done; break; }
@@ -99,7 +106,8 @@ if [ "$STATE" != "done" ]; then
   NEVER=""; SLOW=""
   for c in $REQUIRED; do
     st="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.state // "MISSING"' <<<"${ROWS:-[]}" 2>/dev/null || echo MISSING)"
-    if [ "$st" = "MISSING" ]; then
+    b="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.bucket // "missing"' <<<"${ROWS:-[]}" 2>/dev/null || echo missing)"
+    if [ "$b" = "missing" ]; then
       NEVER="$NEVER $c"
       printf '  FAIL  %-23s never reported — a required check that does not run is not a check\n' "$c"
     else
@@ -130,11 +138,18 @@ fi
 
 FAILED=""
 for c in $REQUIRED; do
+  b="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.bucket // "missing"' <<<"$ROWS")"
   st="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.state // "MISSING"' <<<"$ROWS")"
   link="$(jq -r --arg n "$c" '[.[] | select(.name == $n)] | last.link // ""' <<<"$ROWS")"
-  case "$st" in
-    SUCCESS) printf '  ok    %-23s %s\n' "$c" "$st" ;;
-    MISSING) printf '  FAIL  %-23s never reported — a required check that does not run is not a check\n' "$c"
+  case "$b" in
+    pass)    printf '  ok    %-23s %s\n' "$c" "$st" ;;
+    missing) printf '  FAIL  %-23s never reported — a required check that does not run is not a check\n' "$c"
+             FAILED="$FAILED $c" ;;
+    # A skipped required check is not a passing one. GitHub skips jobs for all
+    # sorts of good reasons — a path filter, a matrix exclusion — and every one
+    # of them means the gates did not run on this commit, which is the one thing
+    # `required_checks` exists to rule out.
+    skipping) printf '  FAIL  %-23s skipped — the gates did not run on this commit\n' "$c"
              FAILED="$FAILED $c" ;;
     *)       printf '  FAIL  %-23s %s  %s\n' "$c" "$st" "$link"; FAILED="$FAILED $c" ;;
   esac
