@@ -69,7 +69,9 @@ printf '{"verdict":"block","from":"the original run"}\n' > "$RUN/verdicts/spec.a
 BEFORE="$(find "$RUN" -type f -exec sha256sum {} + | sort -k2 | sha256sum)"
 
 printf 'schema_version: bean/2.0.0\nid: bean-001\ntitle: t\nintent: i\n' > "$WORK/bean.yaml"
-re() { bash "$PIPE/reaudit.sh" "$RUN" --bean "$WORK/bean.yaml" "$@" 2>&1; }
+# FACTORY_NO_SNAPSHOT=1 throughout: this drives a stub pipeline whose parent is
+# not a repository, and the snapshot is the subject of exactly one section below.
+re() { FACTORY_NO_SNAPSHOT=1 bash "$PIPE/reaudit.sh" "$RUN" --bean "$WORK/bean.yaml" "$@" 2>&1; }
 
 printf '\n== it never writes to the run it is auditing ==\n\n'
 #
@@ -122,15 +124,32 @@ re --passes 1 --target spec --keep "$WORK/k6" --thinking high --json "$WORK/t.js
 eq "and the JSON records it"           "high" "$(jq -r '.thinking' "$WORK/t.json")"
 
 printf '\n== it refuses what it cannot audit ==\n\n'
-out="$(bash "$PIPE/reaudit.sh" "$WORK/nope" --bean "$WORK/bean.yaml" 2>&1)"; rc=$?
+out="$(FACTORY_NO_SNAPSHOT=1 bash "$PIPE/reaudit.sh" "$WORK/nope" --bean "$WORK/bean.yaml" 2>&1)"; rc=$?
 check "a missing run directory"         "no such run directory" "$out"
-out="$(bash "$PIPE/reaudit.sh" "$RUN" 2>&1)"; rc=$?
+out="$(FACTORY_NO_SNAPSHOT=1 bash "$PIPE/reaudit.sh" "$RUN" 2>&1)"; rc=$?
 check "and a missing bean"              "--bean must name the bean" "$out"
 check "saying why that matters"         "criteria nobody declared" "$out"
 out="$(re --passes zero 2>&1)"
 check "a non-numeric --passes"          "wants a number" "$out"
 out="$(re --target sideways 2>&1)"
 check "and an unknown target"           "unknown target" "$out"
+
+printf '\n== it runs from a copy of the pipeline, and refuses an incomplete one ==\n\n'
+#
+# bash reads a script by byte offset as it executes. A twelve-audit measurement is
+# an hour — exactly the window in which someone improves the script — and an hour
+# into the first full run of this file a `pgrep` pattern near the top of it was
+# edited, replacing one line with ten and shifting every byte after it. Every
+# bench harness re-execs through bench/snapshot.sh for this reason; this one is a
+# measurement harness that happens to live in factory/pipeline and had nothing.
+out="$(bash "$PIPE/reaudit.sh" "$RUN" --bean "$WORK/bean.yaml" --passes 1 --target spec 2>&1)"; rc=$?
+# $PIPE's parent is not a repository, so the snapshot cannot be complete — which
+# is the assertion: an incomplete snapshot refuses rather than measuring with a
+# pipeline that is not the one in the repository.
+rc_is "an incomplete snapshot refuses" "$rc" 2
+check "and names what is missing"      "the snapshot is missing" "$out"
+check "and why that matters"           "not the one in the repository" "$out"
+nope  "and it did not measure anyway"  "audit run(s) produced" "$out"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -20,6 +20,45 @@
 #     target swap as an improvement.
 set -uo pipefail
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Run from a copy of the pipeline, always, without anyone having to remember.
+#
+# bash reads a script by byte offset as it executes. A twelve-audit measurement is
+# an hour, which is exactly the window in which someone improves the script — and
+# on 2026-09-16, an hour into the first full run of this file, I edited a `pgrep`
+# pattern near the top of it. The edit replaced one line with ten, shifting every
+# byte after it, and the run was reading from the old offsets.
+#
+# `bench/snapshot.sh` exists for precisely this and every bench harness re-execs
+# through it. This script is a measurement harness that happens to live in
+# factory/pipeline, and it had none, which is how the lesson arrived a second time.
+#
+# The snapshot mirrors the REPOSITORY root rather than factory/, because
+# audit-check climbs to "$PIPELINE_DIR/../../bench/validate.py" and to schemas/
+# beside it — a copy of factory/ alone puts pipeline/ at the top and both are
+# gone, quietly, with the verdict recorded as "structural checks only".
+#
+# FACTORY_NO_SNAPSHOT=1 opts out, for iterating on this file where seeing a change
+# take effect is the point.
+if [ "${FACTORY_REAUDIT_SNAPSHOTTED:-0}" != 1 ] && [ "${FACTORY_NO_SNAPSHOT:-0}" != 1 ]; then
+  _fr="$(cd "$PIPELINE_DIR/../.." && pwd)"
+  _snap="$(mktemp -d "${TMPDIR:-/tmp}/factory-reaudit-snap.XXXXXX")"
+  mkdir -p "$_snap/factory"
+  cp -r "$_fr/factory/." "$_snap/factory/" 2>/dev/null
+  for _sib in schemas bench; do
+    [ -d "$_fr/$_sib" ] && cp -r "$_fr/$_sib" "$_snap/$_sib" 2>/dev/null
+  done
+  # Asserted, not hoped for. A snapshot missing the validator does not fail; it
+  # downgrades every verdict check to "structural only" and says so in a line
+  # nobody reads.
+  for _needed in factory/pipeline/judge.sh factory/pipeline/audit-check.sh \
+                 factory/pipeline/roles.json schemas bench/validate.py; do
+    [ -e "$_snap/$_needed" ] || { printf 'reaudit: the snapshot is missing %s — refusing to measure with a pipeline that is not the one in the repository.\n' "$_needed" >&2; rm -rf "$_snap"; exit 2; }
+  done
+  [ -x "$_fr/.venv/bin/python" ] && export PIPELINE_PYTHON="$_fr/.venv/bin/python"
+  printf 'pipeline snapshot: %s/factory/pipeline\n' "$_snap" >&2
+  FACTORY_REAUDIT_SNAPSHOTTED=1 bash "$_snap/factory/pipeline/reaudit.sh" "$@"; _rc=$?; rm -rf "$_snap"; exit "$_rc"
+fi
 # shellcheck source=lib.sh
 source "$PIPELINE_DIR/lib.sh"
 
