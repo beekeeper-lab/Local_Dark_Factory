@@ -639,6 +639,18 @@ jq -sc \
           #
           # This is measured in the process that ran the step, from before the
           # child to after it, and does not depend on the start line being right.
+          #
+          # The 0s readings themselves have since been explained, and it was not
+          # the contained path misbehaving as the commit that added this guessed:
+          # the run used a pipeline snapshot taken at 19:20, and STEP_STARTED_AT
+          # landed at 20:37. The steps that read zero ran at 20:06. A run copies
+          # the pipeline at launch and finishes on the code it started with, which
+          # is the point of snapshotting and also means a record can be evidence
+          # about a version of the line that no longer exists.
+          #
+          # Kept anyway. Two independent numbers that must agree is a better
+          # record than one derived from two timestamps, and the next reason a
+          # boundary is wrong will not be this one.
           | .duration_s = $dur
           | .conditions = $cond )
     end
