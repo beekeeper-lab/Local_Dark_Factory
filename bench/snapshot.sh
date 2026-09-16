@@ -48,6 +48,11 @@ cp -r "$ROOT/factory" "$SNAP/factory"
 # be deleted. Everything else about the run comes from the snapshot.
 rm -rf "$SNAP/bench/results"
 ln -s "$ROOT/bench/results" "$SNAP/bench/results"
+# The venv, by symlink rather than by copy: it is hundreds of megabytes, it is not
+# what anyone edits mid-run, and the harnesses reach for it as `$ROOT/.venv/bin/python`.
+# Without it every mutation in judge-fitness fails — which the first snapshotted
+# run demonstrated, six times in a row.
+[ -d "$ROOT/.venv" ] && ln -s "$ROOT/.venv" "$SNAP/.venv"
 trap 'rm -rf "$SNAP"' EXIT
 
 printf 'bench snapshot: %s\n' "$SNAP/bench" >&2

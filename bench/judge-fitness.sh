@@ -214,7 +214,19 @@ while IFS='|' read -r name should_reject description catchwords; do
   mkdir -p "$RD/verdicts"
   cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
   printf '{"run_id":"fitness-%s","bean":"%s"}\n' "$name" "$(basename "$(dirname "$BEAN")")" > "$RD/run.json"
-  mutate "$name" "$RD/spec.md" "$RD/tasks.yaml" || { echo "  mutation failed: $name" >&2; continue; }
+  # A mutation that did not happen is not a case to skip; it is a measurement of
+  # nothing. `continue` here printed "mutation failed" for all six cases — when
+  # the snapshot launcher left the venv behind — and then wrote a results file
+  # with zero seeded defects and an empty case list, exit 0, sitting in
+  # bench/results looking like a figure.
+  #
+  # The whole run stops, because one unmutated case makes the denominator wrong
+  # and the rest of the numbers uncomparable with any other run.
+  mutate "$name" "$RD/spec.md" "$RD/tasks.yaml" \
+    || { printf '\nMUTATION FAILED for %s — stopping.\n' "$name" >&2
+         printf 'A case that was not mutated is not a case that was judged, and a run\n' >&2
+         printf 'with a hole in its denominator cannot be compared with another.\n' >&2
+         exit 3; }
 
   t0="$(date +%s)"
   # --thinking, when asked for. roles.json records the level and its history, and

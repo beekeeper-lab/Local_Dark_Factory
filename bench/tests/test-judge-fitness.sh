@@ -199,5 +199,30 @@ kill "$FAKE2" 2>/dev/null
 eq "the escape proceeds"               "0" "$rc2"
 check "and names the cost"             "include contention for the GPU" "$out"
 
+printf '\n== a mutation that did not happen stops the run ==\n\n'
+#
+# `continue` on a failed mutation printed a line and carried on, so a launcher
+# that left the venv behind produced "mutation failed" six times and then wrote a
+# results file with zero seeded defects and an empty case list — exit 0, in
+# bench/results, looking like a figure. A case that was not mutated is not a case
+# that was judged, and a run with a hole in its denominator cannot be compared
+# with another.
+reply accept "fine"
+BROKEN_BENCH="$WORK/broken-bench"; rm -rf "$BROKEN_BENCH"; cp -r "$BENCH" "$BROKEN_BENCH"
+rm -rf "$BROKEN_BENCH/results"; mkdir -p "$BROKEN_BENCH/results"
+# judge-fitness runs the mutation under $ROOT/.venv/bin/python; a copy two
+# directories from nowhere has none, which is exactly the failure that found this.
+out="$( cd "$WORK" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$BROKEN_BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" --bean "$BEAN" \
+  --out "$WORK/broken.json" 2>&1 )"; rc=$?
+eq "it stops"                          "3" "$rc"
+check "and says the mutation failed"   "MUTATION FAILED" "$out"
+check "and why that ends the run"      "hole in its denominator" "$out"
+if [ -f "$WORK/broken.json" ]; then
+  printf '  FAIL  an unmutated run must not leave a figure\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and writes no results file\n'; PASS=$((PASS+1))
+fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
