@@ -120,5 +120,34 @@ out="$(dc)"
 check "both files are seen"     "the walkthrough covers all" "$out"
 nope  "none is reported missing" "never covers" "$out"
 
+printf '\n== the check leaves a record, like every other check in the line ==\n\n'
+#
+# It wrote only to the log, so "the document was checked" was a fact about a
+# terminal and not about the run. A reader of the run directory could not tell
+# whether doc-check had run, passed, or never happened — the same gap
+# package-check exists to close, one file over. pr.sh reads this record when no
+# judge verdict exists, which is when it matters most.
+J="factory/runs/R/doc-check.json"
+want "doc-check.json is written"       "the run record must say the document was checked" \
+     test -s "$J"
+want "with the result"                 "status should be pass" \
+     test "$(jq -r '.status' "$J")" = pass
+want "and the document it read"        "document should be impl-detail.md" \
+     test "$(jq -r '.document' "$J")" = impl-detail.md
+want "named by hash, not by trust"     "document_sha256 should be the file's own" \
+     test "$(jq -r '.document_sha256' "$J")" = "$(sha256sum factory/runs/R/impl-detail.md | cut -d' ' -f1)"
+want "every check appears"             "sections, coverage, invented files, render" \
+     test "$(jq -r '[.checks[]] | length' "$J")" -ge 4
+
+# A record that only ever says pass is not a record. Break the document and look.
+cp factory/runs/R/impl-detail.md "$WORK/good.md"
+printf '# What was built\n\n## Summary\n\nToo short.\n' > factory/runs/R/impl-detail.md
+dc > /dev/null 2>&1 || true
+want "a failing run is recorded failing" "status should be fail" \
+     test "$(jq -r '.status' "$J")" = fail
+want "with the check that failed named" "at least one check should be fail" \
+     test "$(jq -r '[.checks[] | select(.status == "fail")] | length' "$J")" -ge 1
+cp "$WORK/good.md" factory/runs/R/impl-detail.md
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

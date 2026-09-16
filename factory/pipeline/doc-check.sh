@@ -39,8 +39,20 @@ PY="$(factory_python)"
 
 DOC="$RUN_DIR/impl-detail.md"
 FAILED=0
-ok()  { printf '  ok    %-26s %s\n' "$1" "$2"; }
-bad() { printf '  FAIL  %-26s %s\n' "$1" "$2"; FAILED=1; }
+# Every other deterministic check in this line leaves a record — spec-check,
+# package-check, the gate, claims-check, test-integrity, verify-precheck all
+# write a JSON file. This one wrote only to the log, so "the document was
+# checked" was a fact about a terminal and not about the run. That is the same
+# gap package-check exists to close, one file over: a reader of the run directory
+# could not tell whether doc-check had run, passed, or never happened.
+CHECKS_JSON='[]'
+record() { # record <name> <status> <detail>
+  CHECKS_JSON="$(jq -c --arg n "$1" --arg s "$2" --arg d "$3" \
+    '. + [{check:$n, status:$s, detail:$d}]' <<<"$CHECKS_JSON")"
+}
+ok()   { printf '  ok    %-26s %s\n' "$1" "$2"; record "$1" pass "$2"; }
+bad()  { printf '  FAIL  %-26s %s\n' "$1" "$2"; FAILED=1; record "$1" fail "$2"; }
+note() { printf '  note  %-26s %s\n' "$1" "$2"; record "$1" note "$2"; }
 
 printf '\nDOC CHECK %s\n\n' "$(basename "$RUN_DIR")"
 
@@ -137,7 +149,7 @@ if [ -f "$RUN_DIR/gate.json" ]; then
   if grep -qF "${cand:0:12}" "$DOC" 2>/dev/null; then
     ok "provenance" "the document names the candidate it describes"
   else
-    printf '  note  %-26s %s\n' "provenance" "the document does not name the candidate sha; not required, but a reviewer usually wants it"
+    note "provenance" "the document does not name the candidate sha; not required, but a reviewer usually wants it"
   fi
 fi
 
@@ -149,8 +161,16 @@ if [ -f "$TEMPLATES/impl-detail.html" ]; then
     bad "impl-detail.html" "could not be rendered"
   fi
 else
-  printf '  note  %-26s %s\n' "impl-detail.html" "no template at $TEMPLATES/impl-detail.html"
+  note "impl-detail.html" "no template at $TEMPLATES/impl-detail.html"
 fi
+
+jq -n --arg schema "doc-check/1.0.0" --arg doc "$(basename "$DOC")" \
+  --arg status "$([ "$FAILED" = 0 ] && echo pass || echo fail)" \
+  --arg sha "$(sha256sum "$DOC" 2>/dev/null | cut -d' ' -f1)" \
+  --argjson checks "$CHECKS_JSON" \
+  '{schema:$schema, document:$doc, document_sha256:$sha, status:$status, checks:$checks,
+    note:"What a machine can decide about a document: that its sections exist and are not fragments, that its walkthrough covers the diff both ways, and that it invents no file. Whether it teaches is the judge and the human."}' \
+  > "$RUN_DIR/doc-check.json"
 
 printf '\n'
 [ "$FAILED" = 0 ] && { printf 'DOC CHECK PASS\n'; exit 0; }
