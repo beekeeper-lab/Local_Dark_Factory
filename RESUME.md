@@ -18,12 +18,28 @@ One more, whenever you like: `factory read <run-dir>` in the target repo records
 that a human read the two rendered documents. It is the one Phase-1 exit predicate
 a script cannot settle.
 
-**What changed on 2026-09-16 that a reader should know before anything else:**
-hidden tests are built and bean-001 and bean-002 have suites; the judge's response
-grammar now carries the constraints that used to be prose, which produced this
-line's first stamped audit verdict; and `factory reaudit` measures whether a
-change to the judge does anything on a real run. The two sections that carry the
-detail are *"Then three changes in an afternoon"* and *"Hidden tests"*.
+**What changed on 2026-09-16, in the order a reader needs it:**
+
+1. **The judge accepts about half the seeded defects put in front of it, and always
+   did.** Two of six fixtures were not seeding the defects they claimed; on honest
+   ones it is 7 to 9 false accepts in 15. Not a regression — the corpus could not
+   show it before. *"The judge accepts about half the seeded defects"*.
+2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
+   perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
+   `devstral` cannot hold the schema. gpt-oss:120b is the best available.
+3. **Work moved out of the judge instead.** A bean's `non_goals` and `constraints`
+   can now say *where*, and the controller decides them — three of five seeded
+   defects, against one this morning. *"What a bean forbids"*.
+4. **Hidden tests are built**, bean-001 and bean-002 have suites, and the worker is
+   told the rule without the answers. *"Hidden tests"*.
+5. **Five grammar changes**, each measured, which produced this line's **first
+   stamped audit verdict** — and none of which is evidence the judge is right.
+   *"Then three changes in an afternoon"*.
+6. **`factory reaudit`** answers "did that change anything on a real run", which
+   the seeded-defect harnesses cannot.
+
+The one sentence worth carrying out of all of it: **on this model a constraint in
+the grammar is a rule and the same constraint in prose is a suggestion.**
 
 ## The line is blocked on one human action, and correctly
 
