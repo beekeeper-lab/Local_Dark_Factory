@@ -507,15 +507,30 @@ Write the end-to-end test before the next long real run, not after it.
   skipping it — so the standing finding is about artifacts, not about code.
   Re-measure when the GPU is free; `controller-fitness.sh` needs no GPU but does
   need the target repo on `main`, which it now refuses without.
-- **`required_checks: [gates]` names a check nothing produces.** Neither repo has a
-  `.github/workflows`, and no pipeline step waits on CI, so the field reads like
-  protection that is in force and is not. `factory doctor` now says so unprompted.
-  Building it is a decision for the owner, because it means either publishing the
-  pinned gate image to a registry under their org (identical to the local gate,
-  which is the point of pinning it) or running looser tools in CI, which produces a
-  green that means something different from the gate's green. **Recommendation: the
-  registry.** Until then the Phase-2 "remote CI failure returns to build with
-  targeted tasks" fault injection cannot be built.
+- **CI is built and waiting on one command.** The owner chose the registry, so:
+  `factory/scaffold/.github/workflows/gates.yml` runs the image `gates.lock.yaml`
+  pins, by digest; `factory/gate-image/publish.sh` pushes it and refuses if the
+  local digest is not the pinned one; `factory/pipeline/ci.sh` is the last step and
+  sends a failing check back to `build` for the tasks its logs name.
+
+  What is left is a token scope. `podman login ghcr.io` succeeds with the current
+  gh token, and the push is refused: *"the token provided does not match expected
+  scopes"*. It needs an interactive refresh, which only the owner can do:
+
+  ```
+  gh auth refresh --scopes write:packages
+  gh auth token | podman login ghcr.io -u beekeeper-lab --password-stdin
+  factory/gate-image/publish.sh --registry ghcr.io/beekeeper-lab
+  ```
+
+  That prints the `image:` line for `gates.lock.yaml`. Put it in
+  `factory/scaffold/factory/gates.lock.yaml`, re-run `factory/scaffold.sh` against
+  the target repo to install the workflow, and the required check becomes real.
+
+  **The workflow is deliberately NOT installed in seating-planner-py yet.** It
+  fails loudly when the manifest still pins a `localhost/` image — which is the
+  right behaviour and would put a red X on the open PR #1 for a reason that has
+  nothing to do with the change. Publish first, then scaffold.
 
 ## What to re-run to confirm nothing drifted
 
