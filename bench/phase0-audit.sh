@@ -283,10 +283,63 @@ for f in "$RESULTS"/*; do
   if git -C "$ROOT" ls-files --error-unmatch "$f" >/dev/null 2>&1; then tracked_any=$((tracked_any + 1)); fi
 done
 if [ "$tracked_any" -eq "$n_files" ] && [ "$n_files" -gt 0 ]; then
-  ok "evidence.tracked" "all $n_files evidence files are committed"
+  ok "results.tracked" "all $n_files figures in bench/results are committed"
+else
+  finding "results.tracked" blocker \
+    "$tracked_any of $n_files files in bench/results are tracked; the rest exist only on this disk (see .gitignore)"
+fi
+
+# And the same of `evidence/`, which until 2026-09-16 nothing checked at all.
+#
+# The check above is named for the section and measures bench/results. It has
+# said "all N evidence files are committed" since it was written, about a
+# directory that is not evidence/ — so an evidence file that existed only on this
+# disk would have been reported as committed by a check with the right name on
+# the wrong directory. One of them was, the hour this was found.
+ev_tracked=0; ev_files=0; ev_untracked=""
+for f in "$ROOT"/evidence/*; do
+  [ -f "$f" ] || continue
+  ev_files=$((ev_files + 1))
+  if git -C "$ROOT" ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+    ev_tracked=$((ev_tracked + 1))
+  else
+    ev_untracked="$ev_untracked $(basename "$f")"
+  fi
+done
+if [ "$ev_files" -gt 0 ] && [ "$ev_tracked" -eq "$ev_files" ]; then
+  ok "evidence.tracked" "all $ev_files files in evidence/ are committed"
 else
   finding "evidence.tracked" blocker \
-    "$tracked_any of $n_files files in bench/results are tracked; the rest exist only on this disk (see .gitignore)"
+    "$ev_tracked of $ev_files files in evidence/ are tracked; on this disk only:$ev_untracked"
+fi
+
+# Every one of them says what it evidences, exactly once.
+#
+# evidence/README.md's own preamble says "each file is here because a claim
+# somewhere else rests on it", and a file with no row is a file nobody can use.
+# Exactly once, because a duplicated row is two descriptions that will drift —
+# there were two rows for judge-fitness-low-20260916.log, written a day apart,
+# saying slightly different things.
+undesc=""; dupe=""
+for f in "$ROOT"/evidence/*; do
+  [ -f "$f" ] || continue
+  b="$(basename "$f")"
+  [ "$b" = "README.md" ] && continue
+  # Rows, not mentions. One row's prose legitimately names another file — "read
+  # it beside `judge-fitness-low-20260916.log`" — and counting mentions reported
+  # that as a duplicate row, which is a check crying wolf about good writing.
+  n="$(grep -cE "^\| \`$(printf '%s' "$b" | sed 's/[][\\.*^$/]/\\&/g')\`" "$ROOT/evidence/README.md" 2>/dev/null || true)"
+  case "$n" in
+    0) undesc="$undesc $b" ;;
+    1) ;;
+    *) dupe="$dupe $b($n)" ;;
+  esac
+done
+if [ -z "$undesc" ] && [ -z "$dupe" ]; then
+  ok "evidence.described" "every file in evidence/ has exactly one row in its README"
+else
+  finding "evidence.described" major \
+    "$([ -n "$undesc" ] && printf 'no row in evidence/README.md for:%s' "$undesc")$([ -n "$undesc" ] && [ -n "$dupe" ] && printf '; ')$([ -n "$dupe" ] && printf 'more than one row for:%s' "$dupe")"
 fi
 
 # Every bench/results path the ledger cites must exist.

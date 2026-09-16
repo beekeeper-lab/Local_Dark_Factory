@@ -1,0 +1,17 @@
+...........                                                              [100%]
+11 passed in 0.01s
+
+--- and the control, the same suite against an EMPTY tree ---
+
+/hidden/test_hidden_scaffold.py:176: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED ../hidden/test_hidden_scaffold.py::test_declares_a_build_backend - Ass...
+FAILED ../hidden/test_hidden_scaffold.py::test_an_install_would_find_the_package
+FAILED ../hidden/test_hidden_scaffold.py::test_the_package_is_named_what_the_bean_names
+FAILED ../hidden/test_hidden_scaffold.py::test_requires_python_311_or_later
+FAILED ../hidden/test_hidden_scaffold.py::test_ortools_is_declared - Assertio...
+FAILED ../hidden/test_hidden_scaffold.py::test_no_domain_modules_yet - FileNo...
+FAILED ../hidden/test_hidden_scaffold.py::test_the_gate_tools_are_declared_somewhere
+FAILED ../hidden/test_hidden_scaffold.py::test_there_is_a_test_that_is_not_ours
+FAILED ../hidden/test_hidden_scaffold.py::test_the_package_actually_imports
+9 failed, 2 passed in 0.04s
