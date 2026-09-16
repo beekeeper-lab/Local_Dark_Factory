@@ -41,15 +41,28 @@ done
 # order is stable and reviewable.
 SLOW="full-line orchestrate-build build-loop"
 
+# Both test directories. The bench harnesses produce the numbers this project's
+# decisions rest on, and their classification logic is exactly the kind that
+# mislabels quietly — a suite that only discovered factory/pipeline/tests would
+# have let the first bench test written run once and never again.
+BENCH_TESTS="$(cd "$HERE/../../../bench/tests" 2>/dev/null && pwd || true)"
+
+suite_path() { # suite_path <name> -> the file, wherever it lives
+  if [ -f "$HERE/test-$1.sh" ]; then printf '%s' "$HERE/test-$1.sh"
+  elif [ -n "$BENCH_TESTS" ] && [ -f "$BENCH_TESTS/test-$1.sh" ]; then printf '%s' "$BENCH_TESTS/test-$1.sh"
+  fi
+}
+
 ordered() {
   local f n
-  for f in "$HERE"/test-*.sh; do
+  for f in "$HERE"/test-*.sh ${BENCH_TESTS:+"$BENCH_TESTS"/test-*.sh}; do
+    [ -f "$f" ] || continue
     n="$(basename "$f" .sh)"; n="${n#test-}"
     case " $SLOW " in *" $n "*) continue ;; esac
     printf '%s\n' "$n"
   done
   [ "$FAST" = 1 ] && return 0
-  for n in $SLOW; do [ -f "$HERE/test-$n.sh" ] && printf '%s\n' "$n"; done
+  for n in $SLOW; do [ -n "$(suite_path "$n")" ] && printf '%s\n' "$n"; done
 }
 
 TOTAL_PASS=0; TOTAL_FAIL=0; FAILED_SUITES=""
@@ -60,7 +73,7 @@ while IFS= read -r name; do
   [ -n "$name" ] || continue
   [ -n "$ONLY" ] && case "$name" in *"$ONLY"*) : ;; *) continue ;; esac
 
-  out="$(timeout 900 bash "$HERE/test-$name.sh" 2>&1)"; rc=$?
+  out="$(timeout 900 bash "$(suite_path "$name")" 2>&1)"; rc=$?
   tally="$(grep -oE '[0-9]+ passed, [0-9]+ failed' <<<"$out" | tail -1)"
   p="$(awk '{print $1}' <<<"$tally")"; f="$(awk '{print $3}' <<<"$tally")"
   TOTAL_PASS=$((TOTAL_PASS + ${p:-0})); TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
