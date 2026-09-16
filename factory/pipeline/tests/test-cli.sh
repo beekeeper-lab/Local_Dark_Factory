@@ -271,5 +271,41 @@ out="$( cd "$BARE" && "$FACTORY" doctor 2>&1 )"; rc=$?
 rc_is "an unscaffolded repo refuses"  "$rc" 1
 check "and says how to scaffold it"   "scaffold.sh" "$out"
 
+printf '\n== `factory read` needs a person, and says so instead of leaking ==\n\n'
+#
+# `docs_rendered_and_read` is the one Phase-1 predicate a script cannot settle, so
+# the confirmation comes from a terminal or not at all — there is deliberately no
+# --yes, because a flag that lets a script record that a human read something
+# turns the predicate into a formality.
+#
+# What it did without one: `read </dev/tty` with no controlling terminal, which
+# leaked `line 733: /dev/tty: No such device or address` and then said "Not
+# recorded." The outcome was right and the message was a bash error.
+#
+# `[ -r /dev/tty ]` does not catch it either: the device node exists and the
+# permissions allow it, always. The open is the test.
+mkdir -p "$REPO/factory/runs/bean-001-20260102T000000Z"
+printf '<html>spec</html>\n' > "$REPO/factory/runs/bean-001-20260102T000000Z/spec.html"
+printf '<html>impl</html>\n' > "$REPO/factory/runs/bean-001-20260102T000000Z/impl-detail.html"
+printf '{"run_id":"r","bean":"bean-001"}\n' > "$REPO/factory/runs/bean-001-20260102T000000Z/run.json"
+out="$(fac read factory/runs/bean-001-20260102T000000Z </dev/null)"
+check "it says there is nobody to ask"  "no terminal here, so there is nobody to ask" "$out"
+check "and why there is no flag"        "There is no --yes for the same reason" "$out"
+check "and how to do it properly"       "Run it from an interactive shell" "$out"
+nope  "without a bash error"            "/dev/tty: No such device" "$out"
+if [ -f "$REPO/factory/runs/bean-001-20260102T000000Z/documents-read-by.txt" ]; then
+  printf '  FAIL  it recorded a reading nobody did\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and nothing is recorded\n'; PASS=$((PASS+1))
+fi
+
+printf '\n-- and an unrendered run is refused before any of that --\n\n'
+mkdir -p "$REPO/factory/runs/bean-001-20260103T000000Z"
+printf '{"run_id":"r","bean":"bean-001"}\n' > "$REPO/factory/runs/bean-001-20260103T000000Z/run.json"
+out="$(fac read factory/runs/bean-001-20260103T000000Z </dev/null)"
+check "it names what is missing"        "is not rendered" "$out"
+nope  "and does not ask to record it"   "Record that?" "$out"
+rm -rf "$REPO/factory/runs/bean-001-20260102T000000Z" "$REPO/factory/runs/bean-001-20260103T000000Z"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

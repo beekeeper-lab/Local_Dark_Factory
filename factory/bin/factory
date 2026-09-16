@@ -729,6 +729,28 @@ The two documents this run produced:
     printf 'was actually built.
 
 '
+    # A terminal, or nothing. This is the one predicate a script cannot settle, so
+    # the confirmation has to come from a person at a keyboard — there is
+    # deliberately no --yes, because a flag that lets a script record that a human
+    # read something turns the predicate into a formality, which is the exact
+    # thing the command exists to prevent.
+    #
+    # What there was instead of this check: `read </dev/tty` with no terminal,
+    # which leaked `line 733: /dev/tty: No such device or address` and then said
+    # "Not recorded." The outcome was right and the message was a bash error.
+    # Opened, not stat'd. `[ -r /dev/tty ]` is true whenever the device node
+    # exists and the permissions allow it — which is always — and says nothing
+    # about whether this process has a controlling terminal. With no tty the open
+    # fails with ENXIO and the test had already passed.
+    if ! { : < /dev/tty; } 2>/dev/null; then
+      printf '\nThere is no terminal here, so there is nobody to ask.\n\n'
+      printf 'This is the one Phase-1 predicate a script cannot settle — whether the two\n'
+      printf 'documents TEACH — so it is confirmed by a person at a keyboard or not at all.\n'
+      printf 'There is no --yes for the same reason.\n\n'
+      printf 'Run it from an interactive shell:\n'
+      printf '    factory read %s\n' "$run_dir"
+      exit 1
+    fi
     printf 'Record that? [y/N] '
     read -r answer </dev/tty || answer=n
     case "$answer" in
