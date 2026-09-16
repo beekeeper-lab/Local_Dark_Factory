@@ -52,7 +52,7 @@ rather than planning around the missing precondition
 
 ## State: Phase 0 closed. Phase 1 is built end to end, and one real run has now finished — PR #1 is open.
 
-**Test coverage as of 2026-09-16 evening: 1533 assertions across 33 suites, all
+**Test coverage as of 2026-09-16 evening: 1533 assertions across 36 suites, all
 green, in about two minutes.** `factory/pipeline/tests/run-all.sh` runs both
 directories and leaves the count where the commit-msg hook can check it — several
 commit messages here have quoted a number written from memory, and each was a
