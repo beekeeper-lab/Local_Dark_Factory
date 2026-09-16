@@ -224,6 +224,36 @@ revise   4 findings   confidence 0.95   197s
 
 The defect was named in an earlier fitness run and in none of these five.
 
+**Confirmed at case level, 2026-09-16** (`judge-fitness-20260916T001225Z.json`,
+`--repeat 3`: the same six cases, three times, byte-identical input, temperature 0):
+
+```
+clean                       revise   revise   abstain     ← never once passed a clean spec
+contradicts-non-goal        revise   revise   revise
+criterion-not-really-met    revise   ACCEPT   revise      ← false accept on identical input
+invented-current-behaviour  revise   cut off  cut off
+tautological-verify         revise   revise   ACCEPT      ← false accept on identical input
+unfinishable-task           revise   revise   revise
+
+15 seeded defects: rejected 11 · NAMED the actual defect 2 · false accepts 2 · cut off 2
+```
+
+Three things, and the third is the one that decides the question:
+
+1. **The clean control is rejected every time.** Not variance — a consistent false
+   rejection. In one pass it named the defect; in three passes it has never once said a
+   clean spec is clean.
+2. **It rejects for the wrong reason.** 11 rejections, 2 of which named the seeded defect.
+   A verdict that is right by accident is not a check.
+3. **Two cases flipped to `accept` on identical input.** The same bytes, the same
+   temperature, and a seeded defect passed. That is the failure the line exists to prevent,
+   and it is invisible from the outside — a `revise` costs a retry, an `accept` costs
+   everything after it.
+
+A judge that rejects what is good, rejects what is bad for reasons that are not the reason,
+and sometimes accepts what is bad, cannot be a gate. The advisory decision stands on
+measurement, not caution.
+
 **The consequence lands on this project's own conclusions.** Every judge finding here came
 from comparing single runs: fenced artifacts against unfenced, one message per artifact
 against one blob, gpt-oss against gemma4, 4000 tokens against 12000. One sample per arm
