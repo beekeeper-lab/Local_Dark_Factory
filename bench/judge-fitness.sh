@@ -34,6 +34,7 @@ judge-fitness.sh — measure whether the judge catches planted defects.
 
 usage: judge-fitness.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
                         [--out <results.json>] [--only <case>] [--repeat <n>]
+                        [--thinking <level>]
 
 Each case is the same artifacts with exactly one thing wrong. Slow on purpose:
 one real audit per case, no stubs — a fitness number from a stub measures the
@@ -41,13 +42,14 @@ stub.
 EOF
 }
 
-SPEC=""; TASKS=""; BEAN=""; OUT=""; ONLY=""
+SPEC=""; TASKS=""; BEAN=""; OUT=""; ONLY=""; THINKING=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --spec) SPEC="${2:?}"; shift 2 ;;
     --tasks) TASKS="${2:?}"; shift 2 ;;
     --bean) BEAN="${2:?}"; shift 2 ;;
     --out)  OUT="${2:?}"; shift 2 ;;
+    --thinking) THINKING="${2:?}"; shift 2 ;;
     --only) ONLY="${2:?}"; shift 2 ;;
     --repeat) REPEAT="${2:?--repeat needs a count}"; shift 2 ;;
     --no-evict) NO_EVICT=1; shift ;;
@@ -218,7 +220,13 @@ while IFS='|' read -r name should_reject description catchwords; do
   mutate "$name" "$RD/spec.md" "$RD/tasks.yaml" || { echo "  mutation failed: $name" >&2; continue; }
 
   t0="$(date +%s)"
-  bash "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" >"$RD/judge.log" 2>&1
+  # --thinking, when asked for. roles.json records the level and its history, and
+  # the note there says to revisit if the catch rate at `medium` is poor. It is —
+  # so the harness has to be able to ask the same six questions at another level
+  # without editing the file the line runs from, or the comparison is between two
+  # different configurations of the repository rather than two thinking levels.
+  bash "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" \
+    ${THINKING:+--thinking "$THINKING"} >"$RD/judge.log" 2>&1
   rc=$?
   t1="$(date +%s)"
 
@@ -297,9 +305,10 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
+  --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
-    judge:{model:$model, digest:$digest},
+    judge:{model:$model, digest:$digest, thinking:$thinking},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
