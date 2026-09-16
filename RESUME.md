@@ -626,7 +626,7 @@ don't design role-batching as if it were.
 **Context barely affects throughput** across 16K–49K. The old 39-minute InvTrac spec step
 was the 262144 default context, not model speed.
 
-## Two live gotchas
+## Three live gotchas
 
 1. **pi silently drops `--thinking` for models its catalog doesn't mark `reasoning: true`.**
    This had the judge running with reasoning *off* while `roles.json` said `"high"`, and
@@ -648,6 +648,19 @@ was the 262144 default context, not model speed.
    remaining work is control, not honesty** — to actually hold a role at 32768 the unit
    needs `OLLAMA_CONTEXT_LENGTH`, which is a single global value and cannot express a
    per-role context. Spec §09's healthcheck is where that belongs.
+
+3. **A run record is evidence about a version of the line that may no longer exist.**
+   `factory run` copies the pipeline at launch and runs from the copy, so editing the
+   repository mid-run cannot derail it — that is the point, and it has saved two runs.
+   The corollary catches people reading the record afterwards: bean-001's build steps
+   recorded `0s` durations, and reading that against today's code produced a confident
+   wrong explanation about the contained worker. The actual cause was that the fix
+   landed at 20:37 and those steps ran at 20:06, under a snapshot taken at 19:20.
+
+   **Check `conditions.pipeline_version` in the run record before explaining anything
+   about an old run.** `bench/phase1-audit.sh` does this now for step coverage —
+   a step that did not exist when a run was made reports `pass_for_its_version` rather
+   than failing — and it is the same question every time.
 
 ## Machine config as left (already applied, survives reboot)
 
