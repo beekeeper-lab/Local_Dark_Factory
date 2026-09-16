@@ -43,6 +43,24 @@ not about the code.
 | `size-sweep-20260915T134814Z.json` | no | superseded by 100658Z |
 | `size-sweep-20260916T100658Z.json` | yes | **yes** — three passes at four sizes, and the finding that it cannot answer the byte-budget question |
 
+## reaudit
+
+`factory reaudit` answers the question the seeded-defect harnesses cannot: when
+something about the judge changes, does it change anything on a **real** run? Its
+artifacts name the configuration they were taken at, because that is the only
+thing that makes two of them comparable.
+
+| file | provenance | still load-bearing? |
+| --- | --- | --- |
+| `reaudit-20260916T160000Z.json` | yes (names run, bean, passes, thinking) | **yes** — the first configuration under which this line produced a stampable audit verdict at all |
+
+The baselines it has to be read against are terminal logs rather than JSON,
+because `factory reaudit` did not exist when they were taken:
+`evidence/reaudit-bean-001-20260916.log` (one pass, zero stamped),
+`evidence/reaudit-bean-001-3pass-20260916.log` (twelve attempts, zero stamped),
+`evidence/reaudit-bean-001-idenum-20260916.log` (twelve more, zero stamped, but
+criterion compliance went from roughly none to complete).
+
 ## What is missing, and why it is not being back-filled
 
 Eleven files carry no provenance. One of them still carries a claim on its own:
