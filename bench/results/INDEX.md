@@ -32,6 +32,9 @@ not about the code.
 | `controller-fitness-20260916T171150Z.json` | yes | no — one case, the broken `tautological-verify` fixture, kept as the before half of finding it |
 | `controller-fitness-20260916T171317Z.json` | yes | no — the same case with the fixture fixed, 1 of 1 caught. The pair is the whole diagnosis |
 | `controller-fitness-20260916T171328Z.json` | yes | no — superseded within the hour by 171837Z, after the same audit of every OTHER mutation found `contradicts-non-goal` spliced too |
+| `controller-fitness-20260916T194257Z.json` | yes | no — the same 2 of 5, taken while wiring the non-goal check in; kept because it is the before half of the row below |
+| `controller-fitness-20260916T194839Z.json` | yes | no — still 2 of 5, and the first to say *why* `contradicts-non-goal` is not decidable: bean-001's non-goals are prose |
+| `controller-fitness-20260916T194913Z.json` | yes | **yes, and it is the argument for annotating the bean set** — one case, against a bean whose "no solver code" carries `forbidden_paths`: `contradicts-non-goal` goes from "not decidable, needs a judge" to **named by a check**. Three of five decidable for an annotated bean |
 | `controller-fitness-20260916T171837Z.json` | yes | **yes** — every mutation fixed and asserting its own post-condition: **2 of 5 named by a check**, 3 not decidable, 0 false alarms. `tautological-verify` is decided by spec-check's verify precheck and always was |
 | `format-support-20260915T024138Z.json` | no | superseded — a 200-byte question, which cleared two models that then failed on real artifacts |
 | `format-support-real-payload-20260915T025711Z.json` | no | superseded by 111754Z |
