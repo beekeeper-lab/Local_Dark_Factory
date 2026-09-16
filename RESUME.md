@@ -512,12 +512,41 @@ All three causes have had work done on them since: the cap is 16000 (0 of 18 cut
 off, where 12000 gave 4 of 18), `met` now says what it means per target, and the
 unparseable path keeps the whole answer with `done_reason` and jq's own error.
 
-**The experiment that settles it**: run all four audits against this run directory
-— `factory/runs/bean-001-20260915T192025Z`, which still has every artifact — at
-the new cap with the new prompt, and count how many produce a judgement
-`audit-check.sh` will stamp. It is about twenty minutes of GPU and it is the
-strongest available evidence for whether this line can produce a binding audit at
-all. Nothing about it needs PR #1 to be merged.
+**Run 2026-09-16** against a copy of that run directory, at the new cap with the
+new prompt (`evidence/reaudit-bean-001-20260916.log`):
+
+```
+TARGET    JUDGE-RC  VERDICT   STAMPED   why not
+spec      1         -         no        reasoned 20,417 chars, ended its turn without an answer
+impl      1         -         no        tried to call repo_browser.open_file
+doc       0         accept    no        reported on 2 of the bean's 4 criteria
+package   0         accept    no        reported on 2 of the bean's 4 criteria
+```
+
+**Two of four now produce a well-formed judgement, where none did before.** That
+is real progress and it is not enough: none of the four is stampable.
+
+Three things worth keeping from it:
+
+1. **The criteria-coverage check earned its place on day one.** doc and package
+   both returned `accept` at confidence **0.99** over half the bean's criteria.
+   Without that check both would have been stamped.
+2. **Size is not the variable.** The largest payload is the one that worked (doc,
+   36,731 bytes over 3 artifacts); the failures were 25,428 and 30,514. The
+   obvious hypothesis is dead and does not need measuring.
+3. **What the two failures share** is the bean and the task list — the two
+   artifacts written in the imperative and addressed to a different model, which
+   the preamble already warns about once, thousands of tokens earlier. The spec
+   judge's reasoning trace is the evidence: it read `claims-check.json` as a
+   confusing set of statements about its own task, invented a response shape
+   (`{"verdict": false, "reasons": [...]}`), and finished with *"Could you clarify
+   what exactly you'd like me to do?"*.
+
+   `judge.sh` now puts a `read as:` line on each artifact header — "written in the
+   imperative and addressed to a DIFFERENT model", "a measurement the controller
+   already took... not a question for you" — rather than saying it once in the
+   preamble. **Unmeasured.** One observation per target is not a finding, and the
+   next re-audit is what would say whether it helped.
 
 ## OPEN: the snapshot launcher died on its own last line, after succeeding
 
