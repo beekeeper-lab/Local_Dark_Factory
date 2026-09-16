@@ -57,4 +57,4 @@ trap 'rm -rf "$SNAP"' EXIT
 
 printf 'bench snapshot: %s\n' "$SNAP/bench" >&2
 cd "$ROOT"
-bash "$SNAP/bench/$(basename "$HARNESS")" "$@"
+FACTORY_BENCH_SNAPSHOTTED=1 bash "$SNAP/bench/$(basename "$HARNESS")" "$@"

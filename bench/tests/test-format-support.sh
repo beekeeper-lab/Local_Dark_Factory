@@ -60,6 +60,11 @@ done
 # and a suite that fails because a real measurement happens to be running is a
 # suite people learn to ignore. The one case that asserts the refusal clears this.
 export FACTORY_MEASURE_ANYWAY=1
+# And run the harness itself rather than the snapshot launcher. The harnesses
+# re-exec through `bench/snapshot.sh` so nobody has to remember to, which copies
+# the repository — correct for a real measurement, and wrong for a test that
+# points the harness at a fixture directory with no repository around it.
+export FACTORY_BENCH_SNAPSHOTTED=1
 
 reply() { printf '%s' "$1" > "$WORK/reply.json"; }
 # One model, one level, so each case is one classification.

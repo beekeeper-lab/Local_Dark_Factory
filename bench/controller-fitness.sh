@@ -14,6 +14,23 @@
 #
 # No GPU, no model, no variance. Run it as often as you like.
 set -uo pipefail
+# Run from a copy, always, without anyone having to remember.
+#
+# bash reads a script by byte offset as it executes, so editing one mid-run
+# corrupts the run in progress. A three-pass measurement is seventy-five minutes
+# — exactly the window in which someone improves the script — and on 2026-09-16
+# that produced a zero-byte results file from a run whose numbers survived only
+# because they had been printed to a terminal.
+#
+# `bench/snapshot.sh` existed for a day and was used once, by hand. A protection
+# that depends on remembering it is not a protection, so the harness re-execs
+# itself through the launcher. FACTORY_NO_SNAPSHOT=1 opts out, for iterating on
+# the harness where seeing a change take effect is the point.
+if [ "${FACTORY_BENCH_SNAPSHOTTED:-0}" != 1 ] && [ "${FACTORY_NO_SNAPSHOT:-0}" != 1 ]; then
+  exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/snapshot.sh" \
+    "$(basename "${BASH_SOURCE[0]}")" "$@"
+fi
+
 # Every figure carries where and on what it was measured. One emitter, because
 # two lists of what a figure must record is one list that disagrees with itself.
 # shellcheck source=provenance.sh
