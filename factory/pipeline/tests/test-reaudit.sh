@@ -68,6 +68,9 @@ cat > "$PIPE/audit-check.sh" <<'STUB'
 R="$1"; shift
 T=""; while [ $# -gt 0 ]; do [ "$1" = --target ] && T="$2"; shift; done
 [ -f "$R/verdicts/$T.attempt-1.judgement.json" ] || { printf 'AUDIT %s: the judge wrote no judgement file.\n' "$T" >&2; exit 2; }
+# A PASSING line before the refusal, the way the real audit-check prints one
+# check's success before the next one refuses. This is what broke the tally.
+printf 'AUDIT %s: all 4 criterion(s) reported on, none invented\n' "$T" >&2
 [ "${STUB_CHECK:-stamp}" = refuse ] && { printf 'AUDIT %s: refused by the stub.\n' "$T" >&2; exit 1; }
 cp "$R/verdicts/$T.attempt-1.judgement.json" "$R/verdicts/$T.attempt-1.json"
 STUB
@@ -141,6 +144,12 @@ check "the tally is printed"           "why the rest were refused" "$out"
 check "with a count"                   "2  " "$out"
 eq "and the JSON carries it"           "2" "$(jq -r '.refused_because[0].count' "$WORK/t2.json")"
 check "with the reason"                "refused by the stub" "$(jq -r '.refused_because[0].reason' "$WORK/t2.json")"
+# The reason is the LAST AUDIT line, not the first. audit-check refuses by
+# printing and exiting, so its last word is why — and its first increasingly is
+# not: the criteria check prints "all 4 criterion(s) reported on" BEFORE the quote
+# check refuses, and `head -1` reported six real refusals as a success message.
+nope "and not the passing line above it" "none invented" \
+     "$(jq -r '.refused_because[0].reason' "$WORK/t2.json")"
 
 out="$(re --passes 1 --target spec --keep "$WORK/k8")"
 nope "a fully stamped run has no tally" "why the rest were refused" "$out"

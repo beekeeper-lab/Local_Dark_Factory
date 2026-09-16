@@ -72,7 +72,8 @@ thing that makes two of them comparable.
 | --- | --- | --- |
 | `reaudit-20260916T163000Z.json` | no (predates the block) | superseded by 173000Z — 12 audits, 8 judgements, 0 stamped, 2 of 8 answers with duplicate criterion ids |
 | `reaudit-20260916T173000Z.json` | no (predates the block) | superseded — `criteria` keyed by id: 12 audits, 7 judgements, 0 stamped, 0 duplicates. The run that identified the quote as the remaining blocker |
-| `reaudit-20260916T180000Z.json` | no (predates the block) | **yes** — `confidence` as an enum: 12 audits, 8 judgements, **1 stamped**, and every answer at exactly 0.9. The current baseline |
+| `reaudit-20260916T180000Z.json` | no (predates the block) | superseded — `confidence` as an enum: 12 audits, 8 judgements, 1 stamped |
+| `reaudit-20260916T213000Z.json` | yes | **yes** — the same twelve after the prompt stopped contradicting itself: 6 judgements, **0 stamped**, every one refused on an invented quote. The fitness improvement did not transfer, and this is the figure that says so |
 
 The baselines it has to be read against are terminal logs rather than JSON,
 because `factory reaudit` did not exist when they were taken:

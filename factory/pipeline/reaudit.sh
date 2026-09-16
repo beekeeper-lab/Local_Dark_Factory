@@ -176,7 +176,19 @@ for pass in $(seq 1 "$PASSES"); do
     stamped=no
     [ -f "$R/verdicts/$t.attempt-1.json" ] && { stamped=yes; STAMPED_N=$((STAMPED_N + 1)); }
     TOTAL=$((TOTAL + 1))
-    why="$(head -1 "$KEEP/check-$pass-$t.log" 2>/dev/null | sed 's/^AUDIT [a-z]*: //' | head -c 90)"
+    # The LAST `AUDIT <target>:` line, not the first.
+    #
+    # audit-check refuses by printing and exiting, so its last word is why. Its
+    # first word increasingly is not: the criteria check added this morning prints
+    # "all 4 criterion(s) reported on, none invented" BEFORE the quote check
+    # refuses, so `head -1` reported six refusals as a success message and the
+    # tally read "6 all 4 criterion(s) reported on, none invented" — a line that
+    # cannot be a reason for anything.
+    #
+    # Same defect as `tail -1` in judge-fitness eight hours ago, arriving from the
+    # other end: a message extracted by position, in output whose shape changed
+    # underneath it.
+    why="$(grep -E "^AUDIT [a-z]+: " "$KEEP/check-$pass-$t.log" 2>/dev/null | tail -1 | sed 's/^AUDIT [a-z]*: //' | head -c 90)"
     printf '%-9s %-5s %-9s %-10s %-9s %s\n' "$t" "$pass" "$jrc" "$v" "$stamped" "$note"
     ROWS="$(jq -c --arg t "$t" --argjson p "$pass" --argjson jrc "$jrc" --arg v "$v" \
       --arg st "$stamped" --argjson c "$crit" --argjson f "$find_n" --arg why "$why" \

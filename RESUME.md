@@ -623,7 +623,7 @@ the next thing to do here.
 not a temporary accommodation while the judge was tuned. The audit stage did not
 produce a binding verdict on this line's artifacts at all.
 
-## The largest single improvement today came from removing a contradiction
+## Removing a contradiction halved the false accepts — and changed nothing on a real run
 
 `factory/skills/factory-audit/SKILL.md` is spliced into the judge's prompt
 verbatim. It said **"Open the files named below"** and **"Re-read the files"** —
@@ -659,6 +659,33 @@ Three things to hold onto with it:
 - **n is 15, and this judge is not reproducible.** The direction is consistent
   across all four columns and three cases went from mixed verdicts to `revise×3`,
   which is more than the spread would give — but it is one run.
+
+### And it did not transfer to a real run
+
+The same fix, measured the other way — `factory reaudit --passes 3` against
+bean-001's own run directory (`evidence/reaudit-bean-001-rubricfix-20260916.log`):
+
+```
+                    before      after
+stamped              1 / 12     0 / 12
+answered             8 / 12     6 / 12
+all four criteria    8 of 8     6 of 6
+refused on the quote 5 of 7     6 of 6
+```
+
+Every answered audit fails on an invented quote, and they are not near-misses —
+they are requirements the judge made up: *"`src/pyproject.toml` must be present"*,
+*"The repository does not contain a .gitignore file"* (it does), *"All tests pass.
+This is a valid package."*
+
+**Two harnesses, two questions, and only one of them moved.** `judge-fitness` asks
+whether the judge can find a planted flaw in a mutated spec. `factory reaudit`
+asks whether it can produce a verdict a controller will stamp on a real run.
+Nothing measured today has moved the second above **1 in 12**, and the reason is
+always the same: the judge fabricates the evidence for a verdict it has already
+reached, and the quote check catches it every time.
+
+Do not report the fitness number without this one beside it.
 
 **The lesson generalises past the judge.** Nobody had read the prompt as one
 document. judge.sh's preamble and the rubric it splices in were written months
