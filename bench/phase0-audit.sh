@@ -90,19 +90,40 @@ else
   esac
 
   # 6. figures_have_provenance: every artifact carries the conditions block.
-  missing=""
+  missing=""; incomplete=""
   for f in "$RESULTS"/*.json; do
     [ -e "$f" ] || continue
     # kernel + ollama version + a timestamp is the floor for any figure here.
     # GTT is asked for only of the sweep, which is the artifact it bears on.
-    jq -e '.provenance.ollama_version and .provenance.kernel and .provenance.measured_at' "$f" >/dev/null 2>&1 \
-      || jq -e '.conditions.ollama_version and .conditions.kernel' "$f" >/dev/null 2>&1 \
-      || missing="$missing $(basename "$f")"
+    # Non-empty, not merely present. jq treats "" as TRUE — only null and false
+    # are falsy — so `.provenance.ollama_version and ...` passed for a figure
+    # whose ollama_version was the empty string, which is what
+    # `ollama --version` produces on a box where ollama is not installed. The
+    # check said "carries kernel + ollama version" about a field with nothing in
+    # it, which is the first entry in the taxonomy: measuring something other
+    # than what it claims.
+    if jq -e '[(.provenance.ollama_version // ""), (.provenance.kernel // ""), (.provenance.measured_at // "")]
+              | all(. != "")' "$f" >/dev/null 2>&1 \
+       || jq -e '[(.conditions.ollama_version // ""), (.conditions.kernel // "")]
+                 | all(. != "")' "$f" >/dev/null 2>&1; then
+      continue
+    fi
+    # "No block" and "a block with an empty field" are different problems and the
+    # message has to say which. jq treats "" as falsy, so a figure measured on a
+    # box where `ollama --version` returned nothing has a provenance block and
+    # fails this check — and being told it has none would send the next reader to
+    # look for code that is already there.
+    if jq -e 'has("provenance") or has("conditions")' "$f" >/dev/null 2>&1; then
+      incomplete="$incomplete $(basename "$f")"
+    else
+      missing="$missing $(basename "$f")"
+    fi
   done
-  if [ -z "$missing" ]; then
+  if [ -z "$missing" ] && [ -z "$incomplete" ]; then
     ok "figures_have_provenance" "every results JSON carries kernel + ollama version + GTT"
   else
-    finding "figures_have_provenance" major "no provenance block in:$missing"
+    finding "figures_have_provenance" major \
+      "$([ -n "$missing" ] && printf 'no provenance block in:%s' "$missing")$([ -n "$missing" ] && [ -n "$incomplete" ] && printf '; ')$([ -n "$incomplete" ] && printf 'a provenance block with an empty required field in:%s' "$incomplete")"
   fi
 
   # And separately: can each harness still produce one? The artifact check above
