@@ -80,12 +80,18 @@ branch_for() { # branch_for <bean-id> -> the existing branch, or empty
   glob="$(printf '%s' "$BRANCH_PAT" | sed -e "s/BEAN-NNN/$id/" -e 's/<slug>/*/')"
   git -C "$ROOT" branch --list -- "$glob" 2>/dev/null | sed 's/^[ *]*//' | head -1
 }
-pr_for() { # pr_for <bean-id> -> the pr url recorded by a run, or empty
-  local id="$1" d
+pr_for() { # pr_for <bean-id> -> a pr url recorded by ANY run of it, or empty
+  # Any run, not the newest. The first version read the newest run.json and
+  # returned whatever it found there — so a bean that opened a pull request and
+  # was then re-run, with the second run halting before `pr`, went back to
+  # looking unbuilt. The queue would offer it again, `factory go` would run it
+  # again, and the second pull request is the thing pr.sh has an idempotency
+  # check for precisely because it must not happen.
+  local id="$1" d url
   for d in $(ls -1dt "$RUNS_ROOT/$id"-*/ 2>/dev/null); do
     [ -f "$d/run.json" ] || continue
-    jq -r '.pr_url // empty' "$d/run.json" 2>/dev/null | head -1
-    return 0
+    url="$(jq -r '.pr_url // empty' "$d/run.json" 2>/dev/null)"
+    [ -n "$url" ] && { printf '%s' "$url"; return 0; }
   done
 }
 

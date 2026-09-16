@@ -102,6 +102,19 @@ check "and says how it knows"     "a pull request was opened" "$out"
 eq "the next is ready"            "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 eq "and only the next"            "1" "$(jq -r '.ready | length' <<<"$(qj)")"
 
+printf '\n-- and a later run that halted does not un-build it --\n\n'
+#
+# The first version read only the newest run.json. A bean that opened a pull
+# request and was then re-run, with the second run halting before `pr`, went back
+# to looking unbuilt: the queue would offer it again and `factory go` would run
+# it again. pr.sh has an idempotency check for the second pull request precisely
+# because it must not get that far.
+mkdir -p "$REPO/factory/runs/bean-001-20260202T000000Z"
+printf '{"run_id":"r2","bean":"bean-001","status":"halted"}\n' \
+  > "$REPO/factory/runs/bean-001-20260202T000000Z/run.json"
+eq "it is still done"             "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
+eq "and nothing new is ready"     "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+
 printf '\n-- a branch without a pull request is in progress, not ready --\n\n'
 #
 # The difference matters on a resume: a bean whose branch exists has been started,
