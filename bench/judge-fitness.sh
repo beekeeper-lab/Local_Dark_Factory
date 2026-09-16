@@ -261,7 +261,7 @@ unfinishable-task|yes|one task that cannot finish in one session|too large|one s
 criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|annotation|vacuous|does not satisfy|mypy'
 
 RESULTS="[]"
-CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0
+CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0; NO_RUN=0
 # One pass is the default because it is what fits in a coffee break, and it is
 # also not a measurement — see the warning this prints at the end. Anything you
 # intend to compare against another number needs --repeat, and 5 is the smallest
@@ -332,9 +332,17 @@ while IFS='|' read -r name should_reject description catchwords; do
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
   if [ "$rc" -eq 9 ]; then
-    # The runner died. Scoring this at all would be scoring the machine.
+    # The runner died. Scoring this at all would be scoring the machine — and it
+    # is its OWN column, not the token budget's.
+    #
+    # Both were counted as CUT_OFF, so a gemma4 run on 2026-09-16 where the
+    # ollama runner died on 14 of 18 cases printed "14 case(s) were cut off by the
+    # token budget" and told the reader to raise JUDGE_NUM_PREDICT. The budget had
+    # nothing to do with it. That is the fifth defect on this project's own list —
+    # a diagnostic that names the wrong cause — inside the harness that produces
+    # the numbers the rest of the list was found with.
     [ "$should_reject" = yes ] && SEEDED=$((SEEDED+1))
-    CUT_OFF=$((CUT_OFF+1))
+    NO_RUN=$((NO_RUN+1))
     verdict="no run"; outcome="NOT MEASURED — the model server returned nothing; free VRAM and retry"
   elif [ "$rc" -eq 8 ]; then
     # The judge was cut off mid-thought by a cap we chose. That is a fact about
@@ -402,6 +410,7 @@ mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
   --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
   --argjson named "$NAMED" --argjson noans "$NO_ANSWER" --argjson cut "$CUT_OFF" \
+  --argjson norun "$NO_RUN" \
   --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
   --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
@@ -416,6 +425,7 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
     false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
+    never_ran_server_died:$norun,
     complete: ($cut == 0),
     reject_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
     named_rate: (if $seeded > 0 then (($named*100/$seeded)|floor) else null end),
@@ -439,6 +449,15 @@ fi
 
 printf '\nof %s seeded defects (%s case(s) × %s pass(es)): rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$((SEEDED / REPEAT))" "$REPEAT" "$CAUGHT" "$NAMED"
 printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
+if [ "$NO_RUN" -gt 0 ]; then
+  printf '\nINCOMPLETE — %s case(s) never ran: the model server returned nothing.\n' "$NO_RUN"
+  printf '  %s\n' "$(jq -r '[.[] | select(.verdict == "no run") | .case] | unique | join(", ")' <<<"$RESULTS")"
+  printf 'This is the machine, not the judge and not the token budget: ollama answered 200\n'
+  printf 'with a zero-valued struct, which is what it does when a runner dies. Free VRAM\n'
+  printf '(`ollama stop <other-model>`) and run it again. Do not raise JUDGE_NUM_PREDICT;\n'
+  printf 'it had nothing to do with this, and the rates above are lower bounds over a\n'
+  printf 'denominator that includes every case that never ran.\n'
+fi
 if [ "$CUT_OFF" -gt 0 ]; then
   printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged:\n' "$CUT_OFF"
   # Which, not just how many. "Two cases were cut off" is a caveat; "this case is

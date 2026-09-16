@@ -25,6 +25,10 @@ check() {
   if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
   else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
 }
+nope() {
+  if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+  else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi
+}
 eq() {
   if [ "$2" = "$3" ]; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
   else printf '  FAIL  %s — expected "%s", got "%s"\n' "$1" "$2" "$3"; FAIL=$((FAIL+1)); fi
@@ -163,6 +167,27 @@ else
   printf '  ok    and not a fragment of the answer it could not parse\n'; PASS=$((PASS+1))
 fi
 eq "it is counted as no answer"        "1" "$(jq -r '.no_answer' "$WORK/out.json")"
+
+printf '\n== a dead runner is not a token cut-off ==\n\n'
+#
+# Both were counted in the same column, so a gemma4 run on 2026-09-16 where the
+# ollama runner died on 14 of 18 cases printed "14 case(s) were cut off by the
+# token budget" and told the reader to raise JUDGE_NUM_PREDICT. The budget had
+# nothing to do with it — ollama answers 200 with a zero-valued struct when a
+# runner dies. Fifth defect on this project's own list, a diagnostic naming the
+# wrong cause, inside the harness that found the other four.
+printf '{"model":"","created_at":"","done":false,"message":{"role":"assistant","content":""}}\n' \
+  > "$WORK/reply.json"
+out="$(fit contradicts-non-goal)"
+check "it says the server returned nothing" "never ran: the model server returned nothing" "$out"
+check "and names the machine"           "This is the machine, not the judge" "$out"
+check "and what to do instead"          "Free VRAM" "$out"
+nope  "it does not blame the budget"    "cut off by the token budget" "$out"
+# The advice line itself is allowed to name the flag; what must not appear is the
+# INCOMPLETE header attributing the failure to the budget, asserted above.
+check "and says the cap is not the lever" "Do not raise JUDGE_NUM_PREDICT" "$out"
+eq "and it has its own column"          "1" "$(jq -r '.never_ran_server_died' "$WORK/out.json")"
+eq "not the cut-off one"                "0" "$(jq -r '.cut_off_by_token_budget' "$WORK/out.json")"
 
 printf '\n== the clean control ==\n\n'
 #
