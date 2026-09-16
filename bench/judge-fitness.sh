@@ -308,6 +308,7 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
     judge:{model:$model, digest:$digest, thinking:$thinking},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
+    unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
     false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
     complete: ($cut == 0),
@@ -334,10 +335,18 @@ fi
 printf '\nof %s seeded defects (%s case(s) × %s pass(es)): rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$((SEEDED / REPEAT))" "$REPEAT" "$CAUGHT" "$NAMED"
 printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
 if [ "$CUT_OFF" -gt 0 ]; then
-  printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged.\n' "$CUT_OFF"
+  printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged:\n' "$CUT_OFF"
+  # Which, not just how many. "Two cases were cut off" is a caveat; "this case is
+  # cut off at every thinking level, in every pass" is a finding, and only the
+  # second one tells anyone what to do. `invented-current-behaviour` did exactly
+  # that on 2026-09-16 at both `medium` and `low`, always at 394 seconds, which
+  # is 12000 tokens at this model's rate — so it is the budget and not the level.
+  printf '  %s\n' "$(jq -r '[.[] | select(.verdict == "cut off") | .case] | unique | join(", ")' <<<"$RESULTS")"
   printf 'The rates above are computed over a denominator that includes them, so they are\n'
-  printf 'lower bounds on a judge that was not allowed to finish. Raise JUDGE_NUM_PREDICT\n'
-  printf 'and measure again before comparing this run to another.\n'
+  printf 'lower bounds on a judge that was not allowed to finish. A case cut off in EVERY\n'
+  printf 'pass is not noise: raise JUDGE_NUM_PREDICT for it, or record that it cannot be\n'
+  printf 'measured at this budget. Either way do not compare this run with another until\n'
+  printf 'the same cases are measurable in both.\n'
 fi
 printf '%s\n' "$OUT"
 printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
