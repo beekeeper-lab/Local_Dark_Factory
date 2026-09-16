@@ -428,5 +428,71 @@ out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean broken-bean.yaml --policy f
 check "it refuses to compute"   "containment could not be computed" "$out"
 nope  "and never says contained" '"contained": true' "$out"
 
+printf '\n== hidden tests reach the gate, and what they are is not a pass ==\n\n'
+#
+# hidden-tests.sh has its own suite. What this asserts is the wiring: that the
+# gate runs it, records it in gate.json, and turns each of its three outcomes
+# into the right thing. The one that matters is could_not_run — a hidden suite
+# that did not run, arriving at the audit as silence, is the fail-open shape this
+# project keeps finding, so it is a gate FAILURE and not a note.
+reset_branch
+mkdir -p src && printf 'GOOD\n' > src/a.py
+commit_all "task-hidden"
+
+printf '{}\n' > "$WORK/cfg-nohidden.json"
+out="$(PIPELINE_CONFIG="$WORK/cfg-nohidden.json" gate --skip-gates)"
+nope "skip-gates skips them too"       "hidden tests: " "$out"
+
+out="$(PIPELINE_CONFIG="$WORK/cfg-nohidden.json" gate --no-sandbox)"; rc=$?
+check "a repo with none says so"       "none configured" "$out"
+if [ "$(jq -r '.hidden_tests.status' ai/runs/R/gate.json 2>/dev/null)" = "not_configured" ]; then
+  printf '  ok    and the gate record says which\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  gate.json does not record hidden_tests: %s\n' "$(jq -c '.hidden_tests' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
+# not_configured is a note, so it must not contribute a failing part. Asserted on
+# the part and not on `overall`: this fixture's real gates fail for their own
+# reasons, and an assertion on the whole verdict would be measuring those.
+if grep -E '^(FAIL|fail)' <<<"$out" | grep -q 'hidden tests'; then
+  printf '  FAIL  "none configured" was counted as a gate failure\n'; FAIL=$((FAIL+1))
+else
+  printf '  ok    and it is a note, not a failing part\n'; PASS=$((PASS+1))
+fi
+
+printf '\n-- a configured suite that cannot run FAILS the gate --\n\n'
+#
+# Not a note. "The hidden tests did not run" reaching the audit as silence is
+# indistinguishable from "they passed", and the audit is what authorises the PR.
+jq -n --arg d "/definitely/not/here" '{hidden_tests:{dir:$d}}' > "$WORK/cfg-badhidden.json"
+out="$(PIPELINE_CONFIG="$WORK/cfg-badhidden.json" gate --no-sandbox)"; rc=$?
+check "the gate says it could not run" "hidden tests" "$out"
+check "as a failure"                   "could not run" "$out"
+if [ "$rc" -ne 0 ]; then printf '  ok    and the gate exits non-zero\n'; PASS=$((PASS+1))
+else printf '  FAIL  a hidden suite that could not run left the gate green\n'; FAIL=$((FAIL+1)); fi
+check "and gate.json records it"       '"status": "could_not_run"' "$(cat ai/runs/R/gate.json)"
+
+printf '\n-- and a passing suite passes, recorded by its hash --\n\n'
+HID="$WORK/hidden-ok"; rm -rf "$HID"; mkdir -p "$HID"
+printf 'def test_h():\n    assert True\n' > "$HID/test_h.py"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$WORK/yes-pytest"; chmod +x "$WORK/yes-pytest"
+jq -n --arg d "$HID" --arg p "$WORK/yes-pytest" --arg r "$WORK/hidden-results" \
+  '{hidden_tests:{dir:$d, command:[$p], results_dir:$r, control:false}}' > "$WORK/cfg-goodhidden.json"
+out="$(PIPELINE_CONFIG="$WORK/cfg-goodhidden.json" gate --no-sandbox)"; rc=$?
+check "the gate reports the pass"      "hidden tests" "$out"
+if [ "$(jq -r '.hidden_tests.status' ai/runs/R/gate.json 2>/dev/null)" = "passed" ]; then
+  printf '  ok    and gate.json says passed\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  gate.json: %s\n' "$(jq -c '.hidden_tests' ai/runs/R/gate.json 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
+# The record identifies WHICH tests ran without being a copy of them, and carries
+# no test text at all — gate.json goes to the judge, whose findings reach the
+# worker.
+if [ -n "$(jq -r '.hidden_tests.dir_sha256 // ""' ai/runs/R/gate.json 2>/dev/null)" ]; then
+  printf '  ok    hashed, so it says which without quoting them\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  no dir_sha256 in the gate record\n'; FAIL=$((FAIL+1))
+fi
+nope "and no test text in gate.json"   "test_h" "$(jq -c '.hidden_tests' ai/runs/R/gate.json)"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
