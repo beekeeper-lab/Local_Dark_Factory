@@ -41,7 +41,8 @@ not about the code.
 | `judge-fitness-gemma4-20260915T025711Z.json` | no | **partly** — gemma4:26b was rejected as a judge on this. Single run, so the comparison is weak; `format-support-20260916T111754Z.json` rejects it again on a different axis, which is why the decision stands |
 | `judge-fitness-fixedfixtures-20260915T131308Z.json` | no | no — superseded by the three-pass runs |
 | `judge-fitness-20260916T001225Z.json` | yes | superseded — 12000 cap, `thinking: medium` |
-| `judge-fitness-20260916T130042Z.json` | yes | **yes** — the 16000 half of the token-cap decision (0 of 18 cut off) |
+| `judge-fitness-20260916T130042Z.json` | yes | the 16000 half of the token-cap decision (0 of 18 cut off). Its catch-rate columns are **not** usable: two of the six fixtures were not seeding their defects |
+| `judge-fitness-20260916T172619Z.json` | yes | **yes** — the first run on fixtures that seed what they claim, at the current grammar. 9 false accepts in 15, control rejected 3 of 3, 2 named. A new baseline, not a comparison: both the fixtures and the grammar changed |
 | `judge-variance-20260915T134814Z.json` | no | **the finding it carries has been partly overtaken** — two verdicts from five identical runs at temperature 0, which is where "the judge is not reproducible" came from. See 142555Z, which asked the same case again after the cap and prompt changed and got one verdict five times. Kept as the before half, and still the reason the older figure's missing provenance mattered |
 | `judge-variance-20260916T142555Z.json` | yes | **yes** — same case, 16000 cap, `met` defined per target, thinking low: **1 distinct verdict across 5 identical runs**, where the 2026-09-15 run gave 2. Not enough to reopen advisory audits: one case, three variables changed at once, and the content still swings (findings 4/0/4/3/1, confidence 0.5–0.99, the seeded defect named in none of the five) |
 | `size-sweep-20260915T134814Z.json` | no | superseded by 100658Z |

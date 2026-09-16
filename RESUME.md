@@ -599,6 +599,56 @@ the next thing to do here.
 not a temporary accommodation while the judge was tuned. The audit stage did not
 produce a binding verdict on this line's artifacts at all.
 
+## OPEN and important: the grammar work improved conformance and the fitness numbers are the worst on record
+
+`bench/judge-fitness.sh --repeat 3`, 2026-09-16 evening, on fixtures that are
+actually seeding their defects for the first time
+(`evidence/judge-fitness-grammar-20260916.log`):
+
+```
+of 15 seeded defects: rejected 5, NAMED the actual defect 2
+false accepts 9 · abstentions 0 · no answer 1
+
+clean                        revise ×3          ← the control, rejected every time
+tautological-verify          accept ×3
+contradicts-non-goal         accept ×2 revise ×1
+invented-current-behaviour   accept ×1 revise ×2
+unfinishable-task            accept ×2 revise ×1
+criterion-not-really-met     accept ×1 none ×1 revise ×1
+```
+
+**Nine false accepts in fifteen, and the clean control rejected three times out of
+three.** That is not noise around the truth, it is anti-correlated with it.
+
+**It is not a measured regression, and saying so would be the same mistake this
+project keeps writing down.** Two things changed at once: the response grammar,
+and two of the six fixtures — which were not seeding the defects they claimed, so
+no earlier fitness figure was measured against these cases at all. The honest
+statement is that this is a **new baseline** and that every number before it is
+uncomparable.
+
+What it does say on its own terms:
+
+- **Conformance and judgement are not the same thing.** Every case that answered
+  carried all four criterion ids, in the right shape, with a valid confidence. The
+  grammar work did exactly what it was measured to do and none of it is evidence
+  about whether the judge is right.
+- Answers are much faster — 21 to 56 seconds, against 100 to 700 before. A judge
+  that used to spend minutes now answers in half a minute and accepts broken
+  plans.
+- **Advisory audits are more justified than before, not less.**
+
+What would separate the two causes, and it is the obvious next work: re-run
+`judge-fitness --repeat 3` with the fixed fixtures and the grammar changes backed
+out one at a time. `tools: []` and the `maxLength` caps are the two candidates —
+the first forces an answer where the model used to reach for a tool, the second
+forces a short one. Each is ~75 minutes. `git log` has each change as its own
+commit, so reverting one at a time is a `git revert` and a measurement.
+
+**Do not take the grammar changes as settled improvements.** They are settled
+improvements to *conformance*, which is what the controller needs to stamp
+anything at all, and an open question about everything else.
+
 ## Then three changes in an afternoon, and they are all the same change
 
 **The first stamped audit verdict this line has produced**:
