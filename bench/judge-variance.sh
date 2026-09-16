@@ -42,7 +42,7 @@ usage: judge-variance.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml
 EOF
 }
 
-SPEC=""; TASKS=""; BEAN=""; CASE="criterion-not-really-met"; RUNS=5; OUT=""
+SPEC=""; TASKS=""; BEAN=""; CASE="criterion-not-really-met"; RUNS=5; OUT=""; THINKING=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --spec)  SPEC="${2:?}"; shift 2 ;;
@@ -51,6 +51,7 @@ while [ $# -gt 0 ]; do
     --case)  CASE="${2:?}"; shift 2 ;;
     --runs)  RUNS="${2:?}"; shift 2 ;;
     --out)   OUT="${2:?}"; shift 2 ;;
+    --thinking) THINKING="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 1 ;;
   esac
@@ -70,7 +71,24 @@ mkdir -p "$(dirname "$OUT")"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-CATCH="$(grep "^$CASE|" "$ROOT/bench/judge-fitness.sh" | head -1 | cut -d'|' -f4)"
+# An unknown case name is refused, not shrugged at.
+#
+# `mutate` silently does nothing for a name it does not know, so a typo in
+# --case produced a variance measurement of a CLEAN spec while the record said it
+# was measuring a seeded defect — and `named` would have read "no" on every run,
+# which looks exactly like a judge that never catches anything. judge-fitness
+# refuses an unknown case; this copied the lookup and not the refusal.
+# The case list, read out of judge-fitness.sh's own CASES block rather than
+# guessed at with a line-anchored grep — `clean` lives on the same line as
+# `CASES='` and a `^case|` pattern misses it, so the first version of this both
+# refused a valid case and printed a list of five where there are six.
+CASE_LINES="$(sed -n "/^CASES='/,/'$/p" "$ROOT/bench/judge-fitness.sh" | sed "s/^CASES='//; s/'$//")"
+CATCH="$(printf '%s\n' "$CASE_LINES" | grep "^$CASE|" | head -1 | cut -d'|' -f4)"
+if ! printf '%s\n' "$CASE_LINES" | grep -q "^$CASE|"; then
+  printf 'no such case: %s\n\nthe cases judge-fitness.sh defines are:\n' "$CASE" >&2
+  printf '%s\n' "$CASE_LINES" | cut -d'|' -f1 | sed 's/^/  /' >&2
+  exit 2
+fi
 
 # One mutated copy, made once and reused for every run. Making it per-run would
 # introduce a second thing that could differ, and the whole point is that nothing
@@ -94,7 +112,12 @@ for i in $(seq 1 "$RUNS"); do
     "$("$PIPE/yaml2json.sh" "$BEAN" | jq -r '.id')" > "$RD/run.json"
 
   t0="$(date +%s)"; rc=0
-  "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" > "$RD/judge.log" 2>&1 || rc=$?
+  # --thinking, when asked for, and recorded either way. The level is the whole
+  # difference between a judge that answers and one that spends its budget
+  # reasoning, so a variance figure that does not say which cannot be compared
+  # with another.
+  "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" \
+    ${THINKING:+--thinking "$THINKING"} > "$RD/judge.log" 2>&1 || rc=$?
   t1="$(date +%s)"
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"
@@ -127,7 +150,9 @@ jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg sha "$SHA" \
   --argjson distinct "$DISTINCT" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
-  '{schema:"judge-variance/1.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model,
+  --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
+  '{schema:"judge-variance/2.0.0", measured_at:$ts, provenance:$prov, case:$case,
+    judge:{model:$model, thinking:$thinking},
     input_sha:$sha, runs:$r, distinct_verdicts:$distinct,
     reproducible:($distinct == 1),
     note:"Identical input every run: same spec, same task list, same prompt, temperature 0. Any difference between rows is the model, not the question."}' > "$OUT"
