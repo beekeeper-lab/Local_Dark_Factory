@@ -376,6 +376,17 @@ want "and it is the manifest's digest" "the record must agree with the file it r
      test "$(jq -r '.gate_manifest.image' ai/runs/R/gate.json)" = \
           "$(bash "$PIPELINE_DIR/yaml2json.sh" factory/gates.lock.yaml | jq -r '.image')"
 
+printf '\n== a diff it cannot read is not a clean diff ==\n\n'
+#
+# `git diff` failing produces an empty list, and every check below reads that as
+# nothing to object to: containment finds no violations, the secret scan finds no
+# secrets, the size budget is 0 of 5. The failure mode is every check passing at
+# once, which is the most convincing possible way to be wrong.
+out="$(bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean bean.yaml --policy factory/risk-policy.yaml \
+  --base 0000000000000000000000000000000000000000 --skip-gates 2>&1)" || true
+nope "it does not report a clean gate" "GATE PASS" "$out"
+check "it says it could not read the diff" "could not read the diff" "$out"
+
 printf '\n== a found secret is located, never reproduced ==\n\n'
 #
 # The scan used to print the matching lines. A check that finds a credential and

@@ -102,7 +102,15 @@ printf '\nGATE %s (base %s)\n\n' "$BEAN_ID" "$BASE"
 git -C "$ROOT" rev-parse --verify "$BASE" >/dev/null 2>&1 \
   || die "base ref '$BASE' does not exist; nothing to diff against"
 MERGE_BASE="$(git -C "$ROOT" merge-base "$BASE" HEAD 2>/dev/null || echo "$BASE")"
-CHANGED="$(git -C "$ROOT" diff --name-only "$MERGE_BASE"...HEAD)"
+# The diff every check below reads, taken once and required to succeed.
+#
+# `git diff` failing — an unresolvable merge base, a corrupt object — produces an
+# empty list, and every check downstream reads "no files changed" as "nothing to
+# object to": containment finds no violations, the secret scan finds no secrets,
+# the size budget is 0 of 5. A gate that cannot see the diff must not report on
+# it, and the failure mode is the whole set of checks passing at once.
+CHANGED="$(git -C "$ROOT" diff --name-only "$MERGE_BASE"...HEAD)" \
+  || die "could not read the diff between $MERGE_BASE and HEAD. Every check below reads it, and an empty diff is indistinguishable from a clean one."
 CHANGED_N="$(printf '%s\n' "$CHANGED" | sed '/^$/d' | wc -l)"
 DIFF_LINES="$(git -C "$ROOT" diff --numstat "$MERGE_BASE"...HEAD | awk '{a+=$1; d+=$2} END {print a+d+0}')"
 
