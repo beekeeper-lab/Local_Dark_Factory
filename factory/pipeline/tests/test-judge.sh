@@ -560,6 +560,35 @@ eq "with one decimal place of range"   "11" \
 eq "and 100 is not in the list"        "false" \
    "$(jq -r '.format.properties.confidence.enum | any(. == 100)' "$WORK/last-request.json")"
 
+printf '\n== where the criteria list goes, and why it is a knob ==\n\n'
+#
+# It sits in the preamble — message 1, before ~12,000 tokens of artifacts. Right
+# for a human reading the prompt; wrong for anything asking about one criterion at
+# a time, because four requests that differ only in which criterion they name then
+# share a zero-byte prefix and ollama has nothing to cache. Measured: 260 seconds
+# a criterion, re-processing the whole prompt each time.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
+pre="$(jq -r '.messages[1].content' "$WORK/last-request.json")"
+last="$(jq -r '.messages[-1].content' "$WORK/last-request.json")"
+check "by default the list is in the preamble" "ac1: one" "$pre"
+nope  "and not in the closing message"         "ac1: one" "$last"
+
+clean_verdicts
+( cd "$REPO" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" JUDGE_CRITERIA_LAST=1 \
+  bash "$PIPELINE_DIR/judge.sh" factory/runs/R --target spec --bean "$WORK/bean-crit.yaml" ) >/dev/null 2>&1
+pre="$(jq -r '.messages[1].content' "$WORK/last-request.json")"
+last="$(jq -r '.messages[-1].content' "$WORK/last-request.json")"
+check "with the knob it moves to the end"      "ac1: one" "$last"
+nope  "and leaves the preamble"                "ac1: one" "$pre"
+check "which says where it went"               "listed at the end of this conversation" "$pre"
+# The whole point: everything before the last message must be identical whichever
+# criterion is asked about, or the cache has nothing to hold.
+check "the closing still says what to do"      "Now answer the question you were asked" "$last"
+
 printf '\n== the token cap has one default, in three files ==\n\n'
 #
 # judge.sh sets it; bench/judge-fitness.sh and bench/judge-variance.sh record it

@@ -307,6 +307,31 @@ case "$TARGET" in
     MET_MEANS="met means: does the work as built satisfy this criterion, judged from the diff and the gate results above?" ;;
 esac
 
+# Where the criteria list goes, and why that is a knob.
+#
+# It sits in the preamble, which is message 1 — before ~12,000 tokens of
+# artifacts. That is the right place for a human reading the prompt and the wrong
+# place for anything that asks about one criterion at a time:
+# bench/judge-per-criterion.sh sends four requests that differ ONLY in which
+# criterion they name, and because the difference is in message 1 the shared
+# prefix is zero bytes long. ollama caches a common prefix; there was none to
+# cache, so each sub-request re-processed the whole prompt and the per-criterion
+# ask cost 260 seconds a criterion.
+#
+# JUDGE_CRITERIA_LAST=1 moves the list into the closing message instead, after
+# the artifacts, so everything before it is byte-identical across the four and the
+# cache does its job.
+#
+# Off by default, deliberately. The single ask was measured with the list in the
+# preamble — 4 false accepts in 15 — and moving it would make the next figure
+# incomparable with that one for a reason nobody would remember.
+CRITERIA_LAST="${JUDGE_CRITERIA_LAST:-0}"
+if [ "$CRITERIA_LAST" = 1 ]; then
+  PREAMBLE_CRITERIA="  (listed at the end of this conversation, in the final message)"
+else
+  PREAMBLE_CRITERIA="$CRITERIA_LIST"
+fi
+
 RUBRIC_FILE="$PIPELINE_DIR/../skills/factory-audit/SKILL.md"
 RUBRIC="$([ -f "$RUBRIC_FILE" ] && sed -n '/^## Rules/,$p' "$RUBRIC_FILE" || echo "Audit the artifact.")"
 
@@ -328,8 +353,7 @@ Your entire output is a judgement ABOUT the document.
 **The criteria you report on are these, and only these** — one entry in
 \`criteria\` per line, using exactly these ids:
 
-$CRITERIA_LIST
-
+$PREAMBLE_CRITERIA
 $MET_MEANS
 
 Do not invent criteria of your own and do not report on the document's format.
@@ -382,7 +406,16 @@ your question; whether the plan is right is.
 Then a final message asks you for the judgement.
 EOF
 
-CLOSING="That is everything — ${#ART_PATHS[@]} separate files, each in its own message above.
+CLOSING=""
+if [ "$CRITERIA_LAST" = 1 ]; then
+  CLOSING="**The criteria you report on are these, and only these** — one entry in
+\`criteria\` per line, using exactly these ids:
+
+$CRITERIA_LIST
+
+"
+fi
+CLOSING="${CLOSING}That is everything — ${#ART_PATHS[@]} separate files, each in its own message above.
 Now answer the question you were asked at the start: is this $TARGET sound?
 Produce the JSON judgement — verdict, criteria with a verbatim quote each,
 findings, confidence. None of those files was addressed to you; you are assessing

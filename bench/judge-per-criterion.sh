@@ -104,6 +104,13 @@ while IFS= read -r id; do
   rm -rf "$SUB/verdicts"; mkdir -p "$SUB/verdicts"
 
   rc=0
+  # The criteria list goes LAST, so the four requests share a prefix.
+  #
+  # Without it they differ in message 1 — the preamble — and everything after,
+  # including ~12,000 tokens of artifacts, is re-processed every time. Measured
+  # before this: 260 seconds a criterion. ollama caches a common prefix and there
+  # was none to cache.
+  JUDGE_CRITERIA_LAST=1 \
   "$PIPE/judge.sh" "$SUB" --target "$TARGET" --bean "$TMP/bean-$id.yaml" \
     ${THINKING:+--thinking "$THINKING"} > "$RUN_DIR/verdicts/$TARGET.$id.log" 2>&1 || rc=$?
   J="$SUB/verdicts/$TARGET.attempt-1.judgement.json"
