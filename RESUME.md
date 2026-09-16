@@ -456,6 +456,34 @@ Evidence: `evidence/judge-fitness-low-16k-20260916.log` beside
 `evidence/judge-fitness-low-20260916.log`, and
 `bench/results/judge-fitness-20260916T130042Z.json`.
 
+## Why bean-001 has no binding audit verdict, specifically
+
+`bench/phase1-audit.sh` reports `three_verdicts_schema_valid: not_exercised` —
+"6 audits ran advisory and reached none". That is true and it does not say what
+happened, and what happened is now known per audit:
+
+- **spec** produced a judgement: `accept`, and `confidence: 100` against a
+  contract of 0..1. `audit-check.sh` refuses it, correctly — "certain" and
+  "percent" cannot be told apart afterwards and guessing which was meant would
+  invent a claim the model did not make.
+- **doc** produced a judgement: `accept`, **0 findings and 0 criteria**, for a
+  bean with four acceptance criteria. A judgement that reports on none of them is
+  not a judgement.
+- **impl, package** produced no judgement file at all. At the 12000 cap that is
+  most likely the token cut-off; it could also be the unparseable-answer path,
+  which until 2026-09-16 kept nothing and so cannot be told apart retrospectively.
+
+All three causes have had work done on them since: the cap is 16000 (0 of 18 cut
+off, where 12000 gave 4 of 18), `met` now says what it means per target, and the
+unparseable path keeps the whole answer with `done_reason` and jq's own error.
+
+**The experiment that settles it**: run all four audits against this run directory
+— `factory/runs/bean-001-20260915T192025Z`, which still has every artifact — at
+the new cap with the new prompt, and count how many produce a judgement
+`audit-check.sh` will stamp. It is about twenty minutes of GPU and it is the
+strongest available evidence for whether this line can produce a binding audit at
+all. Nothing about it needs PR #1 to be merged.
+
 ## OPEN: the snapshot launcher died on its own last line, after succeeding
 
 That 75-minute run finished, printed its whole summary, wrote its results file, and
