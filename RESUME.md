@@ -1128,7 +1128,30 @@ don't design role-batching as if it were.
 **Context barely affects throughput** across 16K–49K. The old 39-minute InvTrac spec step
 was the 262144 default context, not model speed.
 
-## Four live gotchas
+## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
+
+**The judge stays advisory**, and it is not a holding position. Twelve audits of a
+real run at the best configuration this project knows produced eight judgements
+and zero stampable verdicts. The three grammar changes moved the failures down a
+layer rather than removing them. **Revisit when a `factory reaudit --passes 3`
+stamps the majority of its rows**, which has not happened once.
+
+**`thinking: low` stands.** Two measurements agreed when it was set, and a third
+on 2026-09-16 found `medium` produced *fewer* generated tokens on a real impl
+audit (45–64 against 84) rather than more. Revisit only with a measurement.
+
+**`JUDGE_NUM_PREDICT` = 16000, and it is not the lever for anything currently
+failing.** The cut-offs it fixed are gone; every remaining failure sits at
+35–45% of the context window with a few hundred generated tokens. Raising it
+again would be changing a number that is not binding.
+
+**Constraints on the judge go in the grammar, not the prompt.** Three for three in
+one afternoon against a baseline of zero. This is the one to apply *first* next
+time something in a judgement is wrong, before writing another paragraph of
+instruction. Revisit if a grammar constraint ever measurably makes an answer
+worse — `reaudit` is how you would find out.
+
+## Five live gotchas
 
 **Matching a process by pattern, the sixth time.** `reaudit.sh` printed "a bench
 harness is running" when none was. `pgrep -f` matches whole command lines, so a
