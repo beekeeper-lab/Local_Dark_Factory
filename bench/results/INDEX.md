@@ -52,7 +52,7 @@ thing that makes two of them comparable.
 
 | file | provenance | still load-bearing? |
 | --- | --- | --- |
-| `reaudit-20260916T160000Z.json` | yes (names run, bean, passes, thinking) | **yes** — the first configuration under which this line produced a stampable audit verdict at all |
+| `reaudit-20260916T163000Z.json` | yes (names run, bean, passes, thinking) | **yes** — the current configuration, measured: 12 audits, 8 judgements, 0 stamped, every answer carrying exactly four criteria. The baseline the next grammar change has to beat |
 
 The baselines it has to be read against are terminal logs rather than JSON,
 because `factory reaudit` did not exist when they were taken:
