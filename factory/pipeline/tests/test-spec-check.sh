@@ -337,5 +337,21 @@ check "the spec fails"                 "SPEC CHECK FAIL" "$out"
 out="$(SPEC_CHECK_VALIDATOR=/nonexistent/validate.py SPEC_CHECK_ALLOW_NO_SCHEMA=1 SPEC_CHECK_RUN_VERIFIES=0 sc)"
 check "but it can be accepted deliberately" "schema validation skipped" "$out"
 
+printf '\n== a containment check that cannot run is not "outside the paths" ==\n\n'
+#
+# `! contain.py` treats exit 1 (outside the bean) and exit 2 (contain.py refusing
+# to run) alike, so an unreadable pattern list made every task look out of bounds.
+# That is a refusal for the wrong reason, and it sends the next person to edit a
+# spec that was fine. The same two lines were in build-loop.sh twice.
+BROKEN_PIPE="$WORK/broken-pipeline"; rm -rf "$BROKEN_PIPE"; cp -r "$PIPELINE_DIR" "$BROKEN_PIPE"
+cat > "$BROKEN_PIPE/contain.py" <<'PYSTUB'
+import sys
+print("contain.py: patterns are not JSON", file=sys.stderr)
+sys.exit(2)
+PYSTUB
+out="$(bash "$BROKEN_PIPE/spec-check.sh" factory/runs/R --bean factory/beans/bean.yaml 2>&1)" || true
+check "it says the check did not run" "the check did not run" "$out"
+nope  "and does not blame the paths"  "outside the bean's allowed paths" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

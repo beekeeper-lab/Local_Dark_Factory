@@ -122,14 +122,24 @@ N_TASKS="$(jq '.tasks | length' <<<"$TASKS_JSON")"
 
 # ------------------------------------------------- 3. tasks inside the bean --
 BEAN_PATHS="$(jq -c '.allowed_write_paths // []' <<<"$BEAN_JSON")"
-OUTSIDE=""
+OUTSIDE=""; UNCHECKED=""
 while IFS=$'\t' read -r tid pat; do
   [ -n "$tid" ] || continue
-  if ! printf '%s\n' "$pat" | "$PY" "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS" >/dev/null 2>&1; then
+  # Exit 1 is "outside the paths"; exit 2 is contain.py refusing to run. `! cmd`
+  # treats them alike, so an unreadable pattern list made every task look out of
+  # bounds — a refusal for the wrong reason, which sends the next person to edit
+  # a spec that was fine. The same two lines were in build-loop.sh twice.
+  crc=0
+  printf '%s\n' "$pat" | "$PY" "$PIPELINE_DIR/contain.py" --patterns "$BEAN_PATHS" >/dev/null 2>&1 || crc=$?
+  if [ "$crc" -ge 2 ]; then
+    UNCHECKED="$UNCHECKED $tid:$pat"
+  elif [ "$crc" -ne 0 ]; then
     OUTSIDE="$OUTSIDE $tid:$pat"
   fi
 done < <(jq -r '.tasks[] | .id as $i | .write_paths[] | [$i, .] | @tsv' <<<"$TASKS_JSON")
-if [ -n "$OUTSIDE" ]; then
+if [ -n "$UNCHECKED" ]; then
+  bad "write_paths" "containment could not be computed for:$UNCHECKED — the paths may be fine; the check did not run"
+elif [ -n "$OUTSIDE" ]; then
   bad "write_paths" "outside the bean's allowed paths:$OUTSIDE"
 else
   ok "write_paths" "every task is inside the bean's $(jq 'length' <<<"$BEAN_PATHS") allowed path(s)"
