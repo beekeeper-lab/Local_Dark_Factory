@@ -18,6 +18,10 @@
 # beans get split until specs fit under it. If it does not, granularity is not
 # the lever and this says so.
 set -uo pipefail
+# Nothing else may be using the GPU. See inflight.sh for why this matters even
+# for a harness that evicts nothing.
+# shellcheck source=inflight.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inflight.sh"
 # Every figure carries where and on what it was measured. One emitter, because
 # two lists of what a figure must record is one list that disagrees with itself.
 # shellcheck source=provenance.sh
@@ -107,6 +111,8 @@ printf 'padding available: %s bytes\n' "$(wc -c < "$PAD_ALL")"
 
 CATCH="$(grep "^$CASE|" "$ROOT/bench/judge-fitness.sh" | head -1 | cut -d'|' -f4)"
 [ -n "$CATCH" ] || { echo "no catch phrases for case '$CASE' in judge-fitness.sh" >&2; exit 1; }
+
+refuse_if_inflight
 
 printf '\nsize sweep — case %s\n\n' "$CASE"
 printf '%-10s %-10s %-9s %-7s %-7s %s\n' PADDING TOTAL VERDICT NAMED SECONDS WHY-NOT

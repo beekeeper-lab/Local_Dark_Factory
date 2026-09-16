@@ -20,6 +20,9 @@
 # A miss that abstains is a bad day. A miss that accepts is a false approval,
 # which is the §11 metric the whole line is built to keep near zero.
 set -uo pipefail
+# Nothing else may be using the GPU, because the next thing this does is take it.
+# shellcheck source=inflight.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inflight.sh"
 # Every figure carries where and on what it was measured. One emitter, because
 # two lists of what a figure must record is one list that disagrees with itself.
 # shellcheck source=provenance.sh
@@ -188,13 +191,7 @@ REPEAT="${REPEAT:-1}"
 # measurement of VRAM, and it is also a loaded gun pointed at any run in flight:
 # started during a real bean's spec audit, it would evict the judge mid-request
 # and the run would record a dead runner as the judge's answer. Nearly did.
-if pgrep -f '[o]rchestrate\.sh' >/dev/null 2>&1; then
-  printf 'REFUSED — a pipeline run is in flight (orchestrate.sh).\n' >&2
-  printf 'This harness evicts models to control what it is measuring, which would take\n' >&2
-  printf 'the GPU out from under that run. Wait for it, or use --no-evict to measure\n' >&2
-  printf 'alongside it and accept that the numbers include the contention.\n' >&2
-  [ "${NO_EVICT:-0}" = 1 ] || exit 2
-fi
+refuse_if_inflight evicts
 
 JUDGE_MODEL="$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")"
 while IFS= read -r resident; do

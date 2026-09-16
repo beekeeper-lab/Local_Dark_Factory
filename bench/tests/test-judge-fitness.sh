@@ -170,7 +170,18 @@ out="$( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/rol
 kill "$FAKE_RUN" 2>/dev/null
 eq "it refuses"                        "2" "$rc"
 check "and says why"                   "a pipeline run is in flight" "$out"
-check "with the escape named"          "--no-evict" "$out"
+check "with the escape named"          "FACTORY_MEASURE_ANYWAY=1" "$out"
+
+# And the escape works, saying what it costs rather than going quiet.
+( exec -a "bash /tmp/orchestrate.sh fake" sleep 8 ) &
+FAKE2=$!
+sleep 0.5
+out="$( cd "$ROOT" && OLLAMA_HOST="http://127.0.0.1:$PORT" ROLES_FILE="$WORK/roles.json" \
+  FACTORY_MEASURE_ANYWAY=1 bash "$BENCH/judge-fitness.sh" --spec "$SPEC" --tasks "$TASKS" \
+  --bean "$BEAN" --only clean --out "$WORK/anyway.json" 2>&1 )"; rc2=$?
+kill "$FAKE2" 2>/dev/null
+eq "the escape proceeds"               "0" "$rc2"
+check "and names the cost"             "include contention for the GPU" "$out"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

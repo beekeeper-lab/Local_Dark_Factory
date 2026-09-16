@@ -20,6 +20,10 @@
 # The schema used here is judge.sh's own, read from the file, so this cannot drift
 # away from what the judge actually asks for.
 set -uo pipefail
+# Nothing else may be using the GPU. See inflight.sh for why this matters even
+# for a harness that evicts nothing.
+# shellcheck source=inflight.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inflight.sh"
 # Every figure carries where and on what it was measured. One emitter, because
 # two lists of what a figure must record is one list that disagrees with itself.
 # shellcheck source=provenance.sh
@@ -74,6 +78,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 set -- ${ARGS+"${ARGS[@]}"}
+
+refuse_if_inflight
 
 PAYLOAD='[]'
 if [ -n "$ART_DIR" ]; then

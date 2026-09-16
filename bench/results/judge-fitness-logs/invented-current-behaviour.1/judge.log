@@ -1,2 +1,4 @@
-JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=medium cap=12000  (3 artifacts, 19718 bytes, one message each)
-JUDGE  spec  revise  1 finding(s)  114s  /tmp/tmp.w9xLIxAwGP/invented-current-behaviour.1/verdicts/spec.attempt-1.judgement.json
+JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=low cap=12000  (3 artifacts, 19718 bytes, one message each)
+JUDGE  spec: hit the 12000-token cap before finishing
+JUDGE  spec: spent the whole 12000-token budget thinking and wrote no answer.
+       Its reasoning is in verdicts/spec.thinking.txt. Raise JUDGE_NUM_PREDICT.

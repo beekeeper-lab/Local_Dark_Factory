@@ -19,6 +19,10 @@
 # This changes nothing between runs. It asks the same question N times and reports
 # what came back.
 set -uo pipefail
+# Nothing else may be using the GPU. See inflight.sh for why this matters even
+# for a harness that evicts nothing.
+# shellcheck source=inflight.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inflight.sh"
 # Every figure carries where and on what it was measured. One emitter, because
 # two lists of what a figure must record is one list that disagrees with itself.
 # shellcheck source=provenance.sh
@@ -76,6 +80,8 @@ cp "$SPEC" "$SRC/spec.md"; cp "$TASKS" "$SRC/tasks.yaml"
 sed -n '/^mutate() {/,/^}/p' "$ROOT/bench/judge-fitness.sh" > "$TMP/mutate.sh"
 ROOT="$ROOT" bash -c "source '$TMP/mutate.sh'; mutate '$CASE' '$SRC/spec.md' '$SRC/tasks.yaml'"
 SHA="$(cat "$SRC/spec.md" "$SRC/tasks.yaml" | sha256sum | cut -c1-16)"
+
+refuse_if_inflight
 
 printf '\njudge variance — case %s, %s runs, identical input (sha %s)\n\n' "$CASE" "$RUNS" "$SHA"
 printf '%-5s %-9s %-7s %-7s %s\n' RUN VERDICT NAMED SECONDS NOTE

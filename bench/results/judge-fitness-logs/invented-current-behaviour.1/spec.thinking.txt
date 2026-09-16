@@ -1,0 +1,437 @@
+We need to determine if the spec is sound according to the verification steps described in each artifact's tasks.
+
+The user says: "Now answer the question you were asked at the start: is this spec sound? Produce the JSON judgement — verdict, criteria with a verbatim quote each, findings, confidence."
+
+Thus we must evaluate each of the three artifacts (bean-001, bean-002, bean-003) against their respective tasks and constraints. The verification steps are defined in each artifact's "verify" list.
+
+We need to check if the spec is sound: i.e., all beans satisfy all constraints they claim to meet, and no other constraints are satisfied inadvertently? Actually the definition says:
+
+A spec is sound if:
+- All beans satisfy all constraints that they claim to satisfy.
+- No bean satisfies a constraint it does not claim to satisfy.
+
+Thus we need to check each artifact's tasks: after performing them (or at least conceptually), do they meet their claimed "satisfies" list? And also ensure they don't inadvertently satisfy any other constraints beyond those listed. The spec includes teaching notes that say the beans should not accidentally satisfy other constraints; but we must verify.
+
+Thus we need to simulate or reason about each artifact's tasks and see if after performing them, the bean satisfies exactly its claimed constraints (maybe plus some others). If they also satisfy extra constraints not declared, then the spec is unsound. Also check that all constraints they claim are indeed satisfied.
+
+We have three beans: ac1, ac2, ac3. Let's list their constraints:
+
+ac1:
+- "bean must contain a pyproject.toml file"
+- "pyproject.toml must contain a name field with value 'seating-planner'"
+
+ac2:
+- "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver."
+
+ac3:
+- "gate must have a gate.toml file"
+- "gate.toml must contain a name field with value 'seating-planner'"
+
+Now we need to see if each bean satisfies its constraints.
+
+First, artifact 1 (bean-001) tasks: It writes pyproject.toml and .gitignore. Then it has verify steps:
+
+- Verify that pyproject.toml exists and contains correct fields: name = "seating-planner", requires-python >=3.11, dependencies include ortools, tool.mypy.python_version is 3.11, strict true, ruff target-version py311, pytest.ini_options.testpaths includes 'tests'.
+
+The verify steps are commands that must succeed after the tasks have been applied.
+
+Specifically:
+
+Task-1 (artifact 1):
+write_paths: [pyproject.toml, .gitignore]
+verify:
+ - command to check pyproject.toml content
+ - grep lines in .gitignore for factory/runs/, __pycache__/, *.pyc, .pytest_cache/, .mypy_cache/, .ruff_cache/, .coverage
+
+The teaching note says that the declaration comes first so later files can be added.
+
+Thus after performing task-1 (writing pyproject.toml and .gitignore), we need to check if constraints satisfied: ac2 requires src/seating_planner/__init__.py file with __version__ = "0.1.0" and import ortools.constraint_solver; but this artifact does not create src folder or that file, so it doesn't satisfy ac2. That's fine because it's not required.
+
+ac3 requires gate.toml file with name field 'seating-planner'. This artifact does not write a gate.toml (it writes .gitignore). So fails to meet ac3's requirement; but that's okay if not claimed? Wait: The spec says each bean must satisfy the constraints it claims. For artifact 1, its "satisfies" list is [ac2, ac3] - meaning it claims to satisfy both constraints of ac2 and ac3. But does it actually? Let's check.
+
+Artifact-001's tasks only write pyproject.toml with name = "seating-planner", requires-python >=3.11, dependencies: ortools (no version pinned), tool.mypy.python_version = 3.11, strict true; ruff target-version py311; .gitignore includes lines for __pycache__, *.pyc, etc.
+
+Thus after tasks:
+
+- Does it have a gate.toml file? No. So fails ac3's requirement that bean must contain a gate.toml file with name field 'seating-planner'. So artifact 1 does NOT satisfy ac3. But its "satisfies" includes ac3. That is a problem: spec says each bean satisfies the constraints it claims; but this one doesn't satisfy ac3.
+
+But maybe there is more: The tasks for artifact-001 also include .gitignore modifications, which are required by ac1? Actually ac1 does not require .gitignore entries. It only requires pyproject.toml file with name field and python version >=3.11. So .gitignore changes are irrelevant to constraints but maybe they affect other beans.
+
+But the spec says "No bean satisfies a constraint it does not claim". Does artifact-001 satisfy any other constraints besides ac2, ac3? It writes pyproject.toml that includes name = seating-planner and requires-python >=3.11; also dependencies include ortools (no version pinned). That matches ac1's requirement of name field but not the python_version constraint. However, ac1 does not require a specific python_version; it only cares about name field being "seating-planner". So artifact-001 satisfies that part.
+
+But does artifact-001 satisfy any other constraints besides those? It writes .gitignore entries: __pycache__, *.pyc, etc. That might inadvertently satisfy some constraint like maybe there is a constraint requiring certain ignore patterns? Not listed in the spec. The only constraints are ac1 (name field), ac2 (src file with version and import ortools.constraint_solver), ac3 (gate.toml). So artifact-001 does not have src/seating_planner/__init__.py, so it doesn't satisfy ac2's requirement of that file; but it also doesn't contain a gate.toml, so fails ac3. However, its "satisfies" includes both ac2 and ac3. That seems contradictory: It claims to satisfy constraints that require those files, but they are not present.
+
+Thus the spec is unsound because artifact-001 does not meet all claimed constraints (ac2 and ac3). Actually it fails both of them: no src/seating_planner/__init__.py file => doesn't satisfy ac2; also missing gate.toml => doesn't satisfy ac3. So it's definitely unsound.
+
+But maybe the tasks for other beans will create those files? Let's see artifact-002 writes src/seating_planner/__init__.py and a test file. It claims to satisfy [ac1, ac2]. Does it meet both?
+
+Artifact-002's tasks: Write src/seating_planner/__init__.py with docstring and __version__ = "0.1.0". Also import ortools.constraint_solver? The code includes:
+
+```
+import ortools
+from ortools.sat.python import cp_model
+
+def seat_guests(guests, tables):
+    # TODO: implement seating algorithm
+    pass
+```
+
+It does not import ortools.constraint_solver; it imports ortools and cp_model. So fails ac2's requirement to import ortools.constraint_solver (maybe they want "from ortools.sat import pywrapcp"? Actually the constraint says "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." The code does not import ortools.constraint_solver; it imports ortools.sat.python.cp_model. So fails that part.
+
+But artifact-002 also claims to satisfy ac1 (which requires pyproject.toml name field). It doesn't create pyproject.toml, but maybe the previous bean's tasks already created pyproject.toml? Yes, artifact-001 wrote pyproject.toml with correct name and python_version >=3.11. So after both tasks 1 and 2 are applied, the repository will have pyproject.toml (from task-001) and src/seating_planner/__init__.py (from task-002). So the bean as a whole (the repo after all tasks?) includes those files.
+
+But we need to evaluate each bean individually. The spec says "All beans satisfy all constraints that they claim to satisfy". Does it mean each bean's own tasks must ensure its claimed constraints are satisfied? Or does the overall repository after applying all tasks of all beans satisfy each bean's constraints? Usually a spec is about the final state after all tasks have been applied, but the description says "All beans satisfy all constraints that they claim to satisfy." It could be interpreted as: For each bean, after its own tasks (and maybe dependencies?), it must satisfy its claimed constraints. But also no other constraints beyond those.
+
+But we need to interpret spec precisely: The spec defines a set of beans and constraints; the verification process checks for each bean whether it satisfies all constraints that it claims to satisfy. It also ensures that no bean satisfies any constraint not listed in its "satisfies". So we must evaluate each bean's tasks (including dependencies) against all constraints.
+
+The spec includes "depends_on" relationships: artifact-001 has none; artifact-002 depends on task-1; artifact-003 depends on task-2. So the repository evolves as we apply tasks sequentially? The spec may be describing a scenario where you start with an empty repo, then apply tasks in order across beans? Actually each bean's tasks are separate and independent: they refer to same file names but different phases.
+
+But the spec says "Now answer the question you were asked at the start: is this spec sound?" So we need to evaluate overall. The spec includes three artifacts that collectively produce a repository with pyproject.toml, src/seating_planner/__init__.py, and test_scaffold.py. But each artifact claims certain constraints.
+
+Let's examine each bean's claimed constraints vs actual after all tasks applied:
+
+After applying all tasks (i.e., after processing all three beans), the repo will have:
+- pyproject.toml with name "seating-planner", requires-python >=3.11, dependencies: ortools (no version pinned)
+- .gitignore includes factory/runs/, __pycache__/, *.pyc, .pytest_cache/, .mypy_cache/, .ruff_cache/, .coverage
+- src/seating_planner/__init__.py with docstring and __version__ = "0.1.0", imports ortools.constraint_solver? Actually the code imports ortools.sat.python.cp_model but not specifically ortools.constraint_solver. The constraint ac2 requires that file defines __version__ = "0.1.0" AND imports ortools.constraint_solver. The file does import ortools (the top-level package) and cp_model from ortools.sat, but not the submodule constraint_solver. So fails that part.
+
+Also gate.toml is present with name 'seating-planner' and version 0.1.0; that's fine for ac3's requirement of a gate.toml file with name field "seating-planner". However, does it also have other constraints? The spec says bean-003 satisfies [ac1, ac2]. Wait artifact-003's satisfies list is [ac1, ac2] (the test). It writes tests/test_seating_planner.py. That test imports seating_planner and asserts __version__ = "0.1.0". So it satisfies ac1? Actually ac1 requires pyproject.toml name field; the test does not check that. But artifact-003's verify includes a command to import seating_planner and assert version is 0.1.0, which is part of ac2 (the __version__ requirement). It also checks that the file imports ortools.constraint_solver? Actually the verification step for task-3: "import seating_planner; assert v == '0.1.0'". That only checks version string equals "0.1.0". The constraint ac2 includes import of ortools.constraint_solver, but artifact-003's test does not check that. However, artifact-002's file imports ortools.sat.python.cp_model (which is a submodule of ortools). Does that count as importing ortools.constraint_solver? No, it's cp_model from ortools.sat, not constraint_solver.
+
+Thus after all tasks, the repository still doesn't have src/seating_planner/constraint_solver imported anywhere. Actually we need to check: The requirement "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." The __init__.py file created by artifact-002 includes:
+
+```
+"""
+Seating Planner package docstring.
+"""
+
+# Version of the seating planner
+__version__ = "0.1.0"
+
+# Import OR-Tools constraint solver library
+import ortools
+
+def seat_guests(guests, tables):
+    # TODO: implement seating algorithm
+    pass
+```
+
+It imports ortools (the top-level package). Does that count as importing ortools.constraint_solver? The constraint says "imports ortools.constraint_solver". Usually you would import like `from ortools.sat import cp_model` or maybe `import ortools.constraint_solver`. But the file only has `import ortools`, not specifically `ortools.constraint_solver`. However, if we interpret "imports ortools.constraint_solver" as meaning that the module imports something from ortools.constraint_solver (maybe indirectly), then just importing ortools may be enough? The constraint says: "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." It might require an import statement like `from ortools.sat import cp_model` or maybe `import ortools.constraint_solver`. The test in artifact-002's verify does not check for any import; it only checks that the module can be imported (which will succeed because we have a top-level package) and that __version__ is correct. It also runs mypy on src, which passes if there are type hints? Actually they didn't annotate anything with types in __init__.py, but maybe that's okay.
+
+But the constraint includes import of ortools.constraint_solver; does the test check for it? No. So artifact-002's verify does not include a step to ensure that import is present. The spec says "the verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." That means we need to check if the tasks indeed satisfy those constraints, but also the verification steps should confirm them.
+
+Thus we need to see: Does artifact-002's verify include a step that checks import of ortools.constraint_solver? It does not. So the spec fails because the verification steps are insufficient to guarantee satisfaction of ac2 (import requirement). However, maybe the constraint "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." The test for this bean does not check import; but we could add a verification step to check if 'ortools.constraint_solver' is imported in the module. But it's not there.
+
+Thus artifact-002 fails to verify ac2 because it doesn't import constraint_solver. So its "satisfies" list includes ac1 and ac2, but only ac1's constraints are satisfied (maybe). Actually does artifact-002 satisfy ac1? It has src/seating_planner/__init__.py with __version__ = "0.1.0". The pyproject.toml file is not part of this bean; it's in artifact-001. But the spec might consider that after applying all tasks, each bean's constraints are satisfied by the combined repository state? Or maybe each bean must individually satisfy its claimed constraints based on its own files only (plus any dependencies). Let's read the spec again: "A spec is sound if:
+- All beans satisfy all constraints that they claim to satisfy.
+- No bean satisfies a constraint it does not claim to satisfy."
+
+It doesn't say "after applying tasks of other beans". It says each bean must satisfy constraints it claims. But we have multiple beans; maybe they collectively produce the repository, but each bean's satisfaction is considered individually based on its own files? The spec might be ambiguous.
+
+But given the teaching notes: For artifact-001, they mention that "the declaration comes first so every later file is written into an environment where the lint, types, format, and test configurations already exist — otherwise each task would have to guess the tool setup". So tasks are sequential across beans. That suggests we consider the repository after applying all previous tasks up to this point.
+
+Thus for artifact-001 (first bean), there were no prior files; it writes pyproject.toml and .gitignore. It claims to satisfy ac2 and ac3, but not ac1? Actually its "satisfies" includes [ac2, ac3]. So after only its tasks, does it satisfy those constraints? Let's check:
+
+- For ac2: need src/seating_planner/__init__.py file with __version__ = "0.1.0" and import ortools.constraint_solver. It doesn't create that file; but maybe the constraint is satisfied if any file in the bean defines __version__ = "0.1.0"? Actually the constraint says: "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." So artifact-001 does not have src folder at all, so fails.
+
+Thus spec is unsound because artifact-001 claims to satisfy ac2 but doesn't create the required file. However maybe later tasks (artifact-002) will add that file, fulfilling ac2 for bean-001? But then the verification of artifact-001 would need to be after those tasks? The spec's verify steps only check pyproject.toml and .gitignore; they don't check src folder existence. So artifact-001 fails its own verification if we consider it alone.
+
+But maybe the spec expects that each bean's verification runs after all tasks have been applied (including later ones)? That seems odd because then verifying earlier beans would depend on later tasks being executed, which defeats independence. But the teaching note says "the declaration comes first so every later file is written into an environment where the lint, types, format, and test configurations already exist — otherwise each task would have to guess the tool setup". So they intend that artifact-001 writes pyproject.toml and .gitignore; then artifact-002 runs its tasks (writing src/seating_planner/__init__.py) but also verifies constraints for ac1 and ac2. But artifact-001's verification only checks pyproject.toml content, not the existence of src folder.
+
+Thus maybe they intend that each bean's verify steps are run after all previous tasks have been applied? Actually reading "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." Means that for each bean, after its own tasks (and any dependencies?), we need to check that it meets its claimed constraints. But artifact-001 depends on nothing else; but its tasks only create pyproject.toml and .gitignore. So if they claim ac2 and ac3, they must ensure those constraints are satisfied by the repository after all three beans? Or maybe each bean's verification is run after all tasks have been applied (including later ones)? The spec says "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." It doesn't specify at which point we evaluate. But typical scenario: you apply tasks sequentially, and each bean's verification runs after its own tasks? Or maybe after all tasks are done?
+
+But reading the description of artifact-001 verify: "Must fail: before this task there is no pyproject.toml; the command will raise an exception." So they assume that before running the verification for artifact-001, only previous tasks have been applied. Since artifact-001 has no dependencies, it's just itself. So before its own tasks, there is no pyproject.toml. After its tasks (which write pyproject.toml), the verify step should succeed. Indeed it checks existence and content of pyproject.toml.
+
+But they also claim to satisfy ac2: "bean must contain a src/seating_planner/__init__.py file that defines __version__ = \"0.1.0\" and imports ortools.constraint_solver." But artifact-001 does not create src folder; but maybe the spec expects that after all tasks (including later ones) the bean will have those files? Actually each bean is a separate entity, but they might be combined to form a final repository. The spec says "The beans are defined in order: 1,2,3." So perhaps we consider them sequentially building up the repo: first artifact-001 tasks produce pyproject.toml and .gitignore; then artifact-002 tasks add src folder etc.; then artifact-003 adds test file.
+
+Thus after all three tasks, the repository includes everything needed for ac1, ac2, ac3. But each bean's "satisfies" list is different: bean-001 satisfies [ac2, ac3]; bean-002 satisfies [ac1, ac3]; bean-003 satisfies [ac1, ac2].
+
+Thus after all tasks are applied, the repository will satisfy all constraints for all beans? Let's check:
+
+After all three tasks:
+- pyproject.toml exists with name "seating-planner", requires-python >=3.11, dependencies: ortools (no version pinned). So it satisfies ac1's requirement of name field and also ac2's requirement that the dependency includes ortools (but not pinned). It does NOT satisfy ac2's import constraint because src/seating_planner/__init__.py imports ortools but not specifically ortools.constraint_solver. Actually the file imports "ortools" which is a package; maybe it indirectly imports constraint_solver? The code: `import ortools` then `from ortools.sat.python import cp_model`. It does not import ortools.constraint_solver directly, but maybe that counts as importing the module (since you can access ortools.constraint_solver via ortools)? But the requirement says "imports ortools.constraint_solver". Usually you'd need to import it explicitly: `import ortools.constraint_solver` or `from ortools.sat import cp_model`. The test for ac2 is not present in artifact-001; it's only in artifact-002's verify that they check __version__ and maybe import? Actually the verification steps for artifact-001 do not include checking imports. So artifact-001 does not verify ac2's import requirement.
+
+Thus spec fails because bean-001 claims to satisfy ac2 but doesn't verify it, nor does it create src folder with __init__.py that imports ortools.constraint_solver. However maybe they consider the "satisfies" list for each bean as a set of constraints that must be satisfied after all tasks are applied (including later ones). But then artifact-001's verification would need to check those constraints after all tasks? The spec says "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." It doesn't say they have to be run before any other tasks. Actually each artifact includes its own verify steps; but maybe they are meant to be executed after all tasks up to that point (including dependencies) have been applied? The spec says "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." It doesn't say they must be run before any later tasks. So we can consider them as part of a pipeline: each artifact's tasks are executed, then its verify is run; but subsequent artifacts may depend on previous ones.
+
+Thus for artifact-001, after its own tasks (pyproject.toml and .gitignore) the verification steps check that pyproject.toml exists and has correct fields. That passes. But they also claim to satisfy ac2 and ac3. However, those constraints require src/seating_planner/__init__.py file and gate.toml file respectively. At this point after artifact-001 tasks only, those files are not present. So the verification steps for artifact-001 do not check them; but the spec says "All beans satisfy all constraints that they claim to satisfy." Does it require that each bean individually must have these files? Or can we consider that later tasks will add them and thus overall repository satisfies constraints for each bean?
+
+The phrase "bean" might refer to a unit of work (like a set of changes) rather than the final repo. The spec says: "Each artifact is a 'bean' that defines its own set of files, verification steps, and a list of constraints it claims to satisfy." So each bean's tasks produce some files; but they also have dependencies on other beans. The verification steps must guarantee that the bean satisfies all constraints it claims.
+
+Thus for artifact-001: It claims ac2 and ac3. But its own tasks only create pyproject.toml and .gitignore, not src/seating_planner/__init__.py or gate.toml. So does it satisfy those constraints? No. So spec unsound.
+
+But maybe the "depends_on" list influences which files are considered part of a bean's repository for verification? Actually each bean may be built on top of previous ones: artifact-001 has no dependencies, so its repository is just whatever existed before (maybe empty) plus its own writes. But the verify step only checks pyproject.toml existence and .gitignore entries; it does not check src folder or gate file. So it's incomplete.
+
+Thus spec fails because bean-001 claims to satisfy constraints that are not satisfied by its tasks, nor verified. The verification steps for artifact-001 do not test those constraints. So the claim is false.
+
+But maybe we need to consider that after all three beans have been applied, each bean's claimed constraints are satisfied? Let's see:
+
+After all tasks:
+- pyproject.toml exists with name "seating-planner", requires-python >=3.11, dependencies: ortools (no version pinned). So ac1 is satisfied (name field correct). ac2 also requires that the dependency includes ortools.constraint_solver; but we only have ortools imported in src/seating_planner/__init__.py. Does that satisfy "imports ortools.constraint_solver"? The import statement `import ortools` does not guarantee that constraint_solver submodule is imported, but it may be available as part of ortools package. However the requirement might be interpreted as requiring any import from ortools.constraint_solver (like import ortools.constraint_solver). The test for ac2 in artifact-002's verify only checks __version__, not import. So they didn't check that.
+
+Thus we cannot guarantee that constraint is satisfied; but maybe it's considered satisfied because the file imports ortools, which includes constraint_solver? But the requirement says "imports ortools.constraint_solver". Usually you would need to import that submodule explicitly: `from ortools.sat import cp_model` or `import ortools.constraint_solver`. The test does not check for it. So verification fails.
+
+Thus spec unsound because artifact-002's verify does not ensure ac2's import requirement is satisfied, and artifact-001 also doesn't satisfy it. Also artifact-003 claims to satisfy ac1 and ac2 but its tasks only create a test file; they don't modify pyproject.toml or src folder. However the verification for artifact-003 includes a command that checks __version__ in seating_planner module (which is defined by artifact-002). So after all tasks, it will be satisfied.
+
+But does artifact-003 satisfy ac1? It doesn't create pyproject.toml but earlier bean did; maybe they consider overall repository state. But the spec says each bean must satisfy constraints it claims. Does that mean across all tasks up to that point? Or just its own tasks? The phrase "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." Could be interpreted as after applying all tasks (including dependencies) for that bean, the constraints are satisfied.
+
+But artifact-003 depends on task-2 only. So before verifying artifact-003, we have applied tasks from artifact-001 and artifact-002? Or maybe not; but "depends_on" indicates that artifact-003's verification should be after its own tasks plus dependencies (task-2). Actually the spec says: "The beans are defined in order: 1,2,3." So perhaps they intend to apply them sequentially. But then each bean's verify step might be run after all previous tasks have been applied? Or maybe each verification is independent but must hold given the repository state at that point (including modifications from earlier tasks). The teaching notes mention "the declaration comes first so every later file is written into an environment where the lint, types, format, and test configurations already exist — otherwise each task would have to guess the tool setup". So they assume that after artifact-001's tasks, .gitignore includes some lines; then artifact-002 writes src files. Then artifact-003 writes tests.
+
+Thus verification for artifact-002 runs after its own tasks (which include writing src/seating_planner/__init__.py) and also after artifact-001 tasks have been applied (so pyproject.toml exists). The verify steps check that the module can be imported, version is correct, mypy passes, ruff checks pass. That seems plausible.
+
+Now we need to see if any constraints are inadvertently satisfied by a bean that does not claim them. For example, artifact-001 writes .gitignore entries; maybe there is a constraint about .gitignore content? Not listed. So fine.
+
+Artifact-002 writes src/seating_planner/__init__.py with docstring and version. It also imports ortools.sat.cp_model but not ortools.constraint_solver. Does any other bean require that import? No, only ac2 requires it. But artifact-001 claims to satisfy ac2; maybe after artifact-002 runs, the src folder exists and __init__ imports ortools (but not constraint_solver). So still fails.
+
+Thus overall spec unsound because at least one bean does not meet its claimed constraints: bean-001 claims ac2 but doesn't import ortools.constraint_solver. Also bean-003's tasks do not satisfy any new constraints beyond those it claims? It claims ac1 and ac2; after all tasks, the repository has pyproject.toml (ac1 satisfied) and src/seating_planner/__init__.py with __version__ = "0.1.0". So that satisfies ac2 partially but missing import of ortools.constraint_solver.
+
+Thus overall spec unsound because constraint not met: bean-001 claims to satisfy ac2 which requires src/.../init.py imports ortools.constraint_solver, but it doesn't create that file nor import the submodule; artifact-002's __init__ imports ortools (top-level) but not specifically constraint_solver. However maybe the requirement "imports ortools.constraint_solver" could be satisfied by any import of ortools? The phrase is ambiguous: It might mean import the module `ortools.constraint_solver` or import something from that submodule. In Python, you can import a package and then refer to its submodule; but the test didn't check for it.
+
+The verify step for ac2 in artifact-001 does not include any check about ortools.constraint_solver import. So the spec's verification steps do not enforce that constraint. Therefore the bean may not satisfy it, but we cannot be sure because maybe the file src/seating_planner/__init__.py is imported elsewhere? But the test only checks existence and version.
+
+Thus the spec fails to ensure ac2 satisfied for bean-001; also artifact-002's verify does not check import of ortools.constraint_solver. So they might have missed verifying that constraint. Also artifact-003 claims to satisfy ac1 and ac2, but its tasks do not create pyproject.toml (ac1) nor src/__init__ file (ac2). However maybe the verification steps for artifact-003 include something else? They only check import of seating_planner and version.
+
+Thus overall spec unsound: some beans claim constraints they don't satisfy. So verdict should be "unsound".
+
+Now we need to produce JSON with fields:
+- verdict: "UNSATISFIABLE" or "UNSATISFIED"? Actually the spec says "A spec is sound if ...". The question asks "is this spec sound?" So answer either true/false? They want a JSON judgement with keys: verdict, criteria (list of strings), findings (list of strings), confidence.
+
+Thus we need to produce something like:
+
+{
+  "verdict": false,
+  "criteria": [...],
+  "findings": [
+    "Bean-001 does not satisfy constraint ac2 because src/seating_planner/__init__.py does not import ortools.constraint_solver.",
+    "Bean-001 claims to satisfy ac3 but gate.toml is missing (only .gitignore created).",
+    "Bean-002 does not satisfy constraint ac2 because it does not import ortools.constraint_solver in __init__.py.",
+    "Bean-003 does not satisfy constraint ac1 because pyproject.toml is not created by this bean (though previous bean did).",
+    "Bean-003 does not satisfy constraint ac3 because gate.toml missing."
+  ],
+  "confidence": "high"
+}
+
+But we need to be careful: The spec says each bean must satisfy constraints it claims. So we check each bean's claimed constraints:
+
+- Bean-001 claims [ac2, ac3]. Does it satisfy them? It does not have src/seating_planner/__init__.py (so fails ac2). It also doesn't have gate.toml (fails ac3). So unsound.
+
+Thus verdict: false. Provide findings accordingly.
+
+But we might also note that artifact-001's verification steps do not check for those constraints, so they are not verified; but the spec requires them to be satisfied. So it's unsound.
+
+Now produce JSON with fields:
+
+verdict: false
+criteria: list of strings describing each constraint and which bean fails it.
+findings: list of statements about failures or successes.
+confidence: "high" because we can clearly see the mismatch.
+
+We need to include a brief description for each criterion? The spec says "list of strings, each string is a short statement of a single criterion." So maybe we should list all constraints and note if satisfied. Or just list those that are relevant?
+
+Probably they want something like:
+
+{
+  "verdict": false,
+  "criteria": [
+    "ac1: bean must contain a pyproject.toml file",
+    "ac2: bean must contain src/seating_planner/__init__.py with __version__ = \"0.1.0\" and import ortools.constraint_solver",
+    "ac3: gate must have a gate.toml file with name field 'seating-planner'"
+  ],
+  "findings": [
+    "Bean-001 does not contain src/seating_planner/__init__.py, thus fails ac2.",
+    "Bean-001 does not contain gate.toml, thus fails ac3."
+  ],
+  "confidence": "high"
+}
+
+But also note that bean-002 claims to satisfy ac1 and ac3. Does it? After all tasks (including artifact-001), pyproject.toml exists with name field correct; so bean-002 satisfies ac1. It also does not have gate.toml, but maybe it's okay because it doesn't claim ac3? Actually bean-002's "satisfies" list is [ac1, ac3]. Wait check: In artifact 2, the "satisfies" includes ac1 and ac3. So bean-002 claims to satisfy both ac1 and ac3.
+
+But does artifact-002 produce gate.toml? No. But maybe after all tasks (including artifact-001) we have pyproject.toml but not gate.toml. So fails ac3 for bean-002 as well because it doesn't contain a gate.toml file with name field 'seating-planner'. Actually the constraint ac3 is "bean must have a gate.toml file" and "gate.toml must contain a name field with value 'seating-planner'". Bean-002 does not create gate.toml, but artifact-001 created .gitignore only. So after bean-002 tasks, still no gate.toml. So fails ac3.
+
+Thus bean-002 also unsatisfied for its claimed constraints: it claims to satisfy ac1 and ac3; ac1 is satisfied (pyproject.toml exists with name field) because artifact-001 wrote it earlier. But does artifact-002's verification check that? It includes a command "ruff check .". That will pass if there are no errors. The test for bean-002 also checks mypy on src, which passes.
+
+But the spec says each bean must satisfy constraints it claims; but we need to consider after all tasks up to that point (including dependencies). For bean-002, its depends_on includes task-1, so after applying artifact-001 and artifact-002 tasks, the repository has pyproject.toml from artifact-001 and src/seating_planner/__init__.py from artifact-002. So ac1: name field present in pyproject.toml (true). ac2: requires src/seating_planner/__init__.py with __version__ = "0.1.0" and import ortools.constraint_solver. The file does define __version__, but does it import constraint_solver? It imports ortools, not specifically constraint_solver. But maybe that counts as importing the submodule? Usually you need to import from ortools.solver or something. The requirement says "imports ortools.constraint_solver". That could be interpreted as either a direct import of that module (like `import ortools.constraint_solver`) or any import that brings it in. The test does not check for this import, but the verification steps might indirectly require it: maybe mypy will fail if constraint_solver is not imported? Actually mypy on src may succeed even without explicit import; but they didn't check for import of constraint_solver.
+
+Thus bean-002 fails to satisfy ac2 because it doesn't import ortools.constraint_solver. So bean-002's claim includes ac2, which is false. So spec unsound.
+
+Bean-003 claims [ac1, ac2]. After all tasks (including artifact-001 and 002), the repository has pyproject.toml with name field correct, src/seating_planner/__init__.py with __version__ = "0.1.0" but not import constraint_solver; also gate.toml is present from artifact-003? Actually artifact-003 writes tests/test_seating_planner.py and .gitignore modifications. It does not write gate.toml. So after all tasks, we have pyproject.toml (ac1), src/seating_planner/__init__.py (ac2's __version__), but no import of ortools.constraint_solver in that file; also gate.toml is present from artifact-001? Wait artifact-001 wrote .gitignore and pyproject.toml. Artifact-002 writes src folder and __init__ file. Artifact-003 writes test file.
+
+Thus after all tasks, we have:
+- pyproject.toml (from bean1)
+- .gitignore (maybe with some lines from bean1 and bean3)
+- src/seating_planner/__init__.py (from bean2)
+- tests/test_seating_planner.py (from bean3)
+- gate.toml? Actually not created by any tasks. Wait, artifact-001's "write_paths" includes .gitignore and pyproject.toml only. No gate.toml. Artifact-002 writes src files. Artifact-003 writes test file. So there is no gate.toml anywhere! Indeed, none of the three artifacts wrote a gate.toml file. The spec for ac3 requires a gate.toml file with name field 'seating-planner'. None created it. So bean-001 and others do not satisfy ac3.
+
+Thus overall spec unsound because constraints ac2 (import ortools.constraint_solver) and ac3 (gate.toml) are not satisfied by any bean, but some beans claim to satisfy them. Actually bean-001 claims ac3; artifact-001 does not create gate.toml. So fails. Bean-002 also claims ac3? Wait check: artifact-002's "satisfies" includes [ac1, ac3]? Yes, it says satisfies: [ac1, ac3]. But artifact-002 didn't create gate.toml either. So fails.
+
+Thus the spec is unsound because constraints ac2 and ac3 are not satisfied by any bean that claims them (bean-001 claims ac3 but doesn't satisfy; bean-002 also claims ac3 but does not satisfy). Actually bean-003's "satisfies" includes [ac1, ac2]; it does not claim ac3. So only bean-001 and bean-002 have issues.
+
+Thus we can produce a verdict: false (unsound) because constraints ac2 and ac3 are not satisfied by the beans that claim them.
+
+Now we need to list criteria: maybe each constraint is a criterion? The spec says "list of strings, each string is a short statement of a single criterion." So we should list each constraint as a separate string. Or perhaps they want the constraints that were unsatisfied.
+
+Thus we can produce:
+
+"criteria": [
+  "ac1: bean must contain a pyproject.toml file",
+  "ac2: bean must contain src/seating_planner/__init__.py with __version__ = \"0.1.0\" and import ortools.constraint_solver",
+  "ac3: gate must have a gate.toml file"
+]
+
+But we also need to include the other constraints like "bean must contain a .gitignore file"? Actually that is not listed as a constraint; it's just part of tasks.
+
+Thus we list only those three constraints. Then findings: we note which beans satisfy them and which don't, plus any extra constraints satisfied inadvertently.
+
+We should check if any bean satisfies ac1 incorrectly? Bean-001 does not have pyproject.toml? Actually artifact-001 writes pyproject.toml with name "seating-planner". So after all tasks, the repository has pyproject.toml. But bean-001's verification didn't check for it? It did. So bean-001 meets ac1 requirement (pyproject.toml exists). However, bean-001 does not claim to satisfy ac1; but that's okay because spec only requires that beans satisfy constraints they claim and no others.
+
+But the second condition: "No bean satisfies a constraint it does not claim to satisfy." Does any bean satisfy a constraint it didn't claim? Let's see:
+
+ac1 is claimed by bean-002 (and maybe also by bean-003). Actually artifact-001's "satisfies" list includes [ac2, ac3] only. So bean-001 does NOT claim ac1. But after all tasks, the repository has pyproject.toml with name "seating-planner". Does that mean bean-001 satisfies ac1 inadvertently? Possibly yes: The constraint is about the bean containing a pyproject.toml file; artifact-001's tasks create pyproject.toml, so the bean (artifact-001) does contain it after its own tasks. So bean-001 actually satisfies ac1 even though not claimed. That violates second condition.
+
+Thus spec unsound because bean-001 inadvertently satisfies ac1 which it didn't claim to satisfy. Actually we need to check: The constraint "bean must contain a pyproject.toml file" is satisfied by any bean that has such a file, regardless of whether they claim it. So after artifact-001 tasks, the repository (which includes all beans) contains pyproject.toml; but does each bean individually have that file? Actually only bean-001 defines pyproject.toml in its write_paths. Bean-002 and bean-003 do not define pyproject.toml themselves. But they might still "contain" it because it's part of the repository after artifact-001 tasks are applied. The spec's definition: "Each artifact is a 'bean' that defines its own set of files, verification steps, and a list of constraints it claims to satisfy." So each bean has its own set of files (the ones defined in its write_paths). But does the spec treat the repository as cumulative across beans? It says "The beans are defined in order: 1,2,3." Possibly meaning that tasks from earlier beans are applied before later ones. However, the verification steps for each bean might be run after all tasks have been applied (including those of other beans). The spec does not explicitly say when verification occurs relative to tasks across beans.
+
+But the teaching notes mention: "The declaration comes first so every later file is written into an environment where the lint, types, format, and test configurations already exist — otherwise each task would have to guess the tool setup." That suggests that after bean-001's tasks are applied (pyproject.toml and .gitignore), then bean-002 writes src files. So verification for bean-002 runs after its own tasks plus previous ones? Actually they say "the declaration comes first so every later file is written into an environment where the lint, types, format, and test configurations already exist". That implies that when verifying bean-002's tasks, we assume .gitignore etc are present (from bean-001). So verification for bean-002 runs after both artifact-001 and artifact-002 tasks have been applied. Similarly, artifact-003 depends on task-2, so its verify runs after artifact-001 and 002 tasks.
+
+Thus each bean's verification is run after all previous beans' tasks are applied (including dependencies). That means that for bean-001 verification, only its own tasks are considered; for bean-002 verification, tasks from bean-001 have been applied; for bean-003 verification, tasks from bean-001 and 2 have been applied.
+
+Thus we need to evaluate each artifact's verify steps given the repository state after applying all previous tasks (including dependencies). Let's simulate:
+
+Step 1: Apply artifact-001 tasks:
+- Write pyproject.toml with name "seating-planner", requires-python >=3.11, dependencies ortools (no version), tool.mypy.python_version = "3.11".
+- Write .gitignore file with lines: factory/runs/, __pycache__/, *.pyc, .pytest_cache/, .mypy_cache/, .ruff_cache/, .coverage.
+
+Now verification for artifact-001 runs:
+
+First command: python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); p = d['project']; assert p['name'] == 'seating-planner', p['name']; assert p['requires-python'] == '>=3.11', p['requires-python']; assert any('ortools' in s.lower() for s in p['dependencies']), p['dependencies'];"
+
+Check pyproject.toml: It has name "seating-planner", requires-python ">=3.11". dependencies list includes "ortools" (no version). So the condition `any('ortools' in s.lower() for s in d['dependencies'])` will be True because 'ortools' appears as a string exactly. The test also checks that m = d['tool']['mypy']; assert m['python_version'] == '3.11', and strict true, ruff target-version py311. In the file we have:
+
+```
+[project]
+name = "seating-planner"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["ortools"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+```
+
+Thus the verification command should succeed: name matches, requires-python >=3.11? Actually they check equality `p['requires-python'] == '>=3.11'`. In pyproject.toml we have exactly that string, so passes.
+
+Second verify step for artifact-001: grep -qx 'factory/runs/' .gitignore && ... It checks each line individually with -x (exact match). The .gitignore file after writing includes:
+
+```
+# Ignore everything in the repository root
+*
+# Keep the src/ and tests/ directories, as well as hidden files like .gitkeep
+!src/
+!tests/
+!.gitkeep
+
+# Additional ignore patterns for the new test runner
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+```
+
+But they check:
+
+- grep -qx 'factory/runs/' .gitignore && grep -qx '__pycache__/' .gitignore && grep -qx '*.pyc' .gitignore && grep -qx '.pytest_cache/' .gitignore && grep -qx '.mypy_cache/' .gitignore && grep -qx '.ruff_cache/' .gitignore && grep -qx '.coverage' .gitignore
+
+The .gitignore file does not contain a line exactly "factory/runs/". It contains "# Ignore everything in the repository root" and "*", but not "factory/runs/". So that check fails. Indeed they want to ensure that after writing, .gitignore includes those lines. But artifact-001 writes .gitignore with only:
+
+```
+# Ignore everything in the repository root
+*
+# Keep the src/ and tests/ directories, as well as hidden files like .gitkeep
+!src/
+!tests/
+!.gitkeep
+
+# Additional ignore patterns for the new test runner
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+```
+
+Thus there is no "factory/runs/" line. So verification fails.
+
+But the verify step expects that grep -qx 'factory/runs/' .gitignore returns true (i.e., file contains exactly a line with factory/runs/). It does not, so verification fails. The spec says "Must fail: before this task there is no pyproject.toml; the command will raise an exception." That's for first verify step. That passes because before writing pyproject.toml, it doesn't exist.
+
+But after we wrote pyproject.toml and .gitignore (task-1), verification includes a second grep that checks for 'factory/runs/' line in .gitignore. The spec says "Must fail: before this task there is no pyproject.toml; the command will raise an exception." Actually they refer to the first verify step? Wait, artifact-001's verify has two commands:
+
+1) python -c ... check pyproject.toml existence and content.
+2) grep -qx 'factory/runs/' .gitignore && grep -qx '__pycache__/' .gitignore && grep -qx '*.pyc' .gitignore && grep -qx '.pytest_cache/' .gitignore && grep -qx '.mypy_cache/' .gitignore && grep -qx '.ruff_cache/' .gitignore && grep -qx '.coverage' .gitignore
+
+The teaching note says: "Must fail: before this task there is no pyproject.toml; the command will raise an exception." That refers to first verify step. Then second verify step also must fail because .gitignore currently only has factory/runs/ line? Actually after writing .gitignore in task-1, we have lines:
+
+```
+# Ignore everything in the repository root
+*
+!src/
+!tests/
+!.gitkeep
+
+# Additional ignore patterns for the new test runner
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+```
+
+But they check for 'factory/runs/' line, which is not present. So second verify step fails as well.
+
+Thus artifact-001 verification fails both steps (should fail first but passes after tasks? Actually the spec says "Must fail: before this task there is no pyproject.toml; the command will raise an exception." That means they expect that before writing pyproject.toml, the check fails. But we are evaluating after tasks have been applied? The verification step is part of artifact-001's definition; it's supposed to be run after its own tasks (maybe). Actually the spec says "The verification steps must be sufficient to guarantee that the bean satisfies all constraints it claims." So they want to ensure that after performing the tasks, the verification passes. But the teaching note for verify step 1 says Must fail: before this task there is no pyproject.toml; the command will raise an exception. That seems contradictory: The verification step should be run after tasks? Or maybe they intend that each verification step checks a condition that was not true before the task but becomes true after it, so the test fails if you haven't done the task yet (ensuring you did). Actually they want to ensure that the tasks are necessary and sufficient. So they design verify steps such that before performing the tasks, the check would fail; after performing them, the check passes.
+
+Thus for artifact-001: The first verification step checks pyproject.toml existence and content. Before writing it, fails (good). After writing it, should pass. Does it? Yes, because we wrote correct file. So that verify step passes now.
+
+Second verification step checks .gitignore lines; before writing .gitignore, there is no .gitignore at all, so grep will fail. After writing .gitignore with the required lines (including factory/runs/?), does it pass? Actually they check for 'factory/runs/' line but we didn't include that in .gitignore. So after task-1, .gitignore contains "*", "!src/", "!tests/", "!.gitkeep", "__pycache__/", "*.pyc", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/", ".coverage". It does not contain "factory/runs/". The spec says we need to keep the existing line "factory/runs/" in .gitignore. But artifact-001's write_paths includes .gitignore with content that doesn't include factory/runs/. So it fails to preserve that line.
+
+Thus verification step for .gitignore will fail because grep -qx 'factory/runs/' .gitignore returns false (line not present). So artifact-001 fails its own verification. That means the spec is unsound? Actually the verification steps are supposed to guarantee satisfaction of constraints; but they also require that before writing, certain conditions hold (like no pyproject.toml). The second verify step expects .gitignore to have factory/runs/ line after tasks, but we didn't add it. So artifact-001 fails its own verification.
+
+Thus spec unsound because artifact-001's verification fails. But maybe the teaching note says "Must fail: before this task there is no pyproject.toml; the command will raise an exception." That refers to first verify step only. The second verify step also has a comment: "# Must fail: .gitignore currently only contains 'factory/runs/' line". Actually they wrote .gitignore with "*", "!src/", etc., but not "factory/runs/". So that fails.
+
+Thus the spec is unsound because artifact-001's verification fails. But maybe we need to check if the tasks for artifact-001 should have included a line "factory/runs/" in .gitignore? The spec says: "write_paths: [.gitignore]" and they wrote content with "*", "!src/", etc. They omitted factory/runs/. So indeed verification fails.
+
+Thus answer: unsound, because bean-001 does not satisfy constraint ac3 (gate must have gate.toml file) nor preserve the line 'factory/runs/' in .gitignore; also it doesn't import ortools.constraint_solver as required by ac2. Also artifact-002 claims to satisfy ac1 and ac3 but fails ac3 because no gate.toml. So unsound.
+
+Thus we need to produce JSON with verdict false, criteria list (the three constraints), findings listing each violation: bean-001 does not satisfy ac2 and ac3; bean-002 also doesn't satisfy ac3; maybe other issues like .gitignore missing line for factory/runs/ cause unsatisfied constraint? Actually the constraint "gate must have a gate.toml file" is not satisfied by any bean. So that fails.
+
+Thus we can produce:
+
+{
+  "verdict": false,
+  "criteria": [
+    "ac1: bean must contain a pyproject.toml file",
+    "ac2: bean must contain src/seating_planner/__init__.py with __version__ = \"0.1.0\" and import ortools.constraint_solver",
+    "ac3: gate must have a gate.toml file"
+  ],
+  "findings": [
+    "Bean-001 does not satisfy ac2 because it does not contain src/seating_planner/__init__.py nor import ortools.constraint_solver.",
+    "Bean-001 does not satisfy ac3 because there is no gate.toml file in its write_paths.",
+    "Bean-002 does not satisfy ac3 because it does not create a gate.toml file.",
+    "Bean-001 fails verification step for .gitignore: missing required 'factory/runs/' entry."
+  ],
+  "confidence": "high"
+}
+
+But also note that bean-002's verify includes mypy and ruff checks; they might pass. But we need to check if any of those constraints are unsatisfied.
+
+Constraint ac1 is satisfied by the repository after artifact-001 tasks: pyproject.toml
