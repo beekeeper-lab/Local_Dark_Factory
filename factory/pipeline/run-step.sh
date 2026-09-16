@@ -613,9 +613,27 @@ jq -sc \
         ran_within_context:($compactions == 0),
         declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
         observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
+        # num_ctx is in this comparison, and was not.
+        #
+        # The field is named `declared_matches_observed`. num_ctx is declared and
+        # num_ctx is observed, so a record saying `true` while the two differ is a
+        # false statement by the name of the field itself. It is also the case
+        # that actually differs: pi has no context flag, so the server serves
+        # whatever it was last asked for. The WARN line on drift is a louder,
+        # separate signal; this flag is the summary the record makes of itself,
+        # and it was summarising two fields out of three.
+        #
+        # (No apostrophes in this comment. The whole jq program is one
+        # single-quoted shell string and one apostrophe ends it. Fifth time.)
+        #
+        # Caught by test-role-routing computing the expected value over num_ctx
+        # and thinking while the code compared thinking and model. They agreed
+        # only while nothing else on the box had loaded the model at another
+        # context, which held until a format-support run did exactly that.
         declared_matches_observed:
           ((($obs_thinking == "") or ($thinking == "") or ($obs_thinking == $thinking))
-           and (($obs_model == "") or ($obs_model == $model)))}')" \
+           and (($obs_model == "") or ($obs_model == $model))
+           and (($obs_ctx == null) or ($ctx == null) or ($obs_ctx == $ctx)))}')" \
   '
   . as $arr
   | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx

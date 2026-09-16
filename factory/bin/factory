@@ -499,7 +499,14 @@ run from the working tree."
       else
         NEXT="$(bash "$PIPE/queue.sh" --json | jq -r '.ready[0] // empty')"
       fi
-      [ -n "$NEXT" ] || { printf '\nNothing ready to run. `factory queue --all` says why.\n'; break; }
+      if [ -z "$NEXT" ]; then
+        # Not "nothing to do" — the reason is usually one merge away, and making
+        # someone run a second command to find that out is how a queue that stops
+        # for a good reason gets read as a queue that broke.
+        printf '\n'
+        bash "$PIPE/queue.sh" 2>/dev/null | sed -n '/^ready:/,$p'
+        break
+      fi
       if [ "$GO_LIMIT" -gt 0 ] && [ "$GO_RAN" -ge "$GO_LIMIT" ]; then
         printf '\nStopping at --limit %s. Next would be %s.\n' "$GO_LIMIT" "$NEXT"; break
       fi

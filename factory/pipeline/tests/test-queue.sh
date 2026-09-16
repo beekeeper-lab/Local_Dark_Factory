@@ -226,8 +226,15 @@ check "an unreadable temp root does not stop the queue" "would run" "$out"
 printf '\n-- with everything built, there is nothing to do and it says so --\n\n'
 built bean-002; built bean-003
 out="$(fac go --dry-run)"
-check "it does not invent work"    "Nothing ready to run" "$out"
-check "and points at the queue"    "factory queue --all" "$out"
+# Not "nothing to do" — the reason is usually one merge away, and making someone
+# run a second command to find that out is how a queue that stopped for a good
+# reason gets read as a queue that broke.
+check "it says nothing is ready"   "ready: nothing" "$out"
+# The whole summary, inlined — whatever it happens to say. Here every bean is
+# merged or refused, so the line that matters is the refusal count; in the real
+# repository this morning it was "waiting on a human to merge: bean-001". Either
+# way the reason travels with the stop.
+check "and the queue's own summary" "refused: 1 bean(s) not approved" "$out"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
