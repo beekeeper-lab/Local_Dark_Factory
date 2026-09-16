@@ -43,6 +43,28 @@ them is time spent away from re-reading the acceptance criteria.
 for a run with hidden tests configured, and bean-002 is the first bean that will
 have them.
 
+## They run on the line, and they cannot run in CI
+
+Worth saying before someone expects otherwise. `required_checks` in `repo.yaml`
+names checks GitHub must report green before a merge, and
+`factory/scaffold/.github/workflows/gates.yml` runs the pinned gate image against
+the repository. **Hidden tests are not in the repository**, by construction — that
+is the whole feature — so a GitHub runner has nothing to run them from.
+
+What that means concretely:
+
+- The hidden suite is a **local gate** result. It appears in `gate.json`, in the
+  pull request body, and in the halt summary if it fails. It is not a check
+  GitHub reports, and `required_checks` must not name it.
+- A merge gated only on CI is a merge that did not consider them. The pull request
+  body says whether they passed for exactly this reason: it is the one place a
+  reviewer sees the result before clicking merge.
+- If they ever need to run in CI, the suite has to be somewhere a runner can fetch
+  — a private repository and a deploy key, say — and at that point "the worker
+  cannot read it" becomes a claim about credentials rather than about the
+  filesystem. That is a different and weaker guarantee, and it should be a
+  deliberate decision rather than a consequence of wanting a green tick.
+
 ## What is here
 
 | repo / bean | assertions | what they can check |

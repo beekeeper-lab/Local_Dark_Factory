@@ -125,6 +125,7 @@ write_record() { # write_record <status> <exit_code> <why> <feedback> [count]
       command:$cmd, control:$control,
       output_path:$log,
       worker_feedback:$fb,
+      consumer_note:"worker_feedback has no consumer today. A gate failure halts the run for a human rather than re-opening tasks, so nothing hands this string to a worker; it is the contract for what one MAY be told, written down before there is something to tell. gate-summary.sh is what a human sees.",
       caveat:"This file lives in the run directory, which is inside the repository, which the worker mounts whole. So it carries counts and never test text: no names, no assertions, no output. The full output is at output_path, outside the repository. That also bounds what the judge can quote into feedback_to_worker, which is the other way a hidden test reaches the worker."}' \
     > "$OUT_JSON"
 }

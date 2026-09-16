@@ -1111,9 +1111,21 @@ Write the end-to-end test before the next long real run, not after it.
   gate FAILURE — a missing directory, an empty suite, or a sandbox refusal
   arriving as silence is the fail-open this project keeps finding.
 
-  **No hidden suite exists for seating-planner-py yet**, so the gate records
-  `not configured`. Writing one is a human job: they have to be written from the
-  bean's acceptance criteria by someone who is not the worker.
+  **bean-001 and bean-002 both have suites** (11 and 9 assertions), checked twice
+  before committing: against a plausible correct implementation, where they pass,
+  and against one with the constraints violated, where they bite. bean-001's
+  eleven pass against what the line actually built, which it wrote without ever
+  seeing them.
+
+  **They cannot run in CI, and that is structural.** `required_checks` names checks
+  GitHub reports, and a GitHub runner has only the repository — which is exactly
+  where the hidden suite is not. So it is a local gate result: it appears in
+  `gate.json`, in the pull request body and in the halt summary, and
+  `required_checks` must not name it. A merge gated only on CI is a merge that did
+  not consider them, which is why the pull request body carries the line. Putting
+  them somewhere a runner could fetch would turn "the worker cannot read it" from
+  a fact about the filesystem into a claim about credentials — a weaker guarantee,
+  and one that should be chosen rather than arrived at.
 - **Eleven figures in `bench/results/` carry no provenance block**, and
   `bench/results/INDEX.md` now says, per artifact, whether a claim still rests on
   one. That was the missing half: "eleven files lack provenance" is not
