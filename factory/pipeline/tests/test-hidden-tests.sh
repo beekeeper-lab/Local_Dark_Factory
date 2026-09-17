@@ -264,6 +264,53 @@ rc_is "it refuses"                    "$rc" 2
 check "and says what is missing"      "no bean_id" "$out"
 printf '{"run_id":"R","bean_id":"bean-001"}\n' > "$RUN/run.json"
 
+printf '\n== a test that passes against nothing must be declared ==\n\n'
+#
+# The suite-level control only requires the SUITE to fail, and a suite fails if
+# one test does. On 2026-09-16 that was hiding three real tests that passed
+# against a tree with nothing in it — two legitimately (an assertion that nothing
+# imports ortools is true of an empty directory) and one that nobody had looked
+# at. The judge is handed a COUNT, so a test that cannot fail inflates the number
+# standing in for the whole hidden check.
+CTLD="$WORK/ctl"; mkdir -p "$CTLD"
+printf 'def test_hidden_real():\n    assert True\n' > "$CTLD/test_c.py"
+cat > "$WORK/ctl-pytest" <<'STUB'
+#!/usr/bin/env bash
+# An empty tree: one test passes anyway (an absence assertion), one fails.
+if [ ! -f "${HIDDEN_TREE:-/work}/built" ]; then
+  # -rA's order, which is what pytest gives when the configured command has -q.
+  echo "PASSED x.py::test_no_ci_workflow_files"
+  echo "FAILED x.py::test_the_thing_that_matters"
+  echo "1 failed, 1 passed"; exit 1
+fi
+echo "2 passed"; exit 0
+STUB
+chmod +x "$WORK/ctl-pytest"
+cfg "$(jq -nc --arg d "$CTLD" --arg p "$WORK/ctl-pytest" '{hidden_tests:{dir:$d, command:[$p,"-q"]}}')"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "an undeclared vacuous test is refused" "$rc" 2
+check "and it is named"               "test_no_ci_workflow_files" "$out"
+check "with where to declare it"      "absent-by-design.txt" "$out"
+check "and why declaring is the point" "a short list a person can read" "$out"
+eq "the worker is told nothing about it" "The hidden tests could not be run. This is a configuration problem, not yours." \
+   "$(rec .worker_feedback)"
+
+printf '\n-- declared, it runs --\n\n'
+printf '# it asserts an absence\ntest_no_ci_workflow_files\n' > "$CTLD/absent-by-design.txt"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "the declared one is allowed through" "$rc" 0
+check "and the control says how many"  "all declared as absence tests" "$out"
+
+printf '\n-- a declaration that is no longer true is reported, not refused --\n\n'
+printf 'test_no_ci_workflow_files\ntest_something_that_actually_fails\n' > "$CTLD/absent-by-design.txt"
+rm -f "$RUN/hidden-tests.json"
+out="$(ht)"; rc=$?
+rc_is "a stale declaration does not stop the run" "$rc" 0
+check "and it says which"             "stale declaration" "$out"
+rm -f "$CTLD/absent-by-design.txt"
+
 printf '\n== the record is written on every path ==\n\n'
 #
 # A gate that reads hidden-tests.json and finds nothing cannot tell "did not run"

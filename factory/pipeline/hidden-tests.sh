@@ -275,9 +275,14 @@ if [ "$CONTROL" = "true" ]; then
     cb=( --tree "$EMPTY_TREE" --mount-ro "$HT_DIR:$MOUNT_AT" --out "$RESULTS_DIR/$(basename "$RUN_DIR").control.log" )
     [ -n "$GATES" ] && cb+=( --gates "$GATES" )
     cb+=( --env "HIDDEN_TREE=/work" ${ENV_ARGS+"${ENV_ARGS[@]}"} )
-    "$PIPELINE_DIR/sandbox.sh" "${cb[@]}" -- "${CMD[@]}" || ctl_rc=$?
+    "$PIPELINE_DIR/sandbox.sh" "${cb[@]}" -- "${CMD[@]}" -rA || ctl_rc=$?
   else
-    ( cd "$EMPTY_TREE" && HIDDEN_TREE="$EMPTY_TREE" "${CMD[@]/%$MOUNT_AT/$HT_DIR}" ) \
+    # -rA, not -v. The configured command carries -q, and pytest verbosity is
+    # additive: `-q -v` cancels to the default output, which prints no line per
+    # test at all. `-rA` adds a summary section listing every outcome regardless
+    # of -q, and an unknown flag to some other runner shows up as a control that
+    # could not be read rather than as a silent pass.
+    ( cd "$EMPTY_TREE" && HIDDEN_TREE="$EMPTY_TREE" "${CMD[@]/%$MOUNT_AT/$HT_DIR}" -rA ) \
       > "$RESULTS_DIR/$(basename "$RUN_DIR").control.log" 2>&1 || ctl_rc=$?
   fi
   rm -rf "$EMPTY_TREE"
@@ -292,6 +297,57 @@ if [ "$CONTROL" = "true" ]; then
   fi
   CONTROL_STATUS="failed against an empty tree, as it must"
   printf '  control: %s\n' "$CONTROL_STATUS"
+
+  # Per TEST, not per suite. The rule above only requires the suite to fail, and
+  # a suite fails if one test does — which on 2026-09-16 was hiding three tests
+  # that PASSED against a tree with nothing in it. Two of them legitimately: an
+  # assertion that nothing imports ortools, or that no CI workflow file exists,
+  # is true of an empty directory and is supposed to be. The third had no such
+  # excuse until somebody looked.
+  #
+  # A vacuous test is not neutral here. The judge is handed a COUNT, so a test
+  # that can never fail inflates the number that stands in for "the build was
+  # measured against something nobody in the loop can read".
+  #
+  # So the absences are declared. `absent-by-design.txt` next to the tests lists
+  # the ones expected to pass against nothing, one name per line; anything else
+  # that passes is refused by name. The declaration is the point — it is a short
+  # list a person can read, and it grows only on purpose.
+  CTL_LOG="$RESULTS_DIR/$(basename "$RUN_DIR").control.log"
+  # Both orders, because -rA prints "PASSED path::name" and -v prints
+  # "path::name PASSED", and which one a runner gives is not worth depending on.
+  CTL_PASSED="$( { grep -oE '^PASSED[[:space:]]+[^[:space:]]*::test_[A-Za-z0-9_]+' "$CTL_LOG" 2>/dev/null | sed 's/.*:://'
+                   grep -oE '::test_[A-Za-z0-9_]+[[:space:]]+PASSED' "$CTL_LOG" 2>/dev/null | sed 's/^:://; s/[[:space:]]*PASSED$//'
+                 } | sort -u)"
+  DECLARED="$(sed 's/#.*//; s/[[:space:]]//g' "$HT_DIR/absent-by-design.txt" 2>/dev/null | sed '/^$/d' | sort -u)"
+  if [ -z "$CTL_PASSED" ]; then
+    # Either every test failed — the ideal — or this runner does not print a line
+    # per test and the per-test control cannot be read. Those are different, and
+    # saying "all good" for the second would be the fail-open this check exists
+    # to prevent.
+    if grep -qE '::(test_[A-Za-z0-9_]+)' "$CTL_LOG" 2>/dev/null; then
+      printf '  control: every test failed against nothing\n'
+    else
+      printf '  control: per-test outcomes not readable from this runner; only the suite-level control applies\n'
+    fi
+  else
+    UNDECLARED="$(comm -23 <(printf '%s\n' "$CTL_PASSED") <(printf '%s\n' "$DECLARED"))"
+    STALE="$(comm -13 <(printf '%s\n' "$CTL_PASSED") <(printf '%s\n' "$DECLARED"))"
+    if [ -n "$UNDECLARED" ]; then
+      write_record could_not_run 2 "hidden tests pass against an empty tree without being declared as absence tests" \
+        "The hidden tests could not be run. This is a configuration problem, not yours."
+      printf '\nhidden tests: REFUSED — these passed against a tree with nothing in it:\n' >&2
+      printf '%s\n' "$UNDECLARED" | sed 's/^/    - /' >&2
+      printf '\n  A test that passes against nothing measures nothing, and the judge is handed\n' >&2
+      printf '  a COUNT — so a vacuous one inflates the number that stands in for the whole\n' >&2
+      printf '  hidden check. If it asserts an ABSENCE and is meant to pass here, add its\n' >&2
+      printf '  name to:\n      %s\n' "$HT_DIR/absent-by-design.txt" >&2
+      printf '  Declaring it is the point: that file is a short list a person can read.\n' >&2
+      exit 2
+    fi
+    printf '  control: %s test(s) passed against nothing, all declared as absence tests\n' "$(printf '%s\n' "$CTL_PASSED" | wc -l)"
+    [ -n "$STALE" ] && printf '  note: declared as absence tests but failing against nothing (stale declaration?): %s\n' "$(printf '%s ' $STALE)"
+  fi
 fi
 
 rc=0

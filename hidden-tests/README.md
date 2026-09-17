@@ -83,3 +83,30 @@ writes them.
 `__pycache__` is not committed and should not be: the directory is mounted into
 the gate container, and a stale bytecode cache from a different Python is a
 confusing way to fail.
+
+## Absence tests, and why they are declared
+
+A hidden suite's control run is the only thing standing between a vacuous test
+and a green forever: the worker cannot read these tests by design, and the judge
+is handed a **count**. So a test that can never fail inflates the number that
+stands in for the whole hidden check.
+
+The control used to require only that the SUITE fail against an empty tree, and a
+suite fails if one test does. On 2026-09-16 that was hiding three tests that
+passed against a tree with nothing in it:
+
+- `test_nothing_imports_ortools_yet` — bean-001 declares ortools and must not
+  import it. Nothing imports it in an empty directory either.
+- `test_no_ci_workflow_files` — one of bean-001's non-goals. An empty tree has
+  none.
+- `test_the_domain_stays_inside_its_write_paths` — bean-002 may write only under
+  two paths. An empty tree writes nowhere.
+
+All three are legitimate: each asserts an **absence**, and an absence is true of
+nothing. That is exactly why they cannot be found by inspection — they look like
+the vacuous ones. So they are listed, one name per line with a comment saying
+why, in `absent-by-design.txt` next to the tests. Any other test that passes
+against an empty tree is refused by name, and the run stops.
+
+The declaration is the whole mechanism. It is a short list a person can read, and
+it grows only when somebody decides it should.

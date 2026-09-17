@@ -1,0 +1,16 @@
+# Tests here pass against a tree with NOTHING in it, and are supposed to.
+#
+# Each asserts an absence, and an absence is true of an empty directory. The
+# control run refuses any other test that passes against nothing, because the
+# judge is handed a count and a test that cannot fail inflates it.
+#
+# One name per line. Adding one is a decision: say in a comment why the thing it
+# looks for is absent from an empty tree for the same reason it must be absent
+# from a finished one.
+
+# bean-001 declares ortools as a dependency and must not import it anywhere.
+# Nothing imports it in an empty tree either.
+test_nothing_imports_ortools_yet
+
+# "no CI workflow files" is one of bean-001's non-goals. An empty tree has none.
+test_no_ci_workflow_files
