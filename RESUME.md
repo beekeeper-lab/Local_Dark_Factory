@@ -1627,6 +1627,17 @@ criterion arm.
   directly — bean-001's criterion ids filled with three other beans' work. That
   does not depend on any count.
 
+**Which other figures are affected: none, checked rather than assumed.** It is
+the first question this retraction raises, so: `bench/judge-fitness.sh` uses
+`RD="$WORK/$name.$REP"` and `bench/judge-variance.sh` uses `RD="$TMP/run-$i"` —
+both already a fresh directory per repetition. **`4 false accepts in 15` and the
+variance finding stand.** `factory reaudit` writes `run-<pass>-<target>`, also per
+pass. `size-sweep.sh` was the only one that shared, and it is the newest of the
+four.
+
+There is a tell in that too: judge-variance exists to measure disagreement and
+would have reported *zero* variance if it had this bug. It reported plenty.
+
 **The fix**: a fresh run directory per pass, so `attempt-1` is always this pass's
 and the file-existence guard means what it says. Asserted in
 `bench/tests/test-size-sweep.sh`, including that the reader stays pinned to
