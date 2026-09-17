@@ -549,13 +549,26 @@ fi
 # says a constraint belongs: on this model a constraint in the grammar is a rule
 # and the same constraint in prose is a suggestion.
 #
-# Whether llama.cpp's schema-to-grammar converter honours `minLength` is NOT
-# known. It honours `enum` and `maxLength` and ignores `minimum` and `maximum`,
-# which is three data points and not a rule. So this is a knob, default OFF, and
-# the measurement that turns it on is the one that will say whether it does
-# anything — and whether a model forced to produce twelve characters produces
-# twelve real ones or twelve invented ones, which the quote check would then
-# catch and which would be a worse outcome than an honest blank.
+# MEASURED 2026-09-17, and the answer is: it works, and it makes the answers
+# worse. Keep it at 0. evidence/judge-minlength-probe-20260917.md has the detail.
+#
+# llama.cpp's converter DOES honour `minLength` — at 200 every quote came back
+# between 213 and 260 characters, where the same audit at 12 produced one of 93.
+# And at 200 **all four quotes were invented**, against one real in four at 12.
+# Forcing a longer quote does not make the model find more of the artifact; it
+# makes the model write more prose and call it a quote, because the longer the
+# string the grammar demands, the less likely any real span of the document fits
+# what the model wanted to say.
+#
+# So this is where the project's transferable finding stops. A constraint in the
+# grammar IS a rule where the same constraint in prose is a suggestion — and a
+# grammar constrains the SHAPE of an answer and cannot constrain its TRUTH.
+# Five grammar constraints took conformance from about zero to 100%. A sixth,
+# aimed at the content of a field rather than its shape, produced four
+# fabrications.
+#
+# Kept as a knob rather than deleted: the measurement is reproducible from here,
+# and a later model may behave differently.
 QUOTE_MINLEN="${JUDGE_QUOTE_MINLEN:-0}"
 case "$QUOTE_MINLEN" in ''|*[!0-9]*) die "JUDGE_QUOTE_MINLEN wants a number of characters, or 0 for none; got '$QUOTE_MINLEN'" ;; esac
 if [ "$QUOTE_MINLEN" -gt 0 ]; then

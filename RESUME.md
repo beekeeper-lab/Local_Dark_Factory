@@ -65,7 +65,10 @@ option at this size, and leaving it open is choosing that option by default.
    more things nobody knew. *"Nineteen beans are annotated"*.
 
 The one sentence worth carrying out of all of it: **on this model a constraint in
-the grammar is a rule and the same constraint in prose is a suggestion.**
+the grammar is a rule and the same constraint in prose is a suggestion** — and
+its boundary, measured 2026-09-17: **a grammar constrains the SHAPE of an answer
+and cannot constrain its TRUTH.** `minLength` on `quote` is honoured exactly, and
+every quote it forced was invented. *"The sixth grammar constraint"*.
 
 ## The judge, in one place
 
@@ -1184,6 +1187,48 @@ hidden tests check that one structurally instead. Whether that belongs in the be
 as a third kind of rule, or stays where it is, is a design question and not an
 oversight.
 
+## The sixth grammar constraint, and the boundary it found
+
+Five grammar constraints on 2026-09-16 took schema conformance from about zero to
+100% and produced this line's first stamped verdict. The sixth, on 2026-09-17,
+was aimed at something different — not the shape of a field but its content — and
+it is the one that did not work.
+
+**`minLength: 200` on `quote`.** Two spec audits of the same run, same model, same
+artifacts, differing only in the knob:
+
+| `JUDGE_QUOTE_MINLEN` | quote lengths | quotes actually on disk |
+| --- | --- | --- |
+| 12 | 136, 165, 93, 271 | **1 of 4** |
+| 200 | 214, 260, 242, 213 | **0 of 4** |
+
+**llama.cpp honours `minLength`** — nothing but the grammar makes every quote
+clear 200 characters when the same audit produced one of 93 — which settles the
+fourth keyword after `enum` and `maxLength` (honoured) and `minimum`/`maximum`
+(ignored).
+
+**And it made the answers worse.** Forcing a longer quote does not make the model
+find more of the artifact. It makes the model write more prose and call it a
+quote: the longer the string the grammar demands, the less likely any real span
+of the document fits what the model wanted to say, so it stops looking and starts
+composing. All four of the forced quotes are third-person sentences *about* the
+repository that appear nowhere in it, two are false, and **the judgement
+contradicts itself between `ac2` and `ac4`** about whether `tests/test_scaffold.py`
+exists.
+
+So: **a grammar constrains the shape of an answer and cannot constrain its
+truth.** That is the boundary of the finding this whole week produced, and it is
+worth knowing exactly where it is before the next person reaches for a grammar to
+fix a content problem.
+
+`JUDGE_QUOTE_MINLEN` stays at 0 and stays in the tree, because the measurement is
+reproducible from there and a later model may behave differently.
+`evidence/judge-minlength-probe-20260917.md` has the fabrications in full.
+
+**The loose thread worth pulling**: nothing in the controller reads two criteria
+of one judgement *together*. `ac2` asserting a file exists and `ac4` asserting it
+does not is decidable without a model, and no check looks.
+
 ## The lever was tried, and it is dead: asking one criterion at a time
 
 **Measured 2026-09-16, 6,209 seconds of GPU. Six cases, six `revise`.** Every
@@ -1837,7 +1882,11 @@ It is the last measurement of this judge that can be compared to the ones above
 it; every change below is one that alters what a fitness number means, so they
 are queued rather than made.
 
-1. **`minLength` on `quote` is BUILT and off by default** — `JUDGE_QUOTE_MINLEN`,
+1. ~~`minLength` on `quote`.~~ **DONE, and the answer is no.** See *"The sixth
+   grammar constraint"* below. What follows is what was written before the probe;
+   both predicted failure modes happened at once.
+
+   ~~**`minLength` on `quote` is BUILT and off by default** — `JUDGE_QUOTE_MINLEN`,
    a knob for the same reason `JUDGE_FIELD_MAXLEN` is one. The motivating number:
    **31% of the 44 criteria in the 2026-09-17 reaudit carry no quote at all**, and
    the controller refuses them an hour after the GPU time is spent. What is not
@@ -1847,7 +1896,7 @@ are queued rather than made.
    can fail and both are worth knowing**: ignored, in which case the controller
    rule is the whole of it; or honoured and the model pads twelve invented
    characters, which the quote check catches and which is worse than an honest
-   blank.
+   blank.~~
 2. **Re-run `size-sweep` now that `tools: []` is declared.** The sweep predates it.
 3. ~~Re-measure the 14 provenance-less figures.~~ **Checked instead, which was
    the right question.** Thirteen of the fourteen are superseded by a later figure
