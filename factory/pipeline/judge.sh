@@ -752,8 +752,10 @@ RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
 # Asked once more when the model answered with a TOOL CALL and nothing else.
 #
 # `tools: []` is declared in the request above and gpt-oss:120b sometimes emits a
-# call anyway, to something out of its own training — `repo_browser.print_tree` on
-# a reaudit pass this evening. There are no tools on this path and the artifacts
+# call anyway, to something out of its own training and nothing this line has
+# ever offered: `repo_browser.open_file`, `repo_browser.print_tree`,
+# `container.exec` — three different invented tools across two days, so it is a
+# habit rather than a fluke. There are no tools on this path and the artifacts
 # are already in the prompt, so the call cannot be answered and the audit dies
 # with no judgement, no findings, and nothing for a retry to act on. orchestrate
 # halts the run on that, correctly: a step that failed without a verdict is never
@@ -769,6 +771,12 @@ RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
 # Once. A model that asks for tools twice is telling you something, and the
 # message says which attempt it was so a reader can see the difference between
 # "it did this once" and "it does this".
+#
+# It is not a cure. Measured on a real reaudit the same night: the doc audit on
+# pass 2 asked for `container.exec`, was asked again, and the second answer
+# reasoned for a while and ended without writing anything. One no-judgement
+# became a different no-judgement. The retry costs one request and sometimes
+# works; the honest description is a second chance, not a fix.
 JUDGE_RETRIED=0
 if [ -z "$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)" ] \
    && [ "$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)" -gt 0 ]; then
