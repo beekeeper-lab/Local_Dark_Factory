@@ -153,11 +153,32 @@ done
 # claim. It fails loudly when the image has not been published to a registry
 # rather than skipping, because a required check that passes because it could not
 # run is the failure mode this whole repository is about.
+#
+# Withheld while the manifest still pins a `localhost/` image, and this is a rule
+# rather than a note. The job fails loudly on an image CI cannot pull — correct,
+# and the right thing to do once it is a required check — but installed TODAY it
+# puts a red X on every open pull request for a reason that has nothing to do with
+# the change under review, and a reviewer reads that X as "this code is broken".
+#
+# It was a sentence in RESUME.md saying "deliberately NOT installed yet". I read
+# the drift report, saw the file missing from the target, concluded nobody had
+# re-run the scaffold, and installed it. A decision that lives only in prose is
+# one re-derivation away from being reversed by someone who means well, so it
+# lives here now: publish the image, put the digest in gates.lock.yaml, and the
+# next scaffold run installs the workflow with no further decision to make.
+GATES_IMAGE="$(sed -n 's/^image:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' "$SRC/gates.lock.yaml" 2>/dev/null | head -1)"
 if [ -d "$HERE/scaffold/.github/workflows" ]; then
-  for f in "$HERE/scaffold/.github/workflows"/*.yml; do
-    [ -e "$f" ] || continue
-    copy "$f" ".github/workflows/$(basename "$f")"
-  done
+  case "$GATES_IMAGE" in
+    localhost/*|"")
+      say "hold" ".github/workflows/gates.yml (gates.lock.yaml pins ${GATES_IMAGE:-nothing}; CI could not pull it, and a red X on an open PR reads as a broken change)"
+      ;;
+    *)
+      for f in "$HERE/scaffold/.github/workflows"/*.yml; do
+        [ -e "$f" ] || continue
+        copy "$f" ".github/workflows/$(basename "$f")"
+      done
+      ;;
+  esac
 fi
 
 # Invariants: acceptance fixtures from outside the developer's reach (§05). They

@@ -83,14 +83,17 @@ for bean in "$CORPUS"/bean-*.yaml; do
 done
 
 printf '\n== the two that are easy to get backwards ==\n\n'
-B1="$CORPUS/bean-001.yaml"; B4="$CORPUS/bean-004.yaml"
+# bean-002, not bean-001: bean-001's pull request is open, and its bean is left as
+# prose until that merges — editing a bean mid-flight means a reaudit of the
+# finished run judges it against a bean the run never saw.
+B2="$CORPUS/bean-002.yaml"; B4="$CORPUS/bean-004.yaml"
 printf -- '--- a/pyproject.toml\n+++ b/pyproject.toml\n@@\n+dependencies = ["ortools>=9.8"]\n' > "$WORK/pp.diff"
-out="$("$FORBIDS" --bean "$B1" --diff "$WORK/pp.diff" 2>&1)"; rc=$?
-rc_is "bean-001 may DECLARE ortools in pyproject" "$rc" 0
+out="$("$FORBIDS" --bean "$B2" --diff "$WORK/pp.diff" 2>&1)"; rc=$?
+rc_is "a DECLARATION of ortools is not an import of it" "$rc" 0
 printf -- '--- a/x.py\n+++ b/x.py\n@@\n+from ortools.sat.python import cp_model\n' > "$WORK/imp.diff"
-out="$("$FORBIDS" --bean "$B1" --diff "$WORK/imp.diff" 2>&1)"; rc=$?
-rc_is "and may not import it" "$rc" 1
-check "and the message names the statement it broke" "not yet imported by any module" "$out"
+out="$("$FORBIDS" --bean "$B2" --diff "$WORK/imp.diff" 2>&1)"; rc=$?
+rc_is "and an import of it is refused" "$rc" 1
+check "and the message names the statement it broke" "no solver imports" "$out"
 printf -- '--- a/x.py\n+++ b/x.py\n@@\n+import sqlite3\n' > "$WORK/sq.diff"
 out="$("$FORBIDS" --bean "$B4" --diff "$WORK/sq.diff" 2>&1)"; rc=$?
 rc_is "bean-004, the SQLite bean, may import sqlite3" "$rc" 0
@@ -105,7 +108,7 @@ rc_is "a diff it cannot re-read is refused, not read as clean" "$rc" 2
 
 printf '\n== a removal is the bean being obeyed, not broken ==\n\n'
 printf -- '--- a/x.py\n+++ b/x.py\n@@\n-from ortools.sat.python import cp_model\n' > "$WORK/rm.diff"
-out="$("$FORBIDS" --bean "$B1" --diff "$WORK/rm.diff" 2>&1)"; rc=$?
+out="$("$FORBIDS" --bean "$B2" --diff "$WORK/rm.diff" 2>&1)"; rc=$?
 rc_is "deleting a forbidden import passes" "$rc" 0
 
 printf '\n== prose stays prose, and says so ==\n\n'
@@ -118,19 +121,54 @@ printf '\n== the scaffold carries them downstream ==\n\n'
 T="$WORK/target"; mkdir -p "$T"; git init -q "$T"
 out="$("$ROOT/factory/scaffold.sh" "$T" 2>&1)"; rc=$?
 rc_is "it installs" "$rc" 0
-BM="$(cat "$T"/factory/beans/bean-001-*/bean.md)"
-check "an annotated non-goal renders as its text" "- no domain models" "$BM"
+BM="$(cat "$T"/factory/beans/bean-002-*/bean.md)"
+check "an annotated non-goal renders as its text" "- no rule model (bean-003)" "$BM"
 nope  "not as a Python dict"                      "{'text':" "$BM"
 check "and says what is machine-checked"          "checked, not judged" "$BM"
-BY="$T/factory/beans/bean-001-project-scaffold-with-linting-typing-and/bean.yaml"
-if [ -f "$BY" ] && diff -q "$BY" "$CORPUS/bean-001.yaml" >/dev/null; then
+BY="$(ls "$T"/factory/beans/bean-002-*/bean.yaml)"
+if [ -f "$BY" ] && diff -q "$BY" "$B2" >/dev/null; then
   ok "the installed bean.yaml is the corpus bean, byte for byte"
-else bad "installed bean.yaml" "differs from $CORPUS/bean-001.yaml"; fi
+else bad "installed bean.yaml" "differs from $B2"; fi
+
+# bean-001 is deliberately prose while its pull request is open. If that stops
+# being true without the PR having merged, someone edited a bean mid-flight.
+if grep -q 'forbidden_' "$CORPUS/bean-001.yaml"; then
+  bad "bean-001 stays prose while PR #1 is open" "it now carries forbidden_ keys — see RESUME, 'For the owner: the other eighteen beans'"
+else ok "bean-001 stays prose while PR #1 is open"; fi
 PC="$T/factory/pipeline-config.json"
 if jq -e . "$PC" >/dev/null 2>&1; then ok "pipeline-config.json parses"
 else bad "pipeline-config.json" "not valid JSON — a quote in the jq literal ends it silently"; fi
 check "and carries hidden_tests"  "/hidden" "$(jq -c '.hidden_tests' "$PC")"
 check "keyed on the repo, not the directory it was cloned into" "seating-planner-py" "$(jq -r '.hidden_tests.dir' "$PC")"
+
+printf '\n== the gate workflow waits for an image CI can pull ==\n\n'
+# Not a preference. Installed against a localhost image it fails in ten seconds
+# and puts a red X on every open pull request, which reads as a statement about
+# the change under review and is a statement about a registry.
+GI="$(sed -n 's/^image:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' "$ROOT/factory/scaffold/factory/gates.lock.yaml" | head -1)"
+case "$GI" in
+  localhost/*)
+    if [ -e "$T/.github/workflows/gates.yml" ]; then
+      bad "it is withheld while the image is local" "installed anyway, against $GI"
+    else ok "it is withheld while the image is local"; fi
+    check "and the scaffold says why" "a red X on an open PR reads as a broken change" "$out"
+    # And the moment the image is one CI can pull, no further decision is needed.
+    # A copy of the whole control surface with one line changed, because the image
+    # is read from the manifest the scaffold ships — which is the point: the
+    # publish step is what flips this, not a flag someone has to remember.
+    FAKE="$WORK/fakeroot"; mkdir -p "$FAKE"; cp -a "$ROOT/factory" "$FAKE/factory"
+    sed -i 's|^image: .*|image: "ghcr.io/example/gate:1@sha256:0000000000000000000000000000000000000000000000000000000000000000"|' \
+      "$FAKE/factory/scaffold/factory/gates.lock.yaml"
+    PUB="$WORK/pub"; mkdir -p "$PUB"; git init -q "$PUB"
+    out2="$("$FAKE/factory/scaffold.sh" "$PUB" --bean-set "$(dirname "$CORPUS")" 2>&1)"
+    if [ -e "$PUB/.github/workflows/gates.yml" ]; then ok "a publishable image installs it, with no other change"
+    else bad "a publishable image installs it" "still absent: $(printf '%s' "$out2" | tail -3)"; fi
+    ;;
+  *)
+    if [ -e "$T/.github/workflows/gates.yml" ]; then ok "the image is publishable, so it is installed"
+    else bad "the workflow" "image is $GI but the workflow was not installed"; fi
+    ;;
+esac
 
 printf '\n== --check sees what the scaffold would overwrite ==\n\n'
 out="$("$ROOT/factory/scaffold.sh" --check "$T" 2>&1)"; rc=$?

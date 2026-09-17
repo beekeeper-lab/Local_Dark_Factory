@@ -12,7 +12,12 @@ Two things are waiting on you, and nothing else in this repository is blocked.
    to run — see below.
 2. **`gh auth refresh --scopes write:packages`**, then the two lines under
    "CI is built and waiting on one command" in Still Open. That publishes the pinned
-   gate image and makes `required_checks` real.
+   gate image, and the next `scaffold.sh` run then installs the workflow by itself.
+   It does **not** make `required_checks` enforceable: branch protection is
+   unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
+   so `gates` will be a visible check and never a gate on this repository. The
+   human merge is the gate, which is what `merge_mode: human_required` already
+   said.
 
 One more, whenever you like: `factory read <run-dir>` in the target repo records
 that a human read the two rendered documents. It is the one Phase-1 exit predicate
@@ -37,6 +42,12 @@ a script cannot settle.
    *"Then three changes in an afternoon"*.
 6. **`factory reaudit`** answers "did that change anything on a real run", which
    the seeded-defect harnesses cannot.
+7. **The corpus had drifted under the scaffold, and nobody could have seen it.**
+   `scaffold.sh` copies the control surface into the target repo one way and never
+   looks again, so bean-002's annotation — made in the target — was one scaffold
+   run from being deleted by the script whose job is keeping the two the same.
+   `scaffold.sh --check` now reports DIFFERS/MISSING/EXTRA per file; it found two
+   more things nobody knew. *"Nineteen beans are annotated"*.
 
 The one sentence worth carrying out of all of it: **on this model a constraint in
 the grammar is a rule and the same constraint in prose is a suggestion.**
@@ -1046,20 +1057,42 @@ or a dynamic loader. `forbidden_paths` is exact, because it is `contain.py` — 
 same matcher the containment check uses, rather than a second one that would
 eventually disagree with it.
 
-### For the owner: the other eighteen beans
+### Nineteen beans are annotated; bean-001 waits for its pull request
 
-**bean-002 is annotated and bean-001 is not**, on purpose. bean-001's pull request
-is open and editing a bean mid-flight is how a run stops making sense.
+**Done 2026-09-16, on the standing instruction to decide where there is a clear
+winner.** Fourteen statements across eight beans joined bean-002's three: every
+non-goal and constraint in the set that is about a PLACE now carries
+`forbidden_paths` or `forbidden_imports`. The text of each is byte-identical to
+what was approved; only `text:` plus the lists were added, which is why this was
+not held for you — the annotation cannot make the line do anything the bean did
+not already say, it can only refuse.
 
-The other eighteen are your call, because `status: approved` is the human
-checkpoint and a bulk edit to approved content should not arrive from a script.
-**Recommendation: do it.** The annotation restates an existing sentence and cannot
-make the line do anything the bean did not ask for — it can only refuse, and a
-wrong pattern is caught by spec-check immediately with the pattern printed. Each
-bean's non-goal text stays byte-identical; only `text:` plus the lists are added.
+**bean-001 is still prose, on purpose.** Its pull request is open, and editing a
+bean mid-flight means a `factory reaudit` of the finished run would judge it
+against a bean the run never saw — contaminating the one harness that measures a
+real run. It was annotated and then reverted for exactly that reason.
+`test-corpus-forbids.sh` asserts it stays prose, so the next person to do what I
+did gets told why. **When PR #1 merges, annotate it**: `no domain models` →
+`src/seating_planner/domain/**`, `no solver code` →
+`src/seating_planner/solver/**`, `no CI workflow files` → the four workflow
+directories, and the constraint about ortools being declared but not imported →
+`forbidden_imports: [ortools]`.
 
-`factory doctor` reports the split (`4 of 71` today, counting both fields), so progress
-through the set is visible without reading twenty files.
+**Eleven beans carry nothing**, and that is a result rather than a gap: "no
+behaviour change of any kind", "the result object is serializable", "determinism
+is achieved by configuration" name no place. `bean-forbids.sh` reports those as
+*"declares none in machine-readable form"*, which is not a pass.
+
+**Both directions are tested, because a wrong pattern does not fail — it matches
+nothing, and a check that cannot fire reads exactly like a check that passed.**
+`bench/tests/test-corpus-forbids.sh` asserts every declared pattern actually
+catches a path it describes and every module an import of itself (74 probes), and
+that no bean refuses its own `allowed_write_paths` (22), including the two that
+are easy to get backwards: a pyproject line DECLARING ortools is not an import of
+it, and bean-004 — the SQLite bean — may import sqlite3.
+
+`factory doctor` reports the split, so progress through the set is visible without
+reading twenty files.
 
 **What annotating buys, measured**: `bench/controller-fitness.sh` against a bean
 whose "no solver code" carries `forbidden_paths` scores `contradicts-non-goal` as
@@ -1606,13 +1639,23 @@ Write the end-to-end test before the next long real run, not after it.
   ```
 
   That prints the `image:` line for `gates.lock.yaml`. Put it in
-  `factory/scaffold/factory/gates.lock.yaml`, re-run `factory/scaffold.sh` against
-  the target repo to install the workflow, and the required check becomes real.
+  `factory/scaffold/factory/gates.lock.yaml` and re-run `factory/scaffold.sh`
+  against the target repo. Nothing else: the workflow installs itself once the
+  image is one CI can pull.
 
-  **The workflow is deliberately NOT installed in seating-planner-py yet.** It
-  fails loudly when the manifest still pins a `localhost/` image — which is the
-  right behaviour and would put a red X on the open PR #1 for a reason that has
-  nothing to do with the change. Publish first, then scaffold.
+  **The workflow is withheld while the manifest pins a `localhost/` image, and
+  that is now the scaffold's rule rather than this paragraph.** It used to be only
+  this paragraph, and on 2026-09-16 I read the drift report, saw the file missing
+  from the target, concluded nobody had re-run the scaffold, and installed it. It
+  failed in ten seconds and put a red X on PR #1 — correct behaviour, wrong
+  moment: a reviewer reads a failing check as a statement about the change under
+  review, and this one is a statement about a registry. Reverted, and encoded.
+
+  **The workflow itself is proven.** That accidental push is the evidence:
+  [run 35164768050](https://github.com/beekeeper-lab/seating-planner-py/actions/runs/35164768050)
+  checked out, installed PyYAML, read the pinned manifest, computed the registry
+  host and refused the pull with the publish command in its error. Every step but
+  the one that needs the image has now run on GitHub.
 
 ## What to re-run to confirm nothing drifted
 
@@ -1620,6 +1663,7 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 
 ```
 ./factory/pipeline/tests/run-all.sh
+./factory/scaffold.sh --check /home/gregg/workspace/seating-planner-py
 ./bench/phase0-audit.sh --with-models
 .venv/bin/python bench/validate.py
 .venv/bin/python bench/validate.py --corpus benchmark/seating-planner/bean-sets/v1
