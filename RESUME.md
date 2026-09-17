@@ -1284,9 +1284,44 @@ push against both. Not doing it. Recorded so the next person weighing "the doc
 audit is the biggest prompt" knows the cut has been looked for and the only one
 available costs the thing the document exists to provide.
 
-## Prediction for the reaudit with the briefs in place
+## MEASURED: the briefs changed nothing, and that is the useful part
 
-Written before it lands, as the last one was.
+`factory reaudit --passes 3` with the prompt 4,085 bytes smaller on the spec
+audit and 6,751 smaller on the impl audit. **0 of 12 stamped, again**, and the
+prediction below called it.
+
+The two runs, four hours apart, same run directory, same bean, same model:
+
+| refused because | without briefs | with briefs |
+| --- | --- | --- |
+| quoted text that is on disk nowhere | **5** | **5** |
+| a criterion with no quote long enough to check | 4 | 2 |
+| no judgement at all | 1 | 3 |
+| no quote long enough to prove anything | 1 | 2 |
+| revise with no findings | 1 | 0 |
+
+**Five of twelve, exactly, both times.** For a judge that gives different verdicts
+for byte-identical input at temperature 0, that stability is the finding: **prompt
+size is not what makes this judge invent the evidence for a verdict it has already
+reached.** The rest of the column moved around within the spread and means
+nothing at these counts.
+
+So the briefs stay — they are 4,000 fewer bytes of JSON the judge once mistook
+for a question, and the sweep says smaller prompts false-accept less often — but
+**nobody should expect them to reduce fabrication, because they did not.** That
+is worth more than another lever: it closes a direction. The quote check remains
+the detector, its refusal rate remains the measurement, and the thing it is
+detecting is not about how much the judge was given to read.
+
+One thing the run showed that is not in the table: the tool-call retry added
+tonight fired on a real audit. The doc audit on pass 2 asked for `container.exec`
+— a third invented tool name — was asked again, and the second answer reasoned
+for a while and ended without writing anything. One no-judgement became a
+different no-judgement. A second chance, not a fix, and it costs one request.
+
+## The prediction, as it was written before the run
+
+Written before it landed, as the last one was.
 
 The briefs take the spec audit to 21,343 bytes and the impl audit to 24,353 —
 both already below the 40,422 where the sweep saw false accepts, and both already
