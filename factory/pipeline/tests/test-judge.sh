@@ -609,8 +609,43 @@ prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
 check "the unknown measurement still reaches the judge" "not-a-schema-it-knows" "$prompt"
 rm -f "$R/verify-precheck.json" "$R/verify-precheck.brief.txt"
 
-printf '\n== the quote minimum is a knob, and it is off by default ==\n\n'
+printf '\n== the field caps survive the array-to-object conversion ==\n\n'
 #
+# `criteria` is declared in the literal as an ARRAY with `items`, and the field
+# caps are set on `.items.properties.*`. It is then rebuilt as an OBJECT keyed by
+# the bean's criterion ids — one of the five grammar changes that took schema
+# conformance from about zero to 100%. If the rebuild did not carry the caps
+# forward they would be written to a branch the grammar never reads, and nothing
+# would say so: the answers would simply be longer.
+#
+# On 2026-09-17 an answer came back with 600-character evidence cut mid-word,
+# which is the cap working — but it took reading a truncated file to find that
+# out, so it is asserted here instead.
+# A bean WITH criteria: the conversion only happens when the bean names ids, and
+# the default fixture here has none.
+cp "$WORK/bean.yaml" "$WORK/bean-plain.yaml"
+printf 'acceptance_criteria:\n  - id: ac1\n    text: it works\n    verify: { kind: command, run: ["true"] }\n  - id: ac2\n    text: it still works\n    verify: { kind: command, run: ["true"] }\n' >> "$WORK/bean.yaml"
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+SCH="$(jq -c '.format.properties.criteria' "$WORK/last-request.json")"
+eq "criteria is keyed by id, not an array" "object" "$(jq -r '.type' <<<"$SCH")"
+eq "with one entry per criterion"          "ac1,ac2" "$(jq -r '[.properties | keys[]] | join(",")' <<<"$SCH")"
+eq "and the cap is on every id"            "600" \
+   "$(jq -r '[.properties[].properties.evidence.maxLength] | unique | join(",")' <<<"$SCH")"
+eq "with the quote cap too"                "300" \
+   "$(jq -r '[.properties[].properties.quote.maxLength] | unique | join(",")' <<<"$SCH")"
+clean_verdicts
+JUDGE_FIELD_MAXLEN=1200 judge >/dev/null 2>&1
+SCH="$(jq -c '.format.properties.criteria' "$WORK/last-request.json")"
+eq "and the knob still reaches them"       "1200" \
+   "$(jq -r '[.properties[].properties.evidence.maxLength] | unique | join(",")' <<<"$SCH")"
+# Put the fixture back: every assertion after this one was written against a bean
+# with no criteria, and a test that quietly changes the fixture for the rest of
+# the file is the trap this suite already sprang once today.
+cp "$WORK/bean-plain.yaml" "$WORK/bean.yaml"
+
+printf '\n== the quote minimum is a knob, and it is off by default ==\n#
 # 31% of the criteria in eleven real judgements carried no quote at all, measured
 # 2026-09-17, and the controller refuses them an hour after the GPU time is spent.
 # A minLength refuses it at decode time. Whether llama.cpp's converter honours
