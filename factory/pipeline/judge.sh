@@ -155,6 +155,32 @@ if [ -z "$ATTEMPT" ]; then
 fi
 OUT="$VERDICTS/$TARGET.attempt-$ATTEMPT.judgement.json"
 
+# refuse_j <rule> <exit> <one-line reason> [<details JSON>]
+#
+# Same record audit-check.sh writes, from the other half of the audit. Between
+# them they cover every route to "this run reached no verdict": the judge did not
+# answer, or it answered something the controller could not stamp. Both were
+# stderr-only, and the question "which one, and how often" has been answered from
+# terminal scrollback twice in this project.
+#
+# `by` says which. The two are different problems with different fixes — one is
+# the model or the server, the other is the judgement's content — and a count
+# that merged them would be worth nothing.
+refuse_j() {
+  local rule="$1" code="$2" reason="$3" details="${4:-null}"
+  mkdir -p "$VERDICTS" 2>/dev/null || true
+  jq -n --arg t "$TARGET" --argjson n "${ATTEMPT:-0}" --arg rule "$rule" --arg reason "$reason" \
+        --argjson details "$details" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg bean "${BEAN_ID:-}" --arg run "$(jq -r '.run_id // ""' "$RUN_DIR/run.json" 2>/dev/null)" \
+    '{schema:"refusal/1.1.0", by:"judge", target:$t, attempt:$n, rule:$rule, reason:$reason,
+      details:$details, judgement:null, refused_at:$at,
+      bean:(if $bean == "" then null else $bean end),
+      run_id:(if $run == "" then null else $run end)}' \
+    > "$VERDICTS/$TARGET.attempt-${ATTEMPT:-0}.refused.json" 2>/dev/null || true
+  exit "$code"
+}
+
+
 # ------------------------------------------------------------- the artifacts --
 # Everything the rubric asks the judge to read, read for it. A file that is
 # missing is named as missing rather than silently absent: "I could not see it"
@@ -327,6 +353,9 @@ esac
 # before its first token — which the kept log showed on line 1, and which nothing
 # else would have.
 BEAN_JSON="$("$PIPELINE_DIR/yaml2json.sh" "$BEAN_FILE")" || die "cannot read bean: $BEAN_FILE"
+# Read once here so a refusal record can name the bean it was about. refuse_j
+# reads it at call time and every call site is below this line.
+BEAN_ID="$(jq -r '.id // empty' <<<"$BEAN_JSON")"
 CRITERIA_LIST="$(jq -r '(.acceptance_criteria // [])[] | "  \(.id): \(.text)"' <<<"$BEAN_JSON")"
 # The same ids as data, for the schema. One source, so the list the judge is shown
 # and the list the grammar permits cannot drift apart.
@@ -861,7 +890,7 @@ if [ "$(jq -r '.model // ""' <<<"$RESP" 2>/dev/null)" = "" ] \
   printf '       in the server log: `journalctl -u ollama --since -5min | grep grammar`.\n' >&2
   printf '       Measured 2026-09-16: gemma4:26b emits <unused49>, the grammar stack empties,\n' >&2
   printf '       and every request after the first two dies this way — with the GPU idle.\n' >&2
-  exit 9
+  refuse_j empty-response 9 "the model server returned a 200 with nothing in it"
 fi
 
 DONE_REASON="$(jq -r '.done_reason // "?"' <<<"$RESP" 2>/dev/null)"
@@ -904,7 +933,8 @@ if [ -z "$CONTENT" ] && [ "${NTOOLS:-0}" -gt 0 ]; then
     "$TARGET" "$NTOOLS" "$(jq -r '[.message.tool_calls[].function.name] | join(", ")' <<<"$RESP" 2>/dev/null)" \
     "$([ "$JUDGE_RETRIED" = 1 ] && printf ' — twice, asked again after the first' || true)" >&2
   printf '       There are no tools on this path and the artifacts were in the prompt.\n' >&2
-  exit 1
+  refuse_j tool-calls-instead-of-answer 1 "the model called tools rather than answering" \
+    "$(jq -nc --argjson n "${NTOOLS:-0}" --argjson names "$(jq -c '[.message.tool_calls[]?.function.name]' <<<"$RESP" 2>/dev/null || echo '[]')" '{calls:$n, names:$names}')"
 fi
 if [ -z "$CONTENT" ] && [ "$DONE_REASON" = "length" ]; then
   # Not a judgement the model failed to reach — one it was not given room to
@@ -914,7 +944,8 @@ if [ -z "$CONTENT" ] && [ "$DONE_REASON" = "length" ]; then
   jq -r '.message.thinking // ""' <<<"$RESP" > "$RUN_DIR/verdicts/$TARGET.thinking.txt" 2>/dev/null || true
   printf 'JUDGE  %s: spent the whole %s-token budget thinking and wrote no answer.\n' "$TARGET" "$NUM_PREDICT" >&2
   printf '       Its reasoning is in verdicts/%s.thinking.txt. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
-  exit 8
+  refuse_j budget-spent-thinking 8 "the whole token budget went on reasoning and no answer was written" \
+    "$(jq -nc --argjson cap "$NUM_PREDICT" '{num_predict:$cap}')"
 fi
 if [ -z "$CONTENT" ]; then
   # Three different things produce an empty `content`, and only one of them is
@@ -936,7 +967,8 @@ if [ -z "$CONTENT" ]; then
     printf '       (done_reason=%s). That is a server or model-loading problem, not a\n' "$DONE_REASON" >&2
     printf '       judgement: %s\n' "$(printf '%s' "$RESP" | head -c 300)" >&2
   fi
-  exit 1
+  refuse_j no-answer 1 "the response carries no answer" \
+    "$(jq -nc --arg d "$DONE_REASON" '{done_reason:$d}')"
 fi
 if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
   # Cut off mid-object is not the same failure as ignoring the schema, and saying
@@ -954,7 +986,8 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
     printf 'JUDGE  %s: cut off mid-answer at the %s-token cap — the JSON stops part-way.\n' \
       "$TARGET" "$NUM_PREDICT" >&2
     printf '       What it managed is in verdicts/%s.truncated.json. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
-    exit 8
+    refuse_j answer-truncated 8 "the answer was cut off at the token cap" \
+      "$(jq -nc --argjson cap "$NUM_PREDICT" --argjson b "${#CONTENT}" '{num_predict:$cap, bytes:$b}')"
   fi
   # Not `length`, and still not JSON. Keep ALL of it and say what jq objected to.
   #
@@ -985,7 +1018,9 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
       printf '       verdicts/%s.unparseable.json.\n' "$TARGET" >&2
       ;;
   esac
-  exit 1
+  refuse_j answer-not-json 1 "the answer is not JSON, and the server did not say it ran out of room" \
+    "$(jq -nc --arg d "$DONE_REASON" --arg e "$PARSE_ERR" --argjson b "${#CONTENT}" \
+       '{done_reason:$d, jq_error:$e, bytes:$b}')"
 fi
 
 # Constrained decoding is a request, not a guarantee. Measured: `required` is

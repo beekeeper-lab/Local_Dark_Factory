@@ -189,7 +189,7 @@ done
 # question got answered from memory twice before.
 why=""
 if compgen -G "$RUN_DIR/verdicts/*.refused.json" >/dev/null 2>&1; then
-  why="$(jq -rs '[.[] | .rule] | group_by(.) | map("\(.[0]) ×\(length)") | join(", ")' \
+  why="$(jq -rs '[.[] | ((.by // "audit-check") + ":" + .rule)] | group_by(.) | map("\(.[0]) ×\(length)") | join(", ")' \
         "$RUN_DIR"/verdicts/*.refused.json 2>/dev/null)"
   [ -n "$why" ] && why=" Refused by: $why."
 fi

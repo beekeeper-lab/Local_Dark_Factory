@@ -228,6 +228,54 @@ want  "all of it is kept"              "verdicts/spec.unparseable.json should ex
 want  "kept whole, not truncated"      "the file should be the full answer" \
       test "$(wc -c < "$R/verdicts/spec.unparseable.json")" -eq 97
 
+printf '\n-- and every one of these leaves a refusal record naming its rule --\n\n'
+#
+# The judge half of what audit-check.sh records. Between them they cover every
+# route to "this run reached no verdict": no answer came back that could be read
+# as a judgement, or one did and could not be stamped. `by` keeps them apart,
+# because they are different problems with different fixes and a count that
+# merged them would be worth nothing.
+#
+# Written from the run just above — the answer that stopped without the server
+# saying `length`, which is the case seen on bean-002's first real audit.
+REFJ="$R/verdicts/spec.attempt-1.refused.json"
+want  "a refusal record is written"    "$REFJ should exist" test -s "$REFJ"
+want  "the judge wrote it"             "by should be judge" \
+      test "$(jq -r .by "$REFJ")" = judge
+want  "naming the rule"                "rule should be answer-not-json" \
+      test "$(jq -r .rule "$REFJ")" = answer-not-json
+want  "with what the server said"      "details.done_reason should be stop" \
+      test "$(jq -r .details.done_reason "$REFJ")" = stop
+want  "and what jq objected to"        "details.jq_error should mention EOF" \
+      bash -c "jq -r '.details.jq_error' '$REFJ' | grep -q EOF"
+want  "and the bean it was about"      "bean should be named" \
+      bash -c "test \"\$(jq -r .bean '$REFJ')\" != null"
+FROOT="$(cd "$PIPELINE_DIR/../.." && pwd)"
+if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json" ]; then
+  want "it validates against the schema" "the refusal record must conform" \
+    "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$REFJ"
+fi
+
+printf '\n-- a different failure writes a different rule --\n\n'
+clean_verdicts
+reply "$(jq -nc --arg t "thinking that went on and on" \
+  '{model:"test-judge:latest", done:true, done_reason:"length", message:{role:"assistant", content:"", thinking:$t}}')"
+judge >/dev/null 2>&1
+want  "the budget case is named"       "rule should be budget-spent-thinking" \
+      test "$(jq -r .rule "$R/verdicts/spec.attempt-1.refused.json")" = budget-spent-thinking
+want  "with the cap it had"            "details.num_predict should be a number" \
+      bash -c "jq -e '.details.num_predict | type == \"number\"' '$R/verdicts/spec.attempt-1.refused.json' >/dev/null"
+
+printf '\n-- and an answer the controller can read leaves none --\n\n'
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \
+  '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c, thinking:"brief"}}')"
+judge >/dev/null 2>&1
+want  "no refusal record"              "a judgement that arrived must not record a refusal" \
+      test ! -f "$R/verdicts/spec.attempt-1.refused.json"
+want  "and the judgement is there"     "spec.attempt-1.judgement.json should exist" \
+      test -s "$R/verdicts/spec.attempt-1.judgement.json"
+
 printf '\n-- an answer that is not JSON at all is a different sentence --\n\n'
 clean_verdicts
 reply "$(jq -nc --arg c 'I have reviewed the specification and it looks good to me.' \
