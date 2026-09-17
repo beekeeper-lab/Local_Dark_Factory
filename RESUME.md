@@ -40,6 +40,10 @@ Done, since the last time this list was written:
 - **`write:packages` granted and the gate image published.** The scaffold then
   installed `.github/workflows/gates.yml` by itself, which is the first time its
   hold-back condition has fired the other way.
+- **The 143 is solved.** It was the worker image's entrypoint reaping its own
+  forwarder under `set -e`, not an external SIGTERM — open since 2026-09-15 and
+  settled by `pi --version` in the image, which takes one second. See "SOLVED"
+  below, and taxonomy entry (14).
 - **`factory read` resolved honestly.** An agent may now record that it read the
   documents — `factory read --as-agent <who> --note "<what it found>"`, which
   refuses without a substantive note. It records a **weaker, true** fact: all
@@ -347,7 +351,27 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Thirteen ways a check goes wrong, found on 2026-09-15, 16, 17
+## Fourteen ways a check goes wrong, found on 2026-09-15, 16, 17
+
+**(14) A story that fits every piece of the evidence, never tested against the
+cheapest experiment that could refute it.** The worker container exited 143.
+Nothing in the sandbox sends SIGTERM; `timeout` would have exited 124; the
+occurrences were unreproducible, unlogged, and arrived mid-session while someone
+was working alongside. Every one of those is true, and together they name an
+operator's `pkill -f`, which this repository really has done to itself five
+times. It was the container's own entrypoint: `set -e`, then `wait` on the
+forwarder it had just killed. Two days.
+
+`pi --version` in that image — one second, no model, no session, nobody near the
+machine — exits 143, and 0 on the host. That experiment was available every day
+the question was open, and it costs nothing. **A diagnosis that explains the
+evidence is not the same as one that has survived an attempt to kill it; when a
+failure is called "unreproducible", the next move is to try to reproduce it in
+the smallest case, not to reason about who might have caused it.**
+
+Related but distinct from (12), the check that recorded its answer and was never
+read: there, the evidence existed and nobody looked. Here nobody made the
+evidence, because the story already felt complete.
 
 **(13) A check that answered about something other than what it was checking.**
 `ci.sh` treated every red required check as a finding about the change, and sent
@@ -2255,44 +2279,64 @@ worker on the host — the containment guarantee held during a resource failure,
 which is when guarantees usually do not — and the run halted rather than recording
 a pass.
 
-## OPEN: something SIGTERMs the doc worker at ~1000 seconds — now self-identifying
+## SOLVED: the "SIGTERM at ~1000 seconds" was the worker image's own entrypoint
 
-Not identified as of 2026-09-15 evening. A doc session wrote a complete
-18,626-byte document, printed its report, and its container died at 1022 seconds
-with code 143 — well short of the 3600-second `timeout` in `worker-sandbox.sh`.
+Open from 2026-09-15 to 2026-09-17, and it was never a signal from outside.
 
-It is **not** this project's test suite, which killed a live build once before and
-was the first suspect: a sentinel container and a sentinel process were run
-alongside all 26 suites in sequence and both survived every one. `podman events`
-is the place the death is visible; nothing in the pipeline's own logs names a
-source.
+The entrypoint backgrounds the model-socket forwarder, runs pi, then reaps it:
 
-The line no longer loses the work to it. `run-step.sh` already held the rule that
-a `pi -p` exit status is fallback evidence rather than an override of a verdict the
-child stamped; that now extends to a step whose output is a file. Every expected
-output freshly written by this attempt — verified by hash, not by existence — is a
-PASS regardless of the exit code, and the checks that read the file run next, so a
-half-written one still fails on its contents.
+```sh
+set -e
+...
+kill "$FORWARDER" 2>/dev/null
+wait "$FORWARDER" 2>/dev/null
+exit "$rc"
+```
 
-**2026-09-17: it cannot be diagnosed backwards, so it is made to identify itself
-forwards.** The container is named (`factory-worker-<pid>-<epoch>`) and on any
-non-zero exit `worker-sandbox.sh` reads back that container's own podman events
-and prints them — the `died` event carries the exit code the runtime saw. The
-container used to be anonymous and `--rm`'d, so by the time anyone looked there
-was nothing left to ask.
+`wait` on a job that died by signal returns 143. `set -e` ends the shell on that
+status. `exit "$rc"` never ran. **Every contained worker exited 143** — after a
+good session, a bad one, or none at all.
 
-And on 143 specifically it now says what 143 rules out: nothing in the script
-sends SIGTERM, and the `timeout` wrapper would have exited 124, so it came from
-outside the process tree — and if the events show no `stop` before the `died`,
-nobody asked podman to stop it either. **The first suspect is named: an
-operator's `pkill -f`.** That is not proof, and it is the one cause consistent
-with all of the evidence — unreproducible, unlogged, arriving in the middle of a
-long session while someone was working alongside — and this repository has done
-it to itself five times. The sentinel experiment that cleared the test suite does
-not clear a person at a terminal.
+**The experiment that settles it takes one second and was available every day
+this was open:**
 
-14 assertions in `test-worker-sandbox-death.sh`, with podman stubbed: the message
-is the thing being tested, not the runtime.
+```
+$ podman run ... localhost/factory-worker-pi:20260915 --version
+0.85.1
+RC=143
+$ pi --version          # on the host
+0.85.1
+RC=0
+```
+
+No model, no session, nobody near the machine. Five lines with `sleep` reproduce
+it with no container and no pi involved.
+
+**Why it stayed open for two days**: 143 *is* what an external SIGTERM looks
+like, `timeout` would have exited 124, nothing in the sandbox sends one, and the
+occurrences were unreproducible, unlogged and mid-session while someone was
+working alongside. Every piece of that fit, and the story was built out of it
+instead of being tested against the smallest case that could refute it. The
+note directly above the bug in worker-sandbox.sh describes the SAME misreading
+found earlier and fixed at the MESSAGE the shell prints rather than at the
+status it exits with — a symptom fix leaves the cause to be found again, and it
+was, two days later.
+
+Fixed twice over: `|| true` on both reap lines, and `if pi "$@"; then rc=0; else
+rc=$?; fi`, because `set -e` was also aborting on a bare non-zero `pi`, which
+skipped the reap on exactly the runs most likely to leave something behind.
+Rebuilt as `localhost/factory-worker-pi:20260917@sha256:12bed818…`, verified
+exit 0 through the real sandbox, worker.lock.yaml re-pinned.
+`tests/test-worker-entrypoint.sh` fails five ways against the old entrypoint.
+
+**And it had already cost a run.** bean-002 halted on 2026-09-17 with the spec
+step failed twice. The second attempt fixed the one thing spec-check found, said
+in its report that tasks.yaml had no findings against it and was therefore
+unchanged — true, and the right thing to do — and `OUTPUT_FRESH` required EVERY
+expected output to be fresh, so a targeted edit plus a 143 read as "this attempt
+wrote nothing". The rule is now: nothing missing, and at least one output written
+this attempt. A retry that touches nothing still fails, and that is asserted
+(`tests/test-run-step-outputs.sh`).
 
 ## DONE: one real run reached a pull request
 
