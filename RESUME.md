@@ -1268,6 +1268,30 @@ size where the judge started accepting a spec it had rejected. That is worth
 knowing and it is not worth fixing by dropping an artifact: every byte of it is
 either the standard or the thing being judged.
 
+## Prediction for the reaudit with the briefs in place
+
+Written before it lands, as the last one was.
+
+The briefs take the spec audit to 21,343 bytes and the impl audit to 24,353 —
+both already below the 40,422 where the sweep saw false accepts, and both already
+below the 30,422 that was still clean. **So I do not expect the stamped count to
+move off 0 of 12.** The size finding predicts fewer FALSE ACCEPTS at smaller
+sizes; `reaudit` measures STAMPABLE VERDICTS, and what has been stopping those is
+fabricated quotes and criteria with no quote at all, which size has no obvious
+bearing on.
+
+What would be worth seeing is the refusal reasons moving: five of twelve were
+"quoted text that is on disk nowhere" last time, and a judge given four thousand
+fewer bytes of JSON it once mistook for a question may invent less. If the
+distribution is unchanged, that is the answer too — it says the fabrication is
+not about prompt size, which is worth knowing before anyone spends more effort
+there.
+
+`judge-fitness` cannot measure this at all: its fixtures are a spec and a task
+list, with no controller measurements in the run directory, so the briefs never
+apply. That is worth saying out loud because it is the harness everyone reaches
+for, and here it would have reported "no change" for the wrong reason.
+
 ## The sixth grammar constraint, and the boundary it found
 
 Five grammar constraints on 2026-09-16 took schema conformance from about zero to
