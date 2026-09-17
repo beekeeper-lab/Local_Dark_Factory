@@ -542,6 +542,44 @@ eq "the quote with it"                 "600" \
 eq "and the one-line fields at a third" "400" \
    "$(jq -r '.format.properties.findings.items.properties.summary.maxLength' "$WORK/last-request.json")"
 
+printf '\n== the controller measurements go as prose, and shrink the prompt ==\n\n'
+#
+# Size is the only lever measured this week that moved the false-accept rate:
+# 3-of-3 rejections of a seeded defect at 20,422 and 30,422 bytes, 2-of-3
+# ACCEPTS at 40,422. A real spec audit was 25,428 bytes, of which 4,805 were two
+# controller measurements sent as raw JSON.
+clean_verdicts
+cat > "$R/verify-precheck.json" <<'J'
+{"schema":"verify-precheck/1.0.0","tasks":[{"task":"task-1","verifies":[
+ {"passes_before_the_work":true,"command":"a command long enough to matter, repeated for bulk"},
+ {"passes_before_the_work":false,"command":"another command long enough to matter, repeated for bulk"},
+ {"passes_before_the_work":false,"command":"a third command long enough to matter, repeated for bulk"},
+ {"passes_before_the_work":false,"command":"a fourth command long enough to matter, repeated for bulk"}]}]}
+J
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+out="$(judge)"
+prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
+check "the brief is what was sent"     "verifies already passed" "$prompt"
+nope  "and not the raw JSON"           "passes_before_the_work" "$prompt"
+want  "the brief is on disk in the run dir" "a quote from it must be findable by the quote check" \
+      test -s "$R/verify-precheck.brief.txt"
+
+printf '\n-- and the raw measurement is one variable away --\n\n'
+clean_verdicts
+JUDGE_MEASUREMENT_BRIEF=0 judge >/dev/null 2>&1
+prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
+check "the JSON goes when it is turned off" "passes_before_the_work" "$prompt"
+
+printf '\n-- a measurement it cannot summarise is sent whole --\n\n'
+#
+# Losing a measurement to save bytes would be a bad trade at any size.
+clean_verdicts
+printf '{"schema":"not-a-schema-it-knows/1.0","tasks":[]}\n' > "$R/verify-precheck.json"
+judge >/dev/null 2>&1
+prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
+check "the unknown measurement still reaches the judge" "not-a-schema-it-knows" "$prompt"
+rm -f "$R/verify-precheck.json" "$R/verify-precheck.brief.txt"
+
 printf '\n== the quote minimum is a knob, and it is off by default ==\n\n'
 #
 # 31% of the criteria in eleven real judgements carried no quote at all, measured
