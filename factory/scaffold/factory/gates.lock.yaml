@@ -5,7 +5,7 @@
 #
 # Built by factory/gate-image/build.sh, which refuses to print a digest for an
 # image whose contents disagree with expect_versions below.
-image: "localhost/factory-gate-python:20260914@sha256:b78227887bd97a01bce072f4bc868fa83c1c2cbd44d232d2cbfda0e665deae20"
+image: "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:b78227887bd97a01bce072f4bc868fa83c1c2cbd44d232d2cbfda0e665deae20"
 
 # Asserted before the first bean of a session runs, not after a failure makes
 # someone suspicious. The controller compares these against what the image
