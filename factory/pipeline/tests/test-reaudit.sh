@@ -193,5 +193,26 @@ check "and names what is missing"      "the snapshot is missing" "$out"
 check "and why that matters"           "not the one in the repository" "$out"
 nope  "and it did not measure anyway"  "audit run(s) produced" "$out"
 
+printf '\n== reasons that name criteria still tally as one reason ==\n\n'
+#
+# audit-check refuses a criterion whose own quote is too short to check, and names
+# which — "…: ac3" on one target and "…: ac2, ac3, ac4" on another. Those are the
+# same reason. A tally that splits on the ids counts nothing, and the ids are on
+# every row underneath it anyway.
+TALLY_IN='[{"stamped":false,"pass":1,"target":"spec","refused_because":"these criteria are not backed by a quote long enough to check: ac3","criteria_ids":[]},
+           {"stamped":false,"pass":2,"target":"impl","refused_because":"these criteria are not backed by a quote long enough to check: ac2, ac3, ac4","criteria_ids":[]}]'
+out="$(jq -r '[.[] | select(.stamped | not) | .refused_because
+              | if test("not backed by a quote long enough") then "a criterion with no quote long enough to check" else .[0:52] end]
+              | group_by(.) | map({r: .[0], n: length}) | sort_by(-.n) | .[] | "  \(.n)  \(.r)"' <<<"$TALLY_IN")"
+if [ "$(printf '%s\n' "$out" | grep -c .)" = "1" ]; then
+  printf '  ok    two rows naming different criteria tally as one reason\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  they tallied separately:\n%s\n' "$out"; FAIL=$((FAIL+1))
+fi
+check "and the reason drops the ids" "a criterion with no quote long enough to check" "$out"
+# The same expression is in reaudit.sh; if it stops being there this assertion is
+# testing a copy of something that no longer runs.
+check "and reaudit.sh carries it"    "not backed by a quote long enough" "$(cat "$PIPELINE_DIR/reaudit.sh")"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

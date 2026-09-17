@@ -212,6 +212,11 @@ TALLY="$(jq -r '[.[] | select(.stamped | not) | .refused_because
                  | if . == "" then "(no reason recorded)"
                    elif test("quotes text that is not on disk") then "quoted text that is on disk nowhere"
                    elif test("no quote long enough") then "no quote long enough to prove anything"
+                   # Named criteria, so the raw string differs per row — "…: ac3"
+                   # and "…: ac2, ac3, ac4" are the same reason and would tally as
+                   # two. The ids are still on every row below; a tally that
+                   # splits on them counts nothing.
+                   elif test("not backed by a quote long enough") then "a criterion with no quote long enough to check"
                    elif test("wrote no judgement") then "no judgement at all"
                    elif test("does not report on the criteria") then "wrong criteria"
                    elif test("zero findings") then "revise with no findings"
