@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-008
+repo: beekeeper-lab/shelving-planner-py
+title: Optimization result reporting with violations and affected guests
+intent: >
+  Every serialisation returns an inspectable result naming what was assigned, what was
+  not, the score, and every rule it failed to satisfy along with the guests involved.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 8
+source:
+  kind: manual
+  ref: benchmark/shelving-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-049: The result of each serialisation SHALL include: the number of eligible guests assigned; the number of unassigned guests; the overall soft-constraint score; every violated soft constraint; every authorized hard-constraint exception; the guests affected by each violation or exception."
+context:
+  read_paths:
+    - src/shelving_planner/exporter/
+    - src/shelving_planner/rules/
+    - tests/exporter/
+  background: >
+    Product Principle 2 says results must be explainable, and this is where that is
+    earned. The exporter knows which soft-rule indicators came out false; the result must
+    carry them outward as named violations with the guests each one concerns, not as a
+    bare score. Principle 6 ("no false success") has a specific consequence here: a rule
+    the system could not evaluate must never be reported as satisfied — it is a distinct
+    third state alongside satisfied and violated.
+allowed_write_paths:
+  - src/shelving_planner/exporter/**
+  - tests/exporter/**
+acceptance_criteria:
+  - id: ac1
+    text: The result reports assigned count, unassigned count and total soft score consistent with the assignment.
+    verify: { kind: test, test_id: "tests/exporter/test_result.py::test_counts_and_score_consistent" }
+  - id: ac2
+    text: Each violated soft constraint appears once with its rule id, weight and affected guest ids.
+    verify: { kind: test, test_id: "tests/exporter/test_result.py::test_violations_name_rule_and_guests" }
+  - id: ac3
+    text: A rule that could not be evaluated is reported as unevaluable, never as satisfied.
+    verify: { kind: test, test_id: "tests/exporter/test_result.py::test_unevaluable_is_not_satisfied" }
+  - id: ac4
+    text: Satisfied, violated and unevaluable rule counts together equal the number of active rules.
+    verify: { kind: test, test_id: "tests/exporter/test_result.py::test_rule_accounting_is_complete" }
+constraints:
+  - the result object is serializable
+  - no private guest notes in the result payload
+suggested_risk_tier: 2
+size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 350 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no corrective recommendations (bean-010)
+dependencies: [bean-007]

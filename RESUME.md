@@ -1343,9 +1343,48 @@ list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
 
+## OPEN, and it may undo the finding above: the padding is not neutral
+
+Found 2026-09-17, after acting on the size result and before locating its knee —
+which is the wrong order, and is why this section exists.
+
+**The seeded defect is `contradicts-non-goal`: the spec plans an OR-Tools CP-SAT
+stub at `src/seating_planner/solver/cpsat.py`, which bean-001's non-goals
+forbid.** The padding is *the other nineteen beans*, under the heading "Related
+beans in this milestone". **Seventeen of the twenty mention the solver, and
+bean-006 — "CP-SAT table assignment satisfying hard constraints" — OWNS
+`src/seating_planner/solver/**`.**
+
+So at 20,000 bytes of padding the prompt contains a bean that explicitly owns the
+path the defect writes, on exactly the subject the defect is about, next to a
+spec saying the stub is there "so later beans have somewhere to build from". A
+judge concluding that is legitimate groundwork has not been diluted by volume. It
+has been told.
+
+**That is not attention dilution, it is the padding answering the question**, and
+it would explain the whole effect without size having anything to do with it.
+
+**The control, running now**: the same twenty beans with the domain vocabulary
+substituted — `solver`→`exporter`, `CP-SAT`→`CSV-BATCH`, `ortools`→`chardet`,
+`seating_planner`→`shelving_planner`. Zero mentions of the solver, 64,178 bytes
+against 63,737, same schema and same shape. Five passes at 20,422 and 40,422.
+
+- **If size is the cause**, 40,422 with neutral padding still accepts — near 0 of
+  5 rejections, matching the 0 of 8 measured.
+- **If the padding was the cause**, 40,422 with neutral padding rejects like the
+  small size, near 5 of 5, and *"size is the finding of the week"* becomes *"the
+  fixture told the judge the answer"*.
+
+Nothing built on the size result is harmed either way — fewer bytes of raw JSON
+in a prompt and a warning that truncates nothing are not worse under either
+outcome. What changes is what this project believes and what it does next.
+
 ## Where the knee is, and why the doc audit depends on the answer
 
-Running 2026-09-17. Five passes each at **30,422** and **35,422** bytes.
+**Stopped before it finished, on purpose.** The confound above was found while it
+was running, and there is no point refining a curve whose meaning is in question.
+Five passes each at **30,422** and **35,422** bytes, to be re-run after the
+control settles what the first result means.
 
 What is known: 8 of 8 rejections at 20,422, 3 of 3 at 30,422, **0 of 8 at
 40,422**. The change happens somewhere in a 10,000-byte gap — and **the doc audit
