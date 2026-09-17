@@ -127,15 +127,43 @@ PAD_ALL="$TMP/pad.txt"
   printf '\n## Related beans in this milestone\n\n'
   printf 'These are the other approved beans this one sits beside. They are here for\n'
   printf 'context: none of them is what you are auditing.\n\n'
-  for b in "$PAD_FROM"/*/bean.yaml; do
+  # Both layouts. A scaffolded repo keeps each bean in its own directory
+  # (factory/beans/<id>-<slug>/bean.yaml); a bean SET is flat
+  # (bean-sets/v1/beans/bean-001.yaml). Pointing at the flat one matched nothing
+  # and the sweep ran anyway with 161 bytes of padding against sizes of 10,000
+  # and 20,000 — measuring nothing, reporting a full table.
+  for b in "$PAD_FROM"/*/bean.yaml "$PAD_FROM"/*.yaml "$PAD_FROM"/*.yml; do
     [ -f "$b" ] || continue
+    case "$b" in *"$(basename "$BEAN")") continue ;; esac
     case "$b" in *"$(basename "$(dirname "$BEAN")")"*) continue ;; esac
-    printf -- '### %s\n\n```yaml\n' "$(basename "$(dirname "$b")")"
+    label="$(basename "$(dirname "$b")")"
+    case "$label" in beans|"$(basename "$PAD_FROM")") label="$(basename "$b" .yaml)" ;; esac
+    printf -- '### %s\n\n```yaml\n' "$label"
     cat "$b"
     printf '```\n\n'
   done
 } > "$PAD_ALL"
-printf 'padding available: %s bytes\n' "$(wc -c < "$PAD_ALL")"
+PAD_HAVE="$(wc -c < "$PAD_ALL")"
+printf 'padding available: %s bytes\n' "$PAD_HAVE"
+
+# Refuse rather than sweep a size it cannot reach.
+#
+# It used to pad with what it had and print the requested size in the table, so a
+# row saying 20000 could be 161 bytes of padding and nobody could tell from the
+# artifact. A sweep whose independent variable did not vary is not a sweep, and
+# this is the fail-open shape this project keeps finding: the check ran, produced
+# output, and measured nothing.
+PAD_MAX=0
+for sz in $SIZES; do [ "$sz" -gt "$PAD_MAX" ] && PAD_MAX="$sz"; done
+if [ "$PAD_HAVE" -lt "$PAD_MAX" ]; then
+  printf '\nsize-sweep: REFUSED — %s bytes of padding available, %s needed for the largest size.\n' \
+    "$PAD_HAVE" "$PAD_MAX" >&2
+  printf '  --pad-from %s yielded almost nothing. It wants a directory of beans, in\n' "$PAD_FROM" >&2
+  printf '  either layout: <dir>/<id>/bean.yaml or <dir>/<id>.yaml.\n' >&2
+  printf '  Padding to less than the size named in the table would report a sweep that\n' >&2
+  printf '  did not happen.\n' >&2
+  exit 2
+fi
 
 # The case list out of judge-fitness.sh's own CASES block. A line-anchored grep
 # misses `clean`, which shares a line with `CASES='` — and more importantly an
