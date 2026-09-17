@@ -1603,6 +1603,31 @@ is the confound probe firing on `satisfied` and `therefore`** — generic Englis
 an innocent overlap, handed to a person rather than refused on, which is exactly
 what it was built to do.
 
+## The end-to-end smoke, with real models, that the suite cannot do
+
+Started 2026-09-17. `factory run bean-001 --stop-after spec` against a scratch
+repository at `/tmp/smoke-repo` with a bare local `origin`.
+
+**Why it is worth the GPU.** `test-full-line.sh` drives the whole line with stubs,
+and a stub cannot catch an integration break between two real components. One got
+through today: `package-check` treats any `.json` in `verdicts/` that is not a
+judgement and does not match `<target>.attempt-N.json` as a misnamed verdict and
+raises a **blocker** — and `<target>.request.json`, added this morning, is exactly
+that shape. It would have failed every real run. It was found by asking which
+code globs that directory, not by a test, because package-check's fixtures build
+their own verdicts directory and nothing ever put a request file in one.
+
+This exercises, with live models and in one pass: preflight, the contained spec
+worker, `spec-check` including the new `plans-other-beans`, `audit-spec` with the
+real judge, the measurement briefs, the request sidecar, `audit-check` with the
+per-criterion quote rule, and `--no-skills`.
+
+**Two things it already caught, both correct refusals**: `hidden_tests.dir` is
+relative to the config, so a target that is not a sibling of this repository is
+refused by `factory doctor` at once rather than silently skipping hidden tests;
+and preflight refuses a repository with no `origin`, because it cannot verify
+`main` is up to date.
+
 ## Next on this thread, after that: nothing queued
 
 Whatever the control says, the sweep has been measuring `contradicts-non-goal` —
