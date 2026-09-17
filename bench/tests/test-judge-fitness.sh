@@ -322,5 +322,21 @@ else
   printf '  ok    and writes no results file\n'; PASS=$((PASS+1))
 fi
 
+printf '\n== NAMED is an upper bound, and the artifact says so ==\n\n'
+#
+# It is a keyword match over the judgement body, and the body may be invented. A
+# size-sweep control on 2026-09-17 produced an ACCEPT scored as having named the
+# defect, because a catchword appeared inside a fabricated finding about "a guest
+# can be assigned to multiple tables if they are in different zones" — a sentence
+# in no artifact. The quote check would refuse that judgement; this scorer does
+# not run the quote check.
+#
+# Left as it is rather than tightened: a scorer that silently got stricter would
+# make every earlier figure incomparable. What it needs is to be read for what it
+# is, which is what these assertions keep true.
+check "the script says the bound is upper" "UPPER BOUND" "$(cat "$BENCH/judge-fitness.sh")"
+check "and names the fabrication that showed it" "different zones" "$(cat "$BENCH/judge-fitness.sh")"
+check "the artifact carries the caveat"    "named_the_defect_is_an_upper_bound" "$(cat "$BENCH/judge-fitness.sh")"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

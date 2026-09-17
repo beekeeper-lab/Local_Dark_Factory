@@ -100,7 +100,13 @@ must be present"*, *"The repository does not contain a .gitignore file"* (it doe
 quoted its own instructions as text from the document under audit.
 
 **How often it is wrong.** 4 false accepts in 15 seeded defects at the best
-configuration, 9 before the prompt was fixed. A false accept is the failure the
+configuration, 9 before the prompt was fixed. *(And "named the defect 4 of 15" is
+an UPPER BOUND: NAMED is a keyword match over the judgement body, and the body
+may be invented — a control on 2026-09-17 produced an ACCEPT scored as naming the
+defect because a catchword sat inside a fabricated finding about "a guest can be
+assigned to multiple tables if they are in different zones", a sentence in no
+artifact. The quote check would refuse that judgement; the scorer does not run
+it.)* A false accept is the failure the
 line exists to prevent. And **the clean control is rejected 3 of 3 in every
 configuration measured** — it has never once passed a spec with nothing wrong.
 

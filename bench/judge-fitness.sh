@@ -413,6 +413,20 @@ while IFS='|' read -r name should_reject description catchwords; do
   else
     verdict="$(jq -r '.verdict' "$J")"
     body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"
+    # NAMED is a keyword match over the judgement body, and the body may be
+    # invented. Measured 2026-09-17 on a size-sweep control: the judge ACCEPTED,
+    # and was scored as having named the defect because a catchword appeared
+    # inside a fabricated major finding about "a guest can be assigned to
+    # multiple tables if they are in different zones" — a sentence that is in no
+    # artifact. The quote check would refuse that judgement; this scorer does not
+    # run the quote check.
+    #
+    # So NAMED is an UPPER BOUND on how often the judge identified the defect,
+    # and the figures that quote it — "named the actual defect 4 of 15" — are
+    # upper bounds too. It is left as it is rather than tightened, because a
+    # scorer that silently got stricter would make every earlier figure
+    # incomparable; what it needs is to be read for what it is, which is what
+    # this comment and the artifact note are for.
     named=no
     if [ -n "$catchwords" ]; then
       IFS='|' read -ra words <<< "$catchwords"
@@ -482,6 +496,7 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
     seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
+    named_the_defect_is_an_upper_bound:"A keyword match over the judgement body, which may be invented. A judgement that fabricates a finding containing a catchword is scored as having named the defect; the quote check would refuse that judgement, and this scorer does not run it.",
     false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
     never_ran_server_died:$norun,
     complete: ($cut == 0),
