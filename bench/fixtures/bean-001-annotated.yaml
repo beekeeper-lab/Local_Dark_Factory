@@ -1,0 +1,78 @@
+schema_version: bean/2.0.0
+id: bean-001
+repo: beekeeper-lab/seating-planner-py
+title: Project scaffold with linting, typing and test gates
+intent: >
+  An empty repository becomes a runnable Python package whose lint, type and test
+  gates all execute and pass, so every later bean has something to be verified against.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 1
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "Implementation Guardrails #2: Use a deterministic constraint solver, such as OR-Tools CP-SAT, for assignments and optimization."
+context:
+  read_paths: []
+  background: >
+    This repository is empty. A Python project needs a declaration of its name,
+    dependencies and tooling before any code can be checked: pyproject.toml is that
+    declaration. Ruff checks style, mypy checks that declared types agree with usage,
+    and pytest runs tests. The gates the factory runs are exactly these three commands,
+    so they must succeed on an empty-but-valid project before any feature exists —
+    otherwise a later failure cannot be attributed to the feature that caused it.
+allowed_write_paths:
+  - pyproject.toml
+  - src/seating_planner/**
+  - tests/**
+  - .gitignore
+acceptance_criteria:
+  - id: ac1
+    text: The package imports cleanly from an installed environment.
+    verify: { kind: command, run: ["python", "-c", "import seating_planner"] }
+  - id: ac2
+    text: Ruff reports no violations.
+    verify: { kind: command, run: ["ruff", "check", "."] }
+  - id: ac3
+    text: Mypy reports no errors.
+    verify: { kind: command, run: ["mypy", "src"] }
+  - id: ac4
+    text: Pytest runs and collects at least one passing test.
+    verify: { kind: test, test_id: "tests/test_scaffold.py::test_package_imports" }
+constraints:
+  - Python 3.11 or later
+  - text: ortools declared as a dependency but not yet imported by any module
+    # Declared and imported are different lines in different files. The grep is
+    # over `import`/`from` lines only, so the pyproject declaration this bean is
+    # required to add does not trip it.
+    forbidden_imports: [ortools]
+  - no application logic in this bean
+suggested_risk_tier: 1
+size_budget: { max_tasks: 4, max_files: 5, max_diff_lines: 200 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - text: no domain models
+    # bean-002 owns the domain package. A model arriving here would make bean-002
+    # edit a file outside its own write paths.
+    forbidden_paths:
+      - "src/seating_planner/domain/**"
+  - text: no solver code
+    # The place. The import of it is the constraint below, which is the statement
+    # a grep over the diff settles.
+    forbidden_paths:
+      - "src/seating_planner/solver/**"
+  - text: no CI workflow files
+    # CI is the factory's, not a bean's. These are the four places a workflow
+    # lands; a file in any of them is this non-goal contradicted.
+    forbidden_paths:
+      - ".github/workflows/**"
+      - ".gitlab-ci.yml"
+      - ".circleci/**"
+      - "Jenkinsfile"
+dependencies: []

@@ -189,5 +189,29 @@ check "a bean the set no longer has is EXTRA" "EXTRA     factory/beans/bean-999-
 out="$("$ROOT/factory/scaffold.sh" --check --dry-run "$T" 2>&1)"; rc=$?
 rc_is "--check and --dry-run refuse each other" "$rc" 2
 
+printf '\n== the A/B fixtures differ only in the annotation ==\n\n'
+#
+# bench/fixtures/bean-001-{prose,annotated}.yaml answer "what does annotating a
+# bean buy?" — 2 of 5 seeded defects against 3 of 5, measured in thirty seconds
+# with no GPU. That comparison is only a comparison while the two files differ in
+# exactly one thing. Strip the annotations from the annotated copy and it must be
+# the prose copy, byte for byte; anything else and the figure is measuring two
+# changes and attributing both to one.
+FX="$ROOT/bench/fixtures"
+if [ -f "$FX/bean-001-prose.yaml" ] && [ -f "$FX/bean-001-annotated.yaml" ]; then
+  stripped="$(grep -v 'forbidden_\|^\s*#\|^\s*- "' "$FX/bean-001-annotated.yaml" | sed 's/^\(\s*\)- text: /\1- /')"
+  if [ "$stripped" = "$(cat "$FX/bean-001-prose.yaml")" ]; then
+    ok "strip the annotations and the two fixtures are the same bean"
+  else bad "the A/B fixtures" "they differ by more than the annotation — the comparison measures two changes"; fi
+  if grep -q 'forbidden_' "$FX/bean-001-prose.yaml"; then
+    bad "the prose fixture" "it carries forbidden_ keys; it is not the prose side of anything"
+  else ok "the prose side carries no annotation"; fi
+  n="$(grep -c 'forbidden_' "$FX/bean-001-annotated.yaml")"
+  if [ "$n" -ge 4 ]; then ok "the annotated side carries $n"
+  else bad "the annotated fixture" "only $n annotation(s)"; fi
+else
+  printf '  SKIP  no A/B fixtures\n'
+fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

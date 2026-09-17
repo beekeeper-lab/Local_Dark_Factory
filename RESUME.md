@@ -1095,14 +1095,29 @@ it, and bean-004 — the SQLite bean — may import sqlite3.
 `factory doctor` reports the split, so progress through the set is visible without
 reading twenty files.
 
-**What annotating buys, measured**: `bench/controller-fitness.sh` against a bean
-whose "no solver code" carries `forbidden_paths` scores `contradicts-non-goal` as
-**named by a check** where the same harness against bean-001's prose says *"not
-decidable from the documents, needs a judge"*. That is **3 of 5 seeded defects
-decided by the controller** for an annotated bean, against 2 of 5 this morning and
-1 of 5 before the fixture bug was found. Each one moved out of the judge is one
-the judge cannot accept by mistake, and it accepts about half of what it is
-shown.
+**What annotating buys, measured as an A/B and reproducible in thirty seconds:**
+
+| bean | named by a check | not decidable | false alarms |
+| --- | --- | --- | --- |
+| `bench/fixtures/bean-001-prose.yaml` | 2 of 5 | 3 | 0 |
+| `bench/fixtures/bean-001-annotated.yaml` | **3 of 5** | 2 | 0 |
+
+Same spec, same task list, two beans that differ **only** in whether their
+non-goals carry `forbidden_paths` — the suite asserts that, by stripping the
+annotations and comparing byte for byte. The one case that moves is
+`contradicts-non-goal`, caught by `bean-forbids`, which is the defect the
+annotation claims to make decidable and the only one. No GPU, no variance,
+`bench/fixtures/README.md` has the command.
+
+The fixtures exist because the earlier version of this figure was measured
+against the live bean-001 while it briefly carried annotations, and bean-001 went
+back to prose an hour later. The number was not wrong; it was unreproducible,
+which for a number is nearly as bad. **A measurement may not depend on a file
+somebody else is working in.**
+
+`unfinishable-task` and `criterion-not-really-met` stay the judge's, and the
+judge accepts about half of what it is shown. Each defect moved out is one the
+judge cannot accept by mistake.
 
 ### Constraints too, which is why the script is not called non-goals.sh
 
