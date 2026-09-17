@@ -1,0 +1,149 @@
+{
+  "schema": "size-sweep/2.0.0",
+  "measured_at": "2026-09-17T14:14:22Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-17T14:14:22Z",
+    "pipeline_version": "1.4.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "case": "contradicts-non-goal",
+  "judge": "gpt-oss:120b",
+  "padding": {
+    "from": "pad-neutral",
+    "sha256": "5ffbd7a11174",
+    "bytes_available": 62529,
+    "words_the_seeded_defect_introduced": "none",
+    "note": "WHAT the padding says is a variable, not only how much of it there is. The corpus padding contains the bean that owns the path this defect writes; bench/fixtures/pad-neutral is the same text with that removed. A sweep artifact that does not say which was used cannot be compared with one that used the other."
+  },
+  "inputs": {
+    "spec": "f47d1cb65aab",
+    "tasks": "f12e7653b05b",
+    "bean": "c25c59d33b45"
+  },
+  "passes": 5,
+  "one_pass_is_not_a_sweep": false,
+  "points": [
+    {
+      "pass": 1,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 106
+    },
+    {
+      "pass": 1,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40422,
+      "verdict": "accept",
+      "named_the_defect": "no",
+      "seconds": 199
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20422,
+      "verdict": "abstain",
+      "named_the_defect": "no",
+      "seconds": 189
+    },
+    {
+      "pass": 2,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 64
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 249
+    },
+    {
+      "pass": 3,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 170
+    },
+    {
+      "pass": 4,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 115
+    },
+    {
+      "pass": 4,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 53
+    },
+    {
+      "pass": 5,
+      "padding_bytes": 0,
+      "total_artifact_bytes": 20422,
+      "verdict": "accept",
+      "named_the_defect": "no",
+      "seconds": 50
+    },
+    {
+      "pass": 5,
+      "padding_bytes": 20000,
+      "total_artifact_bytes": 40422,
+      "verdict": "revise",
+      "named_the_defect": "no",
+      "seconds": 68
+    }
+  ],
+  "by_size": {
+    "0": {
+      "verdicts": [
+        "revise",
+        "abstain",
+        "revise",
+        "revise",
+        "accept"
+      ],
+      "named": [
+        "no",
+        "no",
+        "no",
+        "no",
+        "no"
+      ],
+      "agree": false
+    },
+    "20000": {
+      "verdicts": [
+        "accept",
+        "revise",
+        "revise",
+        "revise",
+        "revise"
+      ],
+      "named": [
+        "no",
+        "no",
+        "no",
+        "no",
+        "no"
+      ],
+      "agree": false
+    }
+  },
+  "note": "One defect, one model, one prompt. The only variable is how much real surrounding material the judge reads with it. With passes > 1 the same point is measured repeatedly, because this judge gives different verdicts for identical input and a single reading per size cannot tell a trend from the spread."
+}

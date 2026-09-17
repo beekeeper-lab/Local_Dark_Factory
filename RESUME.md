@@ -1587,7 +1587,52 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
-## Running: the clean re-measurement the retraction calls for
+## RETRACTED IN FULL: there is no size effect
+
+The clean re-run, with a fresh run directory per pass, neutral padding, five
+passes, kept and verified judgement-by-judgement:
+
+| artifact bytes | verdicts | accepts |
+| --- | --- | --- |
+| 20,422 | revise, abstain, revise, revise, **accept** | **1 of 5** |
+| 40,422 | **accept**, revise, revise, revise, revise | **1 of 5** |
+
+**The same rate at both sizes. The effect was the bug.**
+
+Ten run directories, one `attempt-1` each, and every row matches the judgement
+beside it — which was the check that mattered, written down before the run.
+
+**And the noise came back.** `revise, abstain, revise, revise, accept` is what
+this judge looks like: it disagrees with itself on identical input. The columns
+that made the size finding look overwhelming — `abstain ×5`, `accept ×5` — were
+the bug suppressing exactly the variance that `judge-variance.sh` was built to
+measure.
+
+**So the honest summary of the week is shorter and cleaner than the one it
+replaces: nothing measured this week moved the false-accept rate.** Not the token
+cap, not the thinking level, not five grammar constraints, not a sixth, not a
+repaired prompt, not four other models, not one question per criterion, and not
+the size of the prompt. The false-accept rate is what it is — 4 in 15 on the
+fitness corpus, 1 in 5 at each size here, call it a fifth to a quarter — and
+every lever aimed at the judge has left it there.
+
+**That is not a failure of the week. It is the result**, and it is the one that
+justifies what the line already does: audits are advisory, `merge_mode:
+human_required` carries the weight, and the work that has actually moved is the
+work taken *away* from the judge — 4 of 5 seeded defects now decided by a check,
+with zero false alarms.
+
+**What was built on the retracted finding, and what happens to it:**
+
+| built | fate |
+| --- | --- |
+| `measurement-brief.sh` — controller measurements as prose | **stays.** Its own justification holds: 4,000 fewer bytes of raw JSON that this judge once read as "a confusing set of statements about its own task" and answered with "Could you clarify what exactly you'd like me to do?" |
+| `<target>.request.json` and `prompt_bytes` in the verdict | **stays.** Provenance is cheap and makes no claim |
+| the `judge.sh` size warning | **removed.** It asserted a threshold that does not exist |
+| `doc-check`'s doc-audit size note | **removed.** Same |
+| `--keep`, `--pad-into`, the per-pass directory, the confound probe, `pad-neutral` | **stay.** They are what found the error |
+
+## What the re-measurement was set up to check
 
 Five passes at 20,422 and 40,422, neutral padding, `--keep`, with the per-pass
 run directory in place. Started 2026-09-17, after the retraction below.

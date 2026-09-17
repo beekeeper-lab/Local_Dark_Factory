@@ -149,36 +149,18 @@ want "with the check that failed named" "at least one check should be fail" \
      test "$(jq -r '[.checks[] | select(.status == "fail")] | length' "$J")" -ge 1
 cp "$WORK/good.md" factory/runs/R/impl-detail.md
 
-printf '\n== what this document will cost its own audit ==\n\n'
+printf '\n== no advice about size, because the measurement was retracted ==\n\n'
 #
-# The doc audit sends three artifacts: this document, the spec it claims to meet,
-# and the diff it claims to describe. bean-001's comes to 36,731 bytes, and this
-# every judgement recovered from a kept sweep that ACCEPTED a spec with a planted
-# flaw was at around 40,000 bytes, and none of the ones at around 20,000 did.
-# Larger counts were published on 2026-09-17 and retracted — the sweep was
-# repeating its first pass — so this note claims the direction and not a rate.
-#
-# A note, never a failure: §07 asks the document to TEACH, doclint refuses thin
-# sections, and the author cannot shrink the spec or the diff.
+# doc-check briefly told the author how many bytes the doc audit would send and
+# warned above 30,422. The measurement behind it was a sweep reporting its first
+# pass five times; a clean re-run gives the same accept rate at 20,422 and 40,422
+# bytes. Telling an author that a longer document weakens its own audit, when
+# that is not measured, is the kind of plausible advice this project exists to
+# refuse — so these assertions keep it from coming back.
 out="$(dc)"
-check "a small document is reported as fine" "inside the range where it still rejects" "$out"
-nope  "and not warned about"                 "above 30,422" "$out"
-
-# Now make it big. Sections still present — this is about size, not shape.
-python3 - "factory/runs/R/impl-detail.md" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p).read()
-open(p, "w").write(t + "\n\n" + ("Filler prose that teaches nothing but takes room. " * 700))
-PY
-out="$(dc)"
-check "a large one is named with its total"  "bytes will go to the judge" "$out"
-check "and the parts are broken out"         "this document +" "$out"
-check "with what the measurement says"       "accepting a planted defect was above that line" "$out"
-check "and that it is not the document's fault" "Not a fault in the document" "$out"
-check "and what carries it instead"          "human merge" "$out"
-# A note, not a failure: the step must still pass.
-nope "the check does not fail on size"       "DOC CHECK FAIL" "$out"
+nope "no size note"                  "doc audit size" "$out"
+nope "and no threshold"              "30,422" "$out"
+check "and the script says why it went" "retracted" "$(cat "$PIPELINE_DIR/doc-check.sh")"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

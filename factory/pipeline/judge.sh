@@ -688,53 +688,42 @@ done
 printf 'JUDGE  %s  model=%s ctx=%s thinking=%s cap=%s  (%s artifacts, %s bytes, one message each)\n' \
   "$TARGET" "$MODEL" "$NUM_CTX" "$THINKING" "$NUM_PREDICT" "${#ART_PATHS[@]}" "$ART_BYTES" >&2
 
-# Say when the prompt is in the size band where this judge was MEASURED to fail.
-#
-# bench/size-sweep.sh, eight passes across two runs on 2026-09-17: at 20,422
-# bytes it rejected a seeded defect 8 times out of 8; at 40,422 it accepted it
-# most of the time. That is a false accept — the failure this line exists to
-# prevent and the one invisible from outside — and it is an accuracy problem long
-# before the context window is the issue.
-#
-# Nothing here truncates. A judge given less than the artifacts under audit is a
-# different failure, and a silent one. What it does is say so, in the run log, so
-# that a verdict produced at 40,000 bytes is read knowing what was measured at
-# that size.
-#
-# The cap on an artifact is 120,000 bytes — a big bean's diff can put an impl
-# audit four times past the size where this was measured — so this is not a
-# hypothetical about bean-001, whose whole diff is 2,219 bytes.
-# And record it, machine-readably, next to the judgement.
-#
-# The verdict already carries every artifact's path and sha256, so the size is
-# derivable — by someone who still has the files. It is not READABLE, and the
-# size of the prompt is now the most predictive variable this project has
-# measured: 8 of 8 rejections of a seeded defect at 20,422 bytes, 0 of 8 at
-# 40,422. A verdict that does not say what size it was produced at cannot be
-# weighed against that.
+# Record what was SENT, machine-readably, next to the judgement it produced.
 #
 # A sidecar rather than a field in the judgement: the judgement file is what the
 # MODEL said, byte for byte, and adding to it would make that untrue.
+#
+# This survived the retraction of the size finding and should: it asserts
+# nothing, it costs one small file, and "how big was the prompt that produced
+# this verdict" is a question a reader can have for reasons that have nothing to
+# do with any threshold. audit-check copies the numbers into the verdict.
 mkdir -p "$RUN_DIR/verdicts" 2>/dev/null || true
 jq -n --argjson b "${ART_BYTES:-0}" --argjson n "${#ART_PATHS[@]}" \
       --arg m "$MODEL" --arg t "$THINKING" --argjson c "$NUM_CTX" --argjson np "$NUM_PREDICT" \
       '{schema:"judge-request/1.0.0", artifact_bytes:$b, artifact_count:$n,
         model:$m, thinking:$t, num_ctx:$c, num_predict:$np,
-        note:"What was SENT, not what came back. artifact_bytes is the measurement that matters: bench/results/size-sweep-confirm-20260917T034250Z.json has this judge rejecting a seeded defect 8 of 8 at 20,422 bytes and 0 of 8 at 40,422."}' \
+        note:"What was SENT, not what came back. No claim is attached to artifact_bytes: a size effect reported on 2026-09-17 was retracted in full the same day when the sweep behind it turned out to be repeating its first pass."}' \
   > "$RUN_DIR/verdicts/$TARGET.request.json" 2>/dev/null || true
 
-JUDGE_SIZE_WARN="${JUDGE_SIZE_WARN:-30422}"
-if [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
-  printf 'JUDGE  %s: %s bytes of artifacts is above %s, the largest size at which this\n' \
+# There WAS a warning here, from 2026-09-17, saying this request was in a size
+# band where the judge had been measured accepting planted defects. It has been
+# removed: the measurement behind it was an artifact of bench/size-sweep.sh
+# reporting its first pass five times. A clean re-run gives 1 accept in 5 at
+# 20,422 bytes and 1 accept in 5 at 40,422 — the same rate — so there is no band
+# and there was no threshold.
+#
+# The byte count is still recorded, above and in the verdict, because provenance
+# is cheap and makes no claim. What is gone is the claim.
+#
+# JUDGE_SIZE_WARN is honoured if someone sets it deliberately, and off otherwise.
+JUDGE_SIZE_WARN="${JUDGE_SIZE_WARN:-0}"
+if [ "$JUDGE_SIZE_WARN" -gt 0 ] && [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
+  printf 'JUDGE  %s: %s bytes of artifacts is above the JUDGE_SIZE_WARN you set (%s).\n' \
     "$TARGET" "$ART_BYTES" "$JUDGE_SIZE_WARN" >&2
-  printf '       judge was measured rejecting a seeded defect every time (13 of 13). At\n' >&2
-  printf '       40,422 it rejected it 0 of 13, and a kept run shows why: it reviewed the\n' >&2
-  printf '       padding and filled the criterion ids with another bean\x27s work.\n' >&2
-  printf '       Direction measured, magnitude not: every judgement recovered that\n' >&2
-  printf '       ACCEPTED a spec with a planted flaw was at ~40,000 bytes (3 of 11), and\n' >&2
-  printf '       none at ~20,000 (0 of 10). Larger counts were reported earlier and\n' >&2
-  printf '       retracted — the sweep was repeating its first pass. See RESUME.md.\n' >&2
-  printf '       Nothing is truncated. bench/results/size-sweep-*.json has the numbers.\n' >&2
+  printf '       That is your threshold and not a measured one: the size effect this\n' >&2
+  printf '       once reported was retracted in full on 2026-09-17 — a clean re-run gives\n' >&2
+  printf '       1 accept in 5 at 20,422 bytes and 1 in 5 at 40,422, the same rate.\n' >&2
+  printf '       Nothing is truncated.\n' >&2
 fi
 
 # The system message is load-bearing, not decoration. Without it this model

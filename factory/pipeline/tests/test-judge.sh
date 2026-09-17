@@ -542,35 +542,31 @@ eq "the quote with it"                 "600" \
 eq "and the one-line fields at a third" "400" \
    "$(jq -r '.format.properties.findings.items.properties.summary.maxLength' "$WORK/last-request.json")"
 
-printf '\n== it says when the prompt is in the size band that was measured to fail ==\n\n'
+printf '\n== the size warning is off, because the measurement was retracted ==\n\n'
 #
-# bench/size-sweep.sh: every judgement recovered that ACCEPTED a spec with a
-# planted flaw was at around 40,000 bytes, none at around 20,000. (The counts
-# first published were retracted — the sweep was repeating its first pass — so
-# the warning claims a direction, not a rate.) It is an accuracy problem long
-# before the context window is the issue, and an artifact is capped at 120,000
-# bytes: one large diff puts an impl audit far past anything measured.
+# There was a warning here saying the request was in a size band where this judge
+# had been measured accepting planted defects. bench/size-sweep.sh was reporting
+# its first pass five times; a clean re-run gives 1 accept in 5 at 20,422 bytes
+# and 1 in 5 at 40,422 — the same rate, no band, no threshold.
+#
+# The byte count is still recorded. What is gone is the claim, and these
+# assertions are what stop it coming back by habit.
 clean_verdicts
 reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
-JUDGE_SIZE_WARN=10 judge >/dev/null 2>&1
-out="$(JUDGE_SIZE_WARN=10 judge 2>&1)"
-check "above the threshold it warns"    "bytes of artifacts is above" "$out"
-check "and names what was measured"     "ACCEPTED a spec with a planted flaw" "$out"
-check "and says nothing was truncated"  "Nothing is truncated" "$out"
-check "and where the measurement is"    "size-sweep" "$out"
+out="$(judge 2>&1)"
+nope  "no warning by default"          "bytes of artifacts is above" "$out"
+nope  "and no threshold is asserted"   "measured rejecting" "$out"
 clean_verdicts
-out="$(JUDGE_SIZE_WARN=9999999 judge 2>&1)"
-nope  "below it, silence"               "bytes of artifacts is above" "$out"
-# The artifacts still all went. A warning that quietly dropped one would be the
-# failure it exists to report, arriving as a fix.
-prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
-check "and the artifacts are all still sent" "THE SPEC UNDER AUDIT" "$prompt"
-# The size is written down, not only printed. A number in a log is not something
-# a verdict can be weighed against six weeks later.
-want "the request facts are recorded beside the judgement" "spec.request.json should exist" \
+out="$(JUDGE_SIZE_WARN=10 judge 2>&1)"
+check "set deliberately, it still warns" "bytes of artifacts is above" "$out"
+check "and says whose threshold it is"   "not a measured one" "$out"
+check "and that the effect was retracted" "retracted in full" "$out"
+check "and that nothing is truncated"     "Nothing is truncated" "$out"
+# The recording stays: provenance is cheap and makes no claim.
+clean_verdicts
+judge >/dev/null 2>&1
+want "the byte count is still recorded"  "spec.request.json should exist" \
      test -s "$R/verdicts/spec.request.json"
-check "with the bytes"                  '"artifact_bytes"' "$(cat "$R/verdicts/spec.request.json" 2>/dev/null)"
-check "and what that number is for"     "size-sweep" "$(cat "$R/verdicts/spec.request.json" 2>/dev/null)"
 
 printf '\n== the controller measurements go as prose, and shrink the prompt ==\n\n'
 #

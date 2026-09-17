@@ -64,31 +64,13 @@ fi
 if out="$("$PIPELINE_DIR/doclint.sh" impl "$DOC" 2>&1)"; then
   ok "impl-detail.md" "$(grep -c '^  ok' <<<"$out") sections present and substantive"
 
-  # How big the doc AUDIT will be, said here where the author can still act.
-  #
-  # The doc audit sends three artifacts: this document, the spec it claims to
-  # meet, and the diff it claims to describe. On bean-001 that is 36,731 bytes.
-  #
-  # Every judgement recovered from a kept sweep that ACCEPTED a spec with a
-  # planted flaw was at around 40,000 bytes — 3 of 11 — and none of the 10 at
-  # around 20,000 did. Larger counts were published on 2026-09-17 and retracted:
-  # the sweep was repeating its first pass. The direction is what this note rests
-  # on, and the direction is all it claims.
-  #
-  # A note, never a failure. §07 asks this document to TEACH and doclint already
-  # refuses thin sections; a length cap would pull against both, and the author
-  # cannot shrink the diff or the spec. What it can do is say that a longer
-  # document makes its own audit less reliable, which is a fact worth having
-  # before writing another page, and is invisible otherwise.
-  _dsz=$(( $(wc -c < "$DOC" 2>/dev/null || echo 0) ))
-  _ssz=$(( $(wc -c < "$RUN_DIR/spec.md" 2>/dev/null || echo 0) ))
-  _fsz=$(( $(wc -c < "$RUN_DIR/diff.txt" 2>/dev/null || echo 0) ))
-  _tot=$(( _dsz + _ssz + _fsz ))
-  if [ "$_tot" -gt "${DOC_AUDIT_SIZE_WARN:-30422}" ]; then
-    note "doc audit size" "$_tot bytes will go to the judge ($_dsz this document + $_ssz spec + $_fsz diff) — above 30,422, and every judgement measured accepting a planted defect was above that line while none below it did. Not a fault in the document; the audit of it is less reliable, and the human merge is what carries that"
-  else
-    ok "doc audit size" "$_tot bytes will go to the judge, inside the range where it still rejects planted defects"
-  fi
+  # There WAS a note here telling the author how many bytes the doc audit would
+  # send and warning above 30,422. It was retracted the same day: the measurement
+  # behind it was
+  # bench/size-sweep.sh reporting its first pass five times, and a clean re-run
+  # gives the same accept rate at 20,422 and 40,422 bytes. Telling an author that
+  # a longer document weakens its own audit, when that is not measured, is the
+  # kind of plausible advice this project exists to refuse.
 else
   bad "impl-detail.md" "doclint failed"
   printf '%s\n' "$out" | sed -n '/FAIL/p' | sed 's/^/          /'
