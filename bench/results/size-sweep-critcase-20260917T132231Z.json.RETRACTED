@@ -1,0 +1,20 @@
+RETRACTED 2026-09-17.
+
+The multi-pass figures in size-sweep-critcase-20260917T132231Z.json are one measurement
+repeated, not N measurements.
+
+bench/size-sweep.sh shared a single run directory across passes. judge.sh names
+its output attempt-N by counting the files already there, so pass 2 wrote
+attempt-2 while the reader stayed pinned to attempt-1 — and the "did it answer?"
+guard was file existence, which a previous pass satisfies, so a pass that
+produced nothing was reported with the earlier pass's verdict.
+
+Read the `points` array as ONE reading per size.
+
+The clean re-run, with a fresh run directory per pass, is
+size-sweep-clean-20260917T135317Z.json: 1 accept in 5 at 20,422 bytes and 1 in 5
+at 40,422 — the same rate, and no size effect.
+
+The file is kept unedited. A measurement is a record of what was believed and
+when, and editing one to agree with a later one is how a project loses the
+ability to say how it got where it is. This note sits beside it instead.

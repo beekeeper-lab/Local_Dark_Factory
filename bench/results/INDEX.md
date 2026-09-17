@@ -16,6 +16,14 @@ afterwards would be inventing it. `figures_have_provenance` reports those files
 as a standing major finding, and it should: the finding is about the artifacts,
 not about the code.
 
+## A `.RETRACTED` note sits beside each superseded sweep
+
+Six artifacts here carry a sibling `<name>.json.RETRACTED` saying what is wrong
+with them and pointing at the clean run. **The JSON itself is unedited.** A
+measurement records what was believed and when, and editing one so it agrees with
+a later one is how a project loses the ability to say how it got where it is —
+so the correction sits beside the record rather than inside it.
+
 ## The size effect was retracted in full on 2026-09-17
 
 A clean re-run with the harness fixed — `size-sweep-clean-20260917T135317Z.json`,
@@ -81,6 +89,7 @@ a superseded figure produces a second superseded figure with a nicer header.
 | `controller-fitness-pob-20260917T011815Z.json` | yes | no — the second: the check fired and `unfinishable-task` reads "rejected, but not for the seeded defect", because the harness matches a catchphrase per case and this case had none. 3 of 5, and the 4th was sitting in the output unclaimed |
 | `controller-fitness-pob-20260917T011917Z.json` | yes | **yes** — 4 of 5 seeded defects named by a check, 0 false alarms, after `plans-other-beans.sh` took `unfinishable-task`. The highest this figure has ever been; the two earlier runs the same evening (2 and 3 of 5) are the A/B either side of it |
 | `size-sweep-clean-20260917T135317Z.json` | yes | **yes — it is the one that stands, and it retracts the rest.** Five passes with a fresh run directory per pass, neutral padding, judgements kept and verified row by row: **1 accept of 5 at 20,422 bytes, 1 of 5 at 40,422.** The same rate at both sizes. The verdict column varies again — revise, abstain, revise, revise, accept — which is what this judge looks like and what the bug was suppressing |
+| `size-sweep-critcase-20260917T132231Z.json` | yes | **retracted** — the sweep on `criterion-not-really-met`, the one defect the controller cannot take. Its table read `revise` ten times; the kept judgements say `revise, revise, revise, accept` at the large size. Superseded with the rest of the size thread |
 | `size-sweep-padbean-20260917T123004Z.json` | yes | **yes — the arm that settles whether the finding applies to a real audit.** Identical padding appended to a copy of the BEAN, so it arrives as a separate labelled artifact while the document under audit stays untouched: **4 false accepts of 5 at 41,286 bytes, 0 of 5 at 20,422.** Same as padding inside the document, so an artifact header is not a boundary for this model — and the doc audit, 36,731 bytes across three artifacts, is in the band |
 | `size-sweep-kept-20260917T115236Z.json` | yes | supporting — two kept passes at 40,422 whose judgements are the evidence in `evidence/judge-answered-about-the-padding-20260917.md`. Also the run that showed `NAMED` flapping on identical input |
 | `size-sweep-neutralpad-20260917T110731Z.json` | yes | **yes — it is the control that rules the confound out.** Same sizes, padded from `bench/fixtures/pad-neutral`: the corpus with every mention of the solver removed, so the padding can no longer legitimise the seeded defect. **5 accepts of 5 at 40,422 and 0 of 5 at 20,422** — sharper than with the real corpus, so the effect is size and not content. Read it beside the two sweeps below, never alone |
