@@ -1655,7 +1655,38 @@ bytes. A judge that cannot see the document under audit is not a safer judge, an
 the artifacts are what they are. The warning plus `merge_mode: human_required` is
 the honest arrangement.
 
-## Next on this thread: sweep the case the judge still owns
+## Running: does size move the one defect the controller cannot take?
+
+`--case criterion-not-really-met`, five passes at 20,422 and 40,422, padded from
+`bench/fixtures/pad-neutral`, kept. Started 2026-09-17.
+
+Everything measured so far is `contradicts-non-goal`, which `bean-forbids.sh`
+decides at plan time — so the size effect has been demonstrated on a case the
+line no longer needs the judge for. This is the one that is still the judge's
+alone, and recorded as staying that way on purpose.
+
+**The confound probe fired, and this is what it is for.** It named `satisfied`
+and `therefore` — generic English that appears in any bean and legitimises
+nothing about a vacuously-satisfied criterion. A warning, a person reading it,
+and a run that proceeds. Compare the corpus padding for the other case, where it
+named `CP-SAT` and `OR-Tools`.
+
+**Prediction, and it is a harder read than the last three.** The baseline is not
+clean: on the three-pass fitness run this case was already accepted once in three
+at normal size, so "rejects at small, accepts at large" cannot be as stark as
+18-of-18 against 0-of-20. What would count:
+
+- **size generalises** if the large arm is 5 of 5 accepts against 1 or 2 of 5 at
+  the small size — the same direction, from a dirtier baseline.
+- **size is specific to the other case** if both arms look alike, around 1 or 2
+  accepts each, which would narrow the finding to "a defect stated as a PLACE
+  gets displaced" and leave the one the judge actually owns untouched by it.
+
+The second would be the more interesting result and the worse news, because the
+defect the controller cannot take would then be unaffected by the only lever
+that has ever worked.
+
+## Next on this thread, after that: nothing queued
 
 Whatever the control says, the sweep has been measuring `contradicts-non-goal` —
 and **the controller decides that one now**. `bean-forbids.sh` catches it at plan
