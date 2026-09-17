@@ -1837,14 +1837,17 @@ It is the last measurement of this judge that can be compared to the ones above
 it; every change below is one that alters what a fitness number means, so they
 are queued rather than made.
 
-1. **`minLength: 12` on `quote` in judge.sh's schema.** The controller now refuses
-   a criterion whose quote is under twelve characters — a threshold below which a
-   quote matches everything and proves nothing — but it refuses it *after* an hour
-   of GPU time. A grammar constraint stops it being emitted, which is where this
-   day's finding says a constraint belongs. Unknown whether llama.cpp's converter
-   honours `minLength`: it honours `enum` and `maxLength` and ignores `minimum`
-   and `maximum`, so this needs the same one-case probe the others got. If it is
-   ignored, the controller rule is the whole of it and that is worth knowing too.
+1. **`minLength` on `quote` is BUILT and off by default** — `JUDGE_QUOTE_MINLEN`,
+   a knob for the same reason `JUDGE_FIELD_MAXLEN` is one. The motivating number:
+   **31% of the 44 criteria in the 2026-09-17 reaudit carry no quote at all**, and
+   the controller refuses them an hour after the GPU time is spent. What is not
+   known is whether llama.cpp's converter honours `minLength` — it honours `enum`
+   and `maxLength` and ignores `minimum` and `maximum`, which is three data points
+   and not a rule. The probe is one judge call with the knob at 12. **Two ways it
+   can fail and both are worth knowing**: ignored, in which case the controller
+   rule is the whole of it; or honoured and the model pads twelve invented
+   characters, which the quote check catches and which is worse than an honest
+   blank.
 2. **Re-run `size-sweep` now that `tools: []` is declared.** The sweep predates it.
 3. **Re-measure the 14 provenance-less figures**, which are now cheaper to keep:
    the artifact records the grammar and the asker by content hash, so a figure
