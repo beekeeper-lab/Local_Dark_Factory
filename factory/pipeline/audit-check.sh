@@ -308,13 +308,21 @@ trap 'rm -f "$HAYSTACK"' EXIT
   git -C "$ROOT" ls-files -z 2>/dev/null | xargs -0 -r cat 2>/dev/null
 } | norm > "$HAYSTACK"
 
+# One threshold, named once. It is used in three places — skipping a quote too
+# short to check, refusing a judgement where every quote is, and refusing a
+# CRITERION whose own quote is — and three copies of a number is two that drift.
+# Twelve characters: below it a quote matches everything on disk and proves
+# nothing. `"mypy src"` is eight, and it was the evidence the only stamped verdict
+# this line has produced offered for "mypy reports no errors".
+QUOTE_MIN_CHARS=12
+
 UNFOUND=""
 CHECKED=0
 while IFS= read -r qjson; do
   [ -n "$qjson" ] || continue
   q="$(jq -r '.' <<<"$qjson" 2>/dev/null)" || continue
   # Very short quotes prove nothing and match everything.
-  [ "${#q}" -ge 12 ] || continue
+  [ "${#q}" -ge "$QUOTE_MIN_CHARS" ] || continue
   CHECKED=$((CHECKED + 1))
   needle="$(printf '%s' "$q" | norm)"
   grep -qF -- "$needle" "$HAYSTACK" || UNFOUND="$UNFOUND
@@ -322,7 +330,7 @@ while IFS= read -r qjson; do
 done <<< "$QUOTES"
 
 if [ "$CHECKED" -eq 0 ]; then
-  printf 'AUDIT %s: no quote long enough to prove anything (all under 12 characters).\n' "$TARGET" >&2
+  printf 'AUDIT %s: no quote long enough to prove anything (all under %s characters).\n' "$TARGET" "$QUOTE_MIN_CHARS" >&2
   exit 2
 fi
 
@@ -337,10 +345,10 @@ fi
 # without effort; the ones this project has measured emit 200-600 characters when
 # they quote at all. So this costs an honest judge nothing, and it is the same
 # argument the quote check itself is built on.
-SHORT="$(jq -r '[.criteria[]? | select((.quote // "" | length) < 12) | .id] | join(", ")' <<<"$J" 2>/dev/null)"
+SHORT="$(jq -r --argjson min "$QUOTE_MIN_CHARS" '[.criteria[]? | select((.quote // "" | length) < $min) | .id] | join(", ")' <<<"$J" 2>/dev/null)"
 if [ -n "$SHORT" ]; then
   printf 'AUDIT %s: these criteria are not backed by a quote long enough to check: %s\n' "$TARGET" "$SHORT" >&2
-  printf '\n      A verdict rests on every criterion, not on the best one. Twelve characters\n' >&2
+  printf '\n      A verdict rests on every criterion, not on the best one. %s characters\n' "$QUOTE_MIN_CHARS" >&2
   printf '      is the threshold below which a quote matches everything and proves nothing,\n' >&2
   printf '      and a criterion whose quote is under it was never verified — whatever the\n' >&2
   printf '      other criteria managed.\n' >&2
