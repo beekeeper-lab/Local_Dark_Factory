@@ -1264,7 +1264,7 @@ under audit:
 | --- | --- | --- | --- |
 | spec | 25,428 | **21,343** | `verify-precheck.json` and `claims-check.json` as prose |
 | impl | 30,514 | **24,353** | and `gate.json` |
-| doc | 36,731 | 36,731 | nothing — see below |
+| doc | 36,731 | 36,731 | nothing to cut — see below |
 
 Spec and impl are inside the band where the judge rejected the seeded defect 3 of
 3. `measurement-brief.sh` does it, the brief is written into the run directory so
@@ -1272,11 +1272,17 @@ a quote from it can be found by the quote check, an unknown schema is refused an
 the raw file sent instead, and a brief that came out bigger is not used.
 
 **The doc audit is the one left and there is nothing in it to cut.** Its three
-artifacts are the bean, the spec, and the 23,176-byte implementation document
-under audit. It is the largest prompt this line sends and it sits nearest the
-size where the judge started accepting a spec it had rejected. That is worth
-knowing and it is not worth fixing by dropping an artifact: every byte of it is
-either the standard or the thing being judged.
+artifacts are the spec (11,336), the diff (2,219), and the 23,176-byte
+implementation document under audit. Each is load-bearing for the question being
+asked: the document, the standard it claims to meet, and the change it claims to
+describe.
+
+So its size is driven by the work product. **The only lever left on it is a
+shorter `impl-detail.md`, and that is a trade against what the document is for**
+— §07 wants it to teach, `doclint` already refuses thin sections, and a cap would
+push against both. Not doing it. Recorded so the next person weighing "the doc
+audit is the biggest prompt" knows the cut has been looked for and the only one
+available costs the thing the document exists to provide.
 
 ## Prediction for the reaudit with the briefs in place
 
