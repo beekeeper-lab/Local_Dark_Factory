@@ -26,3 +26,16 @@ padding's CONTENT and not its size.
 
 **Do not "fix" these to match the corpus.** They are a control: their whole value
 is that they are the corpus with one property removed.
+
+## It is padding, not a bean set, and does not validate as one
+
+`validate.py --corpus` reports one failure here: bean-002 declares
+`dependencies: [bean-001]` and bean-001 is not in this directory.
+
+That is correct and must stay. The real padding excludes the bean under test too
+— `size-sweep.sh` skips it so a spec is never padded with its own bean — so the
+corpus padding has exactly the same dangling dependency. **Adding bean-001 back
+to make the validator happy would make the control differ from the treatment in a
+second way, which is the entire mistake this directory exists to correct.**
+
+Nineteen beans, as the real padding is nineteen beans.
