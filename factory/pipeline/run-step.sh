@@ -447,9 +447,26 @@ for _f in $EXPECTED; do
     FRESH="$FRESH $(basename "$_f")"
   fi
 done
-# Every expected file, and at least one of them, written during this attempt.
+# Nothing missing, and at least one output written during THIS attempt.
+#
+# It used to require every output to be fresh, and that is wrong on a retry. The
+# guard exists for a session that narrates an intention and stops — a doc step
+# once spent thirty-seven minutes saying "From now on, I'll create the
+# documentation" and wrote nothing. What proves that did not happen is one
+# output written now, not all of them.
+#
+# bean-002 halted on this. The spec-check found one finding, in spec.md's
+# "Current behaviour"; the worker fixed exactly that, said in its report that
+# tasks.yaml had no findings against it and was therefore unchanged — which was
+# true and correct — and the run failed the attempt for not rewriting a file that
+# did not need rewriting. A rule that punishes a minimal, targeted edit teaches
+# the opposite of what this line wants.
+#
+# STALE is still computed and still printed. An attempt that leaves something
+# untouched is worth seeing; it is just not, by itself, an attempt that did
+# nothing.
 OUTPUT_FRESH=0
-[ -n "$EXPECTED" ] && [ -z "$MISSING" ] && [ -z "$STALE" ] && OUTPUT_FRESH=1
+[ -n "$EXPECTED" ] && [ -z "$MISSING" ] && [ -n "$FRESH" ] && OUTPUT_FRESH=1
 
 find "$SESS_DIR" -type f -name '*.jsonl' 2>/dev/null | sort > "$NEW" || true
 
@@ -748,8 +765,12 @@ if [ -n "$MISSING" ] || [ -n "$STALE" ]; then
   if [ -n "$STALE" ]; then
     # The trap this closes: the file is there, so the step looks like it worked
     # and broke afterwards. It is byte-for-byte what an earlier attempt left.
+    #
+    # Reaching here means NOTHING was fresh — an attempt that rewrote one of its
+    # outputs and left another alone is a pass, because leaving a file that had
+    # no findings against it alone is the right answer on a retry.
     printf '       Unchanged since before this attempt started:%s\n' "$STALE" >&2
-    printf '       That file is a previous attempt'"'"'s. This attempt wrote nothing.\n' >&2
+    printf '       Those files are a previous attempt'"'"'s, and nothing else was written.\n' >&2
   fi
   printf '       A session that ends without writing its output has usually described what\n' >&2
   printf '       it was about to do rather than doing it. The transcript is in the session\n' >&2

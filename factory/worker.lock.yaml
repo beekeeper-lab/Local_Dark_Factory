@@ -14,7 +14,7 @@
 # Built by factory/worker-image/build.sh, which refuses to print a digest for an
 # image that does not hold its contract.
 schema_version: worker-manifest/1.0.0
-image: "localhost/factory-worker-pi:20260915@sha256:a437fce6c0c095cbb0dd51b7d8458e83a5f3ee8d780c61546e284e6f9365171b"
+image: "localhost/factory-worker-pi:20260917@sha256:12bed818969418bdb429ba32def93cb2c1df644281f8c06a9f4963c73f18c928"
 
 verify_versions_at_startup: true
 

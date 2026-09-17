@@ -187,20 +187,38 @@ for kv in ${EXTRA_ENV+"${EXTRA_ENV[@]}"}; do RUN_ARGS+=( --env "$kv" ); done
 # The container is named, and the time is noted, so that a death can be asked
 # about afterwards.
 #
-# On 2026-09-15 a doc session wrote a complete 18,626-byte document and its
-# container died at 1022 seconds with 143 — SIGTERM, from outside, when nothing
-# in this script sends one and `timeout` would have exited 124. It has been an
-# open unidentified failure since, because by the time anyone looked the podman
-# events had rolled and `--rm` had taken the container with them.
+# SOLVED 2026-09-17, and it was never an external signal.
 #
-# It cannot be diagnosed retroactively. It can be made to identify itself the
-# next time, which is what this does: on any non-zero exit, the container's own
-# events are read back and printed, and the `died` event carries the exit code
-# the runtime saw. 143 there, with no `stop` event before it, is somebody outside
-# this process tree sending SIGTERM — and the first suspect is an operator's
-# `pkill -f`, which this repository has done to itself five times and which is
-# the one cause consistent with the evidence: unreproducible, unlogged, and
-# arriving in the middle of a long session while someone was working alongside.
+# The story until then: a doc session on 2026-09-15 wrote a complete
+# 18,626-byte document and its container died at 1022 seconds with 143. Nothing
+# here sends SIGTERM and `timeout` would have exited 124, so it was read as
+# somebody outside the process tree — an operator's `pkill -f`, which this
+# repository has done to itself five times. Unreproducible, unlogged, arriving
+# mid-session: the shape fit.
+#
+# It was the worker image's own entrypoint. It backgrounds the model-socket
+# forwarder, runs pi, then kills and reaps it:
+#
+#     kill "$FORWARDER" 2>/dev/null
+#     wait "$FORWARDER" 2>/dev/null
+#     exit "$rc"
+#
+# with `set -e` at the top. `wait` on a job that died by signal returns 143,
+# `set -e` ends the shell on that status, and `exit "$rc"` is never reached. So
+# the container exited 143 after a successful session, a failed one, or no
+# session at all — `pi --version` in this image, one second, no model, nobody
+# near the machine, exits 143, and 0 on the host. Five lines with `sleep`
+# reproduce it with no container and no pi involved.
+#
+# Worth keeping the diagnosis below anyway, for two reasons: images built before
+# the fix still do it, and if a CURRENT image ever exits 143 the external-signal
+# reading becomes the right one again. The events are read back on any non-zero
+# exit; a `died` event carrying 143 with no `stop` before it is what to look at.
+#
+# The lesson is in the note further down about the forwarder's "terminated"
+# message: that was the same bug one layer up, found, and fixed at the MESSAGE
+# rather than at the status. A fix that treats the symptom leaves the cause to be
+# found again, and it was, twice, two days apart.
 CNAME="factory-worker-$$-$(date +%s)"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 RUN_ARGS+=( --name "$CNAME" )
@@ -220,10 +238,16 @@ if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
   else printf '  (no events; podman may have rolled them, or the container was never named)\n' >&2; fi
   if [ "$rc" -eq 143 ]; then
     printf '\n  143 is SIGTERM, and nothing in this script sends one: `timeout` would have\n' >&2
-    printf '  exited 124. So it came from outside this process tree. If there is no `stop`\n' >&2
-    printf '  event above, nobody asked podman to stop it either.\n' >&2
-    printf '  First suspect is a pattern kill from a terminal — `pkill -f` has hit this\n' >&2
-    printf '  repository five times. See "Never pkill -f" in RESUME.md.\n' >&2
+    printf '  exited 124. If there is no `stop` event above, nobody asked podman to stop\n' >&2
+    printf '  the container either.\n' >&2
+    printf '  FIRST CHECK THE IMAGE. Until 2026-09-17 the worker entrypoint exited 143 on\n' >&2
+    printf '  EVERY run, whatever pi did: `set -e`, then `wait` on the forwarder it had\n' >&2
+    printf '  just killed, which returns 143 and ends the shell before `exit $rc`.\n' >&2
+    printf '  `pi --version` in such an image exits 143 in one second. If this image\n' >&2
+    printf '  predates that fix, that is what this is, and the output above it stands.\n' >&2
+    printf '  If the image is current, then it did come from outside this process tree,\n' >&2
+    printf '  and the first suspect is a pattern kill from a terminal — `pkill -f` has hit\n' >&2
+    printf '  this repository five times. See "Never pkill -f" in RESUME.md.\n' >&2
   fi
 fi
 exit "$rc"

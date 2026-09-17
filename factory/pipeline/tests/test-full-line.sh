@@ -668,7 +668,7 @@ cp "$WORK/bin/pi-keep2" "$WORK/bin/pi"
 stale="$(cat "$WORK/o-stale")"
 
 check "the untouched document is noticed" "left the previous attempt's document untouched" "$stale"
-check "run-step says whose file it is"    "That file is a previous attempt's" "$stale"
+check "run-step says whose file it is"    "Those files are a previous attempt's, and nothing else was written" "$stale"
 nope  "and does not call it work done"    "failure after the work" "$stale"
 check "the finding says so too"           "byte-for-byte what an earlier attempt" \
       "$(cat "$DOC_R/doc-findings.md" 2>/dev/null)"

@@ -2,15 +2,16 @@
 # test-worker-sandbox-death.sh — what the sandbox says when the container dies.
 #
 # A doc session on 2026-09-15 wrote a complete 18,626-byte document and its
-# container died at 1022 seconds with 143. SIGTERM, from outside: nothing in
-# worker-sandbox.sh sends one, and the `timeout` wrapper would have exited 124.
-# It has been an open unidentified failure since, because by the time anyone
-# looked the podman events had rolled and `--rm` had taken the container away.
+# container died at 1022 seconds with 143, and it was read for two days as a
+# SIGTERM from outside. It was the worker image's own entrypoint: `set -e`, then
+# `wait` on the forwarder it had just killed, which returns 143 and ends the
+# shell before `exit "$rc"`. Every contained run exited 143 — including
+# `pi --version`, in one second, with no model and nobody near the machine.
 #
-# It cannot be diagnosed backwards. It can be made to identify itself the next
-# time, and these assertions are about that: the container is named so its events
-# can be asked for, and a 143 gets a diagnosis that says what 143 rules out
-# rather than a bare exit code.
+# So the diagnosis this script prints has to send a reader to the image FIRST,
+# and only then to the external-signal reading, which is right again for a
+# current image. These assertions are about that ordering — a diagnosis that
+# names the rare cause before the certain one is a diagnosis that costs a day.
 #
 # podman is stubbed. The point is the message and the naming, not the runtime.
 set -uo pipefail
@@ -80,7 +81,12 @@ printf '\n== 143 gets a diagnosis, not a number ==\n\n'
 check "it says what 143 is"             "143 is SIGTERM" "$out"
 check "and that this script did not send it" "nothing in this script sends one" "$out"
 check "and rules out the timeout"       "exited 124" "$out"
-check "and names the first suspect"     "pattern kill from a terminal" "$out"
+check "it sends you to the image first"  "FIRST CHECK THE IMAGE" "$out"
+check "naming the mechanism"            "wait" "$out"
+check "and the one-second reproduction" "pi --version" "$out"
+check "and it says the output stands"   "the output above it stands" "$out"
+check "the external reading is kept"    "pattern kill from a terminal" "$out"
+check "but only for a current image"    "If the image is current" "$out"
 check "with where that is written down" "RESUME.md" "$out"
 
 printf '\n== a clean exit says nothing at all ==\n\n'
