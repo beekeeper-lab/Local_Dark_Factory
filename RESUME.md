@@ -2161,7 +2161,13 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 .venv/bin/python bench/validate.py
 .venv/bin/python bench/validate.py --corpus benchmark/seating-planner/bean-sets/v1
 ./bench/phase0.sh --provenance-only
+./hidden-tests/verify.sh seating-planner-py/bean-001 --branch bean/bean-001-project-scaffold-with-linting-typing-and --repo /home/gregg/workspace/seating-planner-py
 ```
+
+The last one is the only check that a hidden suite can PASS — the gate's control
+only proves one can fail, and a suite that can never pass blocks its bean forever
+while the worker sees a count. It exits 3 for a bean that has not run yet, which
+is a third answer and not a pass.
 
 And the phase exits — phase 1 needs a finished run to point at, phase 2 runs the
 fault-injection suites and takes about two minutes:
