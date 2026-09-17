@@ -2355,7 +2355,14 @@ There is no bare `python` on this box; the interpreter is the venv's. Run one pe
 .venv/bin/python bench/validate.py --corpus benchmark/seating-planner/bean-sets/v1
 ./bench/phase0.sh --provenance-only
 ./hidden-tests/verify.sh seating-planner-py/bean-001 --branch bean/bean-001-project-scaffold-with-linting-typing-and --repo /home/gregg/workspace/seating-planner-py
+jq -r '.points[] | "\(.total_artifact_bytes) \(.verdict)"' bench/results/size-sweep-*.json | sort | uniq -c
 ```
+
+The last line re-derives the size figures from the artifacts rather than from a
+log or from this document — 8 of 8 `revise` at 20,422 bytes, 3 of 3 at 30,422,
+and at 40,422 six `accept` and two `none` and nothing else. A number quoted in a
+handoff that cannot be re-derived in one line is a number the next reader has to
+take on trust.
 
 The last one is the only check that a hidden suite can PASS — the gate's control
 only proves one can fail, and a suite that can never pass blocks its bean forever
