@@ -695,6 +695,25 @@ printf 'JUDGE  %s  model=%s ctx=%s thinking=%s cap=%s  (%s artifacts, %s bytes, 
 # The cap on an artifact is 120,000 bytes — a big bean's diff can put an impl
 # audit four times past the size where this was measured — so this is not a
 # hypothetical about bean-001, whose whole diff is 2,219 bytes.
+# And record it, machine-readably, next to the judgement.
+#
+# The verdict already carries every artifact's path and sha256, so the size is
+# derivable — by someone who still has the files. It is not READABLE, and the
+# size of the prompt is now the most predictive variable this project has
+# measured: 8 of 8 rejections of a seeded defect at 20,422 bytes, 0 of 8 at
+# 40,422. A verdict that does not say what size it was produced at cannot be
+# weighed against that.
+#
+# A sidecar rather than a field in the judgement: the judgement file is what the
+# MODEL said, byte for byte, and adding to it would make that untrue.
+mkdir -p "$RUN_DIR/verdicts" 2>/dev/null || true
+jq -n --argjson b "${ART_BYTES:-0}" --argjson n "${#ART_PATHS[@]}" \
+      --arg m "$MODEL" --arg t "$THINKING" --argjson c "$NUM_CTX" --argjson np "$NUM_PREDICT" \
+      '{schema:"judge-request/1.0.0", artifact_bytes:$b, artifact_count:$n,
+        model:$m, thinking:$t, num_ctx:$c, num_predict:$np,
+        note:"What was SENT, not what came back. artifact_bytes is the measurement that matters: bench/results/size-sweep-confirm-20260917T034250Z.json has this judge rejecting a seeded defect 8 of 8 at 20,422 bytes and 0 of 8 at 40,422."}' \
+  > "$RUN_DIR/verdicts/$TARGET.request.json" 2>/dev/null || true
+
 JUDGE_SIZE_WARN="${JUDGE_SIZE_WARN:-30422}"
 if [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
   printf 'JUDGE  %s: %s bytes of artifacts is above %s, the largest size at which this\n' \

@@ -564,6 +564,12 @@ nope  "below it, silence"               "bytes of artifacts is above" "$out"
 # failure it exists to report, arriving as a fix.
 prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
 check "and the artifacts are all still sent" "THE SPEC UNDER AUDIT" "$prompt"
+# The size is written down, not only printed. A number in a log is not something
+# a verdict can be weighed against six weeks later.
+want "the request facts are recorded beside the judgement" "spec.request.json should exist" \
+     test -s "$R/verdicts/spec.request.json"
+check "with the bytes"                  '"artifact_bytes"' "$(cat "$R/verdicts/spec.request.json" 2>/dev/null)"
+check "and what that number is for"     "size-sweep" "$(cat "$R/verdicts/spec.request.json" 2>/dev/null)"
 
 printf '\n== the controller measurements go as prose, and shrink the prompt ==\n\n'
 #

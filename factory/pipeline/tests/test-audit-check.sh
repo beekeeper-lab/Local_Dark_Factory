@@ -200,6 +200,30 @@ judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
 out="$(run_check)"
 check "a real quote is verified"      "quote(s) verified against the artifacts" "$out"
 
+# Placed here, where the fixture is known good: sections further down move
+# gates.lock.yaml away and append an invariants_ref to the bean, and a block
+# appended after them tests the wreckage rather than the code.
+printf '\n== a stamped verdict says how big the prompt was ==\n\n'
+#
+# The size of the prompt is the most predictive variable measured on this judge:
+# 8 of 8 rejections of a seeded defect at 20,422 bytes and 0 of 8 at 40,422. The
+# verdict carried every artifact's sha256 — from which the size is derivable by
+# someone who still has the files — and not the number itself.
+rm -f "$V"/spec.attempt-*
+printf '{"schema":"judge-request/1.0.0","artifact_bytes":40422,"artifact_count":5}\n' > "$V/spec.request.json"
+judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
+run_check >/dev/null 2>&1
+check "the byte count is in the verdict" '"prompt_bytes": 40422' "$(cat "$V/spec.attempt-1.json" 2>/dev/null)"
+check "and how many artifacts"           '"prompt_artifacts": 5' "$(cat "$V/spec.attempt-1.json" 2>/dev/null)"
+
+printf '\n-- and a verdict from before it existed simply does not --\n\n'
+# Absent is the honest answer for a verdict written before 2026-09-17. Inventing
+# a zero would make it look like a tiny prompt.
+rm -f "$V"/spec.attempt-* "$V/spec.request.json"
+judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
+run_check >/dev/null 2>&1
+nope "no field rather than a made-up zero" "prompt_bytes" "$(cat "$V/spec.attempt-1.json" 2>/dev/null)"
+
 # The gap between "all quotes are too short" and "every criterion is backed".
 # The check counted verified QUOTES, not verified criteria, and the quotes it
 # counted included the ones attached to findings. So a criterion quoting "the
@@ -465,6 +489,7 @@ run_check >/dev/null 2>&1
 eq "weakened_asserts is false"         "false" \
    "$(jq -r '.test_integrity.weakened_asserts' "$V/spec.attempt-1.json" 2>/dev/null)"
 rm -f factory/runs/R/test-integrity.json
+
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

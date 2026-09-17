@@ -481,6 +481,7 @@ jq -n \
   --arg model "$MODEL_DIGEST" --arg prompt "$PROMPT_VERSION" \
   --arg verdict "$VERDICT" --argjson j "$J" --argjson artifacts "$ARTIFACTS" \
   --argjson ti "$TI_MEASURED" \
+  --argjson req "$([ -f "$VERDICTS/$TARGET.request.json" ] && cat "$VERDICTS/$TARGET.request.json" || echo null)" \
   '{schema_version: $sv, stage: $stage, bean_id: $bean,
     base_sha: $base, candidate_sha: $cand, diff_sha256: $diff,
     gate_run_id: $gate_run, gate_manifest_digest: $gate_digest,
@@ -489,6 +490,13 @@ jq -n \
     criteria: [($j.criteria // [])[] | {id, met,
       evidence: (.evidence + (if .quote then "  [quoted: " + .quote + "]" else "" end))}],
     verdict: $verdict, artifacts: $artifacts}
+   # How big the prompt was that produced this. judge.sh writes it beside the
+   # judgement; it is the most predictive variable measured on this judge — 8 of 8
+   # rejections of a seeded defect at 20,422 bytes, 0 of 8 at 40,422 — and a
+   # verdict that does not carry it cannot be weighed against that later. Absent
+   # for a verdict written before 2026-09-17, which is the honest answer for one.
+   + (if $req != null then {prompt_bytes: ($req.artifact_bytes // null),
+                            prompt_artifacts: ($req.artifact_count // null)} else {} end)
    + (if $j.feedback_to_worker then {feedback_to_worker: $j.feedback_to_worker} else {} end)
    + (if $j.document_quality then {document_quality: $j.document_quality} else {} end)
    + (if $ti != null then {test_integrity: $ti}
