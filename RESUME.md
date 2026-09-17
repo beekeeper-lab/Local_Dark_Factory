@@ -51,7 +51,12 @@ option at this size, and leaving it open is choosing that option by default.
    documents under audit, it was in the other nineteen beans). Only
    `criterion-not-really-met` is still the judge's.
 4. **Hidden tests are built**, bean-001 and bean-002 have suites, and the worker is
-   told the rule without the answers. *"Hidden tests"*.
+   told the rule without the answers. *"Hidden tests"*. Verified **both ways** as
+   of 2026-09-17: the gate's control proved a suite can fail, nothing proved it
+   can pass, and a suite that can never pass blocks its bean forever while the
+   worker sees only a count. `hidden-tests/verify.sh` checks both — bean-001:
+   11 of 11 pass on its accepted tree, 9 of 11 fail on an empty one, the other
+   two declared absences. bean-002 is HALF CHECKED until it runs, and says so.
 5. **Five grammar changes**, each measured, which produced this line's **first
    stamped audit verdict** — and none of which is evidence the judge is right.
    *"Then three changes in an afternoon"*.
