@@ -553,8 +553,11 @@ if [ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" -lt "$ROLE_CTX" ] 2>/
   printf '       truncate before pi thinks it needs to. Lower num_ctx for role %s, or raise\n' "$ROLE" >&2
   printf '       OLLAMA_CONTEXT_LENGTH (system-wide, so it is the operator'"'"'s call).\n' >&2
 fi
-false && [ -n "$OBS_CTX" ] && [ -n "$ROLE_CTX" ] && [ "$OBS_CTX" != "$ROLE_CTX" ] \
-  && drift="$drift num_ctx(declared=$ROLE_CTX observed=$OBS_CTX)"
+# (There was a `false && ...` line here that added num_ctx to drift and could
+# never run. Dead code guarded by a literal false reads as live code to everyone
+# who greps for the variable, and the decision it encoded — that the server
+# context is not drift — is now written down above and tested. Deleted rather
+# than left switched off.)
 [ -n "$OBS_MODEL" ] && [ "$OBS_MODEL" != "$ROLE_MODEL" ] \
   && drift="$drift model(declared=$ROLE_MODEL observed=$OBS_MODEL)"
 [ -n "$drift" ] && printf 'WARN   %s   conditions drift:%s — the run record carries the observed values\n' \
@@ -662,27 +665,42 @@ jq -sc \
         ran_within_context:($compactions == 0),
         declared:{num_ctx:$ctx, thinking:s($thinking), model:$model},
         observed_from:{thinking:"pi session", num_ctx:"ollama /api/ps", model:s($obs_model)},
-        # num_ctx is in this comparison, and was not.
+        # num_ctx was in this comparison and is out again, with a measurement
+        # behind the decision this time.
         #
-        # The field is named `declared_matches_observed`. num_ctx is declared and
-        # num_ctx is observed, so a record saying `true` while the two differ is a
-        # false statement by the name of the field itself. It is also the case
-        # that actually differs: pi has no context flag, so the server serves
-        # whatever it was last asked for. The WARN line on drift is a louder,
-        # separate signal; this flag is the summary the record makes of itself,
-        # and it was summarising two fields out of three.
+        # It was added because the field is named declared_matches_observed and
+        # num_ctx is both declared and observed, so excluding it looked like the
+        # summary lying about itself. The consequence: the flag read false on
+        # every step of every run, and factory status printed (conditions
+        # drifted) beside every line. A flag that is false always is not a
+        # summary, it is noise, and it trains a reader to stop looking.
+        #
+        # What the journal says, measured on bean-002 on 2026-09-17:
+        #
+        #   17:24:02  load_model: initializing, n_slots = 1, n_ctx_slot = 65536
+        #   17:24:10  load_model: initializing, n_slots = 1, n_ctx_slot = 262144
+        #
+        # The controller preloads the role at its declared context; EIGHT SECONDS
+        # LATER the workers own first request reloads the model at the servers
+        # default, and every request in the session runs there. This was the open
+        # question in RESUME - whether pi keeps the loaded context or forces a
+        # reload - and the answer is the reload. pi speaks the
+        # openai-completions API, which has no field for the server side context,
+        # so nothing the controller does inside a session can hold it.
+        #
+        # So the two numbers differing is the NORMAL case and not drift. It is
+        # still worth recording, which is what server_ctx_honoured is for: same
+        # fact, its own name, no longer dragging the other two down with it.
+        # Fixing it for real means OLLAMA_CONTEXT_LENGTH on the server, which is
+        # one number for every role and every other project on the machine.
         #
         # (No apostrophes in this comment. The whole jq program is one
-        # single-quoted shell string and one apostrophe ends it. Fifth time.)
-        #
-        # Caught by test-role-routing computing the expected value over num_ctx
-        # and thinking while the code compared thinking and model. They agreed
-        # only while nothing else on the box had loaded the model at another
-        # context, which held until a format-support run did exactly that.
+        # single-quoted shell string and one apostrophe ends it. Sixth time.)
         declared_matches_observed:
           ((($obs_thinking == "") or ($thinking == "") or ($obs_thinking == $thinking))
-           and (($obs_model == "") or ($obs_model == $model))
-           and (($obs_ctx == null) or ($ctx == null) or ($obs_ctx == $ctx)))}')" \
+           and (($obs_model == "") or ($obs_model == $model))),
+        server_ctx_honoured:
+          (if ($obs_ctx == null) or ($ctx == null) then null else ($obs_ctx == $ctx) end)}')" \
   '
   . as $arr
   | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx

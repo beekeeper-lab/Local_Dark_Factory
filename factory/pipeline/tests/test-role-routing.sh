@@ -157,8 +157,17 @@ fi
 # observed. An earlier version of this test asserted a clean environment and
 # failed the day the environment stopped being clean, which is the wrong thing
 # to learn from a flag whose job is to notice.
+#
+# thinking and model only. num_ctx is deliberately NOT in this flag: the
+# controller preloads the role at its declared context and the workers own first
+# request reloads the model at the servers default eight seconds later —
+# measured in ollamas journal on bean-002, 2026-09-17 — because pi speaks the
+# openai-completions API, which has no field for it. Including num_ctx made the
+# flag false on every step of every run, which is not a summary, and `factory
+# status` printed "(conditions drifted)" beside every line. The same fact has
+# its own field now: server_ctx_honoured, asserted separately below.
 expected_match=true
-for field in num_ctx thinking; do
+for field in thinking; do
   obs="$(jq -r --arg f "$field" '.[$f] // "null"' <<<"$cond")"
   dec="$(jq -r --arg f "$field" '.declared[$f] // "null"' <<<"$cond")"
   if [ "$obs" != "null" ] && [ "$dec" != "null" ] && [ "$obs" != "$dec" ]; then
@@ -172,6 +181,31 @@ else
   printf '  FAIL  declared_matches_observed says %s but the fields say %s: %s\n' \
     "$(jq -r '.declared_matches_observed' <<<"$cond")" "$expected_match" "$cond"
   FAIL=$((FAIL + 1))
+fi
+
+# And the context, on its own, telling the truth either way. Null when there is
+# nothing to compare — the stub does not load a model — which is the third state
+# this has to have: "we could not see" is not "it matched".
+_obsc="$(jq -r '.num_ctx // "null"' <<<"$cond")"
+_decc="$(jq -r '.declared.num_ctx // "null"' <<<"$cond")"
+_got="$(jq -r '.server_ctx_honoured' <<<"$cond")"
+if [ "$_obsc" = "null" ] || [ "$_decc" = "null" ]; then _want=null
+elif [ "$_obsc" = "$_decc" ]; then _want=true
+else _want=false; fi
+if [ "$_got" = "$_want" ]; then
+  printf '  ok    server_ctx_honoured reports the truth (%s here)\n' "$_want"; PASS=$((PASS + 1))
+else
+  printf '  FAIL  server_ctx_honoured says %s, the fields say %s\n' "$_got" "$_want"; FAIL=$((FAIL + 1))
+fi
+# It is a separate field so that a context the controller cannot hold does not
+# drag down the two it can. A run where the model and thinking level are exactly
+# what was asked for must not read as drifted.
+if [ "$(jq -r '.declared_matches_observed' <<<"$cond")" = true ] && [ "$_want" = false ]; then
+  printf '  ok    an unheld context alone is not drift\n'; PASS=$((PASS + 1))
+elif [ "$_want" != false ]; then
+  printf '  ok    (no unheld context here to separate)\n'; PASS=$((PASS + 1))
+else
+  printf '  FAIL  the context pulled declared_matches_observed down with it\n'; FAIL=$((FAIL + 1))
 fi
 
 # The real case: roles.json asks for a thinking level, the model runs with it off,
