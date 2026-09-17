@@ -1343,6 +1343,26 @@ list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
 
+## Where the knee is, and why the doc audit depends on the answer
+
+Running 2026-09-17. Five passes each at **30,422** and **35,422** bytes.
+
+What is known: 8 of 8 rejections at 20,422, 3 of 3 at 30,422, **0 of 8 at
+40,422**. The change happens somewhere in a 10,000-byte gap — and **the doc audit
+is 36,731 bytes, inside it**, with nothing in that prompt that can be cut.
+
+So this is not curiosity about a curve. It decides whether the largest audit this
+line runs is already in the band where this judge stops rejecting planted flaws.
+
+**Prediction.** If it is a threshold near 40,000, 35,422 rejects most of the time
+and the doc audit is uncomfortable but not broken. If it is gradual, 35,422 is
+mixed — call it 2 or 3 of 5 — and the doc audit is already unreliable, which
+would make "advisory audits" less a policy choice than a description of the doc
+audit specifically.
+
+The 30,422 arm is there to firm up a figure that rests on three passes, and to
+catch the case where the whole effect fails to reproduce a third time.
+
 ## CONFIRMED: 8 of 8 against 0 of 8. Size is the finding of the week
 
 Five more passes at the two sizes that matter, 2026-09-17. The prediction below
