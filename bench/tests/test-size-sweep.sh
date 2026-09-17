@@ -27,6 +27,8 @@ check() { if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((
           else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "${3:0:200}"; FAIL=$((FAIL+1)); fi }
 rc_is() { if [ "$2" = "$3" ]; then printf '  ok    %s (exit %s)\n' "$1" "$3"; PASS=$((PASS+1))
           else printf '  FAIL  %s — expected exit %s, got %s\n' "$1" "$3" "$2"; FAIL=$((FAIL+1)); fi }
+nope()  { if grep -qF -- "$2" <<<"$3"; then printf '  FAIL  %s — found: %s\n' "$1" "$2"; FAIL=$((FAIL+1))
+          else printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); fi }
 
 SPEC="$ROOT/evidence/bean-001-spec-20260915.md"
 TASKS="$ROOT/evidence/bean-001-tasks-20260915.yaml"
@@ -91,6 +93,31 @@ printf '\n== it says when it could only measure the verdict ==\n\n'
 check "the script says so when nothing was named" "NAMED in none of the" "$(cat "$SWEEP")"
 check "and why that is about the judge, not size"  "nothing left to fall from" "$(cat "$SWEEP")"
 check "and it is conditional on the count"         'N_NAMED" -eq 0' "$(cat "$SWEEP")"
+
+printf '\n== it warns when the padding contains what the defect introduced ==\n\n'
+#
+# The confound found on 2026-09-17 after a result had already been acted on: the
+# seeded `contradicts-non-goal` plans a CP-SAT stub at
+# src/seating_planner/solver/cpsat.py, and the padding is the other beans — of
+# which seventeen of twenty mention the solver and bean-006 OWNS
+# src/seating_planner/solver/**. A judge accepting under that padding may have
+# been told the write is legitimate rather than distracted by volume.
+#
+# The harness can see this itself, because it knows what it seeded.
+out="$(sweep --pad-from "$CORPUS" --sizes '0' --repeat 1 --out "$WORK/d.json" 2>&1 | head -20)"
+check "the real corpus is flagged"    "the padding contains words the seeded defect introduced" "$out"
+check "naming the term that matters"  "CP-SAT" "$out"
+check "and what the two readings are" "telling the judge the defect is legitimate" "$out"
+check "with where the control lives"  "pad-neutral" "$out"
+
+printf '\n-- and the control pad source is not flagged --\n\n'
+NEUTRAL="$ROOT/bench/fixtures/pad-neutral"
+if [ -d "$NEUTRAL" ]; then
+  out="$(sweep --pad-from "$NEUTRAL" --sizes '0' --repeat 1 --out "$WORK/e.json" 2>&1 | head -20)"
+  nope "the control raises no warning" "the padding contains words the seeded defect introduced" "$out"
+else
+  printf '  FAIL  bench/fixtures/pad-neutral is missing — the control for the size finding\n'; FAIL=$((FAIL+1))
+fi
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

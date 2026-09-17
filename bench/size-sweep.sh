@@ -197,6 +197,51 @@ if ! printf '%s\n' "$CASE_LINES" | grep -q "^$CASE|"; then
 fi
 CATCH="$(printf '%s\n' "$CASE_LINES" | grep "^$CASE|" | head -1 | cut -d'|' -f4)"
 
+# Does the PADDING legitimise the defect being seeded?
+#
+# Found the hard way on 2026-09-17, after a result had been acted on. The seeded
+# `contradicts-non-goal` plans a CP-SAT stub at
+# `src/seating_planner/solver/cpsat.py`; the padding is the other beans of the
+# corpus, seventeen of twenty mention the solver, and bean-006 OWNS
+# `src/seating_planner/solver/**`. A judge that accepts at 20,000 bytes of that
+# has not been diluted by volume — it has been handed the bean that makes the
+# write legitimate.
+#
+# The harness can see this itself, because it knows what it seeded: mutate the
+# spec once up front, take the words the mutation ADDED, and look for them in the
+# padding. It is a warning and not a refusal — a term can overlap innocently, and
+# the judgement about whether it matters is a person's.
+PROBE="$TMP/confound"; mkdir -p "$PROBE"
+cp "$SPEC" "$PROBE/spec.md"; cp "$TASKS" "$PROBE/tasks.yaml"
+sed -n '/^mutate() {/,/^}/p' "$ROOT/bench/judge-fitness.sh" > "$TMP/mutate.sh"
+ROOT="$ROOT" bash -c "source '$TMP/mutate.sh'; mutate '$CASE' '$PROBE/spec.md' '$PROBE/tasks.yaml'" >/dev/null 2>&1 || true
+# The SPEC diff only, and only distinctive tokens.
+#
+# Diffing the task list as well made this useless: the mutation parses and
+# rewrites tasks.yaml, so the diff is the entire file and every word in the
+# corpus "overlaps". And a token counts only if it looks like an identifier —
+# containing a slash, an underscore or a hyphen, or at least nine characters —
+# because "the" and "changes" appear in everything.
+#
+# On the real corpus this prints CP-SAT and OR-Tools. On
+# bench/fixtures/pad-neutral it prints nothing. That is the whole test.
+ADDED="$(diff "$SPEC" "$PROBE/spec.md" 2>/dev/null \
+  | sed -n 's/^> //p' | tr -cs '[:alnum:]_/.-' '\n' \
+  | grep -E '^[A-Za-z][A-Za-z0-9_/.-]*$' | grep -E '/|_|-|^.{9,}$' | sort -u)"
+OVERLAP=""
+while IFS= read -r w; do
+  [ -n "$w" ] || continue
+  case "$w" in behaviour.|somewhere|something|different|available|important) continue ;; esac
+  grep -qiF -- "$w" "$PAD_ALL" 2>/dev/null && OVERLAP="$OVERLAP $w"
+done <<< "$ADDED"
+if [ -n "$OVERLAP" ]; then
+  printf '\n  WARNING: the padding contains words the seeded defect introduced:%s\n' "$OVERLAP" >&2
+  printf '  The padding may be telling the judge the defect is legitimate rather than\n' >&2
+  printf '  diluting its attention, and those are different findings. Pad from a source\n' >&2
+  printf '  without them before reading a verdict change as a size effect — see\n' >&2
+  printf '  bench/fixtures/pad-neutral/README.md.\n\n' >&2
+fi
+
 refuse_if_inflight
 
 printf '\nsize sweep — case %s\n\n' "$CASE"
