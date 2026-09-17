@@ -81,5 +81,16 @@ else
   printf '  FAIL  a scaffolded directory yielded %s bytes\n' "${have:-0}"; FAIL=$((FAIL+1))
 fi
 
+printf '\n== it says when it could only measure the verdict ==\n\n'
+#
+# The case is chosen because the judge has caught and NAMED it before, so that a
+# fall-off in naming is legible across sizes. Every run since 2026-09-16 has
+# named it in zero rows — so the sweep measured the verdict only, and a reader
+# comparing verdict columns should know the stronger question was unavailable
+# rather than answered negatively.
+check "the script says so when nothing was named" "NAMED in none of the" "$(cat "$SWEEP")"
+check "and why that is about the judge, not size"  "nothing left to fall from" "$(cat "$SWEEP")"
+check "and it is conditional on the count"         'N_NAMED" -eq 0' "$(cat "$SWEEP")"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -257,6 +257,33 @@ for pad in $SIZES; do
 done
 done
 
+# What this sweep could and could not measure, said out loud.
+#
+# The case is chosen because the judge "has actually caught and named it before,
+# so a fall-off is legible". If it names it in no row at any size, there is no
+# fall-off to see and the sweep measured the VERDICT only — which is a weaker
+# question, and a reader comparing a verdict column across sizes should know that
+# the stronger one was unavailable rather than negative.
+#
+# Every sweep run since 2026-09-16 has been in that state: 0 named in 9 rows,
+# then 0 in 10. The judge stopped naming this defect at ANY size, including no
+# padding at all.
+N_NAMED="$(jq '[.[] | select(.named_the_defect == "yes")] | length' <<<"$RESULTS")"
+N_ROWS="$(jq 'length' <<<"$RESULTS")"
+if [ "$N_NAMED" -eq 0 ] && [ "$N_ROWS" -gt 0 ]; then
+  printf '
+  The defect was NAMED in none of the %s rows, including at no padding at all.
+' "$N_ROWS"
+  printf '  So this sweep measured the verdict only. The case was chosen because the judge
+'
+  printf '  had named it before; it no longer does at any size, which is a fact about the
+'
+  printf '  judge and not about size — and it means a fall-off in naming cannot be seen
+'
+  printf '  here because there is nothing left to fall from.
+'
+fi
+
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
   --argjson inputs "$INPUT_SHAS" \
