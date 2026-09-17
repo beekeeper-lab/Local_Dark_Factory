@@ -134,8 +134,17 @@ PAD_ALL="$TMP/pad.txt"
   # and 20,000 — measuring nothing, reporting a full table.
   for b in "$PAD_FROM"/*/bean.yaml "$PAD_FROM"/*.yaml "$PAD_FROM"/*.yml; do
     [ -f "$b" ] || continue
-    case "$b" in *"$(basename "$BEAN")") continue ;; esac
-    case "$b" in *"$(basename "$(dirname "$BEAN")")"*) continue ;; esac
+    # Never pad with the bean under test. Two ways it can appear: as the same
+    # file name in a flat set, or as the same directory name in a scaffolded one.
+    #
+    # The directory test used to be a substring match on the whole path, which
+    # excluded every file whose path merely CONTAINED the bean's parent directory
+    # name. Pointing --pad-from at bench/fixtures/pad-neutral — a control built to
+    # remove a confound — matched "fixtures" in every one of its twenty files and
+    # padded with 161 bytes. The refusal above caught it in seconds; the match is
+    # on the parent directory NAME now, not on the path.
+    [ "$(basename "$b")" = "$(basename "$BEAN")" ] && continue
+    [ "$(basename "$(dirname "$b")")" = "$(basename "$(dirname "$BEAN")")" ] && continue
     label="$(basename "$(dirname "$b")")"
     case "$label" in beans|"$(basename "$PAD_FROM")") label="$(basename "$b" .yaml)" ;; esac
     printf -- '### %s\n\n```yaml\n' "$label"
