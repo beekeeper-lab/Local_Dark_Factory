@@ -247,7 +247,32 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Nine ways a check goes wrong, found on 2026-09-15, 16
+## Ten ways a check goes wrong, found on 2026-09-15, 16, 17
+
+**(10) A treatment that changed two things, and a control that changed neither.**
+`bench/size-sweep.sh` pads a spec to a target size and asks whether the judge
+still catches a planted defect. Padding changed **how many bytes** the judge read
+— and **what those bytes said**. The padding is the rest of the bean corpus; the
+planted defect writes `src/seating_planner/solver/cpsat.py`; seventeen of the
+twenty beans mention the solver and bean-006 *owns*
+`src/seating_planner/solver/**`.
+
+So "the judge accepts at 40,422 bytes" had two readings — its attention was
+diluted, or it was handed the bean that makes the write legitimate — and the
+harness could not tell them apart. **Nothing said so, and a result was acted on
+for several hours before anyone asked what else had changed.**
+
+The reusable question is not "is this measurement reproducible": it was, eight
+times out of eight. It is **"what else does the treatment change?"** A sweep that
+varies size by adding TEXT varies the text too, and the control has to be the
+same bytes saying something else — which is what `bench/fixtures/pad-neutral` now
+is, and what `size-sweep.sh` now warns about when the padding contains words the
+mutation introduced.
+
+The related failure is already in this list at (2): two fixtures that were not
+seeding the defect they claimed. That one is *the fixture does not contain the
+defect*. This one is *the fixture contains the excuse*, and it is harder to see,
+because the numbers look excellent.
 
 **(9) The right check at the wrong resolution — and the coarse answer is TRUE,
 which is why nobody sees it.** Three separate instances on 2026-09-16, all found
