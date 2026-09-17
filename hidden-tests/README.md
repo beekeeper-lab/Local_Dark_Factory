@@ -110,3 +110,35 @@ against an empty tree is refused by name, and the run stops.
 
 The declaration is the whole mechanism. It is a short list a person can read, and
 it grows only when somebody decides it should.
+
+## Verifying a suite, in both directions
+
+`factory/pipeline/hidden-tests.sh` runs a control against an empty tree and
+refuses a suite that passes it. That proves the suite **can fail**. Nothing
+proved it **can pass** — and a hidden suite that can never pass is the worse
+failure of the two: it blocks every attempt of its bean, forever, and all the
+worker is told is a count, so it cannot tell a wrong test from its own wrong
+code.
+
+`hidden-tests/verify.sh` checks both ends:
+
+```
+hidden-tests/verify.sh seating-planner-py/bean-001 \
+  --branch bean/bean-001-project-scaffold-with-linting-typing-and \
+  --repo /home/gregg/workspace/seating-planner-py
+```
+
+```
+  ok      all 11 test(s) pass against the real tree
+  ok      9 of 11 fail against an empty tree; the 2 that pass are declared absences
+```
+
+**Run it when a bean lands, and whenever its hidden tests are edited.** The real
+tree is the accepted output of the bean itself, so the second half can only be
+checked after the bean has run — a bean with no tree yet reports
+`HALF CHECKED` and exits 3, which is a different answer from a pass and says so.
+
+| suite | can fail | passes on the real tree |
+| --- | --- | --- |
+| `seating-planner-py/bean-001` | 9 of 11, 2 declared | **yes, 11 of 11** (2026-09-17) |
+| `seating-planner-py/bean-002` | 8 of 9, 1 declared | unknown — bean-002 has not run |
