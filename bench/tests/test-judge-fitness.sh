@@ -241,6 +241,13 @@ eq "so is the token cap"               "$_cap" "$(jq -r '.judge.num_predict' "$W
 # to it moved the judge from 21-56 seconds per case to 229-437. Two figures that
 # differ only by a file nobody recorded are two figures nobody can compare.
 check "and which prompt produced it"   "factory-audit@" "$(jq -r '.judge.prompt_version' "$WORK/out.json")"
+# And which GRAMMAR, which is the half that was missing. The rubric is prose; the
+# schema judge.sh declares is what the model is actually held to, and this project
+# measured the difference — five grammar constraints took conformance from about
+# zero to 100% while the prose asking for the same thing changed nothing. A figure
+# that names the rubric and not the grammar names the weaker half.
+check "and which grammar"              "judge.sh@" "$(jq -r '.judge.judge_sh_version' "$WORK/out.json")"
+check "and which asker, by content"    "@"         "$(jq -r '.judge.asker_version' "$WORK/out.json")"
 eq "and one pass is marked as not a measurement" "true" \
    "$(jq -r '.one_pass_is_not_a_measurement' "$WORK/out.json")"
 check "the provenance block is there"  "kernel" "$(jq -c '.provenance' "$WORK/out.json")"

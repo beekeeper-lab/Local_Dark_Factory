@@ -434,6 +434,14 @@ while IFS='|' read -r name should_reject description catchwords; do
 done <<< "$CASES"
 done
 
+# Three versions, not one. `prompt_version` hashed SKILL.md alone, which is the
+# RUBRIC — and the finding this whole day produced is that on this model a
+# constraint in the GRAMMAR is a rule while the same constraint in prose is a
+# suggestion. The grammar lives in judge.sh, the question shape in whatever
+# --asked-by pointed at, and neither was recorded: every figure in bench/results
+# from before this line is a measurement of a judge whose defining half is
+# unnamed. A run takes an hour; identifying which judge produced a number after
+# the fact costs more than recording it.
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
   --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
@@ -447,9 +455,12 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
   --arg judge_cmd "$(basename "$JUDGE_CMD")" \
   --arg prompt_version "$(_pv="$PIPE/../skills/factory-audit/SKILL.md"; [ -f "$_pv" ] && printf 'factory-audit@%s' "$(sha256sum "$_pv" | cut -c1-12)" || echo 'factory-audit@unknown')" \
+  --arg asker_version "$([ -f "$JUDGE_CMD" ] && printf '%s@%s' "$(basename "$JUDGE_CMD")" "$(sha256sum "$JUDGE_CMD" | cut -c1-12)" || echo 'unknown')" \
+  --arg judge_sh_version "$(_js="$PIPE/judge.sh"; [ -f "$_js" ] && printf 'judge.sh@%s' "$(sha256sum "$_js" | cut -c1-12)" || echo 'judge.sh@unknown')" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
-    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd, prompt_version:$prompt_version},
+    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd,
+           prompt_version:$prompt_version, asker_version:$asker_version, judge_sh_version:$judge_sh_version},
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
