@@ -692,7 +692,11 @@ run from the working tree."
       [ -f "$d/run.json" ] && { found=1; break; }
     done
     [ "$found" = 1 ] || die "no runs yet under $runs_root"
-    printf '\n%-34s %-12s %-9s %-7s %s\n' RUN STATUS STEPS ELAPSED ENDED-AT
+    # READ is a column, because it is one of the three things waiting on a person
+    # and the only one with no other surface. `factory read` records it; nothing
+    # reported it, so the way to find out which runs were still unread was to
+    # look for a file in each run directory by hand.
+    printf '\n%-34s %-12s %-9s %-7s %-6s %s\n' RUN STATUS STEPS ELAPSED READ ENDED-AT
     for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
       rj="$d/run.json"; [ -f "$rj" ] || continue
       st="$(jq -r '.status // "?"' "$rj")"
@@ -707,7 +711,15 @@ run from the working tree."
       fi
       # The step it stopped on is the thing a person is looking for.
       last="$(jq -r '.halted_at_step // .blocked_task // empty' "$rj")"
-      printf '%-34s %-12s %-9s %-7s %s%s\n' "$(basename "${d%/}")" "$st" "$nsteps" "$elapsed" "$ended" \
+      # Only a completed run has two documents to read. A halted one has nothing
+      # to confirm, and "no" against it would read as a chore nobody owes.
+      if [ -f "$d/documents-read-by.txt" ]; then rd="yes"
+      elif [ "$st" = "completed" ]; then rd="NO"
+      # ASCII, not an em dash: printf's %-6s pads by bytes, and a multi-byte
+      # character in a MIDDLE column takes one column and three bytes, so the
+      # row after it shifts left. The em dash is fine where it ends a line.
+      else rd="-"; fi
+      printf '%-34s %-12s %-9s %-7s %-6s %s%s\n' "$(basename "${d%/}")" "$st" "$nsteps" "$elapsed" "$rd" "$ended" \
         "$([ -n "$last" ] && printf '  (%s)' "$last")"
     done
     printf '\n'

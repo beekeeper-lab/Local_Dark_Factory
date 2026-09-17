@@ -222,6 +222,28 @@ check "the status is shown"          "halted" "$out"
 check "and how many steps ended"     "3" "$out"
 check "and how long it took"         "s" "$out"
 
+# Whether a person has read the two documents. It is one of the three things
+# waiting on the owner and the only one with no other surface: `factory read`
+# records it, nothing reported it, and finding out meant looking for a file in
+# each run directory by hand.
+check "the read column exists"       "READ" "$out"
+want  "an unread completed run says NO" "the completed run should be marked NO" \
+      bash -c 'grep -E "bean-001-20260915T100000Z .*completed.* NO " <<<"$1" >/dev/null' _ "$out"
+# The directory's mtime is restored: `factory runs` sorts by it, and writing a
+# file into the older run made it the newest and broke an assertion three
+# sections below about which run `factory status` picks.
+_rd="$REPO/factory/runs/bean-001-20260915T100000Z"
+_was="$(stat -c %y "$_rd")"
+printf 'someone <s@e.com> at 2026-09-16T00:00:00Z\n' > "$_rd/documents-read-by.txt"
+touch -d "$_was" "$_rd"
+out="$(fac runs)"
+want  "and yes once it is recorded"  "the run should be marked yes" \
+      bash -c 'grep -E "bean-001-20260915T100000Z .*completed.* yes " <<<"$1" >/dev/null' _ "$out"
+# A halted run has no two documents to confirm, so "NO" against it would read as
+# a chore nobody owes.
+want  "a halted run is neither"      "the halted run should be neither yes nor NO" \
+      bash -c '! grep -E "bean-001-20260915T120000Z .*(yes|NO)" <<<"$1" >/dev/null' _ "$out"
+
 # --------------------------------------------------------------------------
 printf '\n== status reads one run ==\n\n'
 out="$(fac status)"
