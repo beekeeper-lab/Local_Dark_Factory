@@ -88,6 +88,22 @@ podman push "$PIN_REF" "docker://$DEST" || {
 # same bytes yields the same digest. It should; if it ever does not, the manifest
 # must say what CI will actually pull.
 REMOTE_DIGEST="$(podman image inspect "$PIN_REF" --format '{{.Digest}}' 2>/dev/null || echo "$PIN_DIGEST")"
+# Tag the LOCAL image under the published name, or this box cannot run its own
+# gates any more.
+#
+# The push does not create a local tag. So the moment gates.lock.yaml is re-pinned
+# from `localhost/...` to `ghcr.io/...`, every sandbox on the machine that
+# published it refuses with "image not present" — 43 assertions across five suites
+# on 2026-09-17, on the box that had just pushed the image successfully.
+#
+# It is the same image: the digest below is read back from the registry and
+# compared. Tagging is a local rename, not a second build.
+if ! podman tag "$PIN_REF" "$DEST" 2>/dev/null; then
+  printf '\nwarning: pushed, but could not tag the local image as %s.\n' "$DEST" >&2
+  printf 'Gates on THIS machine will refuse with "image not present" once\n' >&2
+  printf 'gates.lock.yaml names the registry. Run:  podman tag %s %s\n' "$PIN_REF" "$DEST" >&2
+fi
+
 printf '\npushed. Put this in gates.lock.yaml:\n\n'
 printf '  image: "%s@%s"\n\n' "$DEST" "$REMOTE_DIGEST"
 if [ "$REMOTE_DIGEST" != "$PIN_DIGEST" ]; then
