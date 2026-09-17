@@ -129,10 +129,24 @@ def test_no_domain_modules_yet() -> None:
     assert not subpackages, f"no subpackages in this bean: {subpackages}"
 
 
+# The factory's own scaffold installs this one, and it is not the bean's work.
+# It arrives with factory/ — the same read-only area the bean may not write —
+# and it appeared on main the day the gate image was published, at which point
+# this test turned red against a tree the bean had nothing to do with.
+#
+# A non-goal is a statement about the DIFF: this bean must not author CI. The
+# tree-level form of that question has a different answer, because the tree also
+# holds infrastructure nobody in this bean wrote. `bean-forbids` in spec-check
+# already asks the diff question and asks it correctly; this test asks the
+# tree question, so it has to name what the tree is allowed to already contain.
+SCAFFOLD_OWNED_WORKFLOWS = {"gates.yml"}
+
+
 def test_no_ci_workflow_files() -> None:
     wf = WORK / ".github" / "workflows"
     files = sorted(p.name for p in wf.glob("*")) if wf.is_dir() else []
-    assert not files, f"CI workflows are a non-goal of this bean: {files}"
+    authored = [f for f in files if f not in SCAFFOLD_OWNED_WORKFLOWS]
+    assert not authored, f"CI workflows are a non-goal of this bean: {authored}"
 
 
 # --- the bean's background: the three gate tools must be declarable ----------

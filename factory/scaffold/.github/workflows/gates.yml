@@ -71,7 +71,26 @@ jobs:
               echo "::error::then put the printed digest in gates.lock.yaml."
               exit 1 ;;
           esac
-          docker pull "$IMAGE"
+          if docker pull "$IMAGE"; then exit 0; fi
+          # `manifest unknown` is what GHCR answers for a package this token is
+          # not allowed to see, as well as for one that is not there. The two
+          # are indistinguishable from here by design — a registry that said
+          # "it exists, you may not have it" would leak the names of private
+          # images — so this step says both, rather than sending a reader off
+          # to re-check a digest that is probably fine.
+          echo "::error::could not pull $IMAGE"
+          echo "::error::Either the digest is not in the registry, or this"
+          echo "::error::workflow's GITHUB_TOKEN cannot see the package."
+          echo "::error::GHCR answers 'manifest unknown' to both."
+          echo "::error::Check, in that order:"
+          echo "::error::  1. the package is public, or is linked to THIS"
+          echo "::error::     repository (Package settings -> Manage Actions"
+          echo "::error::     access). A private, unlinked package is"
+          echo "::error::     invisible to GITHUB_TOKEN even in the same org."
+          echo "::error::  2. the digest is the REGISTRY's, not a local"
+          echo "::error::     store's: skopeo inspect --format '{{.Digest}}'"
+          echo "::error::     docker://<ref>. publish.sh prints the right one."
+          exit 1
 
       - name: Assert the toolchain inside the image
         run: |
