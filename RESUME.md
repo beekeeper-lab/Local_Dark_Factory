@@ -103,6 +103,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
+| **twice the artifact bytes** | **0 of 3 false accepts → 2 of 3** | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1200,6 +1201,51 @@ the sense of "no class called Rule" — is not expressible as a path, and bean-0
 hidden tests check that one structurally instead. Whether that belongs in the bean
 as a third kind of rule, or stays where it is, is a design question and not an
 oversight.
+
+## The size of the prompt moves the false-accept rate, and nothing else has
+
+Re-run 2026-09-17 with `tools: []` declared, three passes, one seeded defect
+(`contradicts-non-goal`) held constant, padding from the other nineteen beans:
+
+| artifact bytes | verdicts | false accepts | named the defect |
+| --- | --- | --- | --- |
+| 20,422 (no padding) | revise, revise, revise | **0 of 3** | 0 |
+| 30,422 | revise, revise, revise | **0 of 3** | 0 |
+| 40,422 | none, **accept**, **accept** | **2 of 3** | 0 |
+
+**This is the only lever measured this week that moved the false-accept rate.**
+A bigger token cap, a lower thinking level, five grammar constraints, a sixth
+that backfired, a repaired prompt, four other models and one question per
+criterion — none of them changed how often the judge passes a spec with a planted
+flaw. Twice the bytes did, in the direction that matters least and costs most: a
+false accept is the failure the line exists to prevent and is invisible from the
+outside.
+
+**Real audits sit between those two rows.** The spec audit of bean-001 sends
+25,428 bytes. That is above the clean 20,422 and below the 40,422 where it went
+wrong, which is not a comfortable place to be told about and is the honest
+reading.
+
+**And the old standing finding is gone.** It used to be that at exactly 10,000
+bytes of padding the judge produced no judgement, reproducibly, answering
+`{"path": "", "depth": 3}` — a file-browsing tool call leaking into content. Three
+passes at 10,000 now give three verdicts. Declaring `tools: []` fixed it, which
+is the fifth thing that empty list has fixed and the strongest evidence that the
+API should say what the prompt says.
+
+**What did not change:** it never named the defect, at any size, in any pass —
+0 of 9. The sweep was designed around a case "the judge has actually caught and
+named before, so a fall-off is legible". There is nothing to fall off from any
+more, so the sweep can only measure the verdict, not the finding.
+
+**Time is unrelated to size and enormous either way**: 656, 269, 268 seconds at no
+padding; 134, 37, 47 at 10,000. Twice the prompt, a fifth of the time. Whatever
+governs how long this judge takes, it is not the number of bytes.
+
+**Three passes at one size is thin** — this harness says so itself — and the
+comparison is between 3 of 3 and 2 of 3. Before acting on it, the thing to do is
+the cheap half: measure whether the line can send the judge fewer bytes at all,
+which is a question about the artifacts and needs no GPU.
 
 ## The sixth grammar constraint, and the boundary it found
 
