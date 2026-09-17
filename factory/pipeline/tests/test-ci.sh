@@ -187,6 +187,64 @@ want  "and re-opens nothing"           "reopened-tasks.txt must not exist" \
       test ! -f "$R/reopened-tasks.txt"
 check "saying so plainly"              "the logs name no file this bean wrote" "$out"
 
+printf '\n-- red before a gate ever ran is not a finding about the bean --\n\n'
+#
+# On 2026-09-17 the gate image was published to a package that is private and
+# linked to no repository. CI logged in fine and then could not pull it: GHCR
+# answers `manifest unknown` for an image the token may not see, exactly as it
+# does for one that is not there, because it will not confirm a private image
+# exists. Three red runs, none of them about a line of code.
+#
+# The old behaviour would have sent the run back to `build` for whichever tasks
+# happened to name a path the log mentioned, and the rebuild would have failed
+# identically, because the cause is not in the repository.
+clean
+printf '[{"name":"gates","state":"FAILURE","bucket":"fail","link":"https://github.com/example/x/actions/runs/43"}]\n' > "$GH_CHECKS"
+cat > "$GH_LOG" <<'LOG'
+gates  Pull the gate image, by digest  IMAGE='ghcr.io/example/factory-gate-python:1@sha256:dead'
+gates  Pull the gate image, by digest  Error response from daemon: manifest unknown
+LOG
+out="$(ci)"; rc=$?
+rc_is "it halts rather than rewinding" "$rc" 3
+nope  "and never calls it green"       "CI PASS" "$out"
+want  "no rewind is written"           "rewind.json must not exist" test ! -f "$R/rewind.json"
+want  "and no tasks are re-opened"     "reopened-tasks.txt must not exist" \
+      test ! -f "$R/reopened-tasks.txt"
+want  "ci.json says blocked"           "status should be blocked" \
+      test "$(jq -r '.status' "$R/ci.json")" = blocked
+want  "and still records what failed"  "failed should name gates" \
+      test "$(jq -r '.failed[0]' "$R/ci.json")" = gates
+check "it names where it stopped"      "pulling the gate image" "$out"
+check "QUESTIONS says no gate ran"     "before it ran a single gate" "$(cat "$R/QUESTIONS.md")"
+check "and why that matters"           "never opened" "$(cat "$R/QUESTIONS.md")"
+check "naming the private-package case" "private and linked to no repository" "$(cat "$R/QUESTIONS.md")"
+want  "the log is still kept"          "ci-logs.txt should exist" test -s "$R/ci-logs.txt"
+
+printf '\n-- a gate that ran and failed still goes back to build --\n\n'
+#
+# The discriminator is whether the tree was examined, not whether the word
+# "image" appears. A log that names both is a run that got past the pull.
+clean
+cat > "$GH_LOG" <<'LOG'
+gates  Pull the gate image, by digest  sha256:beef: done
+gates  Run the gates  src/a.py:1:1: F401 imported but unused
+LOG
+out="$(ci)"; rc=$?
+rc_is "still a finding"                "$rc" 9
+want  "and a rewind is written"        "rewind.json should exist" test -s "$R/rewind.json"
+
+printf '\n-- a log that could not be fetched is not an excuse --\n\n'
+#
+# Absence of gate markers is also what an unfetchable log looks like. Inferring
+# "not the bean's fault" from that would be the same mistake pointed the other
+# way, so the detection is positive: something in the log has to name the step
+# that failed.
+clean
+: > "$GH_LOG"
+out="$(ci)"; rc=$?
+rc_is "it is still a failure"          "$rc" 9
+nope  "not blocked"                    "CI BLOCKED" "$out"
+
 printf '\n-- a skipped required check is not a passing one --\n\n'
 #
 # GitHub skips jobs for all sorts of good reasons — a path filter, a matrix
@@ -229,7 +287,15 @@ want  "and the run record says so"     "ci.json should say impossible" \
 check "the question names both fixes"  "or remove" "$(cat "$R/QUESTIONS.md")"
 check "including how to install one"   "factory/scaffold.sh" "$(cat "$R/QUESTIONS.md")"
 nope  "and it is never green"          "CI PASS" "$out"
-git revert -q --no-edit HEAD
+# `git revert -q` is not a thing — revert has no --quiet — so this printed the
+# usage text into the middle of the suite and restored nothing. Every section
+# after it ran against a branch with no workflow. None of them needed one, so it
+# passed and stayed wrong, which is how a fixture degrades: silently, in the part
+# of the file nobody reads because the assertions are green. Third time in this
+# repository (see "Eight live gotchas" in RESUME.md), hence the assertion.
+git revert --no-edit HEAD >/dev/null
+want  "the fixture's workflow is back" "later sections need a branch with one" \
+      git ls-tree -r --name-only HEAD -- .github/workflows
 
 # --------------------------------------------------------------------------
 printf '\n== a repository that names no required checks ==\n\n'

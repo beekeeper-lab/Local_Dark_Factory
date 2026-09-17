@@ -243,6 +243,61 @@ for c in $FAILED; do
   fi
 done
 
+# ------------------------------------- did the remote run ever reach a gate? --
+#
+# A red check is only a finding about the change if the change was examined. The
+# workflow pulls the pinned image, asserts the toolchain inside it, and only then
+# runs the gates; a failure in the first two steps means the tree under test was
+# never opened. Rewinding to `build` on one of those sends a worker to fix code
+# that nothing ran — and it will fail again identically, because the cause is not
+# in the repository at all.
+#
+# That is not hypothetical. On 2026-09-17 the image was published to a private
+# package linked to no repository, so `GITHUB_TOKEN` could not see it and GHCR
+# answered `manifest unknown` — the same answer it gives for an image that is not
+# there, because it will not confirm a private image exists. Three red runs, none
+# of them about any line of code.
+#
+# Detected positively, from what the log names, not from what it lacks. An
+# absence is also what a log that could not be fetched looks like, and a check
+# that reports "not your fault" because it could not read anything would be the
+# same class of mistake in the other direction.
+#
+# `--log-failed` returns the failing steps only, tagged with the step's name. So
+# a log that names `Pull the gate image` or `Assert the toolchain` and never
+# names `Run the gates` is a run that stopped before the gates.
+GATE_EVIDENCE='Run the gates|::group::gate '
+INFRA_EVIDENCE='Pull the gate image|Assert the toolchain|manifest unknown'
+if [ -s "$LOGS" ] && grep -qE "$INFRA_EVIDENCE" "$LOGS" && ! grep -qE "$GATE_EVIDENCE" "$LOGS"; then
+  WHERE="before the gates ran"
+  grep -qiE 'manifest unknown|denied|unauthorized|could not pull' "$LOGS" \
+    && WHERE="pulling the gate image"
+  printf '  --    not about the change    the remote run failed %s\n' "$WHERE"
+  {
+    printf '# CI failed before it ran a single gate\n\n'
+    printf 'These required checks are red on `%s`:\n\n' "${HEAD_SHA:0:12}"
+    for c in $FAILED; do printf -- '- `%s`\n' "$c"; done
+    printf '\nThe failure is %s — upstream of the gates, so the tree under test was\n' "$WHERE"
+    printf 'never opened. Nothing here is a statement about this bean, and the run is\n'
+    printf 'NOT going back to build: a worker sent to fix code that nothing ran would\n'
+    printf 'change something at random and fail again identically.\n\n'
+    printf 'The log is in `ci-logs.txt` beside this file. The usual causes:\n\n'
+    printf '  - the gate image is private and linked to no repository, so this\n'
+    printf "    repository's GITHUB_TOKEN cannot see it. GHCR answers \`manifest\n"
+    printf '    unknown` for that exactly as for an image that is absent.\n'
+    printf '  - `gates.lock.yaml` pins a digest from a local image store rather\n'
+    printf "    than the registry's. \`publish.sh\` prints the right one.\n"
+    printf '  - the image drifted from its own `expect_versions`.\n\n'
+    printf 'The gates that decide this bean already ran here, in the pinned image,\n'
+    printf 'before the push. This step is the second opinion a reviewer can see\n'
+    printf 'without trusting this machine, and right now it cannot give one.\n'
+  } > "$RUN_DIR/QUESTIONS.md"
+  ci_record blocked "${FAILED# }" "the remote run failed $WHERE; no gate ran, so it says nothing about the change"
+  rm -f "$RUN_DIR/rewind.json"
+  printf '\nCI BLOCKED — red, and not about this bean. See QUESTIONS.md and ci-logs.txt.\n'
+  exit 3
+fi
+
 TASKS_FILE="$RUN_DIR/tasks.yaml"
 REOPEN=""
 if [ -f "$TASKS_FILE" ]; then
