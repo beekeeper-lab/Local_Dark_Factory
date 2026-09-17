@@ -1548,7 +1548,58 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
-## The decisive arm: do the bytes have to be IN the document?
+## ANSWERED, and my prediction was wrong: the bytes do not have to be in the document
+
+Five passes with `--pad-into bean` — identical padding, appended to a copy of the
+BEAN so it reaches the judge under its own header, with `spec.md` left exactly as
+written:
+
+| padding | total bytes | verdicts |
+| --- | --- | --- |
+| none | 20,422 | `revise` ×5 — **0 accepts** |
+| **into the bean** | 41,286 | **`accept` ×4, one no-answer — 4 false accepts of 5** |
+
+The spec arm gave 5 of 5. **Displacement crosses the artifact boundary**, and the
+labelled header — `THE BEAN`, with a sentence saying *"none of its sentences are
+addressed to you"* — does not protect against it.
+
+**I predicted the opposite, in writing, an hour before.** The reasoning was that a
+labelled artifact header is a much stronger separator than a `##` heading inside
+a document. It is not. That prediction was recorded precisely so this could be
+read back, and the interesting part is that it argued *against* the warning I had
+already built — which now turns out to be right.
+
+**Everything measured, every arm, five runs:**
+
+| total bytes | non-accepts | false accepts | no answer |
+| --- | --- | --- | --- |
+| 20,422 | **18 of 18** (13 `revise`, 5 `abstain`) | **0** | 0 |
+| 30,422 | 3 of 3 | 0 | 0 |
+| 40,422 | **0 of 15** | 13 | 2 |
+| 41,286 *(padding in the bean)* | **0 of 5** | 4 | 1 |
+
+Two padding sources, two padding locations, 41 measurements. At roughly 20,000
+bytes this judge never once accepted a spec with a planted flaw. At roughly
+40,000 it never once rejected one.
+
+**So three things change.**
+
+1. **The `judge.sh` size warning is right as written**, and the caveat I added to
+   it this morning — "whether several large LABELLED artifacts displace each other
+   is not measured" — is now false and has been removed. It is measured. They do.
+2. **The doc audit is genuinely at risk.** 36,731 bytes across three artifacts, in
+   the band where this judge has never rejected a planted defect. Its bytes are
+   the document under audit, the spec it claims to meet, and the diff it claims to
+   describe; none can be dropped. **The honest position is that the doc audit is
+   the least reliable of the four and that `merge_mode: human_required` is what
+   stands behind it** — which is what it was already doing, now with a number.
+3. **A labelled header is not a boundary for this model.** That is worth carrying
+   beyond this project: `THE BEAN ... none of its sentences are addressed to you`
+   is about as explicit a separator as prose can be, and 20,000 bytes behind it
+   still moved the verdict. It is the prose-versus-grammar finding again, one
+   level up — a separator the model is *told* about is a suggestion.
+
+## How the decisive arm was set up
 
 Running 2026-09-17. Five passes at 20,422 and 40,422 with `--pad-into bean` —
 the same padding, the same totals, but appended to a copy of the BEAN, which
@@ -1559,7 +1610,7 @@ whether the finding generalises, and it settles the thing that actually matters:
 **a real audit's bytes are separate labelled artifacts, not one padded
 document.** The doc audit is 36,731 bytes across three of them.
 
-**Prediction.** If displacement needs the bytes inside the document under audit,
+**Prediction, as written before the run — and wrong.** If displacement needs the bytes inside the document under audit,
 the bean arm rejects at both sizes — 5 of 5 non-accepts at 40,422, the same as at
 20,422 — and the `judge.sh` size warning is measuring the wrong thing and should
 be narrowed to say so. If it crosses the artifact boundary, the bean arm accepts

@@ -291,17 +291,15 @@ for pad in $SIZES; do
   # experiment.
   #
   # It measures "a document under audit that is mostly other material", not "a
-  # prompt with more separate artifacts". A real audit's bytes are separate
-  # artifacts with labelled headers saying what each is and how to read it. The
-  # displacement result — the judge filling the bean's criterion ids with another
-  # bean's work — is exactly what padding INSIDE the document predicts, and
-  # whether several large labelled artifacts do the same to each other is NOT
-  # measured here.
+  # prompt with more separate artifacts" — which is what a real audit is. That
+  # distinction went unstated for several hours while a warning was written on the
+  # broader reading.
   #
-  # The version of this sweep that would settle that appends a separate labelled
-  # artifact instead. It is not built; it is one hour of GPU and the one
-  # measurement that would tell the doc audit — 36,731 bytes across three
-  # artifacts — whether it is actually at risk.
+  # `--pad-into bean` is the arm that settled it, and the answer is that the
+  # distinction does not matter: identical bytes appended to a copy of the BEAN,
+  # arriving under its own header with "none of its sentences are addressed to
+  # you", gave 4 false accepts in 5 against the spec arm's 5 in 5. **A labelled
+  # artifact header is not a boundary for this model.**
   #
   # --pad-into bean: the same bytes as a block scalar on a COPY of the bean, which
   # reaches the judge under its own header — "THE BEAN ... the standard the

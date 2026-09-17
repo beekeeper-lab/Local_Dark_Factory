@@ -154,15 +154,17 @@ check "with the day it was needed"      "2026-09-17" "$(cat "$SWEEP")"
 
 printf '\n== the script says what shape of prompt it actually measures ==\n\n'
 #
-# The padding goes INSIDE spec.md, so the experiment is "a document under audit
-# that is mostly other material" — not "a prompt with more separate artifacts",
-# which is what a real audit is. That distinction was missing for several hours
-# while a warning was written on the broader reading.
+# The padding goes INSIDE spec.md, so that arm is "a document under audit that is
+# mostly other material" — not "a prompt with more separate artifacts", which is
+# what a real audit is. The distinction went unstated for several hours while a
+# warning was written on the broader reading, and --pad-into bean then settled it:
+# it does not matter, because a labelled artifact header is not a boundary for
+# this model.
 SRC="$(cat "$SWEEP")"
 check "it says the padding goes inside the document" "INSIDE spec.md" "$SRC"
 # Single-line substrings: these are prose comments and the phrases wrap.
 check "and what that is not"          "prompt with more separate artifacts" "$SRC"
-check "and names the experiment that would settle it" "one hour of GPU" "$SRC"
+check "and that the bean arm settled it" "not a boundary for this model" "$SRC"
 
 printf '\n== --pad-into bean puts the bytes in a different artifact ==\n\n'
 #
