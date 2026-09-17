@@ -5,20 +5,33 @@ the working branch is `main` again, and new work opens small pull requests off i
 
 ## Read this first
 
-**One thing is waiting on you, and it is a settings page, not a decision about
-the work.** Everything that was on this list has been done.
+**Nothing is waiting on you.** Everything that was on this list has been done,
+and the one item that needed a settings page has been routed around rather than
+escalated.
 
-1. **Make `ghcr.io/beekeeper-lab/factory-gate-python` public** — or grant
-   seating-planner-py Actions access to it. The package is private and linked to
-   no repository, so CI's `GITHUB_TOKEN` cannot see the gate image and `gates`
-   is red for a reason unrelated to any change under test. There is no REST
-   endpoint for container visibility; this is a toggle in the package's settings
-   page. Recommendation: **public** — it is ruff, mypy and pytest on a python
-   base image, and a public image means every repo this factory scaffolds gets a
-   working `gates` job with no per-repo grant. Full reasoning in "OPEN, and it
-   needs one toggle in a settings page" below.
+The gate image package stays **private**. CI cannot pull it — `GITHUB_TOKEN`
+cannot see a private package linked to no repository, and GHCR answers
+`manifest unknown` for that exactly as for an image that is absent — so `gates`
+is red on seating-planner-py and will stay red until someone flips one of two
+switches in a settings page (make the package public, or grant this repository
+Actions access to it; container visibility has no REST endpoint).
 
-Done since the last time this list was written:
+That costs less than it looks like. The gates that decide a bean already run
+here, in the pinned image, before anything is pushed; CI is the second opinion
+a reviewer can have without trusting this machine, and branch protection cannot
+enforce it on a private repo without GitHub Pro anyway (HTTP 403, 2026-09-16).
+The human merge is the gate, which is what `merge_mode: human_required` always
+said.
+
+What it did cost, and what is fixed: a red required check used to send the run
+back to `build`. A failure at `docker pull` would have rebuilt tasks chosen by
+which paths the log happened to name, and failed identically, because the cause
+is not in the repository. `ci.sh` now asks whether the remote run ever examined
+the tree — the workflow pulls, asserts the toolchain, and only then runs gates —
+and halts with `blocked` rather than rewinding when it did not. See "CI cannot
+pull the gate image" below for the full account.
+
+Done, since the last time this list was written:
 
 - **PR #1 merged** (2026-09-17 17:31Z) — read first: diff, gates, criteria,
   non-goals, hidden suite. bean-002 is now `ready` and running.
@@ -216,7 +229,7 @@ stopped rather than planning around the missing precondition
 (`evidence/bean-002-worker-questions-20260916.md`).
 
 
-## OPEN, and it needs one toggle in a settings page: CI cannot pull the gate image
+## CI cannot pull the gate image, and the line no longer treats that as the bean's fault
 
 The gate image is published — `ghcr.io/beekeeper-lab/factory-gate-python:20260914`
 — and the scaffold installed `.github/workflows/gates.yml` for the first time,
@@ -334,7 +347,24 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Twelve ways a check goes wrong, found on 2026-09-15, 16, 17
+## Thirteen ways a check goes wrong, found on 2026-09-15, 16, 17
+
+**(13) A check that answered about something other than what it was checking.**
+`ci.sh` treated every red required check as a finding about the change, and sent
+the run back to `build` for whichever tasks named a path the failing log
+mentioned. On 2026-09-17 the red was `docker pull` failing on a private package:
+no gate ran, the tree was never opened, and the rewind would have had a worker
+edit code in response to a signal that contained no information about it. It
+would then have failed identically, and the second failure would have read as
+confirmation.
+
+Nothing malfunctioned. The check ran, its inputs were real, and its answer was
+true — *the required check is red*. It was the **use** that was wrong: red was
+read as "the change is bad" when it meant "nobody looked at the change". Closest
+to (9), the right check at the wrong resolution, except that here the resolution
+was fine and the question had been substituted. `ci.sh` now asks what the remote
+run actually examined before deciding what its answer is about. *When a check
+fails, ask what it examined before acting on what it said.*
 
 **(12) A check that worked, recorded its answer, and was never read.** On
 2026-09-16 the evidence ledger recorded, about the first reaudit: *"the largest
@@ -528,6 +558,7 @@ retry that exists precisely for this failure never fired and the run halted for 
 human. Both now hash the file before the session and after. **Existence is not
 authorship, and on a resumed run every output of every earlier attempt is sitting
 right there to be mistaken for this one's.**
+
 
 ## Deterministic checks — what used to be the judge's job
 
