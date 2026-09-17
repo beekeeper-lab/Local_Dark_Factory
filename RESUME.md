@@ -1679,10 +1679,31 @@ in flight, and the first one restarts ollama:
   global setting comes back onto this list.
 - Smoke step with `--no-skills --skill "$FACTORY_SKILLS"`; if the skill loads, add
   `--no-skills` to `HARNESS_FLAGS` and demote the collision check to a regression test.
-- Spike `pi --mode json` on a smoke step. If model, thinking level and tool calls arrive
-  as events on stdout, `run-step.sh` reads them there and the session-directory search
-  (`pi_sessions_dir()`, ~100 lines) goes; a pi update that changes the session format
-  stops being a silent risk.
+- ~~Spike `pi --mode json` on a smoke step.~~ **Spiked 2026-09-17. It works, it
+  gives more than the session file, and it is not a free swap.**
+
+  `pi -p --mode json --model ollama/gpt-oss:20b` emits the same event stream to
+  STDOUT: `session`, `agent_start`, `turn_start`, `message_start`,
+  `message_update` ×36, `message_end`, `turn_end`, `agent_settled`, `agent_end`.
+  And each assistant `message_end` carries **`model`, `provider`, `api`,
+  `stopReason` and `usage` directly** — `{"model":"gpt-oss:20b",
+  "provider":"ollama","usage":{"input":4337,"output":42,...}}` — which is better
+  than what `run-step.sh` does today, because it reads the model from
+  `model_change` EVENTS and has to infer "unchanged" from their absence. Token
+  usage per worker step is telemetry this line does not currently have at all.
+
+  **What the spike did not show, because the session was trivial**: whether
+  `thinking_level_change`, `model_change` and `compaction` also arrive on stdout.
+  They appear in a session only when they happen. The next step is one session
+  that forces a thinking change or a compaction and re-checks — not another
+  hello-world.
+
+  **And the consequence that turns "100 lines saved" into "100 lines moved"**: in
+  json mode *everything* on stdout is an event, so the worker's human-readable
+  output has to be reconstructed from `message` content. Anything that reads that
+  text today — the halt summary, what goes into `QUESTIONS.md` — would have to be
+  assembled rather than captured. Worth doing, not free, and worth knowing before
+  someone starts.
 - ~~`handle_audit_failure` hands the re-entered authoring step the whole verdict
   file~~ — **done 2026-09-16.** `audit-findings.sh` renders the part a worker can
   act on: the verdict word, the findings, the feedback, and the criteria the audit
