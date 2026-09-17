@@ -1,0 +1,309 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-15T13:12:15Z",
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1"
+  },
+  "seeded_defects": 5,
+  "rejected": 3,
+  "named_the_defect": 1,
+  "false_accepts": 1,
+  "abstentions": 0,
+  "no_answer": 1,
+  "cut_off_by_token_budget": 0,
+  "complete": true,
+  "reject_rate": 60,
+  "named_rate": 20,
+  "false_accept_rate": 20,
+  "cases": [
+    {
+      "case": "clean",
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "block",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 259,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "The specification fails to meet the rubric requirement for a `testpaths` key within the `tool.oryx.seating` table. Instead of `testpaths = [\"tests\"]`, it defines a nested table `[tool.oryx.seating.testpaths]` containing a `paths` key. This does not satisfy the required key structure, rendering the spec unsound according to the rubric.",
+            "evidence": "In `pyproject.toml`, the line `testpaths = [\"tests\"]` is missing; the file contains `[tool.oryx.seating.testpaths]` with `paths = [\"tests\"]` instead."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `SeatingPlanner.add_passenger` method in `src/seating_planner/__init__.py` calls `self.seats[seat_number].assign_passenger(passenger)`, but the `Seat` class does not define an `assign_passenger` method. While this does not violate syntax rules, it would cause a runtime AttributeError, indicating a logical inconsistency with the intended design of a seat that can hold a passenger.",
+            "evidence": "Method `add_passenger` references `self.seats[seat_number].assign_passenger(passenger)`, but `class Seat` only defines `seat_number` and no `assign_passenger` attribute."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "JSON_VALID",
+            "met": true,
+            "evidence": "The file `gate.yaml` contains syntactically correct JSON. All keys and values are properly quoted and separated, and the structure conforms to JSON syntax rules. No syntax errors detected upon parsing.",
+            "quote": "{ \"name\": \"bean-001\", \"description\": \"A bean that defines a simple seating planner with a single seat and a single passenger.\", \"author\": \"Your Name\", \"version\": \"0.1.0\", \"requirements\": { \"python\": \">=3.11\" }, \"dependencies\": [ \"ruff\", \"mypy\", \"pytest\" ], \"tasks\": [ { \"name\": \"task-1\", \"description\": \"Create the root pyproject.toml file with the appropriate metadata and dependencies.\" }, { \"name\": \"task-2\", \"description\": \"Create a simple seating planner module with a single seat and passenger.\" }, { \"name\": \"task-3\", \"description\": \"Add a test for the seating planner.\" } ]"
+          },
+          {
+            "id": "TOML_VALID",
+            "met": true,
+            "evidence": "The file `pyproject.toml` is syntactically valid TOML. All tables and key/value pairs are correctly formed, and the file parses without errors.",
+            "quote": "[project]\nname = \"seating-planner\"\nversion = \"0.1.0\"\ndescription = \"A simple seating planner for a single passenger.\"\nrequires-python = \">=3.11\"\ndependencies = [ \"ortools>=9.5\" ]\n\n[tool.oryx.seating]\ntype = \"package\"\npath = \"src\"\n\n[tool.oryx.seating.testpaths]\npaths = [\"tests\"]"
+          },
+          {
+            "id": "YAML_VALID",
+            "met": true,
+            "evidence": "The file `tasks.yaml` follows proper YAML syntax with correct indentation, list notation, and key/value pairs. It parses correctly.",
+            "quote": "- id: task-1\n  title: Declare the project in pyproject.toml\n  intent: >\n    Create the root pyproject.toml declaring the seating-planner project: metadata,\n    requires-python >=3.11, ortools as the sole runtime dependency (declared but\n    never imported in this bean), src-layout package discovery, and tool\n    configuration (ruff, mypy, pytest, coverage) so the factory gate commands\n    behave correctly when run from the repo root. In particular: ruff must\n    extend-exclude \"factory\" so the control surface synced from another repo is\n    not linted under this repo's rules, and pytest must set testpaths=[\"tests\"],\n    which references the seating_planner.invariant_api seam that does not exist\n    until a later bean.\n- id: task-2\n  title: Create the package module and the first smoke test\n  intent: >\n    Create src/seating_planner/__init__.py containing only a module docstring,\n    __all__, and a non-empty string __version__ (no application logic, no\n    ortools import), and tests/test_scaffold.py containing exactly one test,\n    test_package_imports, which imports seating_planner and asserts\n    __version__ is a non-empty string. The module must stay small enough that\n    importing it covers 100% of src, so the coverage floor passes with a single\n    smoke test.\n- id: task-3\n  title: Bring all four factory gates to green\n  intent: >\n    Run the four pinned gate commands from the repo root — `ruff check .`,\n    `ruff format --check .`, `mypy src`, and `pytest -q --cov=src\n    --cov-report=term-missing --cov-fail-under=60` — and fix every failure in\n    files this bean owns, using only formatting, lint, and type-annotation\n    changes (no new code). Finally, append the gate-generated cache paths\n    (.ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage) to\n    .gitignore so running a gate never dirties the tree."
+          },
+          {
+            "id": "PYTHON_VALID",
+            "met": true,
+            "evidence": "The file `src/seating_planner/__init__.py` contains syntactically correct Python code: a module docstring, __all__, __version__, and simple class definitions. No syntax errors are present.",
+            "quote": "\"\"\"\nSeating Planner module.\n\"\"\"\n\n__all__ = [\"Seat\", \"Passenger\"]\n__version__ = \"0.1.0\"\n\nclass Seat:\n    def __init__(self, seat_number: int):\n        self.seat_number = seat_number\n\nclass Passenger:\n    def __init__(self, name: str):\n        self.name = name\n\nclass SeatingPlanner:\n    def __init__(self):\n        self.seats = {}\n        self.passengers = {}\n\n    def add_seat(self, seat: Seat):\n        self.seats[seat.seat_number] = seat\n\n    def add_passenger(self, passenger: Passenger, seat_number: int):\n        if seat_number in self.seats:\n            self.seats[seat_number].assign_passenger(passenger)\n\n    def get_seat(self, seat_number: int) -> Seat:\n        return self.seats.get(seat_number)\n\n    def get_passenger(self, name: str):\n        for passenger in self.passengers:\n            if passenger.name == name:\n                return passenger\n        return None"
+          },
+          {
+            "id": "PROJECT_TABLE",
+            "met": true,
+            "evidence": "In `pyproject.toml`, the `[project]` table exists with `name = \"seating-planner\"` and `requires-python = \">=3.11\"` (the string contains \"3.11\").",
+            "quote": "[project]\nname = \"seating-planner\"\nrequires-python = \">=3.11\""
+          },
+          {
+            "id": "TOOL_ORYX_SEATING_KEY",
+            "met": true,
+            "evidence": "The TOML file defines `[tool.oryx.seating]`, which creates a `seating` key under the `tool.oryx` table (as a sub‑table). This satisfies the requirement that the `tool.oryx` table contain a `seating` key.",
+            "quote": "[tool.oryx.seating]\n..."
+          },
+          {
+            "id": "TOOL_ORYX_SEATING_TYPE_PATH",
+            "met": true,
+            "evidence": "Within `[tool.oryx.seating]` the keys `type = \"package\"` and `path = \"src\"` are present.",
+            "quote": "[tool.oryx.seating]\ntype = \"package\"\npath = \"src\""
+          },
+          {
+            "id": "TESTPATHS_KEY",
+            "met": false,
+            "evidence": "The required `testpaths` key is missing from the `[tool.oryx.seating]` table. Instead, a sub‑table `[tool.oryx.seating.testpaths]` with a `paths` key is defined. The rubric explicitly requires a `testpaths` key (a list) inside the `tool.oryx.seating` table, not a nested table named `testpaths`.",
+            "quote": "[tool.oryx.seating.testpaths]\npaths = [\"tests\"]"
+          }
+        ],
+        "confidence": 0.95
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 94,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "All verification commands for the defined tasks succeed; the repository satisfies the four factory gate conditions (ruff check passes, ruff format --check passes, mypy src passes, pytest -q --cov=src passes).",
+            "evidence": "Running `ruff check .` and `ruff format --check .` produce no errors. `mypy src` reports no issues due to permissive configuration. `pytest -q --cov=src` runs successfully with coverage > 60% (the only test imports the package, which contains a trivial module, yielding 100% coverage)."
+          },
+          {
+            "severity": "minor",
+            "summary": "The gate command `pytest -q -m \"not slow\"` required by the control surface is not exercised in the verification steps, but the teaching note explicitly states that this omission is acceptable for the current artifact.",
+            "evidence": "Verification only runs `ruff` and `mypy`; the pytest command with the `-m \"not slow\"` marker is not executed, matching the note’s description."
+          },
+          {
+            "severity": "minor",
+            "summary": "All required files are present and correctly configured, and no hidden constraints appear to be violated.",
+            "evidence": "Repository includes `pyproject.toml`, `src/seating_planner/__init__.py`, `tests/test_scaffold.py`, and `.gitignore` with appropriate contents."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "criterion-1",
+            "met": true,
+            "evidence": "The repository contains a `pyproject.toml` file whose `project` table includes `name = \"seating-planner\"` as required. This is verified by the presence of the file and the key‑value pair in its contents:\n```toml\n[project]\nname = \"seating-planner\"\n```\nThe verification step `test -d .` succeeds because the repository directory exists.\n\n**Result:** ✅ Satisfied.\n\n**Teaching note check:** The note mentions that the verification command only checks for the existence of the directory, which is indeed true. No hidden requirement is violated.\n\n**Confidence:** 1.0 (the repository clearly meets the condition).",
+            "quote": "The repository contains a pyproject.toml file with a name field set to 'seating-planner'."
+          },
+          {
+            "id": "criterion-2",
+            "met": true,
+            "evidence": "File `src/seating_planner/__init__.py` exists and defines a non‑empty `__version__` string:\n```python\n__version__ = \"0.1.0\"\n```\nThus the requirement that the package module defines a non‑empty `__version__` variable is satisfied.",
+            "quote": "The repository contains a src/seating_planner/__init__.py file that defines a __version__ variable with a non-empty string."
+          },
+          {
+            "id": "criterion-3",
+            "met": true,
+            "evidence": "File `tests/test_scaffold.py` exists and contains a test that imports `seating_planner` and asserts `sp.__version__` is truthy:\n```python\nimport seating_planner as sp\n\ndef test_package_imports():\n    assert sp.__version__\n```\nRunning `pytest -q tests/test_scaffold.py::test_package_imports` succeeds, confirming the import works and the version string is non‑empty.",
+            "quote": "The repository contains a tests/test_scaffold.py file that imports the seating_planner module and asserts that its __version__ attribute is truthy."
+          },
+          {
+            "id": "criterion-4",
+            "met": true,
+            "evidence": "File `.gitignore` exists and includes the required entries:\n```\n.ruff_cache/\n.mypy_cache/\n.pytest_cache/\n__pycache__/\n.coverage\n```\nAll five entries are present exactly as specified.",
+            "quote": "The repository contains a .gitignore file that includes the following entries: .ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage."
+          }
+        ],
+        "confidence": 1.0
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 175,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "The pytest gate (gate‑4) fails because the test file `tests/test_seating_invariants.py` imports `seating_planner.invariant_api`, which is not provided in this repository. This import error prevents the test suite from completing successfully, violating the gate condition that requires the test suite to pass with at least 60% coverage.",
+            "evidence": "Running `pytest -q --cov=src --cov-report=term-missing` in the sandbox returns a non‑zero exit code due to the missing module."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `ruff check .` and `ruff format --check .` gates are likely satisfied because the provided Python files (`src/seating_planner/__init__.py` and test files) contain minimal code and the `ruff` configuration excludes the `factory` directory, which contains no Python files to lint.",
+            "evidence": "The `pyproject.toml` includes `[tool.ruff]` with appropriate `exclude` and `line-length` settings; the repository contains only a few simple `.py` files that conform to these rules."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `mypy src` gate passes because the `src` directory only contains a stub module (`seating_planner/__init__.py`) with no type errors.",
+            "evidence": "Running `mypy src` on the provided stub returns no errors."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `ruff check .` gate (gate‑1) passes as the `ruff` configuration excludes the `factory` directory and the remaining Python files are syntactically correct.",
+            "evidence": "`ruff check .` exits with status 0."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `ruff format --check .` gate (gate‑2) passes because the code files are already formatted according to the configured style and the excluded directories are not checked.",
+            "evidence": "`ruff format --check .` exits with status 0."
+          },
+          {
+            "severity": "minor",
+            "summary": "The `pyproject.toml` includes the required `[project]` table with `name`, `version`, and `dependencies` (including `ortools`).",
+            "evidence": "Verification step in task‑1 confirms the presence of these fields."
+          },
+          {
+            "severity": "minor",
+            "summary": "`src/seating_planner/__init__.py` defines `__all__` and a non‑empty `__version__` string, satisfying the import test in `tests/test_scaffold.py`.",
+            "evidence": "Verification step in task‑2 imports the module and checks `__version__` is a non‑empty string."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "gate-4",
+            "met": false,
+            "evidence": "The `pytest -q --cov=src --cov-report=term-missing` gate fails because the test suite includes `tests/test_seating_invariants.py`, which imports `seating_planner.invariant_api`. This module does not exist in the repository at this stage, causing an ImportError and causing pytest to exit with a non‑zero status. Consequently, the required coverage threshold is not met, and the gate does not pass.",
+            "quote": "Run the four pinned gate commands from the repo root — `ruff check .`, `ruff format --check .`, `mypy src`, and `pytest -q --cov=src --cov-report=term-missing` — and fix every failure in files this bean owns."
+          },
+          {
+            "id": "definition_of_done",
+            "met": false,
+            "evidence": "The definition of done states that all four AC verifications must pass and the four pinned gates must be green. Since gate‑4 fails (ImportError in `tests/test_seating_invariants.py`), the definition of done is not satisfied.",
+            "quote": "Definition of done, per the bean: all four AC verifications pass, the four pinned gates are green, and the spec and implementation documents are accepted."
+          }
+        ],
+        "confidence": 0.85
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "none",
+      "outcome": "no judgement (rc=1):       \"evidence\": \"File exists at path 'pyproject.toml' with content:\\n[project]\\nname = \\",
+      "seconds": 774,
+      "judgement": null
+    },
+    {
+      "case": "unfinishable-task",
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 61,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "The spec declares that the repository is ready for an installed environment and that all four gate checks should pass, but the repository currently has no `src` directory, no `seating_planner` package, and the Ruff configuration excludes the `factory/` directory. This means the import‑related gate (ac1) and the Ruff check cannot succeed in the current state, violating the acceptance criteria.",
+            "evidence": "The README and task descriptions state that a package module and tests still need to be created. The gate configuration expects a `src` directory with a `seating_planner` package and a functional `ruff` configuration that includes it. The current repository layout lacks these, so the required import test (`python -c \"import seating_planner\"`) and the Ruff check (`ruff check .`) would fail. Additionally, the README notes a discrepancy: the gate expects an installed environment, yet the repository is described as a sandbox with no network and no install step."
+          },
+          {
+            "severity": "minor",
+            "summary": "The README mentions a \"seam\" and a \"seam module\" that are not present in the repository, indicating incomplete documentation of the intended architecture. This omission does not directly affect the current acceptance criteria but highlights missing context that could hinder verification.",
+            "evidence": "The README references a \"seam\" and a \"seam module\" that are not part of the provided files. The tasks later refer to creating a \"seam module\" and wiring it, but these steps have not yet been performed."
+          },
+          {
+            "severity": "minor",
+            "summary": "The task list includes tasks that depend on each other and on the successful execution of gate checks, but those gates are not yet green. Therefore the tasks cannot be verified as complete at this stage.",
+            "evidence": "Task‑2 depends on task‑1, and task‑3 depends on both task‑1 and task‑2. Since the repository does not yet contain the required package files, the verification commands for these tasks (e.g., importing `seating_planner`, running its smoke test, and executing the gate commands) would fail."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The README states that the repository is a sandbox for a new Python project that is not yet ready for production. The definition of done requires the repository to be importable as a package (i.e., an installed environment) and for the four gate checks to pass. However, the current repository lacks a proper installation step and the required package structure (`src/seating_planner/__init__.py` is missing), so the import test in ac1 would fail. Moreover, the gate configuration expects the project to be importable and to have a `ruff` configuration that includes the `src` directory, but the repository currently has no `src` folder at all. Consequently, the gate checks that depend on the existence of `src` (including the mypy and Ruff checks) cannot succeed yet. The tasks defined in the task list (artifact 3) are not yet completed; they are intended to bring the repository to a state where the gates pass, but that work has not been done. Therefore, the overall specification does not yet meet its stated definition of done, and the current state does not satisfy the required acceptance criteria.",
+            "quote": "The repository is a sandbox for a new Python project that is not yet ready for production. The definition of done requires all four AC verifications to pass, the four pinned gates to be green, and the spec and implementation documents to be accepted. However, the repository currently lacks the required package structure and gate‑passing files, and the README’s description of an “installed environment” conflicts with the sandbox’s no‑network, no‑install setup. Consequently, the spec’s acceptance criteria are not currently met."
+          }
+        ],
+        "confidence": 0.92
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 355,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Verification step for ac1 contains a syntax error, causing the check to fail.",
+            "evidence": "The command string in the verification step ends with stray characters (e.g., `p\"]`), which is not valid Python syntax."
+          },
+          {
+            "severity": "major",
+            "summary": "pyproject.toml does not explicitly exclude the control‑surface directory in the ruff configuration, nor does it declare the src layout via `[tool.setuptools.packages.find]`. This violates the explicit requirement in ac1 and ac2 that the src directory be included and the control‑surface directory be excluded in the tool configuration.",
+            "evidence": "Missing `exclude` entry for the control‑surface directory in `[tool.ruff]` and missing `[tool.setuptools.packages.find]` section for src layout."
+          },
+          {
+            "severity": "minor",
+            "summary": "The verification command for checking the presence of '>=3.11' in the `requires` field is malformed and will raise a syntax error before evaluating the condition.",
+            "evidence": "The command string includes an extraneous `p\"]` after the assert expression."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The provided pyproject.toml defines the package name, version, python requirement, and a runtime dependency on ortools, satisfying part of the requirement. However, the spec also requires that the tool configuration includes the src directory and excludes the control‑surface directory. The ruff configuration in the file does not contain an `exclude` entry for the control‑surface directory, and there is no `[tool.setuptools.packages.find]` table specifying that the package lives under `src/`. Moreover, the verification command strings in the task are malformed (e.g., `assert p['name'] == 'seating-planner' and '>=3.11' in p['requires'], p\"]`), which would cause a syntax error and thus the verification step would fail. Consequently, ac1 is **not satisfied**.",
+            "quote": "The repository contains a pyproject.toml file that defines a package named \"seating-planner\" with a version field, a python version requirement of >=3.11, and a runtime dependency on ortools. The pyproject.toml also defines a build system that uses hatchling and a tool configuration for ruff, mypy and pytest that includes the src directory and excludes the control surface directory."
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The pyproject.toml does not contain an `exclude` entry for the control‑surface directory in the ruff configuration, nor does it specify a `[tool.setuptools.packages.find]` table to declare that the package resides in `src/`. Therefore the requirement that the tool configuration includes the src directory and excludes the control‑surface directory is not met. The verification step for task‑3 (`ruff check .`) would still pass because there are no `.py` files in the control‑surface folder, but the spec’s condition for ac2 explicitly demands the exclusion be declared, which it is not. Hence ac2 is not satisfied.",
+            "quote": "The repository contains a pyproject.toml file that defines a package named \"seating-planner\" with a version field, a python version requirement of >=3.11, and a runtime dependency on ortools. The pyproject.toml also defines a build system that uses hatchling and a tool configuration for ruff, mypy and pytest that includes the src directory and excludes the control surface directory."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "The repository’s src directory contains only `seating_planner/__init__.py`, which defines a non‑empty `__version__` string and no other code. Running `mypy src` therefore reports no type‑checking errors, satisfying the requirement that mypy reports no errors. The verification step for ac3 (as noted in the description) is therefore satisfied.",
+            "quote": "The repository contains a pyproject.toml file that defines a package named \"seating-planner\" with a version field, a python version requirement of >=3.11, and a runtime dependency on ortools. The pyproject.toml also defines a build system that uses hatchling and a tool configuration for ruff, mypy and pytest that includes the src directory and excludes the control surface directory."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The file src/seating_planner/__init__.py exists and defines `__version__ = \"0.1.0\"`, which is a non‑empty string as required.",
+            "quote": "The repository contains a src/seating_planner/__init__.py file that defines a __version__ attribute that is a non-empty string."
+          }
+        ],
+        "confidence": 0.6
+      }
+    }
+  ]
+}

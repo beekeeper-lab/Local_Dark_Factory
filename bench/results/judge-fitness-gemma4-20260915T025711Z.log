@@ -1,0 +1,19 @@
+
+judge fitness — 2026-09-15T02:54:55Z
+
+CASE                         EXPECT    VERDICT   OUTCOME
+clean                        no        accept    accepted the clean control, correctly  (18s)
+tautological-verify          yes       accept    FALSE ACCEPT — it passed a seeded defect  (17s)
+contradicts-non-goal         yes       accept    FALSE ACCEPT — it passed a seeded defect  (18s)
+invented-current-behaviour   yes       accept    FALSE ACCEPT — it passed a seeded defect  (17s)
+unfinishable-task            yes       none      no judgement (rc=1): JUDGE  spec: no content in the response: {"model":"","created_at":"0001-01-01T00:00:00Z","  (5s)
+criterion-not-really-met     yes       none      no judgement (rc=1): JUDGE  spec: no content in the response: {"model":"","created_at":"0001-01-01T00:00:00Z","  (6s)
+
+of 5 seeded defects: rejected 0, NAMED the actual defect 0
+false accepts 3 · abstentions 0 · no answer at all 2
+/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/409aaaae-efa7-4467-ba0d-7985ed3c1425/scratchpad/fitness-gemma2.json
+
+The false-accept count is the one that matters. A judge that misses and says
+so costs a retry; a judge that misses and accepts is the failure the line exists
+to prevent, and it is invisible from the outside.
+RC=1

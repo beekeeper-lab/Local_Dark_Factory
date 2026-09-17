@@ -1,0 +1,29 @@
+{
+  "schema": "controller-fitness/1.0.0",
+  "measured_at": "2026-09-16T17:11:59Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T17:11:59Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "measured_against": {
+    "repo": "main",
+    "head": "0c29fa87d00db6a22bef22b684bcca87d32be980"
+  },
+  "seeded_defects": 1,
+  "caught_by_name": 0,
+  "not_decidable": 1,
+  "false_alarms": 0,
+  "cases": [
+    {
+      "case": "tautological-verify",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 9
+    }
+  ],
+  "note": "Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."
+}

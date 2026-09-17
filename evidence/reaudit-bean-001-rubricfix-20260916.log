@@ -1,0 +1,43 @@
+# bean-001's four audits × three passes, after the rubric stopped telling the
+# judge to open files it cannot open. Everything else identical to
+# reaudit-bean-001-confenum-20260916.log, which stamped 1 of 12.
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     0         revise     no        1 finding(s), 4 criteria, conf 0
+impl      1     1         -          no        impl: it reasoned for 253 characters and then ended its turn (done_rea
+doc       1     0         accept     no        1 finding(s), 4 criteria, conf 0.9
+package   1     1         -          no        package: it reasoned for 484 characters and then ended its turn (done_
+spec      2     0         revise     no        1 finding(s), 4 criteria, conf 0.9
+impl      2     0         revise     no        2 finding(s), 4 criteria, conf 0.9
+doc       2     1         -          no        doc: it reasoned for 691 characters and then ended its turn (done_reas
+package   2     0         accept     no        1 finding(s), 4 criteria, conf 0.5
+spec      3     0         revise     no        2 finding(s), 4 criteria, conf 0.9
+impl      3     1         -          no        impl: it reasoned for 373 characters and then ended its turn (done_rea
+doc       3     1         -          no        doc: the model tried to call tools instead of answering (1 call(s): co
+package   3     1         -          no        package: it reasoned for 419 characters and then ended its turn (done_
+
+0 of 12 audit run(s) produced a verdict the controller stamped.
+
+--- why each was refused (the LAST audit-check line, not the first) ---
+1-doc        the judgement quotes text that is not on disk anywhere.
+1-impl       the judge wrote no judgement file.
+1-package    the judge wrote no judgement file.
+1-spec       the judgement quotes text that is not on disk anywhere.
+2-doc        the judge wrote no judgement file.
+2-impl       the judgement quotes text that is not on disk anywhere.
+2-package    the judgement quotes text that is not on disk anywhere.
+2-spec       the judgement quotes text that is not on disk anywhere.
+3-doc        the judge wrote no judgement file.
+3-impl       the judge wrote no judgement file.
+3-package    the judge wrote no judgement file.
+3-spec       the judgement quotes text that is not on disk anywhere.
+
+--- and what it quoted, which is why ---
+  - All tests pass. This is a valid package.
+  - No test file found for this artifact
+  - Pytest passes.
+  - `src/pyproject.toml` must be present and contain a version field.
+  - `src/seating_planner/__init__.py` should exist as a module docstring.
+  - `tests` directory must contain at least one test file.
+  - The repository does not contain a .gitignore file.
+  - The repository must contain a .gitignore file.

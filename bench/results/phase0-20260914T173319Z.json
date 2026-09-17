@@ -1,0 +1,271 @@
+{
+  "schema": "phase0-measurement/1.0.0",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-14T17:33:19Z",
+    "gtt_bytes": 103079215104,
+    "gtt_gb": 96,
+    "ram_total_gb": 125,
+    "developer": {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "digest": "8a1582877303",
+      "quant": "Q8_0",
+      "parameters": "27.3B",
+      "architecture": "qwen35",
+      "native_context": 262144
+    },
+    "judge": {
+      "model": "gpt-oss:120b",
+      "digest": "a951a23b46a1",
+      "quant": "MXFP4",
+      "parameters": "116.8B",
+      "architecture": "gptoss",
+      "native_context": 131072
+    }
+  },
+  "speed": [
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 16384,
+      "wall_seconds": 19.08,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 9.22,
+      "prompt_tokens_per_second": 324.9,
+      "gen_tokens": 50,
+      "gen_seconds": 2.48,
+      "gen_tokens_per_second": 20.1,
+      "load_seconds": 7.33,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "num_ctx": 16384,
+      "wall_seconds": 18.09,
+      "prompt_tokens": 3051,
+      "prompt_seconds": 3.54,
+      "prompt_tokens_per_second": 861.3,
+      "gen_tokens": 64,
+      "gen_seconds": 1.8,
+      "gen_tokens_per_second": 35.6,
+      "load_seconds": 12.72,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 16384,
+      "wall_seconds": 18.62,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 9.18,
+      "prompt_tokens_per_second": 326.2,
+      "gen_tokens": 50,
+      "gen_seconds": 2.48,
+      "gen_tokens_per_second": 20.2,
+      "load_seconds": 6.94,
+      "ok": true,
+      "scenario": "coresident"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 32768,
+      "wall_seconds": 18.54,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 9.21,
+      "prompt_tokens_per_second": 325.3,
+      "gen_tokens": 50,
+      "gen_seconds": 2.48,
+      "gen_tokens_per_second": 20.2,
+      "load_seconds": 6.84,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "num_ctx": 32768,
+      "wall_seconds": 17.54,
+      "prompt_tokens": 3051,
+      "prompt_seconds": 3.48,
+      "prompt_tokens_per_second": 876.4,
+      "gen_tokens": 64,
+      "gen_seconds": 1.79,
+      "gen_tokens_per_second": 35.7,
+      "load_seconds": 12.24,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 32768,
+      "wall_seconds": 18.97,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 9.21,
+      "prompt_tokens_per_second": 325,
+      "gen_tokens": 50,
+      "gen_seconds": 2.48,
+      "gen_tokens_per_second": 20.2,
+      "load_seconds": 7.25,
+      "ok": true,
+      "scenario": "coresident"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 49152,
+      "wall_seconds": 18.4,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 8.96,
+      "prompt_tokens_per_second": 334.2,
+      "gen_tokens": 50,
+      "gen_seconds": 2.3,
+      "gen_tokens_per_second": 21.7,
+      "load_seconds": 7.11,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "num_ctx": 49152,
+      "wall_seconds": 16.71,
+      "prompt_tokens": 3051,
+      "prompt_seconds": 2.9,
+      "prompt_tokens_per_second": 1052.3,
+      "gen_tokens": 56,
+      "gen_seconds": 1.59,
+      "gen_tokens_per_second": 35.2,
+      "load_seconds": 12.19,
+      "ok": true,
+      "scenario": "alone"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "num_ctx": 49152,
+      "wall_seconds": 18.57,
+      "prompt_tokens": 2995,
+      "prompt_seconds": 9.01,
+      "prompt_tokens_per_second": 332.4,
+      "gen_tokens": 50,
+      "gen_seconds": 2.31,
+      "gen_tokens_per_second": 21.7,
+      "load_seconds": 7.24,
+      "ok": true,
+      "scenario": "coresident"
+    }
+  ],
+  "residency": [
+    {
+      "num_ctx": 16384,
+      "scenario": "alone:qwen3.8:27b-mtp-q8_0",
+      "loaded": [
+        {
+          "model": "qwen3.8:27b-mtp-q8_0",
+          "size": "29 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 16384,
+      "scenario": "alone:gpt-oss:120b",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 16384,
+      "scenario": "both",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 32768,
+      "scenario": "alone:qwen3.8:27b-mtp-q8_0",
+      "loaded": [
+        {
+          "model": "qwen3.8:27b-mtp-q8_0",
+          "size": "29 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 32768,
+      "scenario": "alone:gpt-oss:120b",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 32768,
+      "scenario": "both",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 49152,
+      "scenario": "alone:qwen3.8:27b-mtp-q8_0",
+      "loaded": [
+        {
+          "model": "qwen3.8:27b-mtp-q8_0",
+          "size": "29 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 49152,
+      "scenario": "alone:gpt-oss:120b",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    },
+    {
+      "num_ctx": 49152,
+      "scenario": "both",
+      "loaded": [
+        {
+          "model": "gpt-oss:120b",
+          "size": "64 GB",
+          "processor": "100% GPU"
+        }
+      ]
+    }
+  ],
+  "swaps": [
+    {
+      "from": "gpt-oss:120b",
+      "to": "qwen3.8:27b-mtp-q8_0",
+      "seconds": 8.005200146
+    },
+    {
+      "from": "qwen3.8:27b-mtp-q8_0",
+      "to": "gpt-oss:120b",
+      "seconds": 13.150731649
+    }
+  ],
+  "regime_decision": "serial",
+  "model_load_timeout_suggestion_s": 27
+}

@@ -1,0 +1,65 @@
+schema_version: bean/2.0.0
+id: bean-011
+repo: beekeeper-lab/shelving-planner-py
+title: Locked assignments that automatic recalculation cannot move
+intent: >
+  A guest locked to a table stays at that table through every serialisation mode, and
+  only an explicit unlock releases them.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 11
+source:
+  kind: manual
+  ref: benchmark/shelving-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-058: Automatic recalculation SHALL NOT modify a locked assignment. Implementation Guardrails #5: Store manual overrides and locks as domain data rather than transient interface state."
+context:
+  read_paths:
+    - src/shelving_planner/domain/
+    - src/shelving_planner/exporter/
+    - src/shelving_planner/store/
+    - tests/exporter/
+  background: >
+    A lock is the organizer overriding the serialiser, and Product Principle 3 puts it
+    above every automatic decision. Guardrail #5 is the design constraint: a lock is
+    stored domain data, not a flag living in a screen, so it survives a restart and
+    binds the exporter rather than merely greying out a control. In the model a lock
+    becomes a fixed variable — the guest's table is decided before the search begins.
+    This touches the domain model, the store and the exporter, all written by earlier
+    beans.
+allowed_write_paths:
+  - src/shelving_planner/domain/**
+  - src/shelving_planner/exporter/**
+  - src/shelving_planner/store/**
+  - tests/exporter/**
+  - tests/domain/**
+acceptance_criteria:
+  - id: ac1
+    text: A guest locked to a table remains at that table after serialisation.
+    verify: { kind: test, test_id: "tests/exporter/test_locks.py::test_locked_guest_does_not_move" }
+  - id: ac2
+    text: Locking every guest at a table holds all of them through serialisation.
+    verify: { kind: test, test_id: "tests/exporter/test_locks.py::test_table_level_lock_holds" }
+  - id: ac3
+    text: Locks survive a save and load cycle.
+    verify: { kind: test, test_id: "tests/domain/test_locks.py::test_locks_persist" }
+  - id: ac4
+    text: Unlocking a guest allows a later serialisation to move them.
+    verify: { kind: test, test_id: "tests/exporter/test_locks.py::test_unlock_allows_move" }
+  - id: ac5
+    text: Locks that contradict a hard rule produce an infeasibility report naming both.
+    verify: { kind: test, test_id: "tests/exporter/test_locks.py::test_lock_versus_hard_rule_conflict" }
+constraints:
+  - locks are persisted domain data, never interface state
+  - a lock is a fixed variable in the model, not a post-solve correction
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no seat-level locks (seats are deferred; see PRD §18.3 assumption)
+dependencies: [bean-010]

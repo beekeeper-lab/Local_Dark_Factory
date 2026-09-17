@@ -1,0 +1,53 @@
+{
+  "schema": "controller-fitness/1.0.0",
+  "measured_at": "2026-09-15T12:41:50Z",
+  "seeded_defects": 5,
+  "caught_by_name": 1,
+  "not_decidable": 2,
+  "false_alarms": 0,
+  "cases": [
+    {
+      "case": "clean",
+      "should_reject": "no",
+      "rejected": "no",
+      "outcome": "passed the clean control, correctly",
+      "seconds": 1
+    },
+    {
+      "case": "tautological-verify",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "rejected, but not for the seeded defect",
+      "seconds": 0
+    },
+    {
+      "case": "contradicts-non-goal",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 0
+    },
+    {
+      "case": "invented-current-behaviour",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  current behaviour          describes files that are ",
+      "seconds": 1
+    },
+    {
+      "case": "unfinishable-task",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "rejected, but not for the seeded defect",
+      "seconds": 0
+    },
+    {
+      "case": "criterion-not-really-met",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 1
+    }
+  ],
+  "note": "Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."
+}

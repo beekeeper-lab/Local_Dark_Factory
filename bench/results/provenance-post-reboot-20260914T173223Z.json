@@ -1,0 +1,29 @@
+{
+  "schema": "phase0-provenance/1.0.0",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-14T17:32:23Z",
+    "gtt_bytes": 103079215104,
+    "gtt_gb": 96,
+    "ram_total_gb": 125,
+    "developer": {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "digest": "8a1582877303",
+      "quant": "Q8_0",
+      "parameters": "27.3B",
+      "architecture": "qwen35",
+      "native_context": 262144
+    },
+    "judge": {
+      "model": "gpt-oss:120b",
+      "digest": "a951a23b46a1",
+      "quant": "MXFP4",
+      "parameters": "116.8B",
+      "architecture": "gptoss",
+      "native_context": 131072
+    }
+  },
+  "residency_now": []
+}

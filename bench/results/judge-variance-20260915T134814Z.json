@@ -1,0 +1,47 @@
+{
+  "schema": "judge-variance/1.0.0",
+  "measured_at": "2026-09-15T13:47:36Z",
+  "case": "criterion-not-really-met",
+  "judge": "gpt-oss:120b",
+  "input_sha": "46d79e50594ad7d6",
+  "runs": [
+    {
+      "run": 1,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 232,
+      "note": "9 finding(s), confidence 0.99"
+    },
+    {
+      "run": 2,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 168,
+      "note": "1 finding(s), confidence 0.9"
+    },
+    {
+      "run": 3,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 137,
+      "note": "1 finding(s), confidence 0.95"
+    },
+    {
+      "run": 4,
+      "verdict": "none",
+      "named": "-",
+      "seconds": 449,
+      "note": "      \"evidence\": \"The file includes a `[project]` table wit"
+    },
+    {
+      "run": 5,
+      "verdict": "revise",
+      "named": "no",
+      "seconds": 197,
+      "note": "4 finding(s), confidence 0.95"
+    }
+  ],
+  "distinct_verdicts": 2,
+  "reproducible": false,
+  "note": "Identical input every run: same spec, same task list, same prompt, temperature 0. Any difference between rows is the model, not the question."
+}

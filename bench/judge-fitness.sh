@@ -1,0 +1,558 @@
+#!/usr/bin/env bash
+# judge-fitness.sh — does the judge catch a planted defect, and does it pass a clean one?
+#
+# The independent invariants each had to prove they catch their own violation
+# before they were worth anything. The judge has had no equivalent: nobody has
+# measured whether gpt-oss:120b notices a defect deliberately put in front of it.
+# Phase 2's fault injections test the controller. This tests the model the
+# controller trusts, which is the thing the whole §01 argument rests on — a judge
+# of a different family is only worth its cost if it actually catches things.
+#
+# Method: take a real spec and task list that passed, mutate a copy so that
+# exactly one thing is wrong, and ask for a verdict. The defects are chosen to be
+# the ones a script CANNOT catch — spec-check already refuses unclaimed criteria,
+# paths outside the bean, and unrunnable verify kinds. What is left is judgement,
+# which is what the judge is for.
+#
+# Two numbers matter and they are not symmetrical:
+#   catch rate        — of the seeded defects, how many did it flag
+#   false-accept rate — of the seeded defects, how many did it ACCEPT
+# A miss that abstains is a bad day. A miss that accepts is a false approval,
+# which is the §11 metric the whole line is built to keep near zero.
+set -uo pipefail
+# Run from a copy, always, without anyone having to remember.
+#
+# bash reads a script by byte offset as it executes, so editing one mid-run
+# corrupts the run in progress. A three-pass measurement is seventy-five minutes
+# — exactly the window in which someone improves the script — and on 2026-09-16
+# that produced a zero-byte results file from a run whose numbers survived only
+# because they had been printed to a terminal.
+#
+# `bench/snapshot.sh` existed for a day and was used once, by hand. A protection
+# that depends on remembering it is not a protection, so the harness re-execs
+# itself through the launcher. FACTORY_NO_SNAPSHOT=1 opts out, for iterating on
+# the harness where seeing a change take effect is the point.
+if [ "${FACTORY_BENCH_SNAPSHOTTED:-0}" != 1 ] && [ "${FACTORY_NO_SNAPSHOT:-0}" != 1 ]; then
+  exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/snapshot.sh" \
+    "$(basename "${BASH_SOURCE[0]}")" "$@"
+fi
+
+# Nothing else may be using the GPU, because the next thing this does is take it.
+# shellcheck source=inflight.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inflight.sh"
+# Every figure carries where and on what it was measured. One emitter, because
+# two lists of what a figure must record is one list that disagrees with itself.
+# shellcheck source=provenance.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+PIPE="$ROOT/factory/pipeline"
+# Validated only when it was asked for. A JUDGE_CMD someone typed is worth
+# refusing early; a missing default means a broken checkout, and refusing here
+# would pre-empt the checks that say so more usefully — including the mutation
+# guard, which is the one that must run first.
+if [ -n "${JUDGE_CMD:-}" ] && [ ! -f "$JUDGE_CMD" ]; then
+  printf 'no such judge command: %s\n' "$JUDGE_CMD" >&2; exit 2
+fi
+# And re-pointed INTO the snapshot, because an absolute path escapes it.
+#
+# This harness re-execs itself through bench/snapshot.sh so that editing it
+# mid-run cannot corrupt the run — and then `JUDGE_CMD=$PWD/bench/judge-per-criterion.sh`
+# walked straight back out to the live tree. Editing that file during a
+# measurement produced `line 157: \`done <<< "$IDS"'` in the middle of a run, which
+# is the byte-offset hazard the launcher exists to prevent, arriving through the
+# one path the launcher does not control: an argument.
+#
+# A knob that can point outside the snapshot is a knob that can undo it.
+if [ -n "${JUDGE_CMD:-}" ] && [ -f "$HERE/$(basename "$JUDGE_CMD")" ]; then
+  JUDGE_CMD="$HERE/$(basename "$JUDGE_CMD")"
+fi
+JUDGE_CMD="${JUDGE_CMD:-$PIPE/judge.sh}"
+
+usage() {
+  cat <<'EOF'
+judge-fitness.sh — measure whether the judge catches planted defects.
+
+usage: judge-fitness.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
+                        [--out <results.json>] [--only <case>] [--repeat <n>]
+                        [--thinking <level>]
+
+Each case is the same artifacts with exactly one thing wrong. Slow on purpose:
+one real audit per case, no stubs — a fitness number from a stub measures the
+stub.
+EOF
+}
+
+SPEC=""; TASKS=""; BEAN=""; OUT=""; ONLY=""; THINKING=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --spec) SPEC="${2:?}"; shift 2 ;;
+    --tasks) TASKS="${2:?}"; shift 2 ;;
+    --bean) BEAN="${2:?}"; shift 2 ;;
+    --out)  OUT="${2:?}"; shift 2 ;;
+    --thinking) THINKING="${2:?}"; shift 2 ;;
+    --only) ONLY="${2:?}"; shift 2 ;;
+    --repeat) REPEAT="${2:?--repeat needs a count}"; shift 2 ;;
+    --no-evict) NO_EVICT=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+for f in "$SPEC" "$TASKS" "$BEAN"; do
+  [ -n "$f" ] && [ -f "$f" ] || { usage >&2; echo "missing input: ${f:-<unset>}" >&2; exit 2; }
+done
+[ -n "$OUT" ] || OUT="$ROOT/bench/results/judge-fitness-$(date -u +%Y%m%dT%H%M%SZ).json"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# The inputs are frozen here, and every case reads the copies. freeze_inputs in
+# bench/provenance.sh says why; the short version is that this run takes two hours
+# and its bean lives in another repository, where it was edited mid-run.
+#
+# The bean's whole DIRECTORY, keeping its name: run.json records the bean by
+# basename(dirname), so freezing the file alone would have every case report a
+# bean called "inputs".
+FROZEN="$WORK/inputs"
+BEAN_DIR="$(dirname "$BEAN")"
+INPUT_SHAS="$(freeze_inputs "$FROZEN" "spec=$SPEC" "tasks=$TASKS" "bean=$BEAN_DIR")" \
+  || { echo "could not freeze the inputs; refusing to measure a moving target" >&2; exit 2; }
+SPEC="$FROZEN/$(basename "$SPEC")"
+TASKS="$FROZEN/$(basename "$TASKS")"
+BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
+
+# Each case: a name, whether the judge SHOULD reject it, what the defect is, and
+# a python mutation over (spec_text, tasks_text) returning the pair.
+mutate() { # mutate <case> <specfile> <tasksfile>
+  "$ROOT/.venv/bin/python" - "$1" "$2" "$3" <<'PY'
+import re, sys
+case, spec_path, tasks_path = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = open(spec_path).read()
+tasks = open(tasks_path).read()
+spec_before, tasks_before = spec, tasks
+
+if case == "clean":
+    pass
+
+elif case == "tautological-verify":
+    # A check that cannot fail: it asserts that the working directory exists.
+    #
+    # The first version of this did `re.sub(r'run: \[[^\]]*\]', ...)` and was
+    # broken for months of runs: the character class stops at the first `]`,
+    # which in this task list is inside a Python string (`d['project']`), so the
+    # mutation left a mangled line and the fixture was not a tautological verify
+    # at all — it was a syntax error. The judge duly reported a syntax error and
+    # was scored as having missed the defect, three separate times, and the
+    # "format fixation" it was accused of was in this case simply being right.
+    #
+    # Rewritten to replace the whole `verify:` block of the first task, line by
+    # line, so the result is valid YAML that is wrong in exactly the intended way.
+    #
+    # Then broken a SECOND way, found 2026-09-16. The skip loop was
+    #
+    #     while lines[i].strip().startswith("-"): i += 1
+    #
+    # and the line after the first item in this task list is a COMMENT, not a
+    # `-`. So it skipped nothing: the mutation prepended one tautological verify
+    # to four real ones, which is not a tautological task — it is the case
+    # spec-check documents as legitimate, "a lint that is green on an empty
+    # directory". controller-fitness duly reported "not decidable, needs a judge"
+    # about a defect that was never seeded, and judge-fitness scored the judge on
+    # it for days.
+    #
+    # Skip by INDENTATION instead: everything more indented than `verify:`
+    # belongs to it, comments and continuation lines included, and the block ends
+    # at the first non-blank line indented no further.
+    lines = tasks.split("\n")
+    out, i, done = [], 0, False
+    while i < len(lines):
+        line = lines[i]
+        if not done and line.strip() == "verify:":
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(line)
+            out.append(f'{indent}  - {{ kind: command, run: ["sh", "-c", "test -d ."] }}')
+            i += 1
+            while i < len(lines):
+                nxt = lines[i]
+                if nxt.strip() == "":
+                    i += 1
+                    continue
+                if len(nxt) - len(nxt.lstrip()) <= len(indent):
+                    break
+                i += 1
+            done = True
+            continue
+        out.append(line)
+        i += 1
+    tasks = "\n".join(out)
+    spec += "\n\nThe first task is verified by confirming the working directory exists.\n"
+    # The mutation asserts its own post-condition, because this one has now been
+    # silently wrong twice in two different ways and each time the number it
+    # produced looked like a measurement.
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    _v = _t["tasks"][0]["verify"]
+    assert len(_v) == 1, f"tautological-verify: task 0 has {len(_v)} verifies, expected exactly 1"
+    assert _v[0]["run"] == ["sh", "-c", "test -d ."], f"tautological-verify: wrong verify {_v[0]}"
+
+elif case == "contradicts-non-goal":
+    # The bean's non_goals say no solver code. The spec plans some anyway.
+    spec = spec.replace("## Proposed change",
+        "## Proposed change\n\nWe also add a small OR-Tools CP-SAT solver stub in\n"
+        "`src/seating_planner/solver/cpsat.py` so later beans have somewhere to build\n"
+        "from. It is only a stub and changes no behaviour.\n", 1)
+    # Parsed and rewritten, not string-spliced.
+    #
+    # The splice produced
+    #     write_paths:
+    #       - src/seating_planner/solver/** [pyproject.toml, .gitignore]
+    # because the first `write_paths:` in this file is followed by an inline flow
+    # list on the SAME line, so inserting a block item swallowed it into one
+    # nonsense string and deleted the two real paths. Found 2026-09-16, the same
+    # hour as the tautological-verify skip, by applying every mutation and
+    # reading what came out.
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    _t["tasks"][0].setdefault("write_paths", [])
+    _t["tasks"][0]["write_paths"] = list(_t["tasks"][0]["write_paths"]) + ["src/seating_planner/solver/**"]
+    tasks = _y.safe_dump(_t, sort_keys=False, width=10000)
+    assert "src/seating_planner/solver/**" in _t["tasks"][0]["write_paths"]
+    assert len(_t["tasks"][0]["write_paths"]) >= 2, "the real write paths were lost"
+
+elif case == "invented-current-behaviour":
+    # Describes code that does not exist, confidently.
+    spec = re.sub(r'## Current behaviour.*?(?=\n## )',
+        "## Current behaviour\n\nThe repository already contains "
+        "`src/seating_planner/config.py`, which reads a `SEATING_ENV` variable and "
+        "returns a `Settings` dataclass. The scaffold work extends that module's "
+        "existing `load_settings()` helper rather than creating anything new.\n\n",
+        spec, count=1, flags=re.S)
+    # The regex has to have matched. A `## Current behaviour` heading that gets
+    # renamed leaves this a silent no-op and the case measures the clean spec.
+    assert "src/seating_planner/config.py" in spec, \
+        "invented-current-behaviour: the Current behaviour section was not replaced"
+    assert "README.md` — describes the factory arrangement only" not in spec, \
+        "invented-current-behaviour: the real Current behaviour section survived"
+
+elif case == "unfinishable-task":
+    # One session could not finish this. The same lesson as above applies: the
+    # first version introduced an `original_intent:` key the task schema does not
+    # allow, so the fixture failed schema validation rather than presenting an
+    # oversized task. Replace the intent in place instead.
+    lines = tasks.split("\n")
+    for n, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("intent:"):
+            indent = line[: len(line) - len(line.lstrip())]
+            lines[n] = (
+                f"{indent}intent: >\n"
+                f"{indent}  Implement the complete seating optimizer: domain models, the\n"
+                f"{indent}  CP-SAT solver, soft-constraint scoring, the persistence layer,\n"
+                f"{indent}  the REST API and the report renderer, all wired together and\n"
+                f"{indent}  covered by tests."
+            )
+            # Drop any continuation lines of the original block scalar.
+            m = n + 1
+            while m < len(lines) and lines[m].startswith(indent + "  "):
+                lines[m] = ""
+                m += 1
+            break
+    tasks = "\n".join(l for l in lines if l != "")
+    import yaml as _y
+    _t = _y.safe_load(tasks)
+    assert _t["tasks"][0]["intent"].lstrip().startswith("Implement the complete seating optimizer"), \
+        "unfinishable-task: the oversized intent did not land"
+
+elif case == "criterion-not-really-met":
+    # The spec claims a criterion is satisfied by something that does not satisfy it.
+    spec += ("\n\n## Verification\n\nac3 (mypy reports no errors) is satisfied because "
+             "the package contains no type annotations, so mypy has nothing to check "
+             "and therefore cannot report an error.\n")
+
+else:
+    sys.exit(f"unknown case {case}")
+
+# Every mutation except the control must have changed something.
+#
+# Two of these have been silently wrong — a regex that stopped at a `]` inside a
+# Python string, and a skip loop that stopped at a comment — and each time the
+# harness produced a full set of numbers about a fixture that was not the defect.
+# The per-case assertions above check the specific property; this checks the one
+# thing true of all of them, so a new case cannot arrive without either.
+if case != "clean":
+    assert (spec, tasks) != (spec_before, tasks_before), \
+        f"{case}: the mutation changed nothing"
+
+open(spec_path, "w").write(spec)
+open(tasks_path, "w").write(tasks)
+PY
+}
+
+# case | should_reject | what is wrong | what a catch looks like (grep, case-insensitive)
+CASES='clean|no|nothing — the control|
+tautological-verify|yes|a verify that cannot fail|tautolog|cannot fail|always pass|does not test|trivial
+contradicts-non-goal|yes|plans work the bean lists as a non-goal|non-goal|out of scope|solver|scope
+invented-current-behaviour|yes|describes code that does not exist|does not exist|no such file|config.py|invented|not present
+unfinishable-task|yes|one task that cannot finish in one session|too large|one session|split|scope|unfinishable
+criterion-not-really-met|yes|a criterion "met" by an argument that defeats it|annotation|vacuous|does not satisfy|mypy'
+
+RESULTS="[]"
+CAUGHT=0; NAMED=0; SEEDED=0; FALSE_ACCEPT=0; ABSTAINED=0; NO_ANSWER=0; CUT_OFF=0; NO_RUN=0
+# One pass is the default because it is what fits in a coffee break, and it is
+# also not a measurement — see the warning this prints at the end. Anything you
+# intend to compare against another number needs --repeat, and 5 is the smallest
+# count that showed the spread when this was first measured.
+REPEAT="${REPEAT:-1}"
+
+# Nothing else may be using the GPU, because the next thing this does is take it.
+#
+# Evicting models is how this harness stops a fitness score from being a
+# measurement of VRAM, and it is also a loaded gun pointed at any run in flight:
+# started during a real bean's spec audit, it would evict the judge mid-request
+# and the run would record a dead runner as the judge's answer. Nearly did.
+refuse_if_inflight evicts
+
+JUDGE_MODEL="$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")"
+while IFS= read -r resident; do
+  [ "${NO_EVICT:-0}" = 1 ] && break
+  [ -n "$resident" ] && [ "$resident" != "$JUDGE_MODEL" ] || continue
+  printf 'evicting %s to leave room for the judge\n' "$resident"
+  ollama stop "$resident" >/dev/null 2>&1 || true
+done < <(curl -s "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/ps" 2>/dev/null | jq -r '.models[]?.name')
+
+printf '\njudge fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '%-28s %-9s %-9s %s\n' CASE EXPECT VERDICT OUTCOME
+
+for REP in $(seq 1 "$REPEAT"); do
+[ "$REPEAT" -gt 1 ] && printf '\n-- pass %s of %s --\n' "$REP" "$REPEAT"
+while IFS='|' read -r name should_reject description catchwords; do
+  [ -n "$name" ] || continue
+  [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
+
+  RD="$WORK/$name.$REP"
+  mkdir -p "$RD/verdicts"
+  cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
+  printf '{"run_id":"fitness-%s","bean":"%s"}\n' "$name" "$(basename "$(dirname "$BEAN")")" > "$RD/run.json"
+  # A mutation that did not happen is not a case to skip; it is a measurement of
+  # nothing. `continue` here printed "mutation failed" for all six cases — when
+  # the snapshot launcher left the venv behind — and then wrote a results file
+  # with zero seeded defects and an empty case list, exit 0, sitting in
+  # bench/results looking like a figure.
+  #
+  # The whole run stops, because one unmutated case makes the denominator wrong
+  # and the rest of the numbers uncomparable with any other run.
+  mutate "$name" "$RD/spec.md" "$RD/tasks.yaml" \
+    || { printf '\nMUTATION FAILED for %s — stopping.\n' "$name" >&2
+         printf 'A case that was not mutated is not a case that was judged, and a run\n' >&2
+         printf 'with a hole in its denominator cannot be compared with another.\n' >&2
+         exit 3; }
+
+  t0="$(date +%s)"
+  # --thinking, when asked for. roles.json records the level and its history, and
+  # the note there says to revisit if the catch rate at `medium` is poor. It is —
+  # so the harness has to be able to ask the same six questions at another level
+  # without editing the file the line runs from, or the comparison is between two
+  # different configurations of the repository rather than two thinking levels.
+  # JUDGE_CMD, so the shape of the ask is a variable this harness can name.
+  #
+  # Everything about the judge has been varied and measured except the size of the
+  # question it is asked. bench/judge-per-criterion.sh asks one criterion at a
+  # time and composes the verdict by arithmetic; it takes judge.sh's command line
+  # exactly, so the classifier below is the same one and the numbers are
+  # comparable. The artifact records which was used.
+  bash "$JUDGE_CMD" "$RD" --target spec --bean "$BEAN" \
+    ${THINKING:+--thinking "$THINKING"} >"$RD/judge.log" 2>&1
+  rc=$?
+  t1="$(date +%s)"
+
+  # Keep the evidence. A case that produced nothing is the most interesting kind
+  # and the one whose log a temp-dir cleanup would take with it.
+  KEEP="$(dirname "$OUT")/judge-fitness-logs/$name$([ "$REPEAT" -gt 1 ] && printf '.%s' "$REP")"
+  mkdir -p "$KEEP"
+  cp -f "$RD/judge.log" "$KEEP/judge.log" 2>/dev/null || true
+  cp -f "$RD/spec.md" "$RD/tasks.yaml" "$KEEP/" 2>/dev/null || true
+  cp -f "$RD"/verdicts/* "$KEEP/" 2>/dev/null || true
+
+  J="$RD/verdicts/spec.attempt-1.judgement.json"
+  if [ "$rc" -eq 9 ]; then
+    # The runner died. Scoring this at all would be scoring the machine — and it
+    # is its OWN column, not the token budget's.
+    #
+    # Both were counted as CUT_OFF, so a gemma4 run on 2026-09-16 where the
+    # ollama runner died on 14 of 18 cases printed "14 case(s) were cut off by the
+    # token budget" and told the reader to raise JUDGE_NUM_PREDICT. The budget had
+    # nothing to do with it. That is the fifth defect on this project's own list —
+    # a diagnostic that names the wrong cause — inside the harness that produces
+    # the numbers the rest of the list was found with.
+    [ "$should_reject" = yes ] && SEEDED=$((SEEDED+1))
+    NO_RUN=$((NO_RUN+1))
+    verdict="no run"; outcome="NOT MEASURED — the model server returned nothing; free VRAM and retry"
+  elif [ "$rc" -eq 8 ]; then
+    # The judge was cut off mid-thought by a cap we chose. That is a fact about
+    # this harness's configuration, not about the judge's fitness, and scoring it
+    # either way would be a lie: counting it as a miss blames the model for our
+    # budget, and dropping it silently shrinks the denominator. So it is its own
+    # column, and any run with one in it is an incomplete measurement.
+    [ "$should_reject" = yes ] && SEEDED=$((SEEDED+1))
+    CUT_OFF=$((CUT_OFF+1))
+    verdict="cut off"; outcome="NOT MEASURED — ran out of token budget before answering"
+  elif [ ! -f "$J" ]; then
+    # Count it as seeded and not caught. Excluding a case that produced nothing
+    # would divide the catch rate by a denominator that omits its own failures —
+    # a metric that flatters itself is worse than no metric.
+    [ "$should_reject" = yes ] && { SEEDED=$((SEEDED+1)); NO_ANSWER=$((NO_ANSWER+1)); }
+    # The diagnosis line, not the last line. judge.sh writes a one-line verdict on
+    # what went wrong and then two or three lines of what to do about it, so
+    # `tail -1` reported the advice and hid the cause: a whole pass of this
+    # harness recorded `"evidence": "No source files were provided...` — a
+    # fragment of the model's answer — where the log's own first line said
+    # exactly which of three failures it was.
+    diag="$(grep -m1 '^JUDGE  [a-z-]*: ' "$RD/judge.log" 2>/dev/null || true)"
+    [ -n "$diag" ] || diag="$(tail -1 "$RD/judge.log" 2>/dev/null || true)"
+    verdict="none"; outcome="no judgement (rc=$rc): $(printf '%s' "${diag#JUDGE  }" | head -c 100)"
+  else
+    verdict="$(jq -r '.verdict' "$J")"
+    body="$(jq -r '[(.findings[]?|.summary,.evidence), (.criteria[]?|.evidence)] | join(" ")' "$J" | tr '[:upper:]' '[:lower:]')"
+    # NAMED is a keyword match over the judgement body, and the body may be
+    # invented. Measured 2026-09-17 on a size-sweep control: the judge ACCEPTED,
+    # and was scored as having named the defect because a catchword appeared
+    # inside a fabricated major finding about "a guest can be assigned to
+    # multiple tables if they are in different zones" — a sentence that is in no
+    # artifact. The quote check would refuse that judgement; this scorer does not
+    # run the quote check.
+    #
+    # So NAMED is an UPPER BOUND on how often the judge identified the defect,
+    # and the figures that quote it — "named the actual defect 4 of 15" — are
+    # upper bounds too. It is left as it is rather than tightened, because a
+    # scorer that silently got stricter would make every earlier figure
+    # incomparable; what it needs is to be read for what it is, which is what
+    # this comment and the artifact note are for.
+    named=no
+    if [ -n "$catchwords" ]; then
+      IFS='|' read -ra words <<< "$catchwords"
+      for w in "${words[@]}"; do
+        [ -n "$w" ] && grep -qF -- "$w" <<<"$body" && { named=yes; break; }
+      done
+    fi
+    if [ "$should_reject" = yes ]; then
+      SEEDED=$((SEEDED+1))
+      case "$verdict" in
+        revise|block)
+          CAUGHT=$((CAUGHT+1))
+          if [ "$named" = yes ]; then NAMED=$((NAMED+1)); outcome="caught, and named it"
+          else outcome="rejected, but for something else"; fi ;;
+        abstain) ABSTAINED=$((ABSTAINED+1)); outcome="abstained — a bad day, not a false approval" ;;
+        accept)  FALSE_ACCEPT=$((FALSE_ACCEPT+1)); outcome="FALSE ACCEPT — it passed a seeded defect" ;;
+        *)       outcome="no usable verdict" ;;
+      esac
+    else
+      case "$verdict" in
+        accept)  outcome="accepted the clean control, correctly" ;;
+        abstain) outcome="abstained on a clean spec" ;;
+        *)       outcome="REJECTED THE CONTROL — a judge that fails everything is not a judge" ;;
+      esac
+    fi
+  fi
+
+  printf '%-28s %-9s %-9s %s  (%ss)\n' "$name" "$should_reject" "$verdict" "$outcome" "$((t1-t0))"
+  RESULTS="$(jq -c --arg n "$name" --arg d "$description" --arg sr "$should_reject" \
+    --arg v "$verdict" --arg o "$outcome" --argjson s "$((t1-t0))" \
+    --argjson j "$( [ -f "$J" ] && jq -c '{findings, criteria, confidence}' "$J" 2>/dev/null || echo null )" \
+    --argjson rep "$REP" \
+    '. + [{case:$n, pass:$rep, defect:$d, should_reject:$sr, verdict:$v, outcome:$o, seconds:$s, judgement:$j}]' <<<"$RESULTS")"
+done <<< "$CASES"
+done
+
+# Three versions, not one. `prompt_version` hashed SKILL.md alone, which is the
+# RUBRIC — and the finding this whole day produced is that on this model a
+# constraint in the GRAMMAR is a rule while the same constraint in prose is a
+# suggestion. The grammar lives in judge.sh, the question shape in whatever
+# --asked-by pointed at, and neither was recorded: every figure in bench/results
+# from before this line is a measurement of a judge whose defining half is
+# unnamed. A run takes an hour; identifying which judge produced a number after
+# the fact costs more than recording it.
+mkdir -p "$(dirname "$OUT")"
+jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDED" \
+  --argjson fa "$FALSE_ACCEPT" --argjson ab "$ABSTAINED" \
+  --argjson named "$NAMED" --argjson noans "$NO_ANSWER" --argjson cut "$CUT_OFF" \
+  --argjson norun "$NO_RUN" \
+  --arg model "$(jq -r '.roles.judge.model' "$PIPE/roles.json")" \
+  --arg digest "$(ollama list 2>/dev/null | awk -v m="$(jq -r '.roles.judge.model' "$PIPE/roles.json")" '$1==m{print $2;exit}')" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson passes "$REPEAT" \
+  --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
+  --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
+  --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
+  --arg judge_cmd "$(basename "$JUDGE_CMD")" \
+  --arg prompt_version "$(_pv="$PIPE/../skills/factory-audit/SKILL.md"; [ -f "$_pv" ] && printf 'factory-audit@%s' "$(sha256sum "$_pv" | cut -c1-12)" || echo 'factory-audit@unknown')" \
+  --arg asker_version "$([ -f "$JUDGE_CMD" ] && printf '%s@%s' "$(basename "$JUDGE_CMD")" "$(sha256sum "$JUDGE_CMD" | cut -c1-12)" || echo 'unknown')" \
+  --argjson inputs "$INPUT_SHAS" \
+  --arg judge_sh_version "$(_js="$PIPE/judge.sh"; [ -f "$_js" ] && printf 'judge.sh@%s' "$(sha256sum "$_js" | cut -c1-12)" || echo 'judge.sh@unknown')" \
+  --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
+  '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
+    judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd,
+           prompt_version:$prompt_version, asker_version:$asker_version, judge_sh_version:$judge_sh_version},
+    inputs:$inputs,
+    passes:$passes,
+    one_pass_is_not_a_measurement: ($passes < 2),
+    unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),
+    seeded_defects:$seeded, rejected:$caught, named_the_defect:$named,
+    named_the_defect_is_an_upper_bound:"A keyword match over the judgement body, which may be invented. A judgement that fabricates a finding containing a catchword is scored as having named the defect; the quote check would refuse that judgement, and this scorer does not run it.",
+    false_accepts:$fa, abstentions:$ab, no_answer:$noans, cut_off_by_token_budget:$cut,
+    never_ran_server_died:$norun,
+    complete: ($cut == 0),
+    reject_rate: (if $seeded > 0 then (($caught*100/$seeded)|floor) else null end),
+    named_rate: (if $seeded > 0 then (($named*100/$seeded)|floor) else null end),
+    false_accept_rate: (if $seeded > 0 then (($fa*100/$seeded)|floor) else null end),
+    cases:$r}' > "$OUT"
+
+if [ "$REPEAT" -gt 1 ]; then
+  printf '\nper case, across %s passes — the spread is the point:\n\n' "$REPEAT"
+  printf '%-28s %-34s %s\n' CASE VERDICTS NAMED-THE-DEFECT
+  while IFS='|' read -r name _ _ _; do
+    [ -n "$name" ] || continue
+    [ -n "$ONLY" ] && [ "$ONLY" != "$name" ] && continue
+    printf '%-28s %-34s %s\n' "$name" \
+      "$(jq -r --arg n "$name" '[.[] | select(.case == $n) | .verdict] | group_by(.) | map("\(.[0])×\(length)") | join(" ")' <<<"$RESULTS")" \
+      "$(jq -r --arg n "$name" '[.[] | select(.case == $n) | .outcome | test("named it")] | "\(map(select(.)) | length)/\(length)"' <<<"$RESULTS")"
+  done <<< "$CASES"
+  printf '\nA case with more than one verdict in that column is not a result. It is the\n'
+  printf 'judge disagreeing with itself on identical input, and no amount of arithmetic\n'
+  printf 'over it produces a number worth acting on.\n'
+fi
+
+printf '\nof %s seeded defects (%s case(s) × %s pass(es)): rejected %s, NAMED the actual defect %s\n' "$SEEDED" "$((SEEDED / REPEAT))" "$REPEAT" "$CAUGHT" "$NAMED"
+printf 'false accepts %s · abstentions %s · no answer at all %s\n' "$FALSE_ACCEPT" "$ABSTAINED" "$NO_ANSWER"
+if [ "$NO_RUN" -gt 0 ]; then
+  printf '\nINCOMPLETE — %s case(s) never ran: the model server returned nothing.\n' "$NO_RUN"
+  printf '  %s\n' "$(jq -r '[.[] | select(.verdict == "no run") | .case] | unique | join(", ")' <<<"$RESULTS")"
+  printf 'This is the machine, not the judge and not the token budget: ollama answered 200\n'
+  printf 'with a zero-valued struct, which is what it does when a runner dies. Free VRAM\n'
+  printf '(`ollama stop <other-model>`) and run it again. Do not raise JUDGE_NUM_PREDICT;\n'
+  printf 'it had nothing to do with this, and the rates above are lower bounds over a\n'
+  printf 'denominator that includes every case that never ran.\n'
+fi
+if [ "$CUT_OFF" -gt 0 ]; then
+  printf '\nINCOMPLETE — %s case(s) were cut off by the token budget and never judged:\n' "$CUT_OFF"
+  # Which, not just how many. "Two cases were cut off" is a caveat; "this case is
+  # cut off at every thinking level, in every pass" is a finding, and only the
+  # second one tells anyone what to do. `invented-current-behaviour` did exactly
+  # that on 2026-09-16 at both `medium` and `low`, always at 394 seconds, which
+  # is 12000 tokens at this model's rate — so it is the budget and not the level.
+  printf '  %s\n' "$(jq -r '[.[] | select(.verdict == "cut off") | .case] | unique | join(", ")' <<<"$RESULTS")"
+  printf 'The rates above are computed over a denominator that includes them, so they are\n'
+  printf 'lower bounds on a judge that was not allowed to finish. A case cut off in EVERY\n'
+  printf 'pass is not noise: raise JUDGE_NUM_PREDICT for it, or record that it cannot be\n'
+  printf 'measured at this budget. Either way do not compare this run with another until\n'
+  printf 'the same cases are measurable in both.\n'
+fi
+printf '%s\n' "$OUT"
+printf '\nThe false-accept count is the one that matters. A judge that misses and says\n'
+printf 'so costs a retry; a judge that misses and accepts is the failure the line exists\n'
+printf 'to prevent, and it is invisible from the outside.\n'
+printf '\nONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same\n'
+printf 'question five times with identical input at temperature 0 and got two different\n'
+printf 'verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an\n'
+printf 'earlier run and missed in all five. Do not compare a number here against another\n'
+printf 'number here and conclude something changed: establish the spread first, or the\n'
+printf 'comparison is measuring the weather.\n'
+[ "$FALSE_ACCEPT" -eq 0 ]

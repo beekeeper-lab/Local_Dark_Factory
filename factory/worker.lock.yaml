@@ -1,0 +1,34 @@
+# worker.lock.yaml — the worker container, pinned.
+#
+# gates.lock.yaml pins the image that produces verdicts. This pins the image that
+# produces work, which the line has never pinned before because the worker never
+# ran in an image: it ran on the host, as the user, with the user's keys and the
+# whole internet available to it. Its containment was after the fact — reject the
+# attempt and reset the tree — which is an answer to a mistake and not to intent.
+#
+# Named by digest for the same reason as the gate: a tag can be repointed. It
+# matters more here than it looks, because every "the 27B blocked on this task"
+# in this repo's records is a claim about an agent build, and pi's tool set,
+# prompt scaffolding and context handling all move between releases.
+#
+# Built by factory/worker-image/build.sh, which refuses to print a digest for an
+# image that does not hold its contract.
+schema_version: worker-manifest/1.0.0
+image: "localhost/factory-worker-pi:20260915@sha256:a437fce6c0c095cbb0dd51b7d8458e83a5f3ee8d780c61546e284e6f9365171b"
+
+verify_versions_at_startup: true
+
+expect_versions:
+  pi: "0.85.1"
+  node: "22"
+
+# What the container may do, recorded here so that a run record citing this
+# manifest is citing something specific rather than the word "sandboxed".
+contract:
+  network: none            # no routes exist; not a filtered network
+  model_endpoint: unix-socket   # one socket, bridged by model-gateway.sh
+  writable:
+    - /work                # the repository being edited
+    - /home/worker/.pi/agent  # pi's own state, deliberately outside the tree
+  capabilities: none
+  no_new_privileges: true

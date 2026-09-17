@@ -1,0 +1,133 @@
+{
+  "bean_set": "v1",
+  "corpus": "seating-planner",
+  "requirements_sha256": "73512dcd5b1e39493ba8a6fcbf6cd464cfe8ab1bc0d1625d73bb94b10fcc18e5",
+  "requirements_path": "benchmark/seating-planner/requirements/REQUIREMENTS.md",
+  "drafted_by": "Claude Opus 5 (outside builder, spec §04 build-out clause)",
+  "drafted_at": "2026-09-14",
+  "approved_by": "Gregg Reed — bulk approval of all 20 beans, delegated to Claude Opus 5 on 2026-09-14. Not a per-bean human read: the owner authorised the set as a whole so Phase 1 could start. Spec §04's intent (a human gates what queues) is met at the set level, not the bean level; a production corpus should be approved bean by bean.",
+  "approved_at": "2026-09-14T18:38:56Z",
+  "amendments": [
+    {
+      "date": "2026-09-14",
+      "change": "invariants_ref: factory/invariants/seating.yaml added to bean-006, bean-007, bean-009, bean-013",
+      "by": "Claude Opus 5 (outside builder), at the owner's direction",
+      "reopens_approval": false,
+      "rule": "An amendment that only ADDS an independent check does not re-open approval: it narrows what the line may get away with and cannot widen it. An amendment that loosened an acceptance criterion, widened allowed_write_paths, or removed a dependency would re-open it, because those change what a human agreed the line could do.",
+      "note": "The invariants were authored before any implementation existed, by a different model family from the developer, and live at a tier-3 path the developer cannot write. They are not human-reviewed; seating.yaml records that plainly under reviewed_by: null."
+    }
+  ],
+  "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
+  "target_stack": "python-cpsat",
+  "target_repo": "beekeeper-lab/seating-planner-py",
+
+  "stack_rationale": [
+    "Implementation Guardrail #2 names OR-Tools CP-SAT, which is Python-native.",
+    "FR-048 (identical inputs produce identical assignments) is straightforward to",
+    "verify with CP-SAT's seed/worker configuration and hard to verify against a",
+    "black-box heuristic. The gate manifest template (ruff / mypy / pytest) applies",
+    "unchanged. A TypeScript arm is a later bean set, not a later bean."
+  ],
+
+  "ordering_rationale": [
+    "beans 001-004 scaffold an empty repo and therefore contain nothing: there is no",
+    "existing code for allowed_write_paths to protect. Every bean from 005 onward",
+    "modifies what an earlier bean wrote, so real callers, real read paths and real",
+    "regression risk exist from the fifth bean rather than the twentieth.",
+    "bean-019 is a pure refactor (behaviour must not change) and bean-020 is a",
+    "correctness fix to code earlier beans are expected to get wrong — both exist to",
+    "exercise judgement the happy path never reaches."
+  ],
+
+  "scope_exclusions": [
+    {
+      "requirements": ["NFR-010 (WCAG 2.2 AA)", "NFR-012 (99.9% availability)", "NFR-014 (browser support)"],
+      "reason": "No verify a gate container can run. Under spec §05 these become `manual` acceptance criteria, and a manual AC forces human review of its bean — which defeats the lights-out goal for every bean carrying one. Excluded from the bean set and recorded here rather than silently dropped or falsely marked auto-verified.",
+      "revisit": "When a browser-driver gate exists, NFR-010 becomes verifiable via axe-core in the gate container."
+    },
+    {
+      "requirements": ["FR-074 through FR-079 (visual seating chart)", "FR-080/082/083 (PDF exports)", "FR-053 (drag and drop)"],
+      "reason": "UI surface. v1 is the engine and its data model — the layer where every acceptance criterion is machine-verifiable. A UI bean set is a separate arm of the benchmark, and keeping it separate is what makes the engine results readable.",
+      "revisit": "bean set v2 or a ts-react stack arm."
+    },
+    {
+      "requirements": ["NFR-005 (TLS)", "NFR-006 (encryption at rest)", "NFR-009 (deletion/retention)"],
+      "reason": "Deployment and operations properties, not properties of the code under test in a disposable benchmark repo.",
+      "revisit": "Out of scope for the corpus permanently."
+    }
+  ],
+
+  "assumptions": [
+    {
+      "decision": "§18.1 — real-time multiuser editing",
+      "assumed": "No. Shared access only; last write wins, with the FR-003 audit record as the reconciliation trail.",
+      "rationale": "Narrowest defensible reading. Real-time collaboration would dominate the architecture and has no bearing on the seating engine the benchmark measures.",
+      "affects": ["bean-004"]
+    },
+    {
+      "decision": "§18.2 — table position coordinate system",
+      "assumed": "Relative canvas coordinates as floats on an arbitrary unit plane, not scaled physical measurements.",
+      "rationale": "FR-014 (proximity between tables) and FR-035 (minimum distance) are both well-defined on any consistent coordinate system. Physical scaling adds a units concern without changing a single acceptance criterion.",
+      "affects": ["bean-002", "bean-005"]
+    },
+    {
+      "decision": "§18.3 — adjacent-seat assignment in the MVP",
+      "assumed": "No. Table-level assignment only for v1; seat-level layout is deferred.",
+      "rationale": "FR-012 explicitly anticipates unconfigured seats and requires adjacent-seat rules to be reported unevaluable in that state — the PRD itself sanctions deferring it. This is also the largest single scope reduction available, and it creates bean-020: a correctness fix against code written before seats existed.",
+      "affects": ["bean-003", "bean-006", "bean-020"]
+    },
+    {
+      "decision": "§18.4 — separate permission for private conflict notes",
+      "assumed": "No. Editor access is sufficient to read private notes in v1.",
+      "rationale": "FR-027 and FR-084 constrain where notes may appear (guest-facing screens, exports), which is the property under test. A fourth role changes the permission matrix without changing that property.",
+      "affects": ["bean-018"]
+    },
+    {
+      "decision": "§18.5 — production limits",
+      "assumed": "500 guests, 60 tables, 5000 active rules per event.",
+      "rationale": "Comfortably above NFR-001's 250/30/2000 performance target, so the limit never masks the performance criterion. Needed as a concrete bound for validation tests.",
+      "affects": ["bean-002", "bean-003"]
+    },
+    {
+      "decision": "§18.6 — backup retention after deletion",
+      "assumed": "Out of scope; no deletion/retention beans in v1.",
+      "rationale": "An operations decision about production infrastructure, unverifiable in a disposable repo.",
+      "affects": []
+    },
+    {
+      "decision": "§18.7 — natural-language rule assistant in the first release",
+      "assumed": "No.",
+      "rationale": "Guardrail #8 already makes any LLM-generated rule a draft pending user approval, so the assistant is additive to a structured-rule core that must exist regardless. Excluding it keeps the benchmark's own engine deterministic, which matters because the line building it is not.",
+      "affects": []
+    },
+    {
+      "decision": "§18.8 — wedding-specific branding",
+      "assumed": "Wedding-specific. Domain language is weddings throughout.",
+      "rationale": "FR-028/029 (a default wedding-rule template) are concrete requirements; generalising to arbitrary seated events would make them abstract and less testable.",
+      "affects": ["bean-003"]
+    }
+  ],
+
+  "conflicts_found": [
+    {
+      "between": ["FR-019", "FR-043"],
+      "description": "FR-043 says the system generates assignments for 'all eligible guests'; FR-019 says only Confirmed guests are assigned automatically unless a seat is explicitly reserved for a Pending guest. §5 defines 'eligible guest' consistently with FR-019, so this reads as a wording overlap rather than a contradiction.",
+      "resolution": "Treated as consistent: eligible = Confirmed, plus Pending guests with an explicitly reserved seat. Recorded because a bean author could reasonably read FR-043 alone and assign Pending guests.",
+      "needs_owner_decision": false
+    },
+    {
+      "between": ["FR-065", "FR-047"],
+      "description": "FR-065 makes the movement limit a hard constraint and FR-047 makes capacity a hard constraint in every mode. A low-disruption run can therefore be infeasible for two different structural reasons, and FR-050/051 must distinguish them in the conflict report or the corrective advice will be wrong.",
+      "resolution": "bean-013 requires the infeasibility report to name which hard constraint class caused the failure.",
+      "needs_owner_decision": false
+    },
+    {
+      "between": ["FR-048", "NFR-001"],
+      "description": "Reproducibility (identical assignment for identical input) and a 15-second bound on 250 guests / 2000 rules can pull against each other: CP-SAT is deterministic per seed only when worker count is fixed, and fixing workers to 1 costs wall-clock.",
+      "resolution": "bean-009 pins the solver configuration (including worker count) as persisted data, and NFR-001 is verified against that pinned configuration. If the two prove genuinely incompatible on real data it is an owner decision, not a bean-author decision.",
+      "needs_owner_decision": true
+    }
+  ],
+
+  "size_budget_default": { "max_tasks": 6, "max_files": 5, "max_diff_lines": 400 }
+}

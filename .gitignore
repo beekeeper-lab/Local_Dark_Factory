@@ -1,0 +1,42 @@
+.venv/
+__pycache__/
+
+# Sweep output is regenerable and noisy, so bench/results is ignored by default.
+# Any artifact a commit cites as the basis of a decision is kept: a figure whose
+# evidence exists only on one box is a rumour with a timestamp, and Phase-0 exit
+# asserts figures_have_provenance.
+#
+# This used to be a list of individual filenames, and the list failed twice in
+# the way lists do — silently. Three commits on 2026-09-15 described results in
+# detail and committed none of them, because `git add` obeyed the ignore and said
+# nothing, and `git commit` reported success. Nobody lied; the record was simply
+# missing, which is worse than a wrong number because there is nothing to check.
+#
+# So the exception is by FAMILY, not by name. A new run of a harness that already
+# has provenance is kept automatically; a genuinely new kind of sweep needs one
+# line here, which is a deliberate act rather than a thing to remember.
+bench/results/*
+!bench/results/phase0-*
+!bench/results/coresidency-probe-*
+!bench/results/provenance-*
+!bench/results/harmony-*
+!bench/results/judge-fitness-*
+!bench/results/controller-fitness-*
+!bench/results/format-support-*
+!bench/results/size-sweep-*
+# The judge-variance measurement is the one that says a single fitness run cannot
+# be compared with another, which makes it the last file that should live only on
+# this disk. It did, until the Phase-0 audit's evidence.tracked check caught it.
+!bench/results/judge-variance-*
+# `factory reaudit` output: which audits of a real run produced a stampable
+# verdict, at a named configuration. The figure the seeded-defect harnesses
+# cannot produce.
+!bench/results/reaudit-*
+# The ledger that says what each of these measured and whether a claim still
+# rests on it. Without it the directory is twenty timestamps.
+!bench/results/INDEX.md
+# Per-case working state the fitness harness keeps so a strange answer can be
+# read afterwards — not a figure. Seventy-three of these were committed by a
+# `git add -A` on 2026-09-16 and would have churned on every run. One that
+# evidences a claim goes in evidence/, by hand.
+bench/results/judge-fitness-logs/

@@ -1,0 +1,68 @@
+evicting devstral:24b to leave room for the judge
+
+judge fitness — 2026-09-16T11:18:23Z
+
+CASE                         EXPECT    VERDICT   OUTCOME
+
+-- pass 1 of 3 --
+clean                        no        abstain   abstained on a clean spec  (212s)
+tautological-verify          yes       block     rejected, but for something else  (284s)
+contradicts-non-goal         yes       revise    caught, and named it  (249s)
+invented-current-behaviour   yes       cut off   NOT MEASURED — ran out of token budget before answering  (394s)
+unfinishable-task            yes       revise    rejected, but for something else  (257s)
+criterion-not-really-met     yes       revise    caught, and named it  (247s)
+
+-- pass 2 of 3 --
+clean                        no        cut off   NOT MEASURED — ran out of token budget before answering  (395s)
+tautological-verify          yes       revise    rejected, but for something else  (394s)
+contradicts-non-goal         yes       revise    caught, and named it  (231s)
+invented-current-behaviour   yes       block     rejected, but for something else  (142s)
+unfinishable-task            yes       abstain   abstained — a bad day, not a false approval  (173s)
+criterion-not-really-met     yes       cut off   NOT MEASURED — ran out of token budget before answering  (395s)
+
+-- pass 3 of 3 --
+clean                        no        none      no judgement (rc=1):       "evidence": "The verification step for task‑1 expects a `pyproject.toml` file that  (303s)
+tautological-verify          yes       cut off   NOT MEASURED — ran out of token budget before answering  (396s)
+contradicts-non-goal         yes       revise    rejected, but for something else  (233s)
+invented-current-behaviour   yes       revise    caught, and named it  (413s)
+unfinishable-task            yes       revise    rejected, but for something else  (203s)
+criterion-not-really-met     yes       accept    FALSE ACCEPT — it passed a seeded defect  (246s)
+bench/judge-fitness.sh: line 300: --argjson: command not found
+
+per case, across 3 passes — the spread is the point:
+
+CASE                         VERDICTS                           NAMED-THE-DEFECT
+clean                        abstain×1 cut off×1 none×1      0/3
+tautological-verify          block×1 cut off×1 revise×1      0/3
+contradicts-non-goal         revise×3                          2/3
+invented-current-behaviour   block×1 cut off×1 revise×1      1/3
+unfinishable-task            abstain×1 revise×2               0/3
+criterion-not-really-met     accept×1 cut off×1 revise×1     1/3
+
+A case with more than one verdict in that column is not a result. It is the
+judge disagreeing with itself on identical input, and no amount of arithmetic
+over it produces a number worth acting on.
+
+of 15 seeded defects (5 case(s) × 3 pass(es)): rejected 10, NAMED the actual defect 4
+false accepts 1 · abstentions 1 · no answer at all 0
+
+INCOMPLETE — 4 case(s) were cut off by the token budget and never judged:
+  clean, criterion-not-really-met, invented-current-behaviour, tautological-verify
+The rates above are computed over a denominator that includes them, so they are
+lower bounds on a judge that was not allowed to finish. A case cut off in EVERY
+pass is not noise: raise JUDGE_NUM_PREDICT for it, or record that it cannot be
+measured at this budget. Either way do not compare this run with another until
+the same cases are measurable in both.
+/home/gregg/workspace/Local_Dark_Factory/bench/results/judge-fitness-20260916T111823Z.json
+
+The false-accept count is the one that matters. A judge that misses and says
+so costs a retry; a judge that misses and accepts is the failure the line exists
+to prevent, and it is invisible from the outside.
+
+ONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same
+question five times with identical input at temperature 0 and got two different
+verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an
+earlier run and missed in all five. Do not compare a number here against another
+number here and conclude something changed: establish the spread first, or the
+comparison is measuring the weather.
+RC=1

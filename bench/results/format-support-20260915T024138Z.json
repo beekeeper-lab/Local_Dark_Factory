@@ -1,0 +1,42 @@
+{
+  "schema": "format-support/1.0.0",
+  "measured_at": "2026-09-15T02:41:38Z",
+  "models": [
+    {
+      "model": "gpt-oss:120b",
+      "holds": "yes",
+      "seconds": 16,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    },
+    {
+      "model": "gpt-oss:20b",
+      "holds": "yes",
+      "seconds": 6,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    },
+    {
+      "model": "gemma4:26b-a4b-it-q4_K_M",
+      "holds": "yes",
+      "seconds": 10,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    },
+    {
+      "model": "devstral:24b",
+      "holds": "yes",
+      "seconds": 8,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    },
+    {
+      "model": "qwen3-coder:30b",
+      "holds": "yes",
+      "seconds": 6,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    },
+    {
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "holds": "yes",
+      "seconds": 11,
+      "what": "{\"verdict\":\"accept\",\"count\":3}"
+    }
+  ]
+}

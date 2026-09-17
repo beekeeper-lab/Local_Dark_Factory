@@ -1,0 +1,185 @@
+{
+  "schema": "reaudit/1.1.0",
+  "measured_at": "2026-09-16T17:19:30Z",
+  "run": "factory/runs/bean-001-20260915T192025Z",
+  "bean": "/home/gregg/workspace/seating-planner-py/factory/beans/bean-001-project-scaffold-with-linting-typing-and/bean.yaml",
+  "passes": 3,
+  "thinking": "low",
+  "stamped": 1,
+  "total": 12,
+  "rows": [
+    {
+      "target": "spec",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 1,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    },
+    {
+      "target": "impl",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 1,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    },
+    {
+      "target": "doc",
+      "pass": 1,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "package",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": true,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 0,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    },
+    {
+      "target": "spec",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 1,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    },
+    {
+      "target": "impl",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 2,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    },
+    {
+      "target": "doc",
+      "pass": 2,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "package",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 0,
+      "refused_because": "verdict \"revise\" with zero findings."
+    },
+    {
+      "target": "spec",
+      "pass": 3,
+      "judge_rc": 0,
+      "verdict": "abstain",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 1,
+      "refused_because": "the judge abstained — this goes to a human, not to a retry"
+    },
+    {
+      "target": "impl",
+      "pass": 3,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "doc",
+      "pass": 3,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "package",
+      "pass": 3,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 1,
+      "refused_because": "all 4 criterion(s) reported on, none invented"
+    }
+  ],
+  "note": "Nothing was written to the run directory. Each row is a fresh copy of it with an empty verdicts/."
+}

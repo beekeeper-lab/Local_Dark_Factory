@@ -1,0 +1,46 @@
+# bean-001's four audits × three passes at the configuration of 2026-09-16 evening:
+# cap 16000, thinking low, `met` defined per target, `read as:` on every artifact,
+# criterion ids as an enum with minItems, tools: [], maxLength on every free-text
+# field. Run by `factory reaudit`, from a pipeline snapshot, against copies.
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     0         revise     no        1 finding(s), 4 criteria, conf 0
+impl      1     1         -          no        impl: it reasoned for 373 characters and then ended its turn (done_rea
+doc       1     0         accept     no        2 finding(s), 4 criteria, conf 0.5
+package   1     0         revise     no        2 finding(s), 4 criteria, conf 0.99
+spec      2     0         revise     no        2 finding(s), 4 criteria, conf 0.9
+impl      2     1         -          no        impl: it reasoned for 250 characters and then ended its turn (done_rea
+doc       2     1         -          no        doc: the model tried to call tools instead of answering (1 call(s): re
+package   2     0         accept     no        1 finding(s), 4 criteria, conf 0.9
+spec      3     0         revise     no        0 finding(s), 4 criteria, conf 1.0
+impl      3     0         revise     no        1 finding(s), 4 criteria, conf 0.9
+doc       3     1         -          no        doc: the model tried to call tools instead of answering (1 call(s): co
+package   3     0         revise     no        0 finding(s), 4 criteria, conf 0.0
+
+0 of 12 audit run(s) produced a verdict the controller stamped.
+
+--- why each was refused ---
+1-doc        the judgement does not report on the criteria it was given.
+1-impl       the judge wrote no judgement file.
+1-package    the judgement quotes text that is not on disk anywhere.
+1-spec       the judgement quotes text that is not on disk anywhere.
+2-doc        the judge wrote no judgement file.
+2-impl       the judge wrote no judgement file.
+2-package    the judgement quotes text that is not on disk anywhere.
+2-spec       the judgement does not report on the criteria it was given.
+3-doc        the judge wrote no judgement file.
+3-impl       the judgement quotes text that is not on disk anywhere.
+3-package    verdict "revise" with zero findings.
+3-spec       verdict "revise" with zero findings.
+
+--- what it put in `criteria` ---
+  1-spec  ac1, ac2, ac3, ac4
+  1-doc  ac1, ac1, ac1, ac2
+  1-package  ac1, ac2, ac3, ac4
+  2-spec  ac1, ac1, ac2, ac3
+  2-package  ac1, ac2, ac3, ac4
+  3-spec  ac1, ac2, ac3, ac4
+  3-impl  ac1, ac2, ac3, ac4
+  3-package  ac1, ac2, ac3, ac4
+
+the bean declares: ac1 ac2 ac3 ac4

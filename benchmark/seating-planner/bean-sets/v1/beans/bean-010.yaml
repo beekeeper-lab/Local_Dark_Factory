@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-010
+repo: beekeeper-lab/seating-planner-py
+title: Infeasibility preserves the chart and recommends corrective action
+intent: >
+  When no valid assignment exists, the saved seating chart is untouched, the conflicting
+  hard constraints are named, and at least one concrete fix is offered.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 10
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-050: If no valid assignment exists, the system SHALL preserve the current seating chart and identify the hard constraints involved in the conflict. FR-052: A failed, cancelled, or timed-out optimization SHALL NOT modify the last successfully saved seating chart."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/feasibility/
+    - src/seating_planner/store/
+    - tests/solver/
+  background: >
+    Three different ways of failing must all leave the same footprint: infeasible, timed
+    out, and cancelled. In every case the previously saved chart stays exactly as it was
+    — the temptation to write a partial assignment "so the user can see progress" is
+    precisely what FR-052 forbids. CP-SAT can report an assumption subset that made the
+    model infeasible, which is what turns "no answer" into "these two rules and this
+    lock cannot all hold".
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: An infeasible optimization leaves the previously saved chart byte-identical.
+    verify: { kind: test, test_id: "tests/solver/test_infeasible.py::test_saved_chart_unchanged_on_infeasible" }
+  - id: ac2
+    text: A timed-out optimization leaves the previously saved chart byte-identical.
+    verify: { kind: test, test_id: "tests/solver/test_infeasible.py::test_saved_chart_unchanged_on_timeout" }
+  - id: ac3
+    text: The infeasibility report names the specific hard constraints in the conflict, not merely that one exists.
+    verify: { kind: test, test_id: "tests/solver/test_infeasible.py::test_conflict_names_hard_constraints" }
+  - id: ac4
+    text: At least one corrective action is recommended, drawn from adding capacity, unlocking, changing a hard rule, or adding a table.
+    verify: { kind: test, test_id: "tests/solver/test_infeasible.py::test_recommends_corrective_action" }
+constraints:
+  - no partial assignment is ever persisted
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no automatic application of a recommended fix
+dependencies: [bean-009]

@@ -1,0 +1,222 @@
+{
+  "schema": "reaudit/1.3.0",
+  "measured_at": "2026-09-17T03:41:38Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-17T03:41:38Z",
+    "pipeline_version": "1.3.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "run": "/home/gregg/workspace/seating-planner-py/factory/runs/bean-001-20260915T192025Z",
+  "bean": "/home/gregg/workspace/seating-planner-py/factory/beans/bean-001-project-scaffold-with-linting-typing-and/bean.yaml",
+  "passes": 3,
+  "thinking": "low",
+  "refused_because": [
+    {
+      "reason": "the judgement quotes text that is not on disk anywhere.",
+      "count": 5
+    },
+    {
+      "reason": "the judge wrote no judgement file.",
+      "count": 3
+    },
+    {
+      "reason": "no quote long enough to prove anything (all under 12 characters).",
+      "count": 2
+    },
+    {
+      "reason": "these criteria are not backed by a quote long enough to check: ac2, ac3, ac4",
+      "count": 1
+    },
+    {
+      "reason": "these criteria are not backed by a quote long enough to check: ac4",
+      "count": 1
+    }
+  ],
+  "stamped": 0,
+  "total": 12,
+  "rows": [
+    {
+      "target": "spec",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 3,
+      "refused_because": "the judgement quotes text that is not on disk anywhere."
+    },
+    {
+      "target": "impl",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 2,
+      "refused_because": "these criteria are not backed by a quote long enough to check: ac2, ac3, ac4"
+    },
+    {
+      "target": "doc",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 0,
+      "refused_because": "no quote long enough to prove anything (all under 12 characters)."
+    },
+    {
+      "target": "package",
+      "pass": 1,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 0,
+      "refused_because": "these criteria are not backed by a quote long enough to check: ac4"
+    },
+    {
+      "target": "spec",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 4,
+      "refused_because": "the judgement quotes text that is not on disk anywhere."
+    },
+    {
+      "target": "impl",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "accept",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 2,
+      "refused_because": "the judgement quotes text that is not on disk anywhere."
+    },
+    {
+      "target": "doc",
+      "pass": 2,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "package",
+      "pass": 2,
+      "judge_rc": 0,
+      "verdict": "abstain",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 0,
+      "refused_because": "no quote long enough to prove anything (all under 12 characters)."
+    },
+    {
+      "target": "spec",
+      "pass": 3,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 2,
+      "refused_because": "the judgement quotes text that is not on disk anywhere."
+    },
+    {
+      "target": "impl",
+      "pass": 3,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "doc",
+      "pass": 3,
+      "judge_rc": 1,
+      "verdict": "-",
+      "stamped": false,
+      "criteria": 0,
+      "criteria_ids": [],
+      "findings": 0,
+      "refused_because": "the judge wrote no judgement file."
+    },
+    {
+      "target": "package",
+      "pass": 3,
+      "judge_rc": 0,
+      "verdict": "revise",
+      "stamped": false,
+      "criteria": 4,
+      "criteria_ids": [
+        "ac1",
+        "ac2",
+        "ac3",
+        "ac4"
+      ],
+      "findings": 2,
+      "refused_because": "the judgement quotes text that is not on disk anywhere."
+    }
+  ],
+  "note": "Nothing was written to the run directory. Each row is a fresh copy of it with an empty verdicts/."
+}

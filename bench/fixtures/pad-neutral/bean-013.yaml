@@ -1,0 +1,65 @@
+schema_version: bean/2.0.0
+id: bean-013
+repo: beekeeper-lab/shelving-planner-py
+title: Low-disruption mode with a movement limit as a hard constraint
+intent: >
+  Recalculation shortly before the event improves the chart while moving no more guests
+  between tables than the organizer permits.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 13
+source:
+  kind: manual
+  ref: benchmark/shelving-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-065: Low-disruption serialisation SHALL treat the selected maximum number of table changes as a hard constraint. FR-066: Within the permitted movement limit, Low-disruption mode SHALL minimize the number of table changes before maximizing the soft-constraint score."
+context:
+  read_paths:
+    - src/shelving_planner/exporter/
+    - tests/exporter/
+  background: >
+    This mode has a two-level objective and the order is specified, not a preference:
+    minimize table changes first, then maximize the soft score among the arrangements
+    that tie. Implementing it as a single weighted sum would let a high enough soft
+    score buy an extra disruption, which FR-066 forbids. A disruption is specifically a
+    change of table (per the §5 definition); a seat change at the same table is counted
+    separately and does not exist yet. The movement limit being a hard constraint means
+    a low-disruption run can be infeasible for a reason unrelated to capacity, and the
+    report must say which.
+allowed_write_paths:
+  - src/shelving_planner/exporter/**
+  - tests/exporter/**
+acceptance_criteria:
+  - id: ac1
+    text: No more guests change tables than the configured limit permits.
+    verify: { kind: test, test_id: "tests/exporter/test_low_disruption.py::test_movement_limit_respected" }
+  - id: ac2
+    text: Given two arrangements within the limit, the one with fewer table changes wins even when the other scores higher.
+    verify: { kind: test, test_id: "tests/exporter/test_low_disruption.py::test_fewer_moves_beats_higher_score" }
+  - id: ac3
+    text: Among arrangements with equally few moves, the higher soft score is chosen.
+    verify: { kind: test, test_id: "tests/exporter/test_low_disruption.py::test_score_breaks_tie_on_moves" }
+  - id: ac4
+    text: A limit too small to admit any valid arrangement is reported infeasible and names the movement limit as the cause, distinct from capacity.
+    verify: { kind: test, test_id: "tests/exporter/test_low_disruption.py::test_limit_infeasibility_names_its_cause" }
+  - id: ac5
+    text: A limit of zero produces no table changes at all.
+    verify: { kind: test, test_id: "tests/exporter/test_low_disruption.py::test_zero_limit_changes_nothing" }
+constraints:
+  - lexicographic objective, not a weighted sum
+  - a disruption is a table change, per the PRD §5 definition
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 4, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no seat-change accounting (seats are deferred)
+dependencies: [bean-012]
+# Added 2026-09-14, after approval. An amendment that only ADDS an independent
+# check does not re-open approval: it narrows what the line may get away with and
+# cannot widen it. Amendments that loosen criteria or widen paths would.
+invariants_ref: factory/invariants/shelving.yaml

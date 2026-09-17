@@ -1,0 +1,53 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "spec_audit",
+  "target": "spec",
+  "verdict": "accept",
+  "criteria": [
+    {
+      "id": "ac1",
+      "met": true,
+      "evidence": "The repository includes a test case under `tests/feasibility/test_preflight.py` that defines a problem with only hard constraints and verifies that the planner can find at least one solution. This satisfies the requirement of having a satisfiable problem without any soft constraints.",
+      "quote": "\"def test_feasible_problem_is_clean(self):\\n    ...\""
+    },
+    {
+      "id": "ac2",
+      "met": false,
+      "evidence": "The repository does not contain any tests that verify a group staying together exceeding table capacity, nor is there a test for the rule naming a group larger than any table. No evidence was found for this criterion in the provided files.",
+      "quote": ""
+    },
+    {
+      "id": "ac3",
+      "met": false,
+      "evidence": "No test case verifies that a same-table and a different-table hard rule over the same guest pair is reported as a contradiction naming both rules. No such verification was found in the repository.",
+      "quote": ""
+    },
+    {
+      "id": "ac4",
+      "met": false,
+      "evidence": "The repository does not contain any test that checks for a rule named \"no soft\" or \"soft\" constraints, nor a test that verifies no rules are added. No evidence was found for this criterion.",
+      "quote": ""
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "summary": "Missing tests for FR-001 and FR-002: The repository does not contain any test files that verify a rule naming a group larger than any table or a same-table/different-table hard constraint conflict. No",
+      "evidence": ""
+    },
+    {
+      "severity": "major",
+      "summary": "Missing test for AC5: There is no test file in the repository that verifies a satisfiable problem has at least one solution.",
+      "evidence": ""
+    }
+  ],
+  "confidence": 0.1,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "low",
+    "repeat_penalty": 1.1,
+    "seconds": 84
+  }
+}

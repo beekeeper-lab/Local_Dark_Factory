@@ -1,0 +1,130 @@
+{
+  "schema": "package-check/1.0.0",
+  "tier": "full",
+  "run_status": "halted",
+  "step_pairs": [
+    {
+      "step": "audit-doc",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "audit-impl",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "audit-impl",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "audit-spec",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "audit-spec",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "build",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "build-task",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "build-task",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "build-task",
+      "attempt": 3,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 3,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 4,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 5,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "doc",
+      "attempt": 6,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "gate",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "gate",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "preflight",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "spec",
+      "attempt": 1,
+      "starts": 1,
+      "ends": 1
+    },
+    {
+      "step": "spec",
+      "attempt": 2,
+      "starts": 1,
+      "ends": 1
+    }
+  ],
+  "findings": [],
+  "internally_consistent": true,
+  "note": "Everything here was decided by counting. What is left for a judge on this target is whether the run tells a coherent story — whether the reasons recorded for its retries make sense together — which counting cannot reach."
+}

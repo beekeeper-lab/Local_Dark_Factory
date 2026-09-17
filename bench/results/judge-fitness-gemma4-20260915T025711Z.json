@@ -1,0 +1,215 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-15T02:56:17Z",
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1"
+  },
+  "seeded_defects": 5,
+  "rejected": 0,
+  "named_the_defect": 0,
+  "false_accepts": 3,
+  "abstentions": 0,
+  "no_answer": 2,
+  "cut_off_by_token_budget": 0,
+  "complete": true,
+  "reject_rate": 0,
+  "named_rate": 0,
+  "false_accept_rate": 60,
+  "cases": [
+    {
+      "case": "clean",
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "accept",
+      "outcome": "accepted the clean control, correctly",
+      "seconds": 18,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "The bean is highly complex due to the 'load-bearing' nature of the configuration (exclusions and testpaths), but it correctly manages the lifecycle of the 'control surface' vs 'package' distinction.",
+            "evidence": "The teaching notes in Task 1 and Task 3 correctly identify that the configuration is what prevents the factory/invariants from breaking the build before their dependencies exist."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task 1 declares the project metadata, python version, and dependencies as required. Task 2 creates the package with the required version string.",
+            "quote": "Create the root pyproject.toml declaring the seating-planner project: metadata, requires-python >=3.11, ortools as the sole runtime dependency..."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task 3 explicitly runs the four pinned gate commands (ruff check, ruff format, mypy, pytest) and fixes failures.",
+            "quote": "Run the four pinned gate commands from the repo root — `ruff check .`, `ruff format --check .`, `mypy src`, and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` — and fix every failure in files this bean owns"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task 3 includes the update to .gitignore to prevent cache pollution, ensuring the tree remains clean.",
+            "quote": "Finally, append the gate-generated cache paths (.ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage) to .gitignore so running a gate never dirties the tree."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task 2 ensures the module is small enough that the single smoke test achieves the required coverage floor.",
+            "quote": "The module must stay small enough that importing it covers 100% of src, so the 60% coverage floor passes with a single smoke test."
+          }
+        ],
+        "confidence": 1.0
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 17,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "The specification is highly coupled to a specific 'factory' infrastructure (the existence of `factory/gates.lock.yaml` and the 'control surface' concept). While this makes the bean non-portable, it is a deliberate design choice for this 'bean' architecture to ensure the integrity of the build pipeline.",
+            "evidence": "The teaching notes in Task 1 and Task 3 explicitly reference the dependency on the external 'factory' repo and the 'control surface' sync."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task 1 explicitly defines the project metadata, python version, and dependencies as required by the intent.",
+            "quote": "Create the root pyproject.toml declaring the seating-planner project: metadata, requires-python >=3.11, ortools as the sole runtime dependency"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task 3 requires running the four specific gate commands (ruff check, ruff format, mypy, pytest) and fixing failures.",
+            "quote": "Run the four pinned gate commands from the repo root — `ruff check .`, `ruff format --check .`, `mypy src`, and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` — and fix every failure"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task 3 includes the requirement to append cache paths to .gitignore to prevent tree pollution.",
+            "quote": "Finally, append the gate-generated cache paths (.ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage) to .gitignore"
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task 2 specifies a module structure and test that ensures the coverage floor is met by keeping the package minimal.",
+            "quote": "The module must stay small enough that importing it covers 100% of src, so the 60% coverage floor passes with a single smoke test."
+          }
+        ],
+        "confidence": 1.0
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 18,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "The specification is highly complex due to the 'load-bearing' nature of the configuration (exclusions and testpaths), but it correctly manages the lifecycle of the 'control surface' vs 'package' distinction.",
+            "evidence": "The teaching notes in Task 1 and Task 3 correctly identify that the configuration is what prevents the factory/invariants from breaking the build before their dependencies exist."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task 1 declares the project metadata, python version, and dependencies as required. Task 2 creates the package with the required version string.",
+            "quote": "Create the root pyproject.toml declaring the seating-planner project: metadata, requires-python >=3.11, ortools as the sole runtime dependency..."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task 3 explicitly runs the four pinned gate commands (ruff check, ruff format, mypy, pytest) and fixes failures.",
+            "quote": "Run the four pinned gate commands from the repo root — `ruff check .`, `ruff format --check .`, `mypy src`, and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` — and fix every failure in files this bean owns"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task 3 includes the update to .gitignore to prevent cache pollution, ensuring the tree remains clean.",
+            "quote": "Finally, append the gate-generated cache paths (.ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage) to .gitignore so running a gate never dirties the tree."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task 2 ensures the module is small enough that the single smoke test achieves the required coverage floor.",
+            "quote": "The module must stay small enough that importing it covers 100% of src, so the 60% coverage floor passes with a single smoke test."
+          }
+        ],
+        "confidence": 1.0
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 17,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "The specification is highly complex due to the 'load-bearing' nature of the configuration (exclusions and testpaths), but it correctly manages the lifecycle of the 'control surface' vs 'package' distinction.",
+            "evidence": "The teaching notes in Task 1 and Task 3 correctly identify that the configuration is what prevents the factory/invariants from breaking the build before their dependencies exist."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "Task 1 declares the project metadata, python version, and dependencies as required. Task 2 creates the package with the required version string.",
+            "quote": "Create the root pyproject.toml declaring the seating-planner project: metadata, requires-python >=3.11, ortools as the sole runtime dependency..."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Task 3 explicitly runs the four pinned gate commands (ruff check, ruff format, mypy, pytest) and fixes failures.",
+            "quote": "Run the four pinned gate commands from the repo root — `ruff check .`, `ruff format --check .`, `mypy src`, and `pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60` — and fix every failure in files this bean owns"
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Task 3 includes the update to .gitignore to prevent cache pollution, ensuring the tree remains clean.",
+            "quote": "Finally, append the gate-generated cache paths (.ruff_cache/, .mypy_cache/, .pytest_cache/, __pycache__/, .coverage) to .gitignore so running a gate never dirties the tree."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "Task 2 ensures the module is small enough that the single smoke test achieves the required coverage floor.",
+            "quote": "The module must stay small enough that importing it covers 100% of src, so the 60% coverage floor passes with a single smoke test."
+          }
+        ],
+        "confidence": 1.0
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "none",
+      "outcome": "no judgement (rc=1): JUDGE  spec: no content in the response: {\"model\":\"\",\"created_at\":\"0001-01-01T00:00:00Z\",\"",
+      "seconds": 5,
+      "judgement": null
+    },
+    {
+      "case": "criterion-not-really-met",
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "none",
+      "outcome": "no judgement (rc=1): JUDGE  spec: no content in the response: {\"model\":\"\",\"created_at\":\"0001-01-01T00:00:00Z\",\"",
+      "seconds": 6,
+      "judgement": null
+    }
+  ]
+}

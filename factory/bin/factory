@@ -1,0 +1,897 @@
+#!/usr/bin/env bash
+# factory — the one command, so that running the line is not an incantation.
+#
+# Until now a bean was run like this:
+#
+#   cd /path/to/target
+#   PIPELINE_CONFIG=$PWD/factory/pipeline-config.json \
+#     bash /path/to/Local_Dark_Factory/factory/pipeline/orchestrate.sh bean-001 --stop-after gate
+#
+# Two absolute paths and an environment variable, every time, from memory. That
+# is not a convenience problem; it is a correctness one. Every hand-typed
+# invocation is a chance to point the pipeline at the wrong config, and the
+# pipeline has no way to notice — it would run happily against another repo's
+# beans and another repo's risk policy.
+#
+# So: the target repo is wherever you are, its config is found rather than
+# recited, and the factory's own location is derived from this script.
+set -uo pipefail
+BIN_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+FACTORY_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+PIPE="$FACTORY_ROOT/pipeline"
+# shellcheck source=../pipeline/lib.sh
+PIPELINE_DIR="$PIPE"
+source "$PIPE/lib.sh"
+
+usage() {
+  cat <<'EOF'
+factory — run the line against the repository you are standing in.
+
+  factory run <bean-id> [--stop-after <step>] [--resume <run-dir>]
+                            the whole line, or as much of it as you ask for
+  factory step <step> <bean-id>
+                            one step: spec, build, gate, doc, sync, pr, ci,
+                            or audit-{spec,impl,doc,package}
+  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>]
+                            run the approved beans in order, one at a time,
+                            stopping at the first halt
+  factory queue [--all]     what is runnable, and what blocks the rest
+  factory runs              every run this repo has, newest first, and how it
+                            ended — the run directories are the record, not
+                            scratch space
+  factory status [<run-dir>]
+                            what the newest run did, stage by stage
+  factory doctor            is this repository ready to be run against?
+  factory beans             the approved beans, in run order
+  factory read [<run-dir>]  confirm you have read the run's two documents, and
+                            record who and when — the one exit predicate a script
+                            cannot settle
+  factory policy            the tier every bean lands in, and the rule that put
+                            it there — for reviewing risk-policy.yaml by its
+                            consequences rather than by reading globs
+  factory reaudit <run-dir> run a finished run's audits again, against a COPY of
+                            it, N times — for answering "did that change to the
+                            judge do anything on a real run?" rather than on the
+                            seeded defects in bench/
+
+Steps in order: preflight spec audit-spec build gate audit-impl
+                doc audit-doc audit-package sync pr ci
+
+These are the names the pipeline uses. `specify` and `document` read better and
+were in this text for a while, and `--stop-after specify` is refused by the
+orchestrator, which is the only opinion that counts.
+
+The target repository is the current one. Its configuration is found at
+factory/pipeline-config.json; PIPELINE_CONFIG overrides it.
+EOF
+}
+
+# pipeline_snapshot — run from a copy, so editing the line cannot derail a run.
+#
+# bash reads a script incrementally, by byte offset, while it executes. Rewriting
+# a pipeline script during a run therefore does not take effect next time — it
+# corrupts the run in progress, which resumes parsing at an offset that now
+# points into different text. This has happened twice here: judge.sh mid-fitness,
+# where a case died with "m: unbound variable" on a line that contains no such
+# variable, and build-loop.sh mid-build a few minutes ago.
+#
+# Both times the cause took longer to find than the bug being fixed, because the
+# error is always somewhere else. So a run gets its own copy of the pipeline,
+# made once at launch. Edit the repository freely while a bean is building; the
+# run finishes on the code it started with, which is also the more honest thing
+# for the run record to mean.
+#
+# FACTORY_NO_SNAPSHOT=1 runs from the working tree, for iterating on the pipeline
+# itself where the point is to see a change take effect.
+# prune_snapshots — a snapshot outlives the run that made it, because the run
+# `exec`s into it and cannot delete the ground it is standing on.
+#
+# Every `factory run` therefore left a full copy of the factory, the schemas and
+# bench in the temp directory, forever. Twelve of them had accumulated by the
+# evening of 2026-09-15, which was not the thing that filled a 63G tmpfs but was
+# quietly spending a gigabyte a day on a machine whose temp directory is RAM.
+#
+# Pruned at launch rather than at exit: anything still referenced by a running
+# process is left alone, and so is anything younger than an hour, because a
+# resumed run and a fresh one can overlap.
+prune_snapshots() {
+  local d base
+  for d in "${TMPDIR:-/tmp}"/factory-snap.*; do
+    [ -d "$d" ] || continue
+    base="$(basename "$d")"
+    pgrep -af "$base" >/dev/null 2>&1 && continue
+    # -mmin +60: an hour is longer than the gap between a run halting and someone
+    # resuming it, and shorter than the time it takes for these to matter.
+    [ -n "$(find "$d" -maxdepth 0 -mmin +60 2>/dev/null)" ] || continue
+    rm -rf "$d" 2>/dev/null
+  done
+}
+
+pipeline_snapshot() {
+  [ "${FACTORY_NO_SNAPSHOT:-0}" = 1 ] && { printf '%s\n' "$PIPE"; return 0; }
+  local base snap parent
+  prune_snapshots
+  parent="$(cd "$FACTORY_ROOT/.." && pwd)"
+  base="$(mktemp -d "${TMPDIR:-/tmp}/factory-snap.XXXXXX")" || return 1
+
+  # The snapshot mirrors the REPOSITORY root, not the factory directory.
+  #
+  # Scripts resolve siblings by climbing: spec-check finds the schema validator
+  # at "$PIPELINE_DIR/../../bench/validate.py", and the schemas it validates
+  # against live beside it. A snapshot that copied only factory/ put pipeline/ at
+  # the top, so "../.." pointed at /tmp and both were missing.
+  #
+  # The failure was quiet, which is the pattern worth naming: spec-check printed
+  # "schema validator unavailable; structural checks only" and carried on. The
+  # run's record then says the spec was checked, and it was — by a weaker check
+  # than the one anyone reading that record would assume.
+  mkdir -p "$base/factory" || return 1
+  cp -r "$FACTORY_ROOT/." "$base/factory/" 2>/dev/null || return 1
+  for sib in schemas bench; do
+    [ -d "$parent/$sib" ] && cp -r "$parent/$sib" "$base/$sib" 2>/dev/null
+  done
+  snap="$base/factory/pipeline"
+  [ -d "$snap" ] || return 1
+  printf '%s\n' "$snap"
+}
+
+find_config() {
+  [ -n "${PIPELINE_CONFIG:-}" ] && { printf '%s\n' "$PIPELINE_CONFIG"; return 0; }
+  local root
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  for c in "$root/factory/pipeline-config.json" "$root/ai/pipeline/config.json"; do
+    [ -f "$c" ] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
+require_target() {
+  git rev-parse --show-toplevel >/dev/null 2>&1 \
+    || die "not inside a git repository — run this from the repository the line should build in"
+  CONFIG="$(find_config)" \
+    || die "no factory/pipeline-config.json here. This repo has not been scaffolded:
+  $FACTORY_ROOT/scaffold.sh $(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+  export PIPELINE_CONFIG="$CONFIG"
+  TARGET_ROOT="$(git rev-parse --show-toplevel)"
+}
+
+bean_yaml_for() { # bean_yaml_for <bean-id>
+  local id="$1" pat cand
+  pat="$(jq -r '.bean_dir_pattern // "factory/beans/BEAN-NNN-<slug>"' "$CONFIG")"
+  pat="${pat//BEAN-NNN/$id}"
+  for cand in $(cd "$TARGET_ROOT" && compgen -G "${pat//<slug>/*}/bean.yaml" 2>/dev/null); do
+    printf '%s/%s\n' "$TARGET_ROOT" "$cand"; return 0
+  done
+  return 1
+}
+
+newest_run() {
+  local runs
+  runs="$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
+  ls -1dt "$TARGET_ROOT/$runs"/*/ 2>/dev/null | head -1
+}
+
+cmd="${1:-}"; shift 2>/dev/null || true
+case "$cmd" in
+  ""|-h|--help) usage; exit 0 ;;
+
+  run)
+    require_target
+    [ $# -ge 1 ] || die "which bean? try: factory beans"
+    SNAP="$(pipeline_snapshot)" || die "could not snapshot the pipeline"
+    if [ "$SNAP" != "$PIPE" ]; then
+      # The interpreter is exported HERE, not inside pipeline_snapshot.
+      #
+      # That function runs inside $( ), which is a subshell: an `export` in it
+      # dies with the subshell and never reaches this one. The snapshot duly
+      # carried the schemas and the validator, spec-check found both, ran them
+      # under /usr/bin/python3, and reported "missing deps: jsonschema pyyaml
+      # referencing" — a real run, halted, by a variable that was set in a
+      # process that had already exited.
+      #
+      # The venv is pointed at rather than copied: hundreds of megabytes, and
+      # its whole purpose is to be the same interpreter every run.
+      [ -x "$FACTORY_ROOT/../.venv/bin/python" ] \
+        && export PIPELINE_PYTHON="$(cd "$FACTORY_ROOT/.." && pwd)/.venv/bin/python"
+      printf 'pipeline snapshot: %s\n' "$SNAP" >&2
+      [ -d "$SNAP/../skills" ] && export FACTORY_SKILLS="$SNAP/../skills"
+      # Assert the snapshot is complete rather than discovering it is not by
+      # reading a run record afterwards and finding the worker ran on the host.
+      # Asserted, not hoped for. Each of these has already been left out of a
+      # snapshot once, and each time the line kept running with something
+      # silently switched off.
+      for needed in factory/worker.lock.yaml factory/pipeline/roles.json \
+                    factory/skills schemas bench/validate.py; do
+        [ -e "$SNAP/../../$needed" ] \
+          || die "the pipeline snapshot is missing $needed — refusing to run a line that would
+quietly behave differently from the one in the repository. Set FACTORY_NO_SNAPSHOT=1 to
+run from the working tree."
+      done
+    fi
+    exec bash "$SNAP/orchestrate.sh" "$@"
+    ;;
+
+  step)
+    require_target
+    step="${1:-}"; bean="${2:-}"
+    [ -n "$step" ] && [ -n "$bean" ] || die "usage: factory step <step> <bean-id>"
+    # One step is the whole line stopped after that step; resuming an existing
+    # run rather than starting a second one for the same bean.
+    run_dir="$(newest_run)"
+    if [ -n "$run_dir" ] && [ "$(jq -r '.bean // empty' "$run_dir/run.json" 2>/dev/null)" = "$bean" ]; then
+      exec bash "$PIPE/orchestrate.sh" "$bean" --resume "${run_dir%/}" --stop-after "$step"
+    fi
+    exec bash "$PIPE/orchestrate.sh" "$bean" --stop-after "$step"
+    ;;
+
+  status)
+    require_target
+    run_dir="${1:-$(newest_run)}"
+    [ -n "$run_dir" ] && [ -d "$run_dir" ] || die "no run found under $(jq -r '.runs_root' "$CONFIG")"
+    run_dir="${run_dir%/}"
+    printf '\n%s\n' "$(basename "$run_dir")"
+    printf 'bean %s · branch %s · status %s\n\n' \
+      "$(jq -r '.bean' "$run_dir/run.json")" \
+      "$(jq -r '.branch // "—"' "$run_dir/run.json")" \
+      "$(jq -r '.status' "$run_dir/run.json")"
+
+    if [ -f "$run_dir/steps.jsonl" ]; then
+      # Wall clock per step, joined from the start and end timestamps already in
+      # the log. Not new telemetry — the numbers were always there, unjoined, and
+      # "how long does a bean take" was a thing you found out by watching.
+      #
+      # It matters more than it looks. A spec step that costs an hour on this
+      # hardware makes twenty beans a week of wall clock, and that is a fact
+      # about whether the line is practical, not a curiosity. Anything the line
+      # knows about its own cost should be in the place people already look.
+      printf '%-16s %-8s %-9s %-8s %s\n' STEP VERDICT ATTEMPT ELAPSED CONDITIONS
+      # Tab-separated, not NUL: bash cannot hold a NUL in a variable, so a NUL
+      # separator silently collapses every field into one line with no gaps.
+      jq -rs '
+        # step.sh writes millisecond precision ("...:25.629Z") and
+        # fromdateiso8601 refuses anything but whole seconds, so the fraction is
+        # trimmed before parsing rather than the writer being changed — the
+        # millisecond is real information and belongs in the log.
+        def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+        def secs($a; $b): (t($b) - t($a));
+        . as $all
+        | [ .[] | select(.event == "end") ]
+        | map(. as $e
+            | ($all | map(select(.event == "start" and .step == $e.step
+                          and (.attempt // 1) == ($e.attempt // 1))) | last) as $s
+            | [ $e.step, ($e.verdict // "-"), ($e.attempt | tostring),
+                # duration_s when the step measured it in its own process; the
+                # gap between the two lines otherwise. Both are here because the
+                # second is right for steps the controller runs start-to-finish
+                # and was silently wrong for model steps, where both boundaries
+                # were written at the end and every attempt read 0s.
+                (if ($e.duration_s // null) != null then (($e.duration_s | floor | tostring) + "s")
+                 elif $s then (secs($s.ts; $e.ts) | floor | tostring) + "s"
+                 else "-" end),
+                (if $e.conditions then
+                   ($e.conditions.model // "-")
+                   + (if $e.conditions.declared_matches_observed == false then "  (conditions drifted)" else "" end)
+                   + (if ($e.conditions.compactions // 0) > 0 then "  (COMPACTED \($e.conditions.compactions)×)" else "" end)
+                 else "" end) ])
+        | .[] | @tsv' "$run_dir/steps.jsonl" \
+        | while IFS=$'\t' read -r s v a d c; do printf '%-16s %-8s %-9s %-8s %s\n' "$s" "$v" "$a" "$d" "$c"; done
+    fi
+
+    if [ -f "$run_dir/tasks.jsonl" ]; then
+      printf '\ntasks\n'
+      jq -rs '[.[] | select(.event == "task")] | .[] |
+        "  \(.task)  \(.result)  after \(.attempts) attempt(s)"' "$run_dir/tasks.jsonl"
+    fi
+
+    if [ -f "$run_dir/gate.json" ]; then
+      printf '\ngate: %s · tier %s · %s file(s)\n' \
+        "$(jq -r '.overall' "$run_dir/gate.json")" \
+        "$(jq -r '.tier.final_tier // "—"' "$run_dir/gate.json")" \
+        "$(jq -r '.diff.file_count' "$run_dir/gate.json")"
+    fi
+
+    for f in "$run_dir"/verdicts/*.attempt-*.json; do
+      [ -e "$f" ] || continue
+      case "$f" in *judgement.json) continue ;; esac
+      printf 'verdict: %-14s %s\n' "$(jq -r '.stage' "$f")" "$(jq -r '.verdict' "$f")"
+    done
+
+    # A run that continued past a verdict it did not satisfy says so here, not
+    # only in the pull request. Someone reading `factory status` to decide
+    # whether a run is trustworthy should not have to open the PR to find out
+    # that an audit was overridden.
+    for a in "$run_dir"/failed-attempts/*.advisory.*; do
+      [ -e "$a" ] || continue
+      printf 'advisory: %-12s %s\n' "$(basename "$a" | cut -d. -f1)" \
+        "$(grep '^note:' "$a" | head -1 | sed 's/^note: *//')"
+    done
+
+    # A step whose session ran out of context lost part of its own reasoning.
+    # It is in the step record; it belongs in the summary too, because it is a
+    # reason to distrust the output that nothing else in the output shows.
+    if [ -f "$run_dir/steps.jsonl" ]; then
+      jq -rs '[.[] | select(.event == "end" and (.conditions.compactions // 0) > 0)]
+              | .[] | "compacted: \(.step) ran out of context \(.conditions.compactions) time(s) — it lost part of its own reasoning"' \
+        "$run_dir/steps.jsonl" 2>/dev/null
+    fi
+
+    # The two things a person actually wants to see when a run stopped.
+    [ -f "$run_dir/QUESTIONS.md" ] && printf '\nhalted — %s/QUESTIONS.md\n' "$run_dir"
+    for q in "$run_dir"/questions-from-worker/*.md; do
+      [ -e "$q" ] && printf 'the model wrote its own questions: %s\n' "$q"
+    done
+    for b in "$run_dir"/build/*/BLOCKED.md; do
+      [ -e "$b" ] && printf 'a task blocked: %s\n' "$b"
+    done
+    printf '\n'
+    ;;
+
+  doctor)
+    require_target
+    printf '\nfactory doctor — %s\n\n' "$TARGET_ROOT"
+    fail=0
+    say() { printf '  %-6s %-24s %s\n' "$1" "$2" "$3"; }
+    good() { say ok "$1" "$2"; }
+    bad()  { say FAIL "$1" "$2"; fail=1; }
+
+    good "config" "$CONFIG"
+    for f in factory/repo.yaml factory/risk-policy.yaml factory/gates.lock.yaml; do
+      [ -f "$TARGET_ROOT/$f" ] && good "${f#factory/}" "present" || bad "${f#factory/}" "missing — run scaffold.sh"
+    done
+    # The corpus block, which new-run.sh now refuses to start without. Checked
+    # here so the refusal arrives from `doctor` — whose whole job is to answer
+    # "is this repo ready" — rather than from the first run someone tries.
+    miss=""
+    for k in name bean_set requirements_sha256; do
+      [ -n "$(jq -r --arg k "$k" '.corpus[$k] // empty' "$CONFIG" 2>/dev/null)" ] || miss="$miss $k"
+    done
+    if [ -z "$miss" ]; then
+      good "corpus" "$(jq -r '.corpus.name' "$CONFIG") $(jq -r '.corpus.bean_set' "$CONFIG"), requirements pinned"
+    else
+      bad "corpus" "pipeline-config.json is missing:$miss — re-run factory/scaffold.sh; run records cannot say what input they derive from"
+    fi
+
+    n="$(ls -1d "$TARGET_ROOT"/factory/beans/*/ 2>/dev/null | wc -l)"
+    [ "$n" -gt 0 ] && good "beans" "$n installed" || bad "beans" "none installed"
+
+    if [ -f "$TARGET_ROOT/factory/gates.lock.yaml" ]; then
+      img="$("$PIPE/yaml2json.sh" "$TARGET_ROOT/factory/gates.lock.yaml" | jq -r '.image')"
+      if bash "$PIPE/sandbox.sh" --check --gates "$TARGET_ROOT/factory/gates.lock.yaml" >/dev/null 2>&1; then
+        good "gate image" "${img##*/}"
+      else
+        bad "gate image" "not present or not matching its digest — factory/gate-image/build.sh"
+      fi
+    fi
+
+    WLOCK=""
+    for cand in "$TARGET_ROOT/factory/worker.lock.yaml" "$FACTORY_ROOT/worker.lock.yaml"; do
+      [ -f "$cand" ] && { WLOCK="$cand"; break; }
+    done
+    if [ -n "$WLOCK" ]; then
+      wimg="$("$PIPE/yaml2json.sh" "$WLOCK" | jq -r '.image')"
+      if bash "$PIPE/worker-sandbox.sh" --check --lock "$WLOCK" >/dev/null 2>&1; then
+        good "worker image" "${wimg##*/}"
+      else
+        bad "worker image" "not present or not matching its digest — factory/worker-image/build.sh"
+      fi
+      # The gateway is started per step and torn down after, so what doctor can
+      # check is whether one COULD be started: the pieces it needs, not a socket
+      # that would be stale by the time anyone read this.
+      if command -v runcon >/dev/null 2>&1; then
+        good "model gateway" "runcon present; a gateway can be opened per step"
+      else
+        bad "model gateway" "runcon missing — the bridge cannot run in a context a container may connect to"
+      fi
+    else
+      bad "worker image" "no worker.lock.yaml in this repo or in the factory — the worker would run on the host"
+    fi
+
+    # Free space where the line actually writes.
+    #
+    # The gate tree, the pipeline snapshot, every worker's agent directory and
+    # the model gateway's socket all live under TMPDIR, which on this box is a
+    # 63G tmpfs — RAM. When it filled, the contained worker's write failed with
+    # "Unknown system error -122", pi exited 1, and the run recorded a doc step
+    # that produced nothing. Nothing in that chain says "the disk is full", and
+    # the obvious reading is that the model failed. It had not.
+    TMPROOT="${TMPDIR:-/tmp}"
+    AVAIL_KB="$(df -Pk "$TMPROOT" 2>/dev/null | awk 'NR==2 {print $4}')"
+    if [ -z "$AVAIL_KB" ]; then
+      bad "temp space" "cannot read free space on $TMPROOT"
+    elif [ "$AVAIL_KB" -lt 2097152 ]; then
+      bad "temp space" "$(( AVAIL_KB / 1024 )) MB free on $TMPROOT — a worker whose write fails reports 'Unknown system error -122', which reads like anything but a full disk"
+    elif [ "$AVAIL_KB" -lt 8388608 ]; then
+      say note "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT — the gate tree, the snapshot and every worker write here"
+    else
+      good "temp space" "$(( AVAIL_KB / 1048576 )) GB free on $TMPROOT"
+    fi
+
+    # How much of what the bean set forbids a script can decide.
+    #
+    # Both fields, because they are the same shape of statement: `non_goals` is
+    # what a bean is not for and `constraints` is what it may not do, and
+    # bean-002 has "no rule model" in one and "no solver imports" in the other.
+    #
+    # A non-goal about a PLACE is a statement about paths and imports, and those
+    # are checkable; one about a concept is not. The judge was measured on
+    # 2026-09-16 accepting a spec that plans work its bean forbids in 2 attempts
+    # out of 3, so the split between the two is worth knowing at a glance rather
+    # than by reading twenty files.
+    NG_TOTAL=0; NG_CHECKABLE=0; NG_BEANS=0
+    while IFS= read -r by; do
+      [ -f "$by" ] || continue
+      bj="$("$PIPE/yaml2json.sh" "$by" 2>/dev/null)" || continue
+      t="$(jq '((.non_goals // []) | length) + ((.constraints // []) | length)' <<<"$bj" 2>/dev/null || echo 0)"
+      c="$(jq '[((.non_goals // []) + (.constraints // []))[] | select(type == "object") | select(((.forbidden_paths // []) | length) > 0 or ((.forbidden_imports // []) | length) > 0)] | length' <<<"$bj" 2>/dev/null || echo 0)"
+      NG_TOTAL=$((NG_TOTAL + t)); NG_CHECKABLE=$((NG_CHECKABLE + c))
+      [ "${c:-0}" -gt 0 ] && NG_BEANS=$((NG_BEANS + 1))
+    done < <(find "$TARGET_ROOT/factory/beans" -name bean.yaml 2>/dev/null)
+    if [ "$NG_TOTAL" -eq 0 ]; then
+      say note "bean forbids" "no bean declares a non-goal or a constraint"
+    elif [ "$NG_CHECKABLE" -eq 0 ]; then
+      say note "bean forbids" "$NG_TOTAL across the set, none machine-readable — every one is the audit's to judge, and the judge was measured missing this case 2 times in 3"
+    else
+      good "bean forbids" "$NG_CHECKABLE of $NG_TOTAL machine-readable, across $NG_BEANS bean(s); the rest are prose and remain the audit's"
+    fi
+
+    # The other half of "this task does not belong here", and it needs no
+    # configuration at all — only that there be other beans to compare against.
+    # Worth a line for that reason: a check that is simply ON is one nobody
+    # remembers exists, and this one decides `unfinishable-task`, which was "not
+    # decidable from the documents, needs a judge" until 2026-09-16.
+    POB_N="$(find "$TARGET_ROOT/factory/beans" -name bean.yaml 2>/dev/null | wc -l)"
+    if [ "${POB_N:-0}" -le 1 ]; then
+      say note "plans other beans" "$POB_N bean installed — nothing to compare a task intent against, so this check cannot fire here"
+    else
+      good "plans other beans" "$POB_N bean titles to compare task intents against; a task describing a different bean's subject is refused at spec time"
+    fi
+
+    # Hidden tests: configured or not, and if configured, actually hidden.
+    #
+    # "Not configured" is said out loud rather than omitted. A doctor that is
+    # silent about a check nobody set up reads the same as a doctor reporting it
+    # green, and the whole value of hidden tests is that a reader knows whether
+    # the worker was measured by something it could not read.
+    # Runs nobody has read.
+    #
+    # `factory read` is one of the three things waiting on a person and the only
+    # Phase-1 exit predicate a script cannot settle. It had no surface at all
+    # until `factory runs` grew a column, and doctor is where someone looks to
+    # find out what this repository still owes.
+    RR="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG" 2>/dev/null)"
+    DONE_N=0; UNREAD_N=0; AGENT_N=0
+    while IFS= read -r rd; do
+      [ -f "$rd/run.json" ] || continue
+      [ "$(jq -r '.status // ""' "$rd/run.json" 2>/dev/null)" = "completed" ] || continue
+      DONE_N=$((DONE_N + 1))
+      # An agent read is a WEAKER fact and must not be counted as the stronger
+      # one — otherwise --as-agent is the formality this whole command refuses.
+      if [ ! -f "$rd/documents-read-by.txt" ]; then UNREAD_N=$((UNREAD_N + 1))
+      elif grep -q 'NOT a person' "$rd/documents-read-by.txt" 2>/dev/null; then
+        UNREAD_N=$((UNREAD_N + 1)); AGENT_N=$((AGENT_N + 1))
+      fi
+    done < <(find "$RR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+    if [ "$DONE_N" -eq 0 ]; then
+      say note "documents read" "no completed run yet, so there is nothing to confirm"
+    elif [ "$UNREAD_N" -eq 0 ]; then
+      good "documents read" "all $DONE_N completed run(s) confirmed by a person"
+    else
+      say note "documents read" "$UNREAD_N of $DONE_N completed run(s) unconfirmed by a person${AGENT_N:+ ($AGENT_N read by an agent, which is a weaker record and does not close it)} — \`factory read <run-dir>\` from an interactive shell; it is the one exit predicate a script cannot settle"
+    fi
+
+    # And where to check a suite is a suite. The gate's control proves one can
+    # fail; `hidden-tests/verify.sh` is the only thing that proves one can pass,
+    # and a suite that cannot pass blocks its bean forever while the worker sees
+    # only a count. It is not run from here — it needs a tree the bean produced,
+    # which exists only after the bean has run.
+    HT="$(jq -c '.hidden_tests // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -z "$HT" ]; then
+      say note "hidden tests" "none configured — every check in this repo runs code the worker could read"
+    else
+      HTDIR="$(jq -r '.dir // empty' <<<"$HT")"
+      # doctor has no bean, so a per-bean path is reported as the root it is:
+      # which beans have a suite, and which do not. Resolving `<bean>` to nothing
+      # and calling the result a missing directory would report a healthy repo as
+      # broken, which is how a doctor gets ignored.
+      HTPB=0
+      case "$HTDIR" in *"<bean>"*) HTPB=1; HTDIR="${HTDIR%%<bean>*}" ;; esac
+      case "$HTDIR" in
+        ""|/*) ;;
+        *) HTDIR="$(cd "$(dirname "$CONFIG")" && pwd)/$HTDIR" ;;
+      esac
+      if [ -z "$HTDIR" ] || [ ! -d "$HTDIR" ]; then
+        bad "hidden tests" "hidden_tests.dir is not a directory: ${HTDIR:-<unset>}"
+      else
+        HTDIR="$(cd "$HTDIR" && pwd)"
+        HTN="$(find "$HTDIR" -type f -name '*.py' 2>/dev/null | wc -l)"
+        case "$HTDIR/" in
+          "$TARGET_ROOT"/*) bad "hidden tests" "$HTDIR is inside the repository — the worker mounts the whole tree, so these are tests it can read" ;;
+          *)
+            if [ "$HTPB" = 1 ]; then
+              HTB="$(find "$HTDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+              if [ "$HTN" -gt 0 ]; then
+                good "hidden tests" "$HTN file(s) for $HTB bean(s), outside the repository — verify one both ways with hidden-tests/verify.sh"
+              else
+                say note "hidden tests" "configured per bean, and no bean has one yet ($HTDIR)"
+              fi
+            elif [ "$HTN" -gt 0 ]; then
+              good "hidden tests" "$HTN file(s) outside the repository"
+            else
+              bad "hidden tests" "$HTDIR has no .py files — an empty hidden suite reads like a check that passed"
+            fi ;;
+        esac
+      fi
+    fi
+
+    # required_checks names checks that must be green before a merge. Nothing in
+    # the line produces them and nothing reads them: there is no CI step, and
+    # merge_mode is human_required, so the human merging is the one who looks at
+    # the PR's checks. That is a defensible place to be — and a config naming a
+    # check that nothing produces reads exactly like protection that is in force,
+    # which is how a "failing open" defect starts. So say it out loud rather than
+    # letting the file imply otherwise.
+    if [ -f "$TARGET_ROOT/factory/repo.yaml" ]; then
+      RCHECKS="$("$PIPE/yaml2json.sh" "$TARGET_ROOT/factory/repo.yaml" | jq -r '[.required_checks[]?] | join(", ")')"
+      if [ -n "$RCHECKS" ]; then
+        # The working tree, and it says so. `ci.sh` asks the same question of the
+        # branch at HEAD, because a pull request is about a commit and not about
+        # what is lying around unstaged. The two can disagree, and a check that
+        # does not name what it looked at is how that disagreement becomes a
+        # mystery.
+        if [ -d "$TARGET_ROOT/.github/workflows" ] \
+           && [ -n "$(ls -A "$TARGET_ROOT/.github/workflows" 2>/dev/null)" ]; then
+          say note "required_checks" "$RCHECKS — .github/workflows exists in the working tree; the ci step asks the same of the branch"
+        else
+          say note "required_checks" "$RCHECKS — but the working tree has no .github/workflows, so nothing produces them; the ci step will refuse rather than wait"
+        fi
+      fi
+    fi
+
+    branch="$(git -C "$TARGET_ROOT" branch --show-current)"
+    [ "$branch" = "main" ] && good "branch" "on main" \
+      || bad "branch" "on '$branch' — a run starts from main; check out main and delete the bean branch"
+    [ -z "$(git -C "$TARGET_ROOT" status --porcelain)" ] && good "tree" "clean" \
+      || bad "tree" "dirty — preflight will refuse"
+
+    # Asked once, and "could not ask" is not "absent".
+    #
+    # This was `ollama list 2>/dev/null | grep -q` per role, so a list that failed
+    # — a busy server, a slow one, a socket that was not there — produced empty
+    # input, no match, and the words "is not pulled" about a model that was
+    # sitting on disk. Observed on 2026-09-16 while a judge measurement had the
+    # GPU: doctor said the developer model was missing, `ollama list` a second
+    # later showed it, 29 GB, three days old. A diagnostic that names the wrong
+    # cause costs more than no diagnostic.
+    OLLAMA_LIST=""; OLLAMA_LIST_RC=0
+    OLLAMA_LIST="$(timeout 30 ollama list 2>/dev/null)" || OLLAMA_LIST_RC=$?
+    for role in developer judge; do
+      m="$(jq -r --arg r "$role" '.roles[$r].model' "$PIPE/roles.json")"
+      if [ "$OLLAMA_LIST_RC" -ne 0 ] || [ -z "$OLLAMA_LIST" ]; then
+        bad "$role" "cannot ask ollama what is pulled (list exited $OLLAMA_LIST_RC) — this is not the same as '$m is missing'"
+        continue
+      fi
+      grep -q "^$m" <<<"$OLLAMA_LIST" && good "$role" "$m" || bad "$role" "$m is not pulled"
+    done
+
+    printf '\n'
+    [ "$fail" -eq 0 ] && printf 'ready\n' || printf 'not ready — fix the above before running a bean\n'
+    exit "$fail"
+    ;;
+
+  queue)
+    require_target
+    exec bash "$PIPE/queue.sh" "$@"
+    ;;
+
+  go)
+    # The line, rather than one bean of it.
+    #
+    # `factory run <id>` is right for one bean and the wrong shape for twenty:
+    # the order lives in the bean set, the dependencies live in the beans, and a
+    # person retyping both will eventually start bean-006 before bean-005 and
+    # spend an hour finding out. This asks queue.sh what is runnable, runs it,
+    # asks again — because a finished bean unblocks the next one — and stops the
+    # moment something halts.
+    #
+    # Serial, and not as a simplification: repo.yaml says `max_inflight: 1`, and
+    # Phase 0 measured why (the Q8 developer and the judge cannot co-reside, so a
+    # second concurrent bean would make two beans wait on the same model).
+    require_target
+    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --limit)
+          GO_LIMIT="${2:?--limit needs a number}"
+          # Validated, because `[ abc -gt 0 ]` prints "integer expression
+          # expected" to stderr and evaluates false — so `--limit abc` would run
+          # the whole queue while the operator believed it would run one bean.
+          case "$GO_LIMIT" in
+            ''|*[!0-9]*) die "--limit takes a whole number, not '$GO_LIMIT'" ;;
+          esac
+          shift 2 ;;
+        --dry-run) GO_DRY=1; shift ;;
+        --bean) GO_ONE="${2:?--bean needs an id}"; shift 2 ;;
+        # Passed through to every bean. The case it exists for: a repository whose
+        # CI is not wired yet, where `ci` correctly refuses rather than waiting for
+        # a check nothing can report — and a queue that halted every bean at the
+        # last step would be describing the repository's configuration, not the
+        # beans. `--stop-after pr` says "this line ends at the pull request here",
+        # which for `merge_mode: human_required` may simply be true.
+        --stop-after) GO_STOP="${2:?--stop-after needs a step}"; shift 2 ;;
+        *) die "usage: factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>]" ;;
+      esac
+    done
+
+    if [ -n "$GO_ONE" ]; then
+      # An explicit bean still goes through the queue, so "not approved" is
+      # refused here exactly as it would be in the automatic case. A flag that
+      # bypassed the gate would make the gate optional.
+      st="$(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .state')"
+      case "$st" in
+        "")      die "no bean '$GO_ONE' in this repository" ;;
+        refused) die "bean '$GO_ONE' is not approved, and §04 gates what enters the line.
+  $(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .why')" ;;
+        done)    die "bean '$GO_ONE' already reached a pull request" ;;
+        blocked) die "bean '$GO_ONE' is $(bash "$PIPE/queue.sh" --json | jq -r --arg i "$GO_ONE" '.beans[] | select(.id == $i) | .why')" ;;
+      esac
+    fi
+
+    GO_RAN=0
+    while :; do
+      if [ -n "$GO_ONE" ]; then
+        NEXT="$GO_ONE"
+      else
+        NEXT="$(bash "$PIPE/queue.sh" --json | jq -r '.ready[0] // empty')"
+      fi
+      if [ -z "$NEXT" ]; then
+        # Not "nothing to do" — the reason is usually one merge away, and making
+        # someone run a second command to find that out is how a queue that stops
+        # for a good reason gets read as a queue that broke.
+        printf '\n'
+        bash "$PIPE/queue.sh" 2>/dev/null | sed -n '/^ready:/,$p'
+        break
+      fi
+      if [ "$GO_LIMIT" -gt 0 ] && [ "$GO_RAN" -ge "$GO_LIMIT" ]; then
+        printf '\nStopping at --limit %s. Next would be %s.\n' "$GO_LIMIT" "$NEXT"; break
+      fi
+      if [ "$GO_DRY" = 1 ]; then
+        printf 'would run  %s\n' "$NEXT"
+        [ -n "$GO_ONE" ] && break
+        # A dry run cannot ask "and then what?" without running something: the
+        # next bean is blocked until this one has a pull request. Say so rather
+        # than printing a list that assumes success.
+        printf '\n(and then whatever that unblocks — `factory queue --all` shows the chain)\n'
+        break
+      fi
+      # Before each bean, not once at the start.
+      #
+      # A twenty-bean queue is hours of writing into TMPDIR — gate trees, a
+      # pipeline snapshot per run, an agent directory per worker session. When it
+      # filled last night the contained worker's write failed with "Unknown system
+      # error -122", pi exited 1, and the run recorded a doc step that produced
+      # nothing. Every part of that chain was true and none of it said "the disk
+      # is full". A queue that keeps starting beans into a full disk turns one
+      # environmental failure into twenty runs of wasted model time.
+      GO_TMP="${TMPDIR:-/tmp}"
+      GO_KB="$(df -Pk "$GO_TMP" 2>/dev/null | awk 'NR==2 {print $4}')"
+      if [ -n "$GO_KB" ] && [ "$GO_KB" -lt 2097152 ]; then
+        printf '\nSTOPPING before %s: %s MB free on %s.\n' "$NEXT" "$(( GO_KB / 1024 ))" "$GO_TMP"
+        printf 'The gate tree, the pipeline snapshot and every worker session write here. A\n'
+        printf 'worker whose write fails reports "Unknown system error -122", which reads\n'
+        printf 'like anything but a full disk — so the queue stops while the message is\n'
+        printf 'still the true one. %s bean(s) run.\n' "$GO_RAN"
+        exit 1
+      fi
+
+      printf '\n=== %s ===\n' "$NEXT"
+      GO_RC=0
+      bash "$0" run "$NEXT" ${GO_STOP:+--stop-after "$GO_STOP"} || GO_RC=$?
+      GO_RAN=$((GO_RAN + 1))
+      if [ "$GO_RC" -ne 0 ]; then
+        printf '\nSTOPPED at %s (exit %s). The line does not move on from a halt: whatever\n' "$NEXT" "$GO_RC"
+        printf 'stopped it would stop the next bean too, and a queue that kept going would\n'
+        printf 'turn one question into twenty.\n'
+        exit "$GO_RC"
+      fi
+      [ -n "$GO_ONE" ] && break
+    done
+    printf '\n%s bean(s) run.\n' "$GO_RAN"
+    ;;
+
+  runs)
+    # Every run this repo has, newest first, with how it ended.
+    #
+    # `factory status` shows one run. Nothing showed the history, which made run
+    # directories look like scratch space — and they were duly deleted between
+    # attempts all through 2026-09-15, taking with them every spec a model had
+    # written that day and any chance of asking how often the developer clears
+    # doclint on its first try. They are the record. Preflight objects to a dirty
+    # TREE, never to an old run, so there was never a reason to remove one.
+    require_target
+    runs_root="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
+    [ -d "$runs_root" ] || die "no runs yet under $runs_root"
+    # A directory that exists and holds nothing printed a bare header and exited
+    # 0, which reads as "this repo has no history" and is indistinguishable from
+    # "I looked somewhere you did not mean". Say which it is, and exit non-zero,
+    # so a wrong runs_root is a failure rather than an empty table.
+    found=0
+    for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
+      [ -f "$d/run.json" ] && { found=1; break; }
+    done
+    [ "$found" = 1 ] || die "no runs yet under $runs_root"
+    # READ is a column, because it is one of the three things waiting on a person
+    # and the only one with no other surface. `factory read` records it; nothing
+    # reported it, so the way to find out which runs were still unread was to
+    # look for a file in each run directory by hand.
+    printf '\n%-34s %-12s %-9s %-7s %-6s %s\n' RUN STATUS STEPS ELAPSED READ ENDED-AT
+    for d in $(ls -1dt "$runs_root"/*/ 2>/dev/null); do
+      rj="$d/run.json"; [ -f "$rj" ] || continue
+      st="$(jq -r '.status // "?"' "$rj")"
+      ended="$(jq -r '.finished_at // .halted_at // .blocked_at // .interrupted_at // "—"' "$rj")"
+      nsteps=0; elapsed="—"
+      if [ -f "$d/steps.jsonl" ]; then
+        nsteps="$(jq -rs '[.[] | select(.event == "end")] | length' "$d/steps.jsonl" 2>/dev/null || echo 0)"
+        elapsed="$(jq -rs '
+          def t($x): ($x | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601);
+          if length < 2 then "—"
+          else ((t(.[-1].ts) - t(.[0].ts)) | floor | tostring) + "s" end' "$d/steps.jsonl" 2>/dev/null || echo "—")"
+      fi
+      # The step it stopped on is the thing a person is looking for.
+      last="$(jq -r '.halted_at_step // .blocked_task // empty' "$rj")"
+      # Only a completed run has two documents to read. A halted one has nothing
+      # to confirm, and "no" against it would read as a chore nobody owes.
+      if [ -f "$d/documents-read-by.txt" ] && grep -q 'NOT a person' "$d/documents-read-by.txt" 2>/dev/null; then rd="agent"
+      elif [ -f "$d/documents-read-by.txt" ]; then rd="yes"
+      elif [ "$st" = "completed" ]; then rd="NO"
+      # ASCII, not an em dash: printf's %-6s pads by bytes, and a multi-byte
+      # character in a MIDDLE column takes one column and three bytes, so the
+      # row after it shifts left. The em dash is fine where it ends a line.
+      else rd="-"; fi
+      printf '%-34s %-12s %-9s %-7s %-6s %s%s\n' "$(basename "${d%/}")" "$st" "$nsteps" "$elapsed" "$rd" "$ended" \
+        "$([ -n "$last" ] && printf '  (%s)' "$last")"
+    done
+    printf '\n'
+    ;;
+
+  read)
+    # Record that a person read the rendered documents.
+    #
+    # `docs_rendered_and_read` is the one phase-1 predicate a script cannot
+    # settle: rendering is computable, and whether a document teaches is not.
+    # bench/phase1-audit.sh therefore looks for a file saying who read them and
+    # when, and reports the predicate as pending until one exists. Without a
+    # command to write it, that file is a thing someone has to be told about,
+    # which is how a predicate quietly becomes a formality.
+    require_target
+    AS_AGENT=""; READ_NOTE=""
+    _rargs=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --as-agent) AS_AGENT="${2:?--as-agent needs a name}"; shift 2 ;;
+        --note)     READ_NOTE="${2:?--note needs text}"; shift 2 ;;
+        *) _rargs+=( "$1" ); shift ;;
+      esac
+    done
+    set -- ${_rargs+"${_rargs[@]}"}
+    run_dir="${1:-$(newest_run)}"
+    [ -n "$run_dir" ] && [ -d "$run_dir" ] || die "no run found; pass a run directory"
+    run_dir="${run_dir%/}"
+    for d in spec impl-detail; do
+      [ -s "$run_dir/$d.html" ] || die "$run_dir/$d.html is not rendered — there is nothing to read yet"
+    done
+    printf '
+The two documents this run produced:
+
+'
+    printf '  %s
+  %s
+
+' "$run_dir/spec.html" "$run_dir/impl-detail.html"
+    printf 'Confirming you have read them means: they teach. Someone who does not know
+'
+    printf 'this stack could follow the change and its risk from them alone, the risk and
+'
+    printf 'blast radius are stated rather than implied, and the walkthrough matches what
+'
+    printf 'was actually built.
+
+'
+    # A terminal, or nothing. This is the one predicate a script cannot settle, so
+    # the confirmation has to come from a person at a keyboard — there is
+    # deliberately no --yes, because a flag that lets a script record that a human
+    # read something turns the predicate into a formality, which is the exact
+    # thing the command exists to prevent.
+    #
+    # What there was instead of this check: `read </dev/tty` with no terminal,
+    # which leaked `line 733: /dev/tty: No such device or address` and then said
+    # "Not recorded." The outcome was right and the message was a bash error.
+    # Opened, not stat'd. `[ -r /dev/tty ]` is true whenever the device node
+    # exists and the permissions allow it — which is always — and says nothing
+    # about whether this process has a controlling terminal. With no tty the open
+    # fails with ENXIO and the test had already passed.
+    # The agent path, taken before the terminal test because it is not asking
+    # anyone anything. It records a weaker fact, in its own field, with the
+    # reader named and something they found — and says out loud that the human
+    # predicate is still open.
+    if [ -n "$AS_AGENT" ]; then
+      [ -n "$READ_NOTE" ] || die "--as-agent needs --note: an agent recording that it read something, with nothing to show for it, is the rubber stamp this command exists to refuse"
+      printf 'documents-read-by: NOT a person.\n' > "$run_dir/documents-read-by.txt"
+      printf 'read_by_agent: %s\n' "$AS_AGENT" >> "$run_dir/documents-read-by.txt"
+      printf 'at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$run_dir/documents-read-by.txt"
+      printf 'on_instruction_of: %s <%s>\n' \
+        "$(git -C "$TARGET_ROOT" config user.name)" "$(git -C "$TARGET_ROOT" config user.email)" >> "$run_dir/documents-read-by.txt"
+      printf 'what_it_found: %s\n' "$READ_NOTE" >> "$run_dir/documents-read-by.txt"
+      printf '\nThis does NOT satisfy docs_rendered_and_read. That predicate asks whether a\n' >> "$run_dir/documents-read-by.txt"
+      printf 'PERSON found these documents teach, and no person has said so. What is\n' >> "$run_dir/documents-read-by.txt"
+      printf 'recorded here is that an agent read them on the owner-s instruction and what\n' >> "$run_dir/documents-read-by.txt"
+      printf 'it reported. It is weaker, and it is true.\n' >> "$run_dir/documents-read-by.txt"
+      printf '\nRecorded in %s/documents-read-by.txt\n\n' "$run_dir"
+      printf '  read by: %s (an agent, not a person)\n' "$AS_AGENT"
+      printf '  found:   %s\n\n' "$READ_NOTE"
+      printf 'The human predicate stays OPEN. `factory read %s` from an interactive\n' "$run_dir"
+      printf 'shell is what closes it, and nothing here can.\n'
+      exit 0
+    fi
+
+    if ! { : < /dev/tty; } 2>/dev/null; then
+      printf '\nThere is no terminal here, so there is nobody to ask.\n\n'
+      printf 'This is the one Phase-1 predicate a script cannot settle — whether the two\n'
+      printf 'documents TEACH — so it is confirmed by a person at a keyboard or not at all.\n'
+      printf 'There is no --yes for the same reason.\n\n'
+      printf 'If this project runs autonomously and no person is going to read them, the\n'
+      printf 'honest record is a weaker one rather than a false one:\n'
+      printf '    factory read %s --as-agent <who> --note "<what you found>"\n' "$run_dir"
+      printf 'which records that an agent read them, and says the human predicate is open.\n\n'
+      printf 'Run it from an interactive shell:\n'
+      printf '    factory read %s\n' "$run_dir"
+      exit 1
+    fi
+    printf 'Record that? [y/N] '
+    read -r answer </dev/tty || answer=n
+    case "$answer" in
+      y|Y|yes|YES)
+        printf '%s <%s> at %s
+'           "$(git -C "$TARGET_ROOT" config user.name)"           "$(git -C "$TARGET_ROOT" config user.email)"           "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$run_dir/documents-read-by.txt"
+        printf 'Recorded in %s/documents-read-by.txt
+' "$run_dir" ;;
+      *) printf 'Not recorded.
+'; exit 1 ;;
+    esac
+    ;;
+
+  policy)
+    require_target
+    exec bash "$PIPE/policy-preview.sh" "$@"
+    ;;
+
+  reaudit)
+    # The bean is looked up from the run record, because typing it is the step
+    # that gets skipped and an audit without it reports on criteria nobody
+    # declared — which is the failure this whole command was written to measure.
+    require_target
+    rd="${1:-}"; [ -n "$rd" ] || die "usage: factory reaudit <run-dir> [--passes n] [--target t]"
+    shift
+    [ -d "$rd" ] || rd="$TARGET_ROOT/$rd"
+    [ -d "$rd" ] || die "no such run directory: ${1:-$rd}"
+    case " $* " in
+      *" --bean "*) ;;
+      *)
+        rb="$(jq -r '.bean_id // .bean // empty' "$rd/run.json" 2>/dev/null)"
+        [ -n "$rb" ] || die "no bean_id in $rd/run.json — pass --bean <bean.yaml> yourself"
+        by="$(bean_yaml_for "$rb")" || die "cannot find the bean YAML for $rb"
+        set -- --bean "$by" "$@" ;;
+    esac
+    exec bash "$PIPE/reaudit.sh" "$rd" "$@"
+    ;;
+
+  beans)
+    require_target
+    idx="$TARGET_ROOT/$(jq -r '.bean_index_path // "factory/beans/INDEX.md"' "$CONFIG")"
+    [ -f "$idx" ] && cat "$idx" || die "no bean index at $idx"
+    ;;
+
+  *)
+    usage >&2
+    die "unknown command: $cmd"
+    ;;
+esac

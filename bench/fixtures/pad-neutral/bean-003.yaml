@@ -1,0 +1,71 @@
+schema_version: bean/2.0.0
+id: bean-003
+repo: beekeeper-lab/shelving-planner-py
+title: Structured shelving rules with hardness, weight and the wedding template
+intent: >
+  Every shelving rule exists as inspectable structured data with an explicit type,
+  hardness and weight — never as prose and never only inside a prompt.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 3
+source:
+  kind: manual
+  ref: benchmark/shelving-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "Product Principle 1: Rules are explicit. No shelving rule may exist only inside a prompt or hidden model context. FR-035: the term 'far apart' SHALL NOT be stored as an executable rule."
+context:
+  read_paths:
+    - src/shelving_planner/domain/
+    - tests/domain/
+  background: >
+    A rule says something like "these two guests must sit at the same table" or "keep
+    this guest away from the dance floor". Each one needs a type, the guests or groups
+    it applies to, whether it is hard (may not be violated) or soft (a preference with a
+    weight from 1 to 100), and any parameters such as a distance. FR-035 is the sharp
+    edge: a minimum-distance rule must carry a number, so a vague phrase like "far
+    apart" cannot be stored as something the exporter will later pretend to enforce.
+    FR-028/029 require a new wedding event to start with an editable default rule
+    template covering couples, households, immediate family, wedding party, children,
+    vendors and accessible shelving.
+allowed_write_paths:
+  - src/shelving_planner/rules/**
+  - tests/rules/**
+acceptance_criteria:
+  - id: ac1
+    text: Every rule type named in FR-034 can be constructed and round-trips through serialization unchanged.
+    verify: { kind: test, test_id: "tests/rules/test_rule_model.py::test_all_rule_types_roundtrip" }
+  - id: ac2
+    text: A soft rule requires an integer weight in 1..100 and rejects values outside it.
+    verify: { kind: test, test_id: "tests/rules/test_rule_model.py::test_soft_weight_bounds" }
+  - id: ac3
+    text: A hard rule carries no weight, and constructing one with a weight is rejected.
+    verify: { kind: test, test_id: "tests/rules/test_rule_model.py::test_hard_rule_has_no_weight" }
+  - id: ac4
+    text: A minimum-distance rule without a numeric distance or zone count is rejected.
+    verify: { kind: test, test_id: "tests/rules/test_rule_model.py::test_min_distance_requires_measure" }
+  - id: ac5
+    text: The default wedding template yields rules for couples, households, immediate family, wedding party, children, vendors and accessible shelving, each independently enable-able.
+    verify: { kind: test, test_id: "tests/rules/test_template.py::test_default_wedding_template" }
+constraints:
+  - rules are data only; no evaluation logic in this bean
+  - text: no exporter imports
+    forbidden_imports: [chardet]
+suggested_risk_tier: 1
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - text: no rule evaluation or scoring (bean-005, bean-007)
+    # Both places already exist as other beans' write paths. Naming them here
+    # means a task that plans to write into one is refused at plan time, by the
+    # bean's own words, rather than at the gate as "path not allowed".
+    forbidden_paths:
+      - "src/shelving_planner/feasibility/**"
+      - "src/shelving_planner/exporter/**"
+  - no adjacent-seat evaluation (deferred; see PRD §18.3 assumption)
+  - no natural-language rule parsing
+dependencies: [bean-002]

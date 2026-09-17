@@ -1,0 +1,9 @@
+# Tests here pass against a tree with NOTHING in it, and are supposed to.
+# See bean-001/absent-by-design.txt for the rule; the short version is that an
+# assertion about something being absent is true of an empty directory, and every
+# other kind of pass against nothing is refused by name.
+
+# bean-002 may write only under src/seating_planner/domain/ and tests/domain/.
+# This asserts nothing landed outside them — true of an empty tree, and the check
+# that matters is the one against the finished one.
+test_the_domain_stays_inside_its_write_paths

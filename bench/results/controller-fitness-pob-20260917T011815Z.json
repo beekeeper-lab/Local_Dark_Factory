@@ -1,0 +1,69 @@
+{
+  "schema": "controller-fitness/1.0.0",
+  "measured_at": "2026-09-17T01:18:58Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-17T01:18:58Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "inputs": {
+    "spec": "f47d1cb65aab",
+    "tasks": "f12e7653b05b",
+    "bean": "7d7b079f85e0"
+  },
+  "measured_against": {
+    "repo": "main",
+    "head": "16a6460fe604209e9a85953f8b0d2e3a94318d05"
+  },
+  "seeded_defects": 5,
+  "caught_by_name": 3,
+  "not_decidable": 1,
+  "false_alarms": 0,
+  "cases": [
+    {
+      "case": "clean",
+      "should_reject": "no",
+      "rejected": "no",
+      "outcome": "passed the clean control, correctly",
+      "seconds": 10
+    },
+    {
+      "case": "tautological-verify",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  verify can fail            every verify already pass",
+      "seconds": 9
+    },
+    {
+      "case": "contradicts-non-goal",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  bean-forbids               contradicts its own non-g",
+      "seconds": 6
+    },
+    {
+      "case": "invented-current-behaviour",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  current behaviour          describes files that are ",
+      "seconds": 6
+    },
+    {
+      "case": "unfinishable-task",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "rejected, but not for the seeded defect",
+      "seconds": 6
+    },
+    {
+      "case": "criterion-not-really-met",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 6
+    }
+  ],
+  "note": "Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."
+}

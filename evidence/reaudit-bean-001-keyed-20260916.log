@@ -1,0 +1,50 @@
+# The same twelve audits with one variable changed: `criteria` sent as an OBJECT
+# keyed by criterion id (required = all four, additionalProperties false) rather
+# than an array with an enum on the id. Converted back to the array everything
+# downstream expects, at the boundary.
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     1         -          no        spec: it reasoned for 29290 characters and then ended its turn (done_r
+impl      1     0         accept     no        0 finding(s), 4 criteria, conf 100
+doc       1     1         -          no        doc: the answer is not JSON (done_reason=stop, 1109 bytes). jq: parse 
+package   1     0         accept     no        0 finding(s), 4 criteria, conf 1
+spec      2     0         revise     no        2 finding(s), 4 criteria, conf 0.99
+impl      2     0         accept     no        1 finding(s), 4 criteria, conf 0.99
+doc       2     1         -          no        doc: the answer is not JSON (done_reason=stop, 902 bytes). jq: parse e
+package   2     1         -          no        package: it reasoned for 512 characters and then ended its turn (done_
+spec      3     0         revise     no        0 finding(s), 4 criteria, conf 0.0
+impl      3     0         accept     no        0 finding(s), 4 criteria, conf 0.99
+doc       3     1         -          no        doc: the answer is not JSON (done_reason=stop, 1321 bytes). jq: parse 
+package   3     0         accept     no        0 finding(s), 4 criteria, conf 0.99
+
+0 of 12 audit run(s) produced a verdict the controller stamped.
+
+--- why each was refused ---
+1-doc        the judge wrote no judgement file.
+1-impl       confidence 100 is outside the contract range 0..1.
+1-package    the judgement quotes text that is not on disk anywhere.
+1-spec       the judge wrote no judgement file.
+2-doc        the judge wrote no judgement file.
+2-impl       the judgement quotes text that is not on disk anywhere.
+2-package    the judge wrote no judgement file.
+2-spec       the judgement quotes text that is not on disk anywhere.
+3-doc        the judge wrote no judgement file.
+3-impl       the judgement quotes text that is not on disk anywhere.
+3-package    no quote long enough to prove anything (all under 12 chara
+3-spec       verdict "revise" with zero findings.
+
+--- what it put in `criteria`, every time it answered ---
+  1-impl  ac1, ac2, ac3, ac4
+  1-package  ac1, ac2, ac3, ac4
+  2-spec  ac1, ac2, ac3, ac4
+  2-impl  ac1, ac2, ac3, ac4
+  3-spec  ac1, ac2, ac3, ac4
+  3-impl  ac1, ac2, ac3, ac4
+  3-package  ac1, ac2, ac3, ac4
+
+the bean declares: ac1 ac2 ac3 ac4
+
+--- the array-with-enum run, for comparison ---
+  answered      8 of 12        ->  7 of 12
+  duplicates    2 of 8 answers ->  0 of 7
+  stamped       0 of 12        ->  0 of 12

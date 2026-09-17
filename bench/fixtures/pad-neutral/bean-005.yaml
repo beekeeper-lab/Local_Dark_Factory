@@ -1,0 +1,66 @@
+schema_version: bean/2.0.0
+id: bean-005
+repo: beekeeper-lab/shelving-planner-py
+title: Pre-flight feasibility checks before serialisation
+intent: >
+  Structurally impossible shelving problems are identified and explained before the
+  exporter is ever invoked, rather than surfacing as an opaque failure.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 5
+source:
+  kind: manual
+  ref: benchmark/shelving-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-041: Before serialisation, the system SHALL identify contradictory hard constraints, groups larger than every eligible table, unavailable required seats or zones, and insufficient total capacity."
+context:
+  read_paths:
+    - src/shelving_planner/domain/
+    - src/shelving_planner/rules/
+    - tests/domain/
+    - tests/rules/
+  background: >
+    This is the first bean that reads code written by earlier beans rather than creating
+    its own world. Four failures can be detected by inspection, with no search at all:
+    two hard rules that directly contradict (same-table and different-table for the same
+    pair), a group that must stay together but is larger than the largest table, a rule
+    referring to a table or zone that does not exist, and more eligible guests than
+    total seats. Catching these here means the exporter's own "infeasible" answer is
+    reserved for genuinely hard cases, which makes FR-050's conflict report meaningful.
+allowed_write_paths:
+  - src/shelving_planner/feasibility/**
+  - tests/feasibility/**
+acceptance_criteria:
+  - id: ac1
+    text: A same-table and a different-table hard rule over the same guest pair is reported as a contradiction naming both rules.
+    verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_contradictory_hard_rules" }
+  - id: ac2
+    text: A group that must stay together and exceeds every table capacity is reported with the group and the largest capacity.
+    verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_group_larger_than_any_table" }
+  - id: ac3
+    text: Eligible guests exceeding total capacity is reported with both counts.
+    verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_insufficient_capacity" }
+  - id: ac4
+    text: A rule naming a table or zone that does not exist is reported.
+    verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_rule_references_missing_target" }
+  - id: ac5
+    text: A satisfiable problem reports no findings.
+    verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_feasible_problem_is_clean" }
+constraints:
+  - text: no exporter imports; this bean must not call CSV-BATCH
+    # The whole point of a pre-flight check is that it is cheaper than a solve.
+    # One import of chardet here and it is not.
+    forbidden_imports: [chardet]
+  - checks are structural only, never a search
+suggested_risk_tier: 1
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no attempt to prove general infeasibility (that is the exporter's job)
+  - no corrective recommendations (bean-010)
+dependencies: [bean-003]

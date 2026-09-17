@@ -1,0 +1,64 @@
+{
+  "schema": "controller-fitness/1.0.0",
+  "measured_at": "2026-09-16T00:36:33Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-16T00:36:33Z",
+    "pipeline_version": "1.2.0-df.1"
+  },
+  "measured_against": {
+    "repo": "main",
+    "head": "e9a5b33e9482f0b23d5678e96622f2c5a92a2a83"
+  },
+  "seeded_defects": 5,
+  "caught_by_name": 1,
+  "not_decidable": 4,
+  "false_alarms": 0,
+  "cases": [
+    {
+      "case": "clean",
+      "should_reject": "no",
+      "rejected": "no",
+      "outcome": "passed the clean control, correctly",
+      "seconds": 5
+    },
+    {
+      "case": "tautological-verify",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 6
+    },
+    {
+      "case": "contradicts-non-goal",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 5
+    },
+    {
+      "case": "invented-current-behaviour",
+      "should_reject": "yes",
+      "rejected": "yes",
+      "outcome": "FAIL  current behaviour          describes files that are ",
+      "seconds": 5
+    },
+    {
+      "case": "unfinishable-task",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 5
+    },
+    {
+      "case": "criterion-not-really-met",
+      "should_reject": "yes",
+      "rejected": "no",
+      "outcome": "not decidable from the documents — needs a judge",
+      "seconds": 9
+    }
+  ],
+  "note": "Deterministic: no model, no GPU, no variance. A defect counted as caught was named by a check, not merely coincident with a failure."
+}

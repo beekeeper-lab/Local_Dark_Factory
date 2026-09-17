@@ -1,0 +1,323 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-15T02:38:04Z",
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1"
+  },
+  "seeded_defects": 5,
+  "rejected": 2,
+  "named_the_defect": 2,
+  "false_accepts": 1,
+  "abstentions": 0,
+  "no_answer": 1,
+  "cut_off_by_token_budget": 1,
+  "complete": false,
+  "reject_rate": 40,
+  "named_rate": 40,
+  "false_accept_rate": 20,
+  "cases": [
+    {
+      "case": "clean",
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "revise",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 767,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "Artifact `ac2` (src/seating_planner/__init__.py) is not satisfied by any task. The artifact description says it should be a placeholder file containing only a docstring, but Task‑2 creates a file with additional symbols (`__all__` and `__version__`). This violates the spec’s requirement that each artifact be satisfied by at least one task and that the file match the description.",
+            "evidence": "Task‑2’s `write_paths` includes `src/seating_planner/__init__.py`, and its verification step checks for a non‑empty `__version__` attribute, which contradicts the artifact description that only a docstring should be present."
+          },
+          {
+            "severity": "major",
+            "summary": "Artifact `ac3` (.gitignore) is required to contain a line ignoring `.ruff_cache`, but no verification step checks for this. The spec’s `task‑3` verification only runs ruff, mypy, and pytest commands, none of which verify the presence of the ignore line. Therefore the artifact’s condition is not guaranteed to be met.",
+            "evidence": "The `verify` list for `task‑3` does not include any command that inspects .gitignore; consequently the presence of the required ignore line cannot be assured."
+          },
+          {
+            "severity": "major",
+            "summary": "The verification command for `task‑1` is syntactically invalid. The Python snippet ends with `, p\"]` which is not valid syntax, so the verification cannot succeed.",
+            "evidence": "The command string in `task‑1` is: \"python -c \\\"import tomllib; d = tomllib.load(open('pyproject.toml', 'rb')); assert p['name'] == 'seating‑planner' and '>=3.11' in p['requires‑python'], p\\\"]}\" – the trailing `p\\\"]` after the assert makes the code invalid."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The artifact `src/seating_planner/__init__.py` is described as a placeholder file containing only a docstring, but Task 2 writes additional symbols (`__all__` and `__version__`). No task in the plan creates a file that matches the artifact description exactly, so the artifact is not satisfied as specified. Moreover, the control surface file `src/seating_planner/__init__.py` is mentioned as a placeholder for the future project, but the repository does not contain any other files for the control surface, and no task creates or verifies it. This violates the requirement that each artifact be satisfied by at least one task.\n\nAdditionally, the verification step for Task 1 contains a syntax error: the Python command includes an extraneous token `p` after the assert expression (`assert p['name'] == 'seating-planner' and '>=3.11' in p['requires‑python'], p\"`), which makes the command invalid and therefore the verification cannot succeed.\n\nFinally, artifact `ac3` (.gitignore) requires a line ignoring `.ruff_cache`, but none of the verification steps in any task check for the presence of that line. Consequently, the spec does not guarantee that the .gitignore will be correctly updated, leaving the gate condition for `.ruff_cache` unverified.\n\nBecause not all artifacts are guaranteed to be satisfied by the defined tasks and some verification steps are malformed, the spec does not meet the soundness criteria as currently written.",
+            "quote": "The repository is not a real project but a sandbox for a later project. The control surface is a separate repository, and the .gitignore must contain a line to ignore `.ruff_cache`. However, the spec does not provide a task that creates or verifies this line, nor does it correctly satisfy the `src/seating_planner/__init__.py` placeholder artifact. Moreover, the verification command for Task‑1 contains a syntax error (`p\"]` after the assert)."
+          }
+        ],
+        "confidence": 0.95
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "accept",
+      "outcome": "FALSE ACCEPT — it passed a seeded defect",
+      "seconds": 215,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "All required conditions are present in the repository: a `pyproject.toml` with the correct package name, Python version constraint (>=3.11), and ortools dependency; a `src` directory containing an importable `seating_planner` package with a non‑empty `__version__` string; appropriate tool configurations for ruff, mypy, and pytest; and the required .gitignore entries. The version field of the package itself is \"0.1.0\", which satisfies the Python version requirement but does not affect the criterion about the package version (the criterion only mentions the Python version). Therefore the repository satisfies all listed criteria.",
+            "evidence": "pyproject.toml exists and includes:\n- name = \"seating-planner\"\n- requires-python = \">=3.11\"\n- dependencies includes \"ortools>=9.0\"\n- setuptools packages find points to \"src\"\nsrc/seating_planner/__init__.py defines __version__ = \"0.1.0\" and __all__ = []\nRuff, mypy, and pytest configurations are present as required.\n.gitignore contains entries for .ruff_cache, .mypy_cache, .pytest_cache, __pycache__, .coverage.\nAll tasks defined in the spec are satisfied by the current repository state."
+          },
+          {
+            "severity": "major",
+            "summary": "The spec does not contain any violations of the stated criteria; therefore, no major issues are detected regarding the required package definition, dependency, version constraint, importability, or tool configuration. All criteria are met, making the spec sound and acceptable for the intended purpose.",
+            "evidence": "The repository includes the required pyproject.toml with correct metadata, a src layout exposing the `seating_planner` package, and the necessary configuration files for ruff, mypy, and pytest. The .gitignore also excludes the appropriate cache directories. No missing or incorrect elements were found."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "1",
+            "met": true,
+            "evidence": "The repository contains a `pyproject.toml` file that defines a package named \"seating-planner\" and includes a runtime dependency on `ortools` (version constraint `>=9.0`). The `requires-python` field is set to \">=3.11\", satisfying the required Python version. The `src` directory contains a `seating_planner` package with an `__init__.py` that defines `__version__`, making the package importable. The `[tool.setuptools.packages.find]` section points to the `src` directory, ensuring the package is discoverable. The `ruff`, `mypy`, and `pytest` configurations are present as required. The `ortools` dependency is declared (the exact version is not mandated beyond being present).",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "2",
+            "met": true,
+            "evidence": "The `pyproject.toml` file includes `requires-python = \">=3.11\"`, meeting the required Python version constraint. The package version itself is \"0.1.0\", which satisfies the condition that the version be at least 3.11 when interpreted as a Python version requirement (the spec’s requirement).",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "3",
+            "met": true,
+            "evidence": "The `src/seating_planner/__init__.py` file exists and defines `__version__`, confirming that the package `seating_planner` can be imported from the `src` directory.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "4",
+            "met": true,
+            "evidence": "The same `pyproject.toml` entry satisfies this repeated requirement as well; the package name and dependency are correctly defined and the Python version constraint is satisfied.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "5",
+            "met": true,
+            "evidence": "Identical to the previous checks; the repository meets the condition.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "6",
+            "met": true,
+            "evidence": "The `pyproject.toml` file satisfies the requirement as described above.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "7",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "8",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "9",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "10",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortols. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "11",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "12",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "13",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "14",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "15",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          },
+          {
+            "id": "16",
+            "met": true,
+            "evidence": "The repository meets the condition with the existing `pyproject.toml` and `src` layout.",
+            "quote": "The repo must contain a pyproject.toml file that defines a package named \"seating-planner\" and a dependency on ortools. The version must be >= 3.11. The package must be importable from the src directory."
+          }
+        ],
+        "confidence": 0.97
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 219,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "The artifact `bean-001` declares a write_path `.gitignore` but does not list `.gitignore` among its own files. According to the specification, the artifact’s file list must include all paths it writes to. Since `.gitignore` is missing, the spec is not sound.",
+            "evidence": "artifact files: [\"bean-001.yaml\", \"pyproject.toml\", \"src/seating_planner/__init__.py\", \"src/seating_planner/solver/__init__.py\", \"src/seating_planner/solver/solver.py\", \"tests/test_scaffold.py\"]\nwrite_paths declared: [pyproject.toml, src/seating_planner/**, tests/**, .gitignore]\nMissing .gitignore in the artifact’s file list violates the write_paths constraint."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "The artifact defines `write_paths: []`, `depends_on: []`, and `satisfies: []`. Its file list contains only its own definition file (`ac1.yaml`). No other files are written, and it has no dependencies, satisfying the constraints exactly. The verification steps are not checked for correctness, as per the specification. Therefore, all constraints for `ac1` are satisfied.",
+            "quote": "write_paths: []\ndepends_on: []\nsatisfies: []"
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "The artifact defines `write_paths: []` (no files are written), `depends_on: []` (no dependencies), and `satisfies: [ac1]`. Since `ac1` appears earlier in the spec, the dependency is satisfied. The verification steps are ignored for soundness checking. Hence all constraints for `ac2` are satisfied.",
+            "quote": "write_paths: []\ndepends_on: []\nsatisfies: [ac1]"
+          },
+          {
+            "id": "bean-001",
+            "met": false,
+            "evidence": "The artifact declares `write_paths: [pyproject.toml, src/seating_planner/**, tests/**, .gitignore]`. Its file list includes `pyproject.toml`, `src/seating_planner/__init__.py`, `src/seating_planner/solver/__init__.py`, `src/seating_planner/solver/solver.py`, and `tests/test_scaffold.py`. The path `.gitignore` is **not** listed among the artifact’s files, violating the requirement that all write_paths be present in the artifact’s file list. Therefore, the `write_paths` constraint is not satisfied.",
+            "quote": "write_paths: [pyproject.toml, src/seating_planner/**, tests/**, .gitignore]"
+          },
+          {
+            "id": "bean-001",
+            "met": true,
+            "evidence": "The artifact declares `depends_on: [ac1, ac2]`. Both `ac1` and `ac2` are defined earlier in the specification, satisfying the dependency constraint.",
+            "quote": "depends_on: [ac1, ac2]"
+          },
+          {
+            "id": "bean-001",
+            "met": true,
+            "evidence": "The artifact declares `satisfies: [ac1, ac2, ac3, ac4]`. It satisfies `ac1` and `ac2` trivially (they have no constraints). It also satisfies `ac3` because it writes to `src/seating_planner/__init__.py` (required by `ac3`). It satisfies `ac4` because it writes to `src/seating_planner/solver/__init__.py` (required by `ac4`). Thus all constraints listed in `satisfies` are met.",
+            "quote": "satisfies: [ac1, ac2, ac3, ac4]"
+          }
+        ],
+        "confidence": 0.99
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "cut off",
+      "outcome": "NOT MEASURED — ran out of token budget before answering",
+      "seconds": 381,
+      "judgement": null
+    },
+    {
+      "case": "unfinishable-task",
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "none",
+      "outcome": "no judgement (rc=1):        There are no tools on this path and the artifacts were in the prompt.",
+      "seconds": 15,
+      "judgement": null
+    },
+    {
+      "case": "criterion-not-really-met",
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "caught, and named it",
+      "seconds": 90,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "minor",
+            "summary": "All gate identifiers referenced by tasks are present in the gates file, and all task identifiers referenced by gates are present in the tasks list. No missing references were found.",
+            "evidence": "artifact‑2 contains gate‑1, gate‑2, gate‑3, gate‑4; artifact‑3 contains task‑1, task‑2, task‑3. The spec’s gate and task references match these identifiers."
+          },
+          {
+            "severity": "minor",
+            "summary": "All commands specified for the gates are syntactically valid Ruff, MyPy, and pytest commands, assuming the standard tools are installed in the environment.",
+            "evidence": "\"ruff check .\", \"ruff format .\", \"ruff format --check .\", and \"pytest -q --cov=src --cov-report=term-missing\" are proper command‑line invocations for their respective tools."
+          },
+          {
+            "severity": "minor",
+            "summary": "All tasks’ depends_on entries reference existing tasks, and all tasks’ satisfies entries reference existing gates.",
+            "evidence": "task‑2 depends on task‑1; task‑3 depends on task‑1 and task‑2. All are defined in artifact‑3."
+          },
+          {
+            "severity": "minor",
+            "summary": "All gates’ satisfies entries reference existing tasks defined in the spec.",
+            "evidence": "gate‑1 → task‑1, gate‑2 → task‑1, gate‑3 → task‑2, gate‑4 → task‑3 – all tasks exist."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "C1",
+            "met": true,
+            "evidence": "artifact-2 defines gates gate-1, gate-2, gate-3, and gate-4, exactly matching the list of gate identifiers referenced in the spec (bean-001). Therefore every gate listed in the spec exists in the gates file, satisfying the first condition for soundness.",
+            "quote": "All gates referenced in the spec exist in the gates file."
+          },
+          {
+            "id": "C2",
+            "met": true,
+            "evidence": "artifact-3 defines tasks task-1, task-2, and task-3, which correspond exactly to the tasks listed in the spec. Hence all referenced tasks exist.",
+            "quote": "All tasks referenced in the spec exist in the tasks file."
+          },
+          {
+            "id": "C3",
+            "met": true,
+            "evidence": "The spec’s gates (gate‑1 … gate‑4) each list a \"satisfies\" field that contains task identifiers. All those identifiers (task‑1, task‑2, task‑3) are present in the tasks list of the spec.",
+            "quote": "All tasks referenced in gates’ \"satisfies\" fields exist in the spec."
+          },
+          {
+            "id": "C4",
+            "met": true,
+            "evidence": "Each task’s \"satisfies\" list in artifact‑3 contains only gate identifiers that are defined in artifact‑2 (ac1, ac2, ac3, ac4). No missing or extra identifiers are present.",
+            "quote": "All gates referenced in tasks’ \"satisfies\" fields exist in the gates file."
+          },
+          {
+            "id": "C5",
+            "met": true,
+            "evidence": "The commands listed for each gate are valid Ruff, MyPy and pytest commands:\n- \"ruff check .\" is a correct Ruff lint command.\n- \"ruff format .\" and \"ruff format --check .\" are valid Ruff formatting commands.\n- \"mypy src\" is a valid MyPy command.\n- \"pytest -q --cov=src --cov-report=term-missing\" is a valid pytest invocation.\nAll of these commands are executable in a typical development environment where Ruff, MyPy, and pytest are installed.",
+            "quote": "All gates' \"command\" fields are valid commands."
+          },
+          {
+            "id": "C6",
+            "met": true,
+            "evidence": "artifact‑3’s tasks have the following depends_on lists:\n- task‑1: [] (no dependencies) – valid.\n- task‑2: [task‑1] – task‑1 exists.\n- task‑3: [task‑1, task‑2] – both exist.\nThus every task’s depends_on references refer to tasks defined in the spec.",
+            "quote": "All tasks' \"depends_on\" fields refer to tasks defined in the spec."
+          },
+          {
+            "id": "C7",
+            "met": true,
+            "evidence": "artifact‑3’s tasks have the following satisfies lists:\n- task‑1: [ac1] – gate‑1 exists.\n- task‑2: [ac1, ac4] – both gates exist.\n- task‑3: [ac2, ac3, ac4] – all exist.\nThus every task’s satisfies field references gates that are defined in the spec.",
+            "quote": "All tasks' \"satisfies\" fields refer to gates defined in the spec."
+          }
+        ],
+        "confidence": 0.99
+      }
+    }
+  ]
+}

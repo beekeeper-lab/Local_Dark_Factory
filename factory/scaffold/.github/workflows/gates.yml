@@ -1,0 +1,129 @@
+# gates — the same gates the line runs, in the same image, by digest.
+#
+# `required_checks: [gates]` in factory/repo.yaml names this workflow. Until it
+# existed, that field described protection that was not in force; `factory doctor`
+# said so out loud, which is not the same as fixing it.
+#
+# The whole design decision is in the `image:` line of factory/gates.lock.yaml:
+# CI pulls the image the manifest pins, by digest, and runs the gate commands
+# inside it. A workflow that pip-installed ruff and mypy would run *a* lint and
+# *a* type check at whatever versions the runner resolved that morning — so a
+# green here and a green on Forge would be two different claims wearing the same
+# checkmark. That is invisible to a reviewer, which is why it is not done.
+#
+# Publishing the image is `factory/gate-image/publish.sh --registry ghcr.io/<org>`.
+# If it has not been published, this job FAILS rather than skipping: a required
+# check that passes because it could not run is the failure mode this whole
+# repository is about.
+name: gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the pinned manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pyyaml
+          # PyYAML reads the manifest; it never runs a gate. The toolchain under
+          # test is entirely inside the image named below.
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, yaml, os
+          m = yaml.safe_load(open("factory/gates.lock.yaml"))
+          image = m["image"]
+          print(f"image={image}")
+          # The registry host, computed here rather than in an expression: GitHub
+          # Actions has no split() and the docker/login-action needs the host alone.
+          print("registry=" + (image.split("/")[0] if "/" in image and "." in image.split("/")[0] else ""))
+          print("gates=" + json.dumps(m["gates"]))
+          print("expect=" + json.dumps(m.get("expect_versions", {})))
+          PY
+
+      - name: Log in to the registry
+        if: ${{ steps.manifest.outputs.registry != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.manifest.outputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the gate image, by digest
+        run: |
+          set -euo pipefail
+          IMAGE='${{ steps.manifest.outputs.image }}'
+          case "$IMAGE" in
+            localhost/*)
+              echo "::error::factory/gates.lock.yaml still pins a local image ($IMAGE)."
+              echo "::error::CI cannot pull it. Publish it first:"
+              echo "::error::  factory/gate-image/publish.sh --registry ghcr.io/<org>"
+              echo "::error::then put the printed digest in gates.lock.yaml."
+              exit 1 ;;
+          esac
+          docker pull "$IMAGE"
+
+      - name: Assert the toolchain inside the image
+        run: |
+          set -euo pipefail
+          IMAGE='${{ steps.manifest.outputs.image }}'
+          # The manifest claims what is in the image. An image that has drifted
+          # from its own expect_versions is worse than an unpinned one: every
+          # "the gates passed" in this repo's history is a claim about a specific
+          # toolchain, and this is where that claim is checked in CI.
+          echo '${{ steps.manifest.outputs.expect }}' > /tmp/expect.json
+          fail=0
+          for tool in ruff mypy pytest; do
+            want="$(python3 -c "import json,sys;print(json.load(open('/tmp/expect.json')).get('$tool',''))")"
+            [ -n "$want" ] || continue
+            got="$(docker run --rm "$IMAGE" "$tool" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+            if [ "$got" != "$want" ]; then
+              echo "::error::$tool is $got in the image, manifest says $want"
+              fail=1
+            else
+              echo "ok  $tool $got"
+            fi
+          done
+          exit "$fail"
+
+      - name: Run the gates
+        run: |
+          set -uo pipefail
+          IMAGE='${{ steps.manifest.outputs.image }}'
+          echo '${{ steps.manifest.outputs.gates }}' > /tmp/gates.json
+          n="$(python3 -c "import json;print(len(json.load(open('/tmp/gates.json'))))")"
+          failed=0
+          for i in $(seq 0 $((n - 1))); do
+            id="$(python3 -c "import json;print(json.load(open('/tmp/gates.json'))[$i]['id'])")"
+            # argv, never a shell string: the manifest stores arrays precisely so
+            # there is no quoting to get wrong and nothing for a path to inject
+            # through, and that property has to survive the trip into CI.
+            mapfile -t argv < <(python3 -c "import json;[print(a) for a in json.load(open('/tmp/gates.json'))[$i]['run']]")
+            echo "::group::gate $id — ${argv[*]}"
+            # A writable copy, as the local gate does: pytest writes caches and
+            # coverage data, and a read-only mount would fail the unit gate for a
+            # reason that has nothing to do with the change under test. The copy
+            # is thrown away after each gate so one cannot leave state for the next.
+            rm -rf /tmp/gate-tree && cp -a "$PWD" /tmp/gate-tree
+            docker run --rm \
+              --network=none \
+              --volume /tmp/gate-tree:/work:rw \
+              --workdir /work \
+              --env PYTHONPATH=/work/src \
+              "$IMAGE" "${argv[@]}"
+            rc=$?
+            echo "::endgroup::"
+            if [ "$rc" -eq 0 ]; then echo "ok    $id"
+            else echo "::error::gate $id failed (exit $rc)"; failed=1; fi
+          done
+          exit "$failed"

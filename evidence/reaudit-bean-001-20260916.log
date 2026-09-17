@@ -1,0 +1,56 @@
+# bean-001's four audits, re-run 2026-09-16 at cap=16000, thinking=low, with
+# `met` given a per-target meaning. Against a COPY of the original run
+# directory, which still carries every artifact. Nothing wrote to the original.
+
+copy: /tmp/reaudit.SAgc9i/run
+
+TARGET     JUDGE-RC  VERDICT    STAMPED   NOTE
+spec       1         -          no        JUDGE  spec: it reasoned for 20417 characters and then ended its turn (done_reas
+impl       1         -          no        JUDGE  impl: the model tried to call tools instead of answering (1 call(s): repo
+doc        0         accept     no        2 finding(s), 2 criteria, confidence 0.99
+package    0         accept     no        1 finding(s), 2 criteria, confidence 0.99
+
+logs: /tmp/reaudit.SAgc9i
+
+--- payloads ---
+JUDGE  spec  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (5 artifacts, 25428 bytes, one message each)
+JUDGE  impl  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (6 artifacts, 30514 bytes, one message each)
+JUDGE  doc  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (3 artifacts, 36731 bytes, one message each)
+JUDGE  package  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (6 artifacts, 24217 bytes, one message each)
+
+--- why doc and package were not stamped ---
+AUDIT doc: the judgement does not report on the criteria it was given.
+      not reported on: ac3 ac4
+      bean-001 declares: ac1 ac2 ac3 ac4
+
+      A verdict over some of the criteria, stamped as a verdict, is the shape of
+      a false accept: the ones nobody looked at are the ones that were wrong.
+
+--- what the spec judge did instead of answering ---
+We need to parse the problem statement.
+
+The user says:
+
+"Below is a description of a repository and its contents:"
+
+Then there are 5 artifacts described with some fields like "what", "file", "format", etc. The content includes weird statements about "Current behaviour". They ask: "is this spec sound?" So we need to answer yes/no.
+
+We have to produce JSON output:
+
+{
+  "verdict": ...,
+  "reasons": [...],
+  "analysis": [...]
+}
+
+But they also say: "The current Current behaviour is not a valid test. The scaffold test, the entire scaffolding does not exist." Actually reading: "Current behaviour: The current behaviour of the repository is that it has no tests. The scaffold test is not present. The verification step expects certain files to be present and contain certain content."
+
+Thus we need to produce JSON with verdict false (since spec says there should be a test file but none exists). And
+[...]
+repository contains no tests to verify the functionality of the code.",
+    "There is no scaffold test present."
+  ]
+}
+```
+
+It looks like there might be a misunderstanding or typo in your request. The phrase “the current behaviour is that the scaffold does not exist” seems contradictory because you mentioned both a scaffold and its non-existence. Could you clarify what exactly you'd like me to do? If you're looking for a specific analysis or have any other requests, feel free to let me know!

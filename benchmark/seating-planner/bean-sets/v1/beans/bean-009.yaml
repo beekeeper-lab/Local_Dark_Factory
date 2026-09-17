@@ -1,0 +1,61 @@
+schema_version: bean/2.0.0
+id: bean-009
+repo: beekeeper-lab/seating-planner-py
+title: Reproducible optimization via persisted solver configuration
+intent: >
+  Re-running an optimization over identical inputs produces an identical assignment, and
+  the configuration needed to reproduce it is stored with the result.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 9
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-048: Repeated optimization using identical guests, tables, rules, locks, mode, and solver settings SHALL produce the same assignment. Implementation Guardrails #3: Persist the solver configuration or seed needed to reproduce an assignment."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/store/
+    - tests/solver/
+  background: >
+    CP-SAT searches in parallel by default, and parallel search is not deterministic:
+    whichever worker finds an optimal answer first decides which of several equally-good
+    answers you get. Determinism therefore requires pinning the worker count and the
+    random seed, and storing both with the result so a later run can be reproduced
+    exactly. There is a real tension with NFR-001's 15-second target, because pinning
+    workers costs wall-clock — the manifest records this as an open owner decision, and
+    this bean's job is to make the configuration explicit rather than to resolve it.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: Two runs over identical inputs and configuration produce byte-identical assignments.
+    verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_repeat_run_is_identical" }
+  - id: ac2
+    text: The result carries the solver seed, worker count and time limit actually used.
+    verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_result_records_configuration" }
+  - id: ac3
+    text: Replaying a stored configuration against the same inputs reproduces the stored assignment.
+    verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_stored_config_reproduces_result" }
+  - id: ac4
+    text: Changing only the seed may change the assignment, and that is reported rather than hidden.
+    verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_seed_change_is_visible" }
+constraints:
+  - determinism is achieved by configuration, not by sorting the output afterwards
+suggested_risk_tier: 2
+size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 300 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no performance tuning against NFR-001 in this bean
+dependencies: [bean-008]
+# Added 2026-09-14, after approval. An amendment that only ADDS an independent
+# check does not re-open approval: it narrows what the line may get away with and
+# cannot widen it. Amendments that loosen criteria or widen paths would.
+invariants_ref: factory/invariants/seating.yaml

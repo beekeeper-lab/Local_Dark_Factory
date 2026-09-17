@@ -1,0 +1,110 @@
+# seating.yaml — the properties a seating answer must have, whatever code produces it.
+#
+# What "independent" means here, stated plainly so nobody has to guess later:
+# these were written by Claude Opus 5 (the outside builder) on 2026-09-14, before
+# any implementation existed, and they live at a path the developer model cannot
+# write — `factory/invariants/**` is tier 3 in risk-policy.yaml and is absent from
+# `repo_allowed_paths`, so a bean cannot touch them even if its own write paths
+# claimed it could. That is genuine independence in two of the three senses that
+# matter — a different model family from the developer, and outside its reach —
+# and not in the third: a human did not write them. Spec §05 asks for "a human or
+# a genuinely different model family"; this is the second. If one of these ever
+# fails and the argument becomes "the invariant is wrong", that argument should
+# be settled by the owner, not by the line.
+#
+# Why these properties and not more: each one is a thing a passing test suite can
+# miss, because the wrong answer is silent. A seating chart that quietly seats
+# eleven people at a table for ten does not raise; it just gets printed and put on
+# a table at a wedding.
+schema_version: invariants/1.0.0
+id: seating-core
+title: Hard guarantees of any seating assignment
+authored_by: "Claude Opus 5 (outside builder) — different model family from the developer"
+authored_at: "2026-09-14"
+reviewed_by: null          # awaiting the owner; see the note above
+
+# The invariants run against a conformance seam rather than against the internal
+# design, so that they constrain the ANSWER without dictating the architecture.
+# The developer must provide exactly one function; everything else about how the
+# solver is built is its own business.
+seam:
+  module: seating_planner.invariant_api
+  callable: solve_from_spec
+  signature: "solve_from_spec(spec: dict) -> dict"
+  why: >
+    An outside check cannot import an API it was not allowed to see being designed.
+    One small documented entry point keeps the invariant independent of the
+    implementation while still letting it run for real. It is not a test helper:
+    it ships with the package, and it is the only shape this file assumes.
+  spec_shape: |
+    {
+      "tables":  [{"id": "t1", "capacity": 8}, ...],
+      "guests":  [{"id": "g1", "eligible": true}, ...],
+      "rules":   [{"kind": "same_table"|"different_table",
+                   "guests": ["g1","g2"], "hardness": "hard"|"soft"}, ...],
+      "config":  {"seed": 7, "time_limit_s": 10}
+    }
+  result_shape: |
+    {
+      "status": "feasible" | "infeasible",
+      "assignments": {"g1": "t1", ...}   # empty when infeasible
+    }
+
+invariants:
+  - id: inv-capacity
+    statement: No table is ever assigned more guests than its capacity.
+    source: FR-047 — capacity is a hard constraint in every operating mode.
+    why_a_test_suite_misses_it: >
+      Capacity is usually checked on the path the tests exercise. It is the paths
+      nobody wrote a test for — a rule that forces two guests together onto an
+      already-full table, a re-solve after a lock — where it slips.
+
+  - id: inv-one-table
+    statement: An assigned guest appears at exactly one table.
+    source: FR-043/FR-019 — an assignment is a function from eligible guests to tables.
+    why_a_test_suite_misses_it: >
+      A guest appearing twice is invisible in any per-table view and only shows up
+      when someone counts the whole chart.
+
+  - id: inv-eligibility
+    statement: No ineligible guest is assigned a seat.
+    source: FR-019 — only Confirmed guests, plus Pending guests with a reserved seat.
+    why_a_test_suite_misses_it: >
+      Eligibility is decided in the domain layer and consumed in the solver; a
+      refactor on either side can quietly widen it.
+
+  - id: inv-hard-rules
+    statement: >
+      Every hard same_table rule has both guests at one table, and every hard
+      different_table rule has them at different tables, in any feasible result.
+    source: FR-045 — hard constraints hold unless a documented exception is authorized.
+    why_a_test_suite_misses_it: >
+      Tests check the rules they were written for. This checks every rule in the
+      input, including combinations the author did not think of.
+
+  - id: inv-infeasible-is-total
+    statement: An infeasible result carries no assignments at all — never a partial chart.
+    source: FR-050/FR-051 — infeasibility is reported, not approximated.
+    why_a_test_suite_misses_it: >
+      A partial answer looks like progress and reads like success. This is the
+      failure mode most likely to reach a user.
+
+  - id: inv-reproducible
+    statement: >
+      The same spec solved twice with the same config produces byte-identical
+      assignments.
+    source: FR-048 — identical inputs produce identical assignments.
+    why_a_test_suite_misses_it: >
+      CP-SAT is deterministic per seed only when the worker count is fixed. A
+      change to solver configuration can break this without breaking anything else,
+      and the benchmark's whole value depends on it holding.
+
+verify:
+  kind: command
+  run: ["pytest", "-q", "--no-header", "factory/invariants/test_seating_invariants.py"]
+
+applies_to:
+  - bean-006   # hard constraints: capacity, one table, eligibility, hard rules, infeasibility
+  - bean-007   # soft scoring must not break any of the above
+  - bean-009   # reproducibility
+  - bean-013   # low-disruption mode is still bound by every hard guarantee

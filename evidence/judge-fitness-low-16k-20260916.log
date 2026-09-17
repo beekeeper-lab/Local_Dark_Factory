@@ -1,0 +1,60 @@
+bench snapshot: /tmp/factory-bench.i5v4s1/bench
+
+judge fitness — 2026-09-16T13:00:42Z
+
+CASE                         EXPECT    VERDICT   OUTCOME
+
+-- pass 1 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (337s)
+tautological-verify          yes       revise    rejected, but for something else  (280s)
+contradicts-non-goal         yes       revise    rejected, but for something else  (169s)
+invented-current-behaviour   yes       revise    caught, and named it  (116s)
+unfinishable-task            yes       revise    rejected, but for something else  (365s)
+criterion-not-really-met     yes       none      no judgement (rc=1):       "evidence": "No source files were provided for analysis; the repository appears empt  (64s)
+
+-- pass 2 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (161s)
+tautological-verify          yes       abstain   abstained — a bad day, not a false approval  (282s)
+contradicts-non-goal         yes       revise    rejected, but for something else  (181s)
+invented-current-behaviour   yes       revise    caught, and named it  (487s)
+unfinishable-task            yes       revise    rejected, but for something else  (324s)
+criterion-not-really-met     yes       revise    rejected, but for something else  (300s)
+
+-- pass 3 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (210s)
+tautological-verify          yes       none      no judgement (rc=1):       "evidence": "The entry is malformed: `run: [\"sh\", \"-c\", \"test -d .\"] }` contai  (703s)
+contradicts-non-goal         yes       abstain   abstained — a bad day, not a false approval  (222s)
+invented-current-behaviour   yes       revise    rejected, but for something else  (122s)
+unfinishable-task            yes       abstain   abstained — a bad day, not a false approval  (63s)
+criterion-not-really-met     yes       abstain   abstained — a bad day, not a false approval  (229s)
+
+per case, across 3 passes — the spread is the point:
+
+CASE                         VERDICTS                           NAMED-THE-DEFECT
+clean                        revise×3                          0/3
+tautological-verify          abstain×1 none×1 revise×1       0/3
+contradicts-non-goal         abstain×1 revise×2               0/3
+invented-current-behaviour   revise×3                          2/3
+unfinishable-task            abstain×1 revise×2               0/3
+criterion-not-really-met     abstain×1 none×1 revise×1       0/3
+
+A case with more than one verdict in that column is not a result. It is the
+judge disagreeing with itself on identical input, and no amount of arithmetic
+over it produces a number worth acting on.
+
+of 15 seeded defects (5 case(s) × 3 pass(es)): rejected 9, NAMED the actual defect 2
+false accepts 0 · abstentions 4 · no answer at all 2
+/tmp/factory-bench.i5v4s1/bench/results/judge-fitness-20260916T130042Z.json
+
+The false-accept count is the one that matters. A judge that misses and says
+so costs a retry; a judge that misses and accepts is the failure the line exists
+to prevent, and it is invisible from the outside.
+
+ONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same
+question five times with identical input at temperature 0 and got two different
+verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an
+earlier run and missed in all five. Do not compare a number here against another
+number here and conclude something changed: establish the spread first, or the
+comparison is measuring the weather.
+bench/snapshot.sh: line 61: unexpected EOF while looking for matching `"'
+RC=2

@@ -1,0 +1,78 @@
+bench snapshot: /tmp/factory-bench.AKVuIt/bench
+
+judge fitness — 2026-09-16T20:35:59Z
+
+CASE                         EXPECT    VERDICT   OUTCOME
+
+-- pass 1 of 3 --
+clean                        no        revise    REJECTED THE CONTROL — a judge that fails everything is not a judge  (26s)
+tautological-verify          yes       revise    rejected, but for something else  (22s)
+contradicts-non-goal         yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+invented-current-behaviour   yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+unfinishable-task            yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+criterion-not-really-met     yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+
+-- pass 2 of 3 --
+clean                        no        no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+tautological-verify          yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+contradicts-non-goal         yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+invented-current-behaviour   yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+unfinishable-task            yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+criterion-not-really-met     yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+
+-- pass 3 of 3 --
+clean                        no        no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (7s)
+tautological-verify          yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+contradicts-non-goal         yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+invented-current-behaviour   yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+unfinishable-task            yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+criterion-not-really-met     yes       no run    NOT MEASURED — the model server returned nothing; free VRAM and retry  (6s)
+
+per case, across 3 passes — the spread is the point:
+
+CASE                         VERDICTS                           NAMED-THE-DEFECT
+clean                        no run×2 revise×1                0/3
+tautological-verify          no run×2 revise×1                0/3
+contradicts-non-goal         no run×3                          0/3
+invented-current-behaviour   no run×3                          0/3
+unfinishable-task            no run×3                          0/3
+criterion-not-really-met     no run×3                          0/3
+
+A case with more than one verdict in that column is not a result. It is the
+judge disagreeing with itself on identical input, and no amount of arithmetic
+over it produces a number worth acting on.
+
+of 15 seeded defects (5 case(s) × 3 pass(es)): rejected 1, NAMED the actual defect 0
+false accepts 0 · abstentions 0 · no answer at all 0
+
+INCOMPLETE — 16 case(s) never ran: the model server returned nothing.
+  clean, contradicts-non-goal, criterion-not-really-met, invented-current-behaviour, tautological-verify, unfinishable-task
+This is the machine, not the judge and not the token budget: ollama answered 200
+with a zero-valued struct, which is what it does when a runner dies. Free VRAM
+(`ollama stop <other-model>`) and run it again. Do not raise JUDGE_NUM_PREDICT;
+it had nothing to do with this, and the rates above are lower bounds over a
+denominator that includes every case that never ran.
+/home/gregg/workspace/Local_Dark_Factory/bench/results/judge-fitness-gemma4-20260916T203559Z.json
+
+The false-accept count is the one that matters. A judge that misses and says
+so costs a retry; a judge that misses and accepts is the failure the line exists
+to prevent, and it is invisible from the outside.
+
+ONE RUN IS NOT A MEASUREMENT. bench/judge-variance.sh asked this judge the same
+question five times with identical input at temperature 0 and got two different
+verdicts, findings counts of 9, 1, 1 and 4, and a defect that was named in an
+earlier run and missed in all five. Do not compare a number here against another
+number here and conclude something changed: establish the spread first, or the
+comparison is measuring the weather.
+RC=0
+
+--- why, from the server log ---
+
+  slot iterate: id 0 | task 1503 | got exception:
+      Unexpected empty grammar stack after accepting piece: <unused49> (62)
+  srv send_error: task id = 1503, error: got exception: ...
+  [GIN] 200 | 2.276573677s | POST "/api/chat"
+
+gemma4 emits <unused49>, the constrained decode has no rule that accepts it,
+llama.cpp throws — and ollama answers 200 with a zero-valued struct. The GPU was
+idle; every other model had been stopped. This is not fixable by retrying.

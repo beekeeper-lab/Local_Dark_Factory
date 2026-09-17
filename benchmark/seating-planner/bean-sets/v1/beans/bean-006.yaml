@@ -1,0 +1,73 @@
+schema_version: bean/2.0.0
+id: bean-006
+repo: beekeeper-lab/seating-planner-py
+title: CP-SAT table assignment satisfying hard constraints
+intent: >
+  Eligible guests are assigned to tables such that no hard constraint and no table
+  capacity is violated, or the problem is reported infeasible.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 6
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-045: The optimizer SHALL satisfy every hard constraint unless the user explicitly authorizes a documented exception. FR-047: The optimizer SHALL treat table capacity as a hard constraint in every operating mode."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/rules/
+    - src/seating_planner/feasibility/
+  background: >
+    CP-SAT is a constraint solver: you declare boolean variables and the relationships
+    that must hold between them, and it searches for an assignment satisfying all of
+    them. Here the variable is "guest g sits at table t". Each guest needs exactly one
+    true value across tables; each table's true values must not exceed its capacity;
+    a same-table rule forces two guests' variables to agree; a different-table rule
+    forces them to differ. This bean handles hard constraints only — it either returns a
+    valid assignment or reports infeasible, with no notion yet of a better or worse
+    answer among valid ones.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: With sufficient capacity and satisfiable rules, every eligible guest is assigned to exactly one table.
+    verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_all_eligible_guests_assigned" }
+  - id: ac2
+    text: No table is assigned more guests than its capacity.
+    verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_capacity_never_exceeded" }
+  - id: ac3
+    text: A same-table hard rule places both guests at one table; a different-table hard rule separates them.
+    verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_same_and_different_table_rules" }
+  - id: ac4
+    text: Ineligible guests are never assigned.
+    verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_ineligible_guests_unassigned" }
+  - id: ac5
+    text: An unsatisfiable hard-constraint set returns an infeasible result rather than a partial assignment.
+    verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_infeasible_returns_no_assignment" }
+constraints:
+  - text: OR-Tools CP-SAT only; no hand-rolled heuristic fallback
+    # A second solver is the fallback, whatever it is called. These are the
+    # libraries one would arrive as. A fallback written by hand out of the
+    # standard library is not caught by this and stays the audit's to judge.
+    forbidden_imports: [pulp, mip, cvxpy, gurobipy, pyomo, networkx]
+  - table-level assignment only
+  - solve time bounded by an explicit configurable limit
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no soft constraints or scoring (bean-007)
+  - no seat-level assignment
+  - no locks (bean-011)
+dependencies: [bean-005]
+# Added 2026-09-14, after approval. An amendment that only ADDS an independent
+# check does not re-open approval: it narrows what the line may get away with and
+# cannot widen it. Amendments that loosen criteria or widen paths would.
+invariants_ref: factory/invariants/seating.yaml
