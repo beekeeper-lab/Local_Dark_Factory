@@ -1501,6 +1501,27 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
+## What size actually costs, in one line
+
+**At 20,422 bytes this judge did not once accept a spec with a planted flaw — 13
+of 13. At 40,422 it did not once reject it — 0 of 13.** Same defect, same model,
+same temperature, three runs, two padding sources, one of them built to remove
+the only alternative explanation anyone could name.
+
+That is the whole of it, and it is the only thing measured this week that changed
+how often the judge is wrong.
+
+**What the line does about it, today:** the controller's own measurements go to
+the judge as prose rather than raw JSON, which took the spec audit to 21,343
+bytes and the impl audit to 23,763 — both inside the band where it has never
+false-accepted. The doc audit is 36,731 and cannot be cut; `judge.sh` says so on
+every request above 30,422 and truncates nothing.
+
+**What it does not do, and should not:** refuse to run an audit over 30,422
+bytes. A judge that cannot see the document under audit is not a safer judge, and
+the artifacts are what they are. The warning plus `merge_mode: human_required` is
+the honest arrangement.
+
 ## Next on this thread: sweep the case the judge still owns
 
 Whatever the control says, the sweep has been measuring `contradicts-non-goal` —
