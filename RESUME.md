@@ -1421,7 +1421,31 @@ this judge accept" — the control is still bean-shaped text — but for every
 practical purpose that is the size explanation, because what the line would pad
 an audit with is always artifacts.
 
-**One loose end I cannot close from this run.** All five large-size rows scored
+**The mechanism, from a kept run: it is displacement, not dilution.** Two more
+passes at 40,422 with `--keep`, and the judgement can be read.
+`evidence/judge-answered-about-the-padding-20260917.md` has it in full. bean-001
+is a project scaffold — does the package import, is ruff clean, is mypy clean,
+does pytest collect a test — and the judge filled all four of its criterion ids
+with findings about `tests/feasibility/test_preflight.py`, group capacity rules
+and soft constraints. Three other beans' work. **The seeded defect is not
+mentioned once.**
+
+It stopped reviewing the artifact and started reviewing the context. And **the
+grammar made that invisible**: `criteria` is keyed on the bean's own ids with
+`additionalProperties: false`, so the answer has exactly four entries, exactly
+`ac1` through `ac4`, perfectly shaped, every one about somebody else's bean. The
+clearest instance yet of **conformance is not judgement**.
+
+It also settles the loose end below: `NAMED` flapped between `yes` five times and
+`no` twice on identical input because the judgement is not about the spec at all,
+so whether a catchword appears is luck.
+
+**And the controller does refuse it** — confidence 0.1 is under the 0.4 floor, and
+`accept` with two findings is a judgement disagreeing with itself. Worth knowing,
+and worth being clear that neither check is about the actual failure. They catch
+it sideways. What catches it directly is not sending the judge 40,000 bytes.
+
+**The loose end as it stood before that run.** All five large-size rows scored
 `NAMED` = yes, and with neutral padding "solver" appears only in the seeded text,
 so that should mean the judge identified the forbidden work and accepted it
 anyway — the sharpest possible characterisation. But `NAMED` is an upper bound
