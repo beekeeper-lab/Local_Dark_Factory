@@ -290,10 +290,31 @@ run from the working tree."
         "$(jq -r '.diff.file_count' "$run_dir/gate.json")"
     fi
 
+    # Everything in verdicts/ that is not a verdict, by name. Three readers of
+    # this directory have now had to learn the same list — package-check.sh,
+    # phase1-audit.sh and this one — and each learned it by printing something
+    # wrong first. This printed `verdict: null null` for every refusal record
+    # within an hour of refusal records existing.
     for f in "$run_dir"/verdicts/*.attempt-*.json; do
       [ -e "$f" ] || continue
-      case "$f" in *judgement.json) continue ;; esac
+      case "$f" in *.judgement.json|*.request.json|*.refused.json) continue ;; esac
       printf 'verdict: %-14s %s\n' "$(jq -r '.stage' "$f")" "$(jq -r '.verdict' "$f")"
+    done
+
+    # What refused, and which rule did it. An audit that reached no verdict is
+    # the normal outcome on today's measurement, and "no verdict" on its own
+    # tells a reader nothing about whether to distrust the artifact or the
+    # judge. `by` is the difference: `judge` means no answer came back that
+    # could be read at all, `audit-check` means one did and could not be
+    # stamped.
+    _refs=0
+    for f in "$run_dir"/verdicts/*.refused.json; do
+      [ -e "$f" ] || continue
+      [ "$_refs" -eq 0 ] && printf '\nrefused\n'
+      _refs=$((_refs + 1))
+      printf '  %-8s attempt %-3s %-12s %s\n' \
+        "$(jq -r '.target' "$f")" "$(jq -r '.attempt' "$f")" \
+        "$(jq -r '.by // "audit-check"' "$f")" "$(jq -r '.rule' "$f")"
     done
 
     # A run that continued past a verdict it did not satisfy says so here, not

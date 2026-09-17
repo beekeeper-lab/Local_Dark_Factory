@@ -310,6 +310,44 @@ check "and its branch"               "factory/bean-001" "$out"
 out="$(fac status "$REPO/factory/runs/bean-001-20260915T100000Z")"
 check "a named run overrides"        "bean-001-20260915T100000Z" "$out"
 
+printf '\n-- and it says what refused, and which rule --\n\n'
+#
+# An audit that reached no verdict is the normal outcome on today's measurement,
+# and "no verdict" alone tells a reader nothing about whether to distrust the
+# artifact or the judge. `by` is the difference: `judge` means no answer came
+# back that could be read at all; `audit-check` means one did and could not be
+# stamped.
+SR="$REPO/factory/runs/bean-001-20260915T120000Z/verdicts"
+mkdir -p "$SR"
+jq -nc '{schema:"refusal/1.1.0", by:"audit-check", target:"spec", attempt:1,
+         rule:"quote-not-on-disk", reason:"quotes text that is not on disk",
+         details:{quotes:["a thing nobody wrote"]}, judgement:null,
+         refused_at:"2026-09-17T21:00:00Z"}' > "$SR/spec.attempt-1.refused.json"
+jq -nc '{schema:"refusal/1.1.0", by:"judge", target:"impl", attempt:2,
+         rule:"answer-not-json", reason:"the answer is not JSON",
+         details:{done_reason:"stop"}, judgement:null,
+         refused_at:"2026-09-17T21:05:00Z"}' > "$SR/impl.attempt-2.refused.json"
+out="$(fac status "$REPO/factory/runs/bean-001-20260915T120000Z")"
+check "the refusals are listed"      "refused" "$out"
+check "naming the rule"              "quote-not-on-disk" "$out"
+check "and who refused"              "audit-check" "$out"
+check "the judge's own are there too" "answer-not-json" "$out"
+check "and marked as the judge's"    "judge" "$out"
+
+printf '\n-- and a refusal record is never read as a verdict --\n\n'
+#
+# It printed `verdict: null null` for every one of them within an hour of
+# refusal records existing: the loop that prints verdicts globs
+# `*.attempt-*.json` and skipped only judgements. Third reader of this directory
+# to learn the list of things in it that are not verdicts, and the third to
+# learn it by printing something wrong first.
+nope  "no null verdict line"         "verdict: null" "$out"
+
+printf '\n-- a run with no refusals says nothing about them --\n\n'
+rm -f "$SR"/*.refused.json
+out="$(fac status "$REPO/factory/runs/bean-001-20260915T120000Z")"
+nope  "no empty heading"             "refused" "$out"
+
 # --------------------------------------------------------------------------
 printf '\n== read refuses until there is something to read ==\n\n'
 #
