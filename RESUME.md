@@ -958,14 +958,11 @@ left to read afterwards. A successful measurement can no longer be reported as a
 failed launcher. If this recurs, the thing to catch is what is writing to
 `bench/snapshot.sh` — `inotifywait -m bench/snapshot.sh` during a long run.
 
-- **`minLength` on `quote`, for the same reason as everything else in that list.**
-  The quote check counts a quote only at 12 characters or more — anything shorter
-  proves nothing and matches everything — and refuses a judgement where none
-  qualifies. The first pass of the measurement that produced the first stamped
-  verdict was refused for exactly that: quotes of 10, 14, 23 and 24 characters,
-  and the ten-character one was not the problem, the *absence of a long one* was.
-  A `minLength` of about 20 makes a too-short quote unemittable rather than
-  refused afterwards. Measure it the same way — `factory reaudit --passes 3`.
+- ~~**`minLength` on `quote`.**~~ **Measured 2026-09-17 and the answer is no**;
+  see *"The sixth grammar constraint"*. It is honoured — at 200 every quote came
+  back over 200 characters — and it made the answers worse: 0 of 4 quotes were
+  real, against 1 of 4 at 12. Forcing a longer quote makes the model write more
+  prose and call it a quote. `JUDGE_QUOTE_MINLEN` exists and stays at 0.
 
 - **Re-run `bench/size-sweep.sh` now that `tools: []` is declared.** Its standing
   finding is that at exactly 10,000 bytes of padding the judge produces no
@@ -974,11 +971,14 @@ failed launcher. If this recurs, the thing to catch is what is writing to
   `repo_browser.open_file` calls that stopped when the empty tool list was
   declared. The sweep may now measure something different, or nothing at all.
 
-- **Re-run `bench/judge-fitness.sh --repeat 3`.** Now doubly needed. Every fitness
-  figure predates the enum, the empty tool list, the field length caps, the keyed
-  criteria and the confidence enum — *and* two of its six fixtures were not seeding
-  the defects they claimed. It is ~75 minutes and it is the case-level measurement
-  the advisory-audits decision actually rests on.
+- ~~**Re-run `bench/judge-fitness.sh --repeat 3`.**~~ **Done — it is
+  `judge-fitness-rubricfix-20260916T211029Z.json`**, three passes, measured
+  22:26Z on 2026-09-16 with the enum, the empty tool list, the 600-character
+  field caps, the keyed criteria and the confidence enum all in place, and on the
+  repaired fixtures. **4 false accepts in 15**, and that is the figure the
+  advisory-audits decision rests on. Nothing has changed the judge since except a
+  retry on a tool-call answer, which only affects cases that previously produced
+  nothing at all.
 
 - ~~**`confidence` as an enum**~~ — **done 2026-09-16.** The keyword finding stands
   and is the transferable part: the schema carried `{"minimum":0,"maximum":1}` for
