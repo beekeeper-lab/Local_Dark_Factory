@@ -117,6 +117,17 @@ mutate() { # mutate <case> <specfile> <tasksfile>
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# Frozen, for the reason freeze_inputs gives: these three point outside the
+# snapshot this harness re-execs through, and a run long enough to be worth doing
+# is long enough for one of them to be edited while it runs.
+FROZEN="$TMP/inputs"
+BEAN_DIR="$(dirname "$BEAN")"
+INPUT_SHAS="$(freeze_inputs "$FROZEN" "spec=$SPEC" "tasks=$TASKS" "bean=$BEAN_DIR")" \
+  || { echo "could not freeze the inputs; refusing to measure a moving target" >&2; exit 2; }
+SPEC="$FROZEN/$(basename "$SPEC")"
+TASKS="$FROZEN/$(basename "$TASKS")"
+BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
+
 # case | should_reject | what a controller catch looks like in its output
 CASES='clean|no|
 tautological-verify|yes|every verify already passes
@@ -189,10 +200,12 @@ done <<< "$CASES"
 jq -n --argjson r "$RESULTS" --argjson seeded "$SEEDED" --argjson caught "$CAUGHT" \
   --argjson missed "$MISSED" --argjson fa "$FALSE_ALARM" \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson inputs "$INPUT_SHAS" \
   --argjson prov "$(provenance_block)" \
     --arg repo_branch "$(git -C "$REPO" branch --show-current 2>/dev/null || echo '-')" \
   --arg repo_head "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo '-')" \
 '{schema:"controller-fitness/1.0.0", measured_at:$ts, provenance:$prov,
+    inputs:$inputs,
     measured_against:{repo:$repo_branch, head:$repo_head},
     seeded_defects:$seeded, caught_by_name:$caught,
     not_decidable:$missed, false_alarms:$fa, cases:$r,

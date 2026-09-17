@@ -129,5 +129,19 @@ PY
 out="$(STUB_RC=0 cf --only contradicts-non-goal)"
 nope "an annotated bean gets no such note" "declares no non-goal in" "$out"
 
+printf '\n== it records the inputs it measured, by content ==\n\n'
+#
+# The bean this harness reads lives in another repository. A run long enough to
+# be worth doing is long enough for someone to edit it — that happened to a
+# judge-fitness run on 2026-09-16, two of six cases measuring a different bean
+# from the other four, and nothing in the artifact said so. The inputs are copied
+# once and hashed; these assert the hash reaches the artifact.
+STUB_RC=0 STUB_OUT='ok' cf --only tautological-verify >/dev/null 2>&1
+for _f in spec tasks bean; do
+  _v="$(jq -r --arg f "$_f" '.inputs[$f] // ""' "$WORK/out.json" 2>/dev/null)"
+  if [ "${#_v}" -ge 8 ]; then printf '  ok    the %s it measured is named by content\n' "$_f"; PASS=$((PASS+1))
+  else printf '  FAIL  the %s it measured is named by content — got: %s\n' "$_f" "${_v:-<empty>}"; FAIL=$((FAIL+1)); fi
+done
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

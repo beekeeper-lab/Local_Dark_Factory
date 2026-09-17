@@ -88,6 +88,17 @@ mkdir -p "$(dirname "$OUT")"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# Frozen, for the reason freeze_inputs gives: these three point outside the
+# snapshot this harness re-execs through, and a run long enough to be worth doing
+# is long enough for one of them to be edited while it runs.
+FROZEN="$TMP/inputs"
+BEAN_DIR="$(dirname "$BEAN")"
+INPUT_SHAS="$(freeze_inputs "$FROZEN" "spec=$SPEC" "tasks=$TASKS" "bean=$BEAN_DIR")" \
+  || { echo "could not freeze the inputs; refusing to measure a moving target" >&2; exit 2; }
+SPEC="$FROZEN/$(basename "$SPEC")"
+TASKS="$FROZEN/$(basename "$TASKS")"
+BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
+
 # An unknown case name is refused, not shrugged at.
 #
 # `mutate` silently does nothing for a name it does not know, so a typo in
@@ -114,6 +125,11 @@ SRC="$TMP/src"; mkdir -p "$SRC"
 cp "$SPEC" "$SRC/spec.md"; cp "$TASKS" "$SRC/tasks.yaml"
 sed -n '/^mutate() {/,/^}/p' "$ROOT/bench/judge-fitness.sh" > "$TMP/mutate.sh"
 ROOT="$ROOT" bash -c "source '$TMP/mutate.sh'; mutate '$CASE' '$SRC/spec.md' '$SRC/tasks.yaml'"
+# `input_sha` is the MUTATED pair the five runs all saw — the thing that makes
+# "identical input, different verdict" a claim about the model rather than about
+# the fixture. `inputs` above is the un-mutated spec, task list and bean this run
+# started from. Both, because a fixture can be stable across five runs and still
+# be a different fixture from last week's.
 SHA="$(cat "$SRC/spec.md" "$SRC/tasks.yaml" | sha256sum | cut -c1-16)"
 
 refuse_if_inflight
@@ -166,12 +182,14 @@ VERDICTS="$(jq -r '[.[].verdict] | unique | join(", ")' <<<"$RESULTS")"
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg sha "$SHA" \
   --argjson distinct "$DISTINCT" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
+  --argjson inputs "$INPUT_SHAS" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
   --arg thinking "${THINKING:-$(jq -r '.roles.judge.thinking // "?"' "${ROLES_FILE:-$PIPE/roles.json}")}" \
   --argjson cap "${JUDGE_NUM_PREDICT:-16000}" \
   --argjson maxlen "${JUDGE_FIELD_MAXLEN:-600}" \
   --arg prompt_version "$(_pv="$PIPE/../skills/factory-audit/SKILL.md"; [ -f "$_pv" ] && printf 'factory-audit@%s' "$(sha256sum "$_pv" | cut -c1-12)" || echo 'factory-audit@unknown')" \
   '{schema:"judge-variance/2.0.0", measured_at:$ts, provenance:$prov, case:$case,
+    inputs:$inputs,
     judge:{model:$model, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, prompt_version:$prompt_version},
     input_sha:$sha, runs:$r, distinct_verdicts:$distinct,
     reproducible:($distinct == 1),

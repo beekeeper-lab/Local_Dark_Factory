@@ -106,36 +106,20 @@ done
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The inputs are frozen here, and every case reads the copies.
+# The inputs are frozen here, and every case reads the copies. freeze_inputs in
+# bench/provenance.sh says why; the short version is that this run takes two hours
+# and its bean lives in another repository, where it was edited mid-run.
 #
-# `--bean` named a file in ANOTHER repository, read fresh by the judge at the
-# start of each case — a six-case run takes two hours, and on 2026-09-16 that
-# bean was annotated at 19:55 and reverted at 20:12 while a run begun at 19:29
-# was on its third case. Two of six cases were measuring a different bean from
-# the other four, and nothing in the artifact would have said so. This harness
-# already re-execs through bench/snapshot.sh precisely so that editing it
-# mid-run cannot corrupt the run; the inputs had no such protection, and an
-# input is more of a measurement than the script is.
-#
-# The hashes go in the artifact. Two figures taken from different specs are two
-# figures nobody can compare, and that has to be visible without reconstructing
-# a timeline out of file mtimes.
-FROZEN="$WORK/inputs"; mkdir -p "$FROZEN"
-freeze() { # freeze <path> <name> -> prints the frozen path
-  cp "$1" "$FROZEN/$2"; printf '%s' "$FROZEN/$2"
-}
-INPUT_SHAS="$(jq -n --arg s "$(sha256sum "$SPEC" | cut -c1-12)" \
-                    --arg t "$(sha256sum "$TASKS" | cut -c1-12)" \
-                    --arg b "$(sha256sum "$BEAN" | cut -c1-12)" \
-                    --arg bn "$(basename "$(dirname "$BEAN")")" \
-                    '{spec:$s, tasks:$t, bean:$b, bean_id:$bn}')"
-SPEC="$(freeze "$SPEC" spec.md)"
-TASKS="$(freeze "$TASKS" tasks.yaml)"
-# The whole bean DIRECTORY, keeping its name: `run.json` records the bean by
-# `basename(dirname)`, so freezing the file alone would have every case report a
+# The bean's whole DIRECTORY, keeping its name: run.json records the bean by
+# basename(dirname), so freezing the file alone would have every case report a
 # bean called "inputs".
-cp -a "$(dirname "$BEAN")" "$FROZEN/"
-BEAN="$FROZEN/$(basename "$(dirname "$BEAN")")/$(basename "$BEAN")"
+FROZEN="$WORK/inputs"
+BEAN_DIR="$(dirname "$BEAN")"
+INPUT_SHAS="$(freeze_inputs "$FROZEN" "spec=$SPEC" "tasks=$TASKS" "bean=$BEAN_DIR")" \
+  || { echo "could not freeze the inputs; refusing to measure a moving target" >&2; exit 2; }
+SPEC="$FROZEN/$(basename "$SPEC")"
+TASKS="$FROZEN/$(basename "$TASKS")"
+BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
 
 # Each case: a name, whether the judge SHOULD reject it, what the defect is, and
 # a python mutation over (spec_text, tasks_text) returning the pair.

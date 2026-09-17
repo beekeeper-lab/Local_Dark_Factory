@@ -109,6 +109,17 @@ mkdir -p "$(dirname "$OUT")"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# Frozen, for the reason freeze_inputs gives: these three point outside the
+# snapshot this harness re-execs through, and a run long enough to be worth doing
+# is long enough for one of them to be edited while it runs.
+FROZEN="$TMP/inputs"
+BEAN_DIR="$(dirname "$BEAN")"
+INPUT_SHAS="$(freeze_inputs "$FROZEN" "spec=$SPEC" "tasks=$TASKS" "bean=$BEAN_DIR")" \
+  || { echo "could not freeze the inputs; refusing to measure a moving target" >&2; exit 2; }
+SPEC="$FROZEN/$(basename "$SPEC")"
+TASKS="$FROZEN/$(basename "$TASKS")"
+BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
+
 # The padding: other beans from the same set, as a "related work" appendix. Real
 # text about the real project, which is what a larger bean's spec would carry.
 PAD_ALL="$TMP/pad.txt"
@@ -214,9 +225,11 @@ done
 
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
+  --argjson inputs "$INPUT_SHAS" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
   --argjson passes "$REPEAT" \
   '{schema:"size-sweep/2.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model,
+    inputs:$inputs,
     passes:$passes, one_pass_is_not_a_sweep: ($passes < 2), points:$r,
     by_size: ([$r[] | {k: (.padding_bytes|tostring), v: .}] | group_by(.k)
               | map({key: .[0].k,
