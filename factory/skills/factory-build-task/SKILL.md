@@ -53,6 +53,22 @@ dependency's work is missing from `/work`, it is missing — that is a real find
 and stopping to say so is right. Say it from the listing, which is evidence, and
 do not qualify it with what you could not check in git.
 
+## the toolchain is not in here either, and that is not a fault to report
+
+This container has node, git's binary, and pi. It has no `python3`, no `pytest`,
+no `mypy`, no `ruff`, no venv, and nothing else on PATH that could run a project
+of this kind. Deliberately: the gates and the task `verify` commands run in a
+separate, digest-pinned image, from a clean state, by the controller — so that
+every "it passed" in this repository is a claim about one known toolchain rather
+than about whatever happened to be in the session that wrote the code.
+
+**So do not go looking for an interpreter.** Real sessions have spent turns
+discovering it is not there and then reporting it as an environment constraint
+they had to work around. Read the `verify` commands as the definition of done,
+write what would satisfy them, and finish. Saying plainly what you could not
+check is right; calling it a defect in your environment is not, and neither is
+softening a conclusion because of it.
+
 ## Inputs
 
 Arguments (appended as `User: <args>` — parse them from there):
@@ -82,10 +98,11 @@ Read, in this order:
    was not given is a spec problem, and a human needs to see it. Working around
    it is the failure mode this rule exists to prevent — a real run (BEAN-121)
    invented a workaround that was worse than the gap it papered over.
-4. You may run the task's `verify` commands yourself to check your work, and you
-   should. But **the controller's run is the one that counts** — it runs them
-   again, from a clean state, after you finish. Do not report a task as done on
-   the strength of your own run, and never edit a test so that it passes.
+4. **You cannot run the `verify` commands** — see "the toolchain is not in here
+   either" below. They are the definition of done, not something you execute.
+   Never report a task as done on the strength of a run of your own, in the
+   unlikely event you find a way to make one, and never edit a test so that it
+   passes.
 5. Finish the session. There is nothing to stamp and no verdict to write: exiting
    cleanly *is* declaring the task done.
 

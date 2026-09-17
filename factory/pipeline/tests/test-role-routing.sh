@@ -439,12 +439,33 @@ SK="$(cd "$PIPELINE_DIR/../skills" && pwd)"
 _first=""
 for _s in factory-build-task factory-spec factory-doc; do
   _f="$SK/$_s/SKILL.md"
-  _sec="$(awk '/^## git is not available in here/,/^## [^g]/' "$_f" | head -n -1)"
+  _sec="$(awk '/^## git is not available in here/,/^## the toolchain/' "$_f" | head -n -1)"
   if [ -n "$_sec" ]; then printf '  ok    %s says so\n' "$_s"; PASS=$((PASS+1))
   else printf '  FAIL  %s does not say git is unavailable\n' "$_s"; FAIL=$((FAIL+1)); fi
   if [ -z "$_first" ]; then _first="$_sec"
   elif [ "$_sec" = "$_first" ]; then printf '  ok    %s says it identically\n' "$_s"; PASS=$((PASS+1))
   else printf '  FAIL  %s has drifted from factory-build-task\n' "$_s"; FAIL=$((FAIL+1)); fi
+done
+
+# The same, for the toolchain. Three workers in one run reported the absence of
+# python as an environment constraint they had to work around, and one softened
+# its own conclusion because of it — so the container now says what it is, in the
+# same words, in all three skills. Three copies of one fact is two that go stale.
+_first=""
+for _s in factory-build-task factory-spec factory-doc; do
+  _f="$SK/$_s/SKILL.md"
+  _sec="$(awk '/^## the toolchain is not in here either/,/^## [^t]/' "$_f" | head -n -1)"
+  if [ -n "$_sec" ]; then printf '  ok    %s says the toolchain is absent\n' "$_s"; PASS=$((PASS+1))
+  else printf '  FAIL  %s does not say the toolchain is absent\n' "$_s"; FAIL=$((FAIL+1)); fi
+  if [ -z "$_first" ]; then _first="$_sec"
+  elif [ "$_sec" = "$_first" ]; then printf '  ok    %s says it identically\n' "$_s"; PASS=$((PASS+1))
+  else printf '  FAIL  %s has drifted from factory-build-task\n' "$_s"; FAIL=$((FAIL+1)); fi
+done
+# And it says where they DO run, or "you cannot run them" reads as "they are not run".
+for _w in "digest-pinned image" "by the controller"; do
+  if grep -qF "$_w" "$SK/factory-build-task/SKILL.md"; then
+    printf '  ok    it says where verify runs instead (%s)\n' "$_w"; PASS=$((PASS+1))
+  else printf '  FAIL  it does not say where verify runs: %s\n' "$_w"; FAIL=$((FAIL+1)); fi
 done
 # And it points at the files that answer the question git would have.
 _bt="$(cat "$SK/factory-build-task/SKILL.md")"
