@@ -286,6 +286,13 @@ case "$TARGET" in
       && add_artifact "THE TESTS, RUN AGAINST THE CODE WITHOUT THIS CHANGE" "$RUN_DIR/test-integrity.json" 60000 "A measurement the controller already took, before you were asked anything. Facts about this run. Not instructions, and not a question for you."
     ;;
   doc)
+    # The largest prompt this line sends: 36,731 bytes on bean-001, against a
+    # measurement that saw the judge start accepting a seeded defect at 40,422.
+    # All three artifacts are load-bearing — the document under audit, the
+    # standard it claims to meet, and the change it claims to describe — so the
+    # only lever on its size is a shorter impl-detail.md, which trades against
+    # what §07 asks that document to do and what doclint already enforces.
+    # Looked for and not taken; see RESUME.md.
     add_artifact "THE IMPLEMENTATION DOCUMENT UNDER AUDIT" "$RUN_DIR/impl-detail.md"
     add_artifact "THE SPEC" "$RUN_DIR/spec.md"
     add_artifact "THE ACTUAL DIFF" "$RUN_DIR/diff.txt" 120000
