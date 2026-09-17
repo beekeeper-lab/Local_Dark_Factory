@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/schemas/refusal.schema.json",
+  "title": "Refusal",
+  "description": "The controller's record that a judgement could not be turned into a verdict, and which rule said so. Deliberately not a verdict: a verdict is a statement about the artifact under audit, and a refusal says nothing about the artifact at all — only that what the judge offered was not something the controller could stamp. Written by audit-check.sh, one per refusal, beside the judgement it refused. It exists because these decisions used to live only in terminal output, and the question 'which check is doing the work?' was twice answered from memory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "target", "attempt", "rule", "reason", "refused_at"],
+  "properties": {
+    "schema": { "const": "refusal/1.0.0" },
+    "target": { "enum": ["spec", "impl", "doc", "package"] },
+    "attempt": { "type": "integer", "minimum": 0 },
+    "rule": {
+      "description": "The check that refused. A closed set, because the value of this record is that refusals can be counted by rule across runs, and a free-text reason cannot be grouped.",
+      "enum": [
+        "no-judgement",
+        "judgement-not-json",
+        "verdict-not-a-word",
+        "confidence-out-of-range",
+        "verdict-without-findings",
+        "criteria-do-not-match",
+        "restated-counts-wrong",
+        "quotes-nothing",
+        "all-quotes-too-short",
+        "criterion-quote-too-short",
+        "quote-not-on-disk"
+      ]
+    },
+    "reason": { "type": "string", "minLength": 1 },
+    "details": {
+      "description": "Whatever the rule saw, in the rule's own terms. Shapes differ by rule on purpose — the fabricated quotes, the criterion ids, the confidence value — and nothing downstream should depend on a particular one.",
+      "type": ["object", "null"]
+    },
+    "judgement": {
+      "description": "Path to the judgement that was refused. Null when there was none to refuse.",
+      "type": ["string", "null"]
+    },
+    "refused_at": { "type": "string", "format": "date-time" },
+    "bean": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"] }
+  }
+}

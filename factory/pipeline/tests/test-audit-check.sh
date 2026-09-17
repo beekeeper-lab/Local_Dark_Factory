@@ -195,6 +195,55 @@ want  "and it exits 2"                "expected 2" test "$rc" -eq 2
 want  "with no verdict written"       "a fabricated audit must leave nothing behind" \
   test ! -f "$V/spec.attempt-1.json"
 
+printf '\n-- and the refusal is on the record, naming the rule --\n\n'
+#
+# Every refusal here used to exist only as words on stderr. "5 of 12 reaudit
+# refusals were fabricated quotes" is a number this project needed twice and
+# reconstructed by hand from scrollback both times. A refusal record makes the
+# question "which check is doing the work?" arithmetic.
+#
+# It is NOT a verdict and must never be counted as one: a verdict is about the
+# artifact, this is about the judgement offered.
+REF="$V/spec.attempt-1.refused.json"
+want  "a refusal record is written"   "$REF should exist" test -s "$REF"
+want  "naming the rule that fired"    "rule should be quote-not-on-disk" \
+  test "$(jq -r .rule "$REF")" = quote-not-on-disk
+want  "and it is not a verdict"       "no verdict field" \
+  test "$(jq -r 'has("verdict")' "$REF")" = false
+want  "it says which target"          "target should be spec" \
+  test "$(jq -r .target "$REF")" = spec
+want  "and which attempt"             "attempt should be 1" \
+  test "$(jq -r .attempt "$REF")" = 1
+want  "it keeps the offending text"   "the fabricated quote should be in details" \
+  bash -c "jq -r '.details.quotes[]?' '$REF' | grep -q Architecture"
+want  "and points at the judgement"   "judgement should name the file" \
+  bash -c "jq -r '.judgement' '$REF' | grep -q 'spec.attempt-1.judgement.json'"
+# The record has a schema for the same reason the verdict does: a shape nobody
+# validates drifts, and this one is meant to be counted across runs.
+FROOT="$(cd "$PIPELINE_DIR/../.." && pwd)"
+if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json" ]; then
+  want "and it validates against refusal.schema.json" "the refusal record must conform" \
+    "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$REF"
+fi
+
+printf '\n-- a different rule writes a different record --\n\n'
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept", confidence:100}' <<<"$BASE")"
+run_check >/dev/null 2>&1
+want  "confidence out of range is named" "rule should be confidence-out-of-range" \
+  test "$(jq -r .rule "$V/spec.attempt-1.refused.json")" = confidence-out-of-range
+want  "with the value it saw"            "details.confidence should be 100" \
+  test "$(jq -r .details.confidence "$V/spec.attempt-1.refused.json")" = 100
+
+printf '\n-- and a judgement the controller CAN stamp leaves no refusal --\n\n'
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept", confidence:0.9}' <<<"$BASE")"
+run_check >/dev/null 2>&1
+want  "no refusal record"             "a stamped verdict must not also record a refusal" \
+  test ! -f "$V/spec.attempt-1.refused.json"
+want  "and the verdict is there"      "spec.attempt-1.json should exist" \
+  test -s "$V/spec.attempt-1.json"
+
 rm -f "$V"/spec.attempt-*
 judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
 out="$(run_check)"

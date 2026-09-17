@@ -151,7 +151,7 @@ VSCHEMA="$ROOT/schemas/verdict.schema.json"
 nv=0; invalid=""
 for f in "$RUN_DIR"/verdicts/*.attempt-*.json; do
   [ -e "$f" ] || continue
-  case "$f" in *.judgement.json) continue ;; esac
+  case "$f" in *.judgement.json|*.request.json|*.refused.json) continue ;; esac
   nv=$((nv+1))
   if [ -f "$VSCHEMA" ] && [ -x "$ROOT/.venv/bin/python" ]; then
     "$ROOT/.venv/bin/python" - "$VSCHEMA" "$f" <<'PY' >/dev/null 2>&1 || invalid="$invalid $(basename "$f")"
@@ -183,9 +183,19 @@ for f in "$RUN_DIR/failed-attempts"/audit-*.advisory.* \
          "$RUN_DIR/failed-attempts/resolved"/audit-*.advisory.*; do
   [ -e "$f" ] && nadv=$((nadv + 1))
 done
+# Which rule refused, when one did. `audit-check.sh` writes a refusal record per
+# refusal naming the rule, so "why did this run reach no verdict" is now read off
+# the run rather than reconstructed from terminal output — which is how the same
+# question got answered from memory twice before.
+why=""
+if compgen -G "$RUN_DIR/verdicts/*.refused.json" >/dev/null 2>&1; then
+  why="$(jq -rs '[.[] | .rule] | group_by(.) | map("\(.[0]) ×\(length)") | join(", ")' \
+        "$RUN_DIR"/verdicts/*.refused.json 2>/dev/null)"
+  [ -n "$why" ] && why=" Refused by: $why."
+fi
 if [ "$nv" -eq 0 ] && [ "$nadv" -gt 0 ]; then
   bad "three_verdicts_schema_valid" major \
-    "no verdicts: $nadv audit(s) ran advisory and reached none. The judge ran; it did not produce a judgement the controller could stamp. Nothing here is schema-invalid — there is nothing to validate, which is a different problem and one this predicate cannot close."
+    "no verdicts: $nadv audit(s) ran advisory and reached none. The judge ran; it did not produce a judgement the controller could stamp.$why Nothing here is schema-invalid — there is nothing to validate, which is a different problem and one this predicate cannot close."
   pred three_verdicts_schema_valid not_exercised
 elif [ "$nv" -eq 0 ]; then
   bad "three_verdicts_schema_valid" blocker "no verdict files at all, and nothing recorded to say why — nothing was audited"

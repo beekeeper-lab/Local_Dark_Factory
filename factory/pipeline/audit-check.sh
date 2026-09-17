@@ -63,6 +63,39 @@ for f in "$VERDICTS/$TARGET".attempt-*.judgement.json; do
   if [ "$n" -gt "$N" ]; then N="$n"; JUDGEMENT="$f"; fi
 done
 
+# refuse <rule> <exit> <one-line reason> [<details as JSON>]
+#
+# Every refusal in this script used to exist only as words on stderr. The
+# controller was making a real decision — this judgement is not usable — and
+# recording it nowhere a later reader could count. "5 of 12 reaudit refusals were
+# fabricated quotes" is a number this project needed twice and had to reconstruct
+# by hand from terminal scrollback both times.
+#
+# So each refusal also writes <target>.attempt-N.refused.json, naming the RULE
+# that fired. That makes the question "which check is doing the work?" arithmetic
+# rather than recollection — and it is the same argument as everywhere else here:
+# a decision a script cannot read is a decision that will be misremembered.
+#
+# It is deliberately NOT a verdict. A verdict says accept/revise/block about the
+# artifact; this says nothing about the artifact at all, only that the judgement
+# offered was not one the controller could stamp. Giving it the verdict schema
+# would put those two on the same shelf, which is precisely the confusion the
+# split in JUDGEMENT-CONTRACT.md exists to prevent.
+refuse() {
+  local rule="$1" code="$2" reason="$3" details="${4:-null}"
+  mkdir -p "$VERDICTS" 2>/dev/null || true
+  jq -n --arg t "$TARGET" --argjson n "${N:-0}" --arg rule "$rule" --arg reason "$reason" \
+        --argjson details "$details" --arg j "${JUDGEMENT:-}" \
+        --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg bean "${BEAN_ID:-}" \
+        --arg run "$(jq -r '.run_id // ""' "$RUN_DIR/run.json" 2>/dev/null)" \
+    '{schema:"refusal/1.0.0", target:$t, attempt:$n, rule:$rule, reason:$reason,
+      details:$details, judgement:(if $j == "" then null else $j end),
+      refused_at:$at, bean:(if $bean == "" then null else $bean end),
+      run_id:(if $run == "" then null else $run end)}' \
+    > "$VERDICTS/$TARGET.attempt-${N:-0}.refused.json" 2>/dev/null || true
+  exit "$code"
+}
+
 STAGE_FOR() { case "$1" in spec) echo spec_audit ;; impl|package) echo impl_audit ;; doc) echo pre_pr_audit ;; esac; }
 STAGE="$(STAGE_FOR "$TARGET")"
 
@@ -72,18 +105,20 @@ if [ -z "$JUDGEMENT" ]; then
   printf 'AUDIT %s: the judge wrote no judgement file.\n' "$TARGET" >&2
   printf '      expected: %s/%s.attempt-<n>.judgement.json\n' "$VERDICTS" "$TARGET" >&2
   ls -1 "$VERDICTS" 2>/dev/null | sed 's/^/      present: /' >&2
-  exit 2
+  refuse no-judgement 2 "the judge wrote no judgement file"
 fi
 if ! jq -e . "$JUDGEMENT" >/dev/null 2>&1; then
   printf 'AUDIT %s: %s is not valid JSON.\n' "$TARGET" "$JUDGEMENT" >&2
-  exit 2
+  refuse judgement-not-json 2 "the judgement file is not valid JSON"
 fi
 
 J="$(cat "$JUDGEMENT")"
 VERDICT="$(jq -r '.verdict // empty' <<<"$J")"
 case "$VERDICT" in
   accept|revise|block|abstain) ;;
-  *) printf 'AUDIT %s: verdict is %s, expected accept|revise|block\n' "$TARGET" "${VERDICT:-absent}" >&2; exit 2 ;;
+  *) printf 'AUDIT %s: verdict is %s, expected accept|revise|block\n' "$TARGET" "${VERDICT:-absent}" >&2
+     refuse verdict-not-a-word 2 "the verdict field is not accept, revise, block or abstain" \
+       "$(jq -nc --arg v "${VERDICT:-}" '{got:$v}')" ;;
 esac
 
 # An abstention is the judge saying it could not tell. That is a question for a
@@ -126,7 +161,8 @@ if ! awk -v c="$CONF" 'BEGIN{exit !(c >= 0 && c <= 1)}' 2>/dev/null; then
   printf '       The judgement is kept at %s; no verdict is stamped from it.\n' \
     "$VERDICTS/$TARGET.attempt-$N.json.rejected" >&2
   cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
-  exit 1
+  refuse confidence-out-of-range 1 "confidence is outside the contract range 0..1" \
+    "$(jq -nc --arg c "$CONF" '{confidence:$c}')"
 fi
 if [ "$VERDICT" = "accept" ] && awk -v c="$CONF" -v f="$CONF_FLOOR" 'BEGIN{exit !(c < f)}'; then
   printf 'AUDIT %s: accepted at confidence %s, below the %s floor — recorded as abstain\n' \
@@ -159,7 +195,8 @@ case "$VERDICT" in
       printf '      the identical question again and the second failure halts the run.\n' >&2
       printf '      If there is genuinely nothing to point at, the verdict is "abstain".\n' >&2
       cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
-      exit 1
+      refuse verdict-without-findings 1 "a revise or block verdict with nothing to point at" \
+        "$(jq -nc --arg v "$VERDICT" '{verdict:$v, findings:0}')"
     fi ;;
 esac
 
@@ -212,7 +249,9 @@ if [ -n "$WANT_IDS" ]; then
     printf '\n      A verdict over some of the criteria, stamped as a verdict, is the shape of\n' >&2
     printf '      a false accept: the ones nobody looked at are the ones that were wrong.\n' >&2
     cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
-    exit 1
+    refuse criteria-do-not-match 1 "the judgement reports on criteria the bean does not declare, or misses some it does" \
+      "$(jq -nc --arg m "$MISSING_IDS" --arg e "$EXTRA_IDS" \
+         '{not_reported_on:($m|split(" ")|map(select(. != ""))), not_in_the_bean:($e|split(" ")|map(select(. != "")))}')"
   fi
   # wc -w, not wc -l. The ids come back newline-separated with no trailing
   # newline, so `wc -l` reports one fewer than there are and a two-criterion bean
@@ -260,7 +299,8 @@ if [ -f "$TI_FILE" ] && jq -e 'has("test_integrity")' <<<"$J" >/dev/null 2>&1; t
     printf '      Refused rather than repaired: writing the measured count into the verdict\n' >&2
     printf '      would hide that the judge contradicted its own evidence.\n' >&2
     cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
-    exit 1
+    refuse restated-counts-wrong 1 "the judgement restates counts it was handed, wrongly" \
+      "$(jq -nc --arg b "$ti_bad" '{fields:($b|split(" ")|map(select(. != "")))}')"
   fi
   printf 'AUDIT %s: the counts it restates match the ones it was given\n' "$TARGET" >&2
 fi
@@ -286,7 +326,7 @@ if [ "$NQ" -eq 0 ]; then
   printf '      Every criterion needs a `quote` copied verbatim from the artifact. A judge\n' >&2
   printf '      that read it can do that without effort; one that did not, cannot. See\n' >&2
   printf '      JUDGEMENT-CONTRACT.md.\n' >&2
-  exit 2
+  refuse quotes-nothing 2 "the judgement quotes nothing at all"
 fi
 
 # Where a quote may legitimately come from: the artifacts under audit, anything
@@ -331,7 +371,8 @@ done <<< "$QUOTES"
 
 if [ "$CHECKED" -eq 0 ]; then
   printf 'AUDIT %s: no quote long enough to prove anything (all under %s characters).\n' "$TARGET" "$QUOTE_MIN_CHARS" >&2
-  exit 2
+  refuse all-quotes-too-short 2 "every quote is under the length at which a quote proves anything" \
+    "$(jq -nc --argjson min "$QUOTE_MIN_CHARS" --argjson n "$NQ" '{min_chars:$min, quotes:$n}')"
 fi
 
 # Per CRITERION, not per judgement. The rule above refuses a judgement whose
@@ -352,7 +393,9 @@ if [ -n "$SHORT" ]; then
   printf '      is the threshold below which a quote matches everything and proves nothing,\n' >&2
   printf '      and a criterion whose quote is under it was never verified — whatever the\n' >&2
   printf '      other criteria managed.\n' >&2
-  exit 2
+  refuse criterion-quote-too-short 2 "some criteria are not backed by a quote long enough to check" \
+    "$(jq -nc --arg s "$SHORT" --argjson min "$QUOTE_MIN_CHARS" \
+       '{min_chars:$min, criteria:($s|split(", ")|map(select(. != "")))}')"
 fi
 
 if [ -n "$UNFOUND" ]; then
@@ -361,7 +404,8 @@ if [ -n "$UNFOUND" ]; then
   printf '\n      A quote is not a paraphrase. If the judge cannot point at real text, the\n' >&2
   printf '      audit did not happen — which is exactly how a confident false accept gets\n' >&2
   printf '      into a run. Refusing rather than recording it.\n' >&2
-  exit 2
+  refuse quote-not-on-disk 2 "the judgement quotes text that is not in any artifact, the run directory or the repository" \
+    "$(printf '%s' "$UNFOUND" | sed 's/^ *- //' | jq -R . | jq -sc '{quotes: map(select(. != ""))}')"
 fi
 printf 'AUDIT %s: %s quote(s) verified against the artifacts\n' "$TARGET" "$CHECKED" >&2
 
