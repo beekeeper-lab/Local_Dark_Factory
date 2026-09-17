@@ -43,12 +43,13 @@ needs it:**
 2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
-3. **The SIZE of the prompt is the only thing that has ever moved the
-   false-accept rate — direction established, magnitude RETRACTED.** The harness
-   reported its first pass N times (*"RETRACTED IN PART"*), so the counts were
-   wrong. What the judgements on disk support: **3 accepts in 11 at ~40,000 bytes
-   and 0 in 10 at ~20,000**, every accept at the large size. A clean re-run is
-   what would put a number on it. Two confounds were chased down: the
+3. **NOTHING measured this week moved the false-accept rate — including the size
+   of the prompt, which looked for several hours like it did.** The sweep behind
+   that was reporting its first pass five times; a clean re-run gives 1 accept in
+   5 at 20,422 bytes and 1 in 5 at 40,422. *"RETRACTED IN FULL"*. The rate sits
+   at a fifth to a quarter and every lever aimed at the judge has left it there,
+   which is the result that justifies advisory audits and makes the work taken
+   AWAY from the judge the only work that has moved. Two confounds were chased down: the
    padding was the rest of the corpus, which contains the bean that owns the path
    the defect writes — a control with that removed made the effect *sharper*; and
    the padding went inside the document under audit — an arm that put it in a
@@ -137,7 +138,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
-| **twice the artifact bytes** | direction only: every recovered accept is at the large size (3 of 11 vs 0 of 10). Earlier counts retracted | — |
+| twice the artifact bytes | **nothing** — 1 accept in 5 at each size, clean run. Earlier figures retracted in full | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1287,81 +1288,23 @@ hidden tests check that one structurally instead. Whether that belongs in the be
 as a third kind of rule, or stays where it is, is a design question and not an
 oversight.
 
-## The size of the prompt moves the false-accept rate, and nothing else has
+## Superseded: "the size of the prompt moves the false-accept rate"
 
-Re-run 2026-09-17 with `tools: []` declared, three passes, one seeded defect
-(`contradicts-non-goal`) held constant, padding from the other nineteen beans:
+The section that started the thread, and the claim is **retracted in full** — a
+clean re-run gives the same accept rate at both sizes. What came out of chasing
+it is worth more than the claim was:
 
-| artifact bytes | verdicts | false accepts | named the defect |
-| --- | --- | --- | --- |
-| 20,422 (no padding) | revise, revise, revise | **0 of 3** | 0 |
-| 30,422 | revise, revise, revise | **0 of 3** | 0 |
-| 40,422 | none, **accept**, **accept** | **2 of 3** | 0 |
-
-**This is the only lever measured this week that moved the false-accept rate.** A
-confound was found after this was written and then ruled out by a control that
-made the effect sharper — see *"RESOLVED: the confound is ruled out"*. The
-numbers below are the first three passes; the standing figures are 13 of 13
-against 0 of 13.
-A bigger token cap, a lower thinking level, five grammar constraints, a sixth
-that backfired, a repaired prompt, four other models and one question per
-criterion — none of them changed how often the judge passes a spec with a planted
-flaw. Twice the bytes did, in the direction that matters least and costs most: a
-false accept is the failure the line exists to prevent and is invisible from the
-outside.
-
-**Real audits sit between those two rows.** The spec audit of bean-001 sends
-25,428 bytes. That is above the clean 20,422 and below the 40,422 where it went
-wrong, which is not a comfortable place to be told about and is the honest
-reading.
-
-**And the old standing finding is gone.** It used to be that at exactly 10,000
-bytes of padding the judge produced no judgement, reproducibly, answering
-`{"path": "", "depth": 3}` — a file-browsing tool call leaking into content. Three
-passes at 10,000 now give three verdicts. Declaring `tools: []` fixed it, which
-is the fifth thing that empty list has fixed and the strongest evidence that the
-API should say what the prompt says.
-
-**What did not change:** it never named the defect, at any size, in any pass —
-0 of 9. The sweep was designed around a case "the judge has actually caught and
-named before, so a fall-off is legible". There is nothing to fall off from any
-more, so the sweep can only measure the verdict, not the finding.
-
-**Time is unrelated to size and enormous either way**: 656, 269, 268 seconds at no
-padding; 134, 37, 47 at 10,000. Twice the prompt, a fifth of the time. Whatever
-governs how long this judge takes, it is not the number of bytes.
-
-**Three passes at one size is thin** — this harness says so itself — and the
-comparison is between 3 of 3 and 2 of 3. So the cheap half was done first, and it
-needed no GPU: **can the line send fewer bytes at all?**
-
-It can, and it does now. The controller's own measurements were going as raw
-JSON, and they are the easiest bytes in the prompt because nothing in them is
-under audit:
-
-| audit | was | is | what changed |
-| --- | --- | --- | --- |
-| spec | 25,428 | **21,343** | `verify-precheck.json` and `claims-check.json` as prose |
-| impl | 30,514 | **23,763** | and `gate.json`, and `test-integrity.json` |
-| doc | 36,731 | 36,731 | nothing to cut — see below |
-
-Spec and impl are inside the band where the judge rejected the seeded defect 3 of
-3. `measurement-brief.sh` does it, the brief is written into the run directory so
-a quote from it can be found by the quote check, an unknown schema is refused and
-the raw file sent instead, and a brief that came out bigger is not used.
-
-**The doc audit is the one left and there is nothing in it to cut.** Its three
-artifacts are the spec (11,336), the diff (2,219), and the 23,176-byte
-implementation document under audit. Each is load-bearing for the question being
-asked: the document, the standard it claims to meet, and the change it claims to
-describe.
-
-So its size is driven by the work product. **The only lever left on it is a
-shorter `impl-detail.md`, and that is a trade against what the document is for**
-— §07 wants it to teach, `doclint` already refuses thin sections, and a cap would
-push against both. Not doing it. Recorded so the next person weighing "the doc
-audit is the biggest prompt" knows the cut has been looked for and the only one
-available costs the thing the document exists to provide.
+- **`measurement-brief.sh`**, which stands on its own argument
+- **two confounds found and controlled** — padding that legitimised the defect,
+  and padding inside the document rather than beside it
+- **`bench/fixtures/pad-neutral`**, a control built to differ in one thing
+- **the sweep's own confound probe**, which reads what it seeded and looks for it
+  in the padding
+- **`--keep`**, without which the harness bug would still be standing
+- **taxonomy entries 10 and 11**, which are the transferable part
+- **one piece of evidence that does not depend on any count**:
+  `evidence/judge-answered-about-the-padding-20260917.md`, a judgement filling
+  bean-001's criterion ids with three other beans' work
 
 ## MEASURED: the briefs changed nothing, and that is the useful part
 
@@ -1430,92 +1373,12 @@ list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
 
-## RESOLVED: the confound is ruled out. Size is the cause
+## Superseded: "the confound is ruled out, size is the cause"
 
-The control ran and it is unambiguous. Five passes, padding with the corpus
-rewritten to remove every mention of the solver:
-
-| padding | artifact bytes | verdicts |
-| --- | --- | --- |
-| none | 20,422 | `abstain` ×5 — **0 accepts** |
-| **neutral** | 40,422 | **`accept` ×5 — 5 false accepts of 5** |
-
-With the confounding content removed the effect is not weakened, it is **sharper**
-than with the real corpus (5 of 5 against 6 of 8). So the padding was not telling
-the judge the write was legitimate. Twice the bytes is what does it.
-
-**Everything measured at these two sizes, across three runs and two padding
-sources:**
-
-| artifact bytes | non-accepts | false accepts | no answer |
-| --- | --- | --- | --- |
-| 20,422 | **13 of 13** (8 `revise`, 5 `abstain`) | **0** | 0 |
-| 30,422 | 3 of 3 | 0 | 0 |
-| 40,422 | **0 of 13** | **11** | 2 |
-
-**What the control rules out and what it does not.** It rules out the specific
-confound: that the corpus padding handed the judge the bean which owns the path
-the defect writes.
-
-**And here is the limit of the whole experiment, which I did not state when I
-first acted on it.** `size-sweep.sh` appends the padding *inside `spec.md`* —
-`head -c "$pad" "$PAD_ALL" >> "$RD/spec.md"`. So what is measured is **a document
-under audit that is two-thirds other material**, and the displacement result is
-exactly what that predicts: the judge reviewed the part of the document that was
-not the spec.
-
-**A real audit is not shaped like that.** Its bytes are separate artifacts, each
-with its own labelled header saying what it is and how to read it — `THE SPEC
-UNDER AUDIT`, `THE ACTUAL DIFF`, `THE GATE RESULTS`. Whether three large labelled
-artifacts displace each other the way one padded document does **is not
-measured.**
-
-So the honest statement of the finding is narrower than "size makes this judge
-false-accept". It is: **a document under audit that is mostly other material gets
-reviewed as that other material, and the grammar hides it.** The byte thresholds
-are real for that shape.
-
-**What this does and does not justify.** The measurement briefs stand on their own
-— fewer bytes of raw JSON the judge once mistook for a question is good regardless.
-The `judge.sh` size warning is a precaution resting on a narrower experiment than
-its wording implied, and it now says so. **The experiment that would settle it**
-is a sweep that pads by adding a SEPARATE labelled artifact rather than appending
-to the spec; that is a change to `size-sweep.sh`, an hour of GPU, and the one
-measurement that would tell the doc audit whether it is actually at risk.
-
-**The mechanism, from a kept run: it is displacement, not dilution.** Two more
-passes at 40,422 with `--keep`, and the judgement can be read.
-`evidence/judge-answered-about-the-padding-20260917.md` has it in full. bean-001
-is a project scaffold — does the package import, is ruff clean, is mypy clean,
-does pytest collect a test — and the judge filled all four of its criterion ids
-with findings about `tests/feasibility/test_preflight.py`, group capacity rules
-and soft constraints. Three other beans' work. **The seeded defect is not
-mentioned once.**
-
-It stopped reviewing the artifact and started reviewing the context. And **the
-grammar made that invisible**: `criteria` is keyed on the bean's own ids with
-`additionalProperties: false`, so the answer has exactly four entries, exactly
-`ac1` through `ac4`, perfectly shaped, every one about somebody else's bean. The
-clearest instance yet of **conformance is not judgement**.
-
-It also settles the loose end below: `NAMED` flapped between `yes` five times and
-`no` twice on identical input because the judgement is not about the spec at all,
-so whether a catchword appears is luck.
-
-**And the controller does refuse it** — confidence 0.1 is under the 0.4 floor, and
-`accept` with two findings is a judgement disagreeing with itself. Worth knowing,
-and worth being clear that neither check is about the actual failure. They catch
-it sideways. What catches it directly is not sending the judge 40,000 bytes.
-
-**The loose end as it stood before that run.** All five large-size rows scored
-`NAMED` = yes, and with neutral padding "solver" appears only in the seeded text,
-so that should mean the judge identified the forbidden work and accepted it
-anyway — the sharpest possible characterisation. But `NAMED` is an upper bound
-(see the judge section), an earlier control row was scored `named` because a
-catchword sat inside a *fabricated* finding, and `size-sweep.sh` deletes its run
-directories on exit, so the judgements are gone and I cannot tell which this was.
-**That is why `--keep` now exists on the sweep.** Until a kept run says
-otherwise, treat those five as "accepted", not as "identified and accepted".
+Written while the size effect was believed. The confound work in it was real and
+survives under *"What the confound was, and how it was found"*; the conclusion is
+**retracted in full**. The control it describes was measured with the broken
+harness, like everything else in that thread.
 
 ## What the confound was, and how it was found
 
@@ -1564,28 +1427,12 @@ Nothing built on the size result is harmed either way — fewer bytes of raw JSO
 in a prompt and a warning that truncates nothing are not worse under either
 outcome. What changes is what this project believes and what it does next.
 
-## Where the knee is, and why the doc audit depends on the answer
+## Abandoned: locating the knee
 
-**Stopped before it finished, on purpose.** The confound above was found while it
-was running, and there is no point refining a curve whose meaning is in question.
-Five passes each at **30,422** and **35,422** bytes, to be re-run after the
-control settles what the first result means.
-
-What is known: 8 of 8 rejections at 20,422, 3 of 3 at 30,422, **0 of 8 at
-40,422**. The change happens somewhere in a 10,000-byte gap — and **the doc audit
-is 36,731 bytes, inside it**, with nothing in that prompt that can be cut.
-
-So this is not curiosity about a curve. It decides whether the largest audit this
-line runs is already in the band where this judge stops rejecting planted flaws.
-
-**Prediction.** If it is a threshold near 40,000, 35,422 rejects most of the time
-and the doc audit is uncomfortable but not broken. If it is gradual, 35,422 is
-mixed — call it 2 or 3 of 5 — and the doc audit is already unreliable, which
-would make "advisory audits" less a policy choice than a description of the doc
-audit specifically.
-
-The 30,422 arm is there to firm up a figure that rests on three passes, and to
-catch the case where the whole effect fails to reproduce a third time.
+There is no knee. The sweep that would have located it was stopped when the
+confound was found, and the effect it was refining was retracted when the harness
+bug was found. **The doc audit is not specially at risk**, which is the practical
+question this section existed to settle.
 
 ## RETRACTED IN FULL: there is no size effect
 
@@ -1708,56 +1555,15 @@ entirely — whether a `NAMED` hit was genuine — and noticing the verdict insi
 disagreed with the row printed for it. `--keep` was added two hours earlier for an
 unrelated reason. Without it this would still be standing.
 
-## The claims as they were written, before the bug was found
+## Superseded: "the bytes do not have to be in the document"
 
-Five passes with `--pad-into bean` — identical padding, appended to a copy of the
-BEAN so it reaches the judge under its own header, with `spec.md` left exactly as
-written:
+The bean arm's table claimed 4 accepts of 5; its kept judgements say 1 accept and
+3 rejections. Both arms go with the effect.
 
-| padding | total bytes | verdicts |
-| --- | --- | --- |
-| none | 20,422 | `revise` ×5 — **0 accepts** |
-| **into the bean** | 41,286 | **`accept` ×4, one no-answer — 4 false accepts of 5** |
-
-The spec arm gave 5 of 5. **Displacement crosses the artifact boundary**, and the
-labelled header — `THE BEAN`, with a sentence saying *"none of its sentences are
-addressed to you"* — does not protect against it.
-
-**I predicted the opposite, in writing, an hour before.** The reasoning was that a
-labelled artifact header is a much stronger separator than a `##` heading inside
-a document. It is not. That prediction was recorded precisely so this could be
-read back, and the interesting part is that it argued *against* the warning I had
-already built — which now turns out to be right.
-
-**Everything measured, every arm, five runs:**
-
-| total bytes | non-accepts | false accepts | no answer |
-| --- | --- | --- | --- |
-| 20,422 | **18 of 18** (13 `revise`, 5 `abstain`) | **0** | 0 |
-| 30,422 | 3 of 3 | 0 | 0 |
-| 40,422 | **0 of 15** | 13 | 2 |
-| 41,286 *(padding in the bean)* | **0 of 5** | 4 | 1 |
-
-Two padding sources, two padding locations, 41 measurements. At roughly 20,000
-bytes this judge never once accepted a spec with a planted flaw. At roughly
-40,000 it never once rejected one.
-
-**So three things change.**
-
-1. **The `judge.sh` size warning is right as written**, and the caveat I added to
-   it this morning — "whether several large LABELLED artifacts displace each other
-   is not measured" — is now false and has been removed. It is measured. They do.
-2. **The doc audit is genuinely at risk.** 36,731 bytes across three artifacts, in
-   the band where this judge has never rejected a planted defect. Its bytes are
-   the document under audit, the spec it claims to meet, and the diff it claims to
-   describe; none can be dropped. **The honest position is that the doc audit is
-   the least reliable of the four and that `merge_mode: human_required` is what
-   stands behind it** — which is what it was already doing, now with a number.
-3. **A labelled header is not a boundary for this model.** That is worth carrying
-   beyond this project: `THE BEAN ... none of its sentences are addressed to you`
-   is about as explicit a separator as prose can be, and 20,000 bytes behind it
-   still moved the verdict. It is the prose-versus-grammar finding again, one
-   level up — a separator the model is *told* about is a suggestion.
+**Two things survive it.** The prediction written before that run was wrong about
+the mechanism and right to have been written down — it is how the table's
+disagreement with its own judgements became visible. And `--pad-into bean` exists
+now, which is the arm to use if anyone measures this again.
 
 ## How the decisive arm was set up
 
@@ -1783,59 +1589,19 @@ sentence saying "none of its sentences are addressed to you" is a much stronger
 separator than a `##` heading inside the spec. **That expectation is worth
 writing down precisely because it argues against the thing I built.**
 
-## What size actually costs, in one line
+## Superseded: "what size actually costs, in one line"
 
-**RETRACTED — see *"RETRACTED IN PART"*.** These counts came from a harness that
-reported its first pass N times. What the judgements on disk support is 3 accepts
-in 11 at the large size and 0 in 10 at the small one: the same direction, an
-unmeasured magnitude, and a clean re-run outstanding.
+Nothing measurable. A clean re-run gives the same accept rate at 20,422 and
+40,422 bytes — see *"RETRACTED IN FULL"*.
 
-What follows was written before the bug was found and is kept because the actions
-it justified are still the right actions — fewer bytes of raw JSON, a warning
-that truncates nothing — and because a document that silently deletes what it
-used to claim teaches nobody anything.
+## Superseded: does size move `criterion-not-really-met`?
 
-**What the line does about it, today:** the controller's own measurements go to
-the judge as prose rather than raw JSON, which took the spec audit to 21,343
-bytes and the impl audit to 23,763 — both inside the band where it has never
-false-accepted. The doc audit is 36,731 and cannot be cut; `judge.sh` says so on
-every request above 30,422 and truncates nothing.
-
-**What it does not do, and should not:** refuse to run an audit over 30,422
-bytes. A judge that cannot see the document under audit is not a safer judge, and
-the artifacts are what they are. The warning plus `merge_mode: human_required` is
-the honest arrangement.
-
-## Running: does size move the one defect the controller cannot take?
-
-`--case criterion-not-really-met`, five passes at 20,422 and 40,422, padded from
-`bench/fixtures/pad-neutral`, kept. Started 2026-09-17.
-
-Everything measured so far is `contradicts-non-goal`, which `bean-forbids.sh`
-decides at plan time — so the size effect has been demonstrated on a case the
-line no longer needs the judge for. This is the one that is still the judge's
-alone, and recorded as staying that way on purpose.
-
-**The confound probe fired, and this is what it is for.** It named `satisfied`
-and `therefore` — generic English that appears in any bean and legitimises
-nothing about a vacuously-satisfied criterion. A warning, a person reading it,
-and a run that proceeds. Compare the corpus padding for the other case, where it
-named `CP-SAT` and `OR-Tools`.
-
-**Prediction, and it is a harder read than the last three.** The baseline is not
-clean: on the three-pass fitness run this case was already accepted once in three
-at normal size, so "rejects at small, accepts at large" cannot be as stark as
-18-of-18 against 0-of-20. What would count:
-
-- **size generalises** if the large arm is 5 of 5 accepts against 1 or 2 of 5 at
-  the small size — the same direction, from a dirtier baseline.
-- **size is specific to the other case** if both arms look alike, around 1 or 2
-  accepts each, which would narrow the finding to "a defect stated as a PLACE
-  gets displaced" and leave the one the judge actually owns untouched by it.
-
-The second would be the more interesting result and the worse news, because the
-defect the controller cannot take would then be unaffected by the only lever
-that has ever worked.
+Run, and its table read `revise` ten times — from the broken harness. The
+judgements on disk say `revise, revise, revise, accept` at the large size, and the
+question is moot now that there is no size effect to generalise. **What survives
+is the confound probe firing on `satisfied` and `therefore`** — generic English,
+an innocent overlap, handed to a person rather than refused on, which is exactly
+what it was built to do.
 
 ## Next on this thread, after that: nothing queued
 
@@ -1861,71 +1627,19 @@ bean-001 for reasons that have nothing to do with a vacuous satisfaction
 argument. That is the probe working as designed — a warning, not a refusal, and a
 person deciding whether the overlap matters.
 
-## MEASURED: 8 of 8 against 0 of 8 — the first confirmation, now superseded by 13 of 13
+## Superseded: the first confirmation
 
-Five more passes at the two sizes that matter, 2026-09-17. The prediction below
-called it and the effect is stronger than the three-pass run suggested.
+Three passes that read as 8 of 8 against 0 of 8. Both numbers are the first pass
+counted several times. **Retracted in full.**
 
-| artifact bytes | rejected the seeded defect | accepted it | no answer |
-| --- | --- | --- | --- |
-| **20,422** | **8 of 8** | 0 | 0 |
-| **40,422** | **0 of 8** | **6** | 2 |
+## Superseded: the prediction for the confirming sweep
 
-Eight passes at each, across two independent runs four hours apart. At the small
-size this judge rejected a spec with a planted flaw every single time. At twice
-the bytes it never rejected it once.
+It named both outcomes, including the one that removes the finding — *"if the two
+columns look alike, the honest position becomes that nothing measured this week
+changes how often this judge passes a spec with a planted flaw"*.
 
-**This is the only lever that has moved the false-accept rate, and it is not
-subtle.** Everything else tried this week — the token cap, the thinking level,
-five grammar constraints, a sixth that backfired, a repaired prompt, four other
-models, one question per criterion — left it where it was.
-
-**What was done about it.** The controller's own measurements went to the judge
-as raw JSON and now go as prose, which is the only fat there was:
-
-| audit | was | is |
-| --- | --- | --- |
-| spec | 25,428 | **21,343** |
-| impl | 30,514 | **23,763** |
-| doc | 36,731 | 36,731 |
-
-**And what was not.** The doc audit is 36,731 bytes — between the two measured
-points and much nearer the bad one — and every byte of it is the document under
-audit, the spec it claims to meet, or the diff it claims to describe. There is
-nothing to cut that is not evidence. `judge.sh` now says so on every request over
-30,422 bytes, naming the measurement, and truncates nothing: a judge given less
-than the artifacts under audit is a different failure and a silent one.
-
-**The lurking version of this is worse than the doc audit.** An artifact is
-capped at 120,000 bytes, so a bean with a large diff can put an impl audit four
-times past the size where this was measured. bean-001's whole diff is 2,219
-bytes; bean-006 is a CP-SAT solver. The warning is what stands between that and a
-confident accept nobody questions.
-
-**What it does not explain**: the fabricated quotes. Twelve audits with the
-smaller prompts refused for the same reasons in the same proportions as twelve
-without — 5 of 12 "quoted text that is on disk nowhere" both times. Size moves
-the verdict; it does not move the invention.
-
-## Prediction for the confirming sweep
-
-The size finding is the only actionable thing measured this week and it rests on
-**three passes**. Five more, at the two sizes that matter and nothing in between,
-started 2026-09-17.
-
-**If the effect is real**: 0 of 5 false accepts at 20,422 bytes, and 2 or more of
-5 at 40,422. **If it is the weather**: the two columns look alike, and the 2-of-3
-was this judge disagreeing with itself — which it does for byte-identical input
-at temperature 0, and which is the thing every number here has to survive.
-
-Either answer is worth the GPU hour. The first firms up the one lever that has
-moved; the second removes it, and the honest position becomes that **nothing**
-measured this week changes how often this judge passes a spec with a planted flaw
-— which would be a cleaner statement than the one currently standing, and would
-point the next effort at the controller rather than at the model.
-
-No middle reading is planned in advance: 1 of 5 at the large size against 0 of 5
-at the small one is not a finding, it is two samples.
+**That is where this ended up**, by a route nobody predicted: not because the
+columns looked alike, but because the harness was printing one column twice.
 
 ## The sixth grammar constraint, and the boundary it found
 
