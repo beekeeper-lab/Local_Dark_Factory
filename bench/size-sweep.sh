@@ -153,6 +153,12 @@ printf 'padding available: %s bytes\n' "$PAD_HAVE"
 # artifact. A sweep whose independent variable did not vary is not a sweep, and
 # this is the fail-open shape this project keeps finding: the check ran, produced
 # output, and measured nothing.
+#
+# The table already had the column that would have shown it — TOTAL, which is
+# `total_artifact_bytes` in the artifact, and on a real sweep it grows exactly
+# with the padding (20841, 25841, 30841, 40841 on 2026-09-16). Nobody read it.
+# A number that would reveal the fault, printed and unread, is not a safeguard;
+# the refusal above is.
 PAD_MAX=0
 for sz in $SIZES; do [ "$sz" -gt "$PAD_MAX" ] && PAD_MAX="$sz"; done
 if [ "$PAD_HAVE" -lt "$PAD_MAX" ]; then

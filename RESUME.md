@@ -1631,13 +1631,22 @@ and unmerged, so `factory queue` reports `pr_open` and nothing is ready. Merge i
 (or say why not) and `factory go` picks up bean-002, which now has hidden tests
 waiting for it.
 
-Three things the owner alone can do, each with the command:
+Four things the owner alone can do, each with the command:
 
 1. **Merge** https://github.com/beekeeper-lab/seating-planner-py/pull/1
 2. **Publish the gate image**, which is all that stands between the line and a
-   real CI step — see "Still open".
+   real CI step — see "Still open". The workflow installs itself on the next
+   `scaffold.sh` once the manifest stops pinning a `localhost/` image; it is
+   withheld until then, by the scaffold, for a reason it prints.
 3. **`factory read <run-dir>`** for bean-001, the one Phase-1 exit predicate a
    script cannot settle.
+4. **Decide this repository's own PR #2** — 308 commits, open since day one,
+   blocking nothing. Recommendation: merge it and open smaller ones from here.
+
+And when bean-001 merges, one thing for whoever is at the keyboard next:
+**annotate bean-001's non-goals**, which were deliberately left as prose while its
+pull request is open. The four annotations are written out under *"Nineteen beans
+are annotated"*, and `test-corpus-forbids.sh` fails if they arrive early.
 
 Then, for the next bean:
 
