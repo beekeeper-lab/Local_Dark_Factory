@@ -326,6 +326,27 @@ if [ "$CHECKED" -eq 0 ]; then
   exit 2
 fi
 
+# Per CRITERION, not per judgement. The rule above refuses a judgement whose
+# quotes are ALL too short, and that left a gap wide enough to drive the whole
+# verdict through: four criteria, one with a real 300-character quote and three
+# with "the test" apiece, and the check reported "1 quote(s) verified" and passed.
+# The three unverifiable criteria rode along on the one that was checked, and a
+# verdict rests on every criterion, not on the best one.
+#
+# A judge that read the artifact can quote twelve characters of it per criterion
+# without effort; the ones this project has measured emit 200-600 characters when
+# they quote at all. So this costs an honest judge nothing, and it is the same
+# argument the quote check itself is built on.
+SHORT="$(jq -r '[.criteria[]? | select((.quote // "" | length) < 12) | .id] | join(", ")' <<<"$J" 2>/dev/null)"
+if [ -n "$SHORT" ]; then
+  printf 'AUDIT %s: these criteria are not backed by a quote long enough to check: %s\n' "$TARGET" "$SHORT" >&2
+  printf '\n      A verdict rests on every criterion, not on the best one. Twelve characters\n' >&2
+  printf '      is the threshold below which a quote matches everything and proves nothing,\n' >&2
+  printf '      and a criterion whose quote is under it was never verified — whatever the\n' >&2
+  printf '      other criteria managed.\n' >&2
+  exit 2
+fi
+
 if [ -n "$UNFOUND" ]; then
   printf 'AUDIT %s: the judgement quotes text that is not on disk anywhere.\n' "$TARGET" >&2
   printf '%s\n' "$UNFOUND" >&2

@@ -200,6 +200,24 @@ judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
 out="$(run_check)"
 check "a real quote is verified"      "quote(s) verified against the artifacts" "$out"
 
+# The gap between "all quotes are too short" and "every criterion is backed".
+# The check counted verified QUOTES, not verified criteria, and the quotes it
+# counted included the ones attached to findings. So a criterion quoting "the
+# test" — eight characters, matching everything, proving nothing — rode along on
+# a finding that quoted the artifact properly, and the output said
+# "1 quote(s) verified" and passed. A verdict rests on every criterion.
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"revise",
+    findings:[{severity:"major", what:"the write paths are wrong", where:"spec",
+               quote:"allowed_write_paths: [\"src/**\"]"}]}
+  | .criteria[0].quote = "the test"' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+check "a finding's quote does not back a criterion" "not backed by a quote long enough to check" "$out"
+check "and the criterion is named"    "ac1" "$out"
+want  "and it exits 2"                "expected 2" test "$rc" -eq 2
+want  "with no verdict written"       "an unverified criterion must leave nothing behind" \
+  test ! -f "$V/spec.attempt-1.json"
+
 printf '\n== provenance that cannot be observed stops the verdict ==\n\n'
 rm -f "$V"/spec.attempt-*
 judgement "$(jq -c '. + {verdict:"accept"}' <<<"$BASE")"
