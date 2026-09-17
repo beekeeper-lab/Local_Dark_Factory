@@ -74,6 +74,46 @@ check "the step passes"                           "TEST INTEGRITY PASS" "$out"
 check "the record says yes"                       '"result":"yes"' \
       "$(tr -d ' \n' < factory/runs/R/test-integrity.json)"
 
+printf '\n== and it says WHICH of the new tests pin it ==\n\n'
+#
+# The suite-level answer is "at least one test in the repository fails without
+# this change", and a suite fails if one test does. Five new tests, one of which
+# pins the change and four of which assert what was already true, get the same
+# "yes" as five that all pin it — and weakened assertions are the defect the impl
+# rubric calls a blocker and the one a developer model produces most often. So
+# "yes" over the whole suite is the wrong resolution for exactly the thing being
+# looked for.
+git checkout -q main && git checkout -q -b mixed
+printf 'def existing():\n    return 1\n\ndef added():\n    return 2\n' > src/a.py
+# `from src import a`, not `from src.a import added`: the second fails to IMPORT
+# on the reverted tree, pytest stops at collection, and there are no per-test
+# outcomes to attribute. That case is covered below; this one is the case where
+# the module still imports and the tests inside it differ.
+{ printf 'from src import a\n\n'
+  printf 'def test_really_added():\n    assert a.added() == 2\n\n'
+  printf 'def test_asserts_the_old_thing():\n    assert a.existing() == 1\n\n'
+  printf 'def test_asserts_nothing_much():\n    assert True\n'
+} > tests/test_b.py
+git add -A && git commit -q -m "one test that pins it and two that do not"
+out="$(ti)"
+check "the suite-level answer is still yes" "as it must" "$out"
+check "but it names the ones that pass anyway" "PASS with the change reverted" "$out"
+check "and names one of them"                "test_asserts_the_old_thing" "$out"
+check "and the other"                        "test_asserts_nothing_much" "$out"
+nope  "and not the one that pins it"         "test_really_added" \
+      "$(grep 'PASS with the change reverted' <<<"$out")"
+check "they are in the record"               "test_asserts_nothing_much" \
+      "$(jq -c '.fails_on_revert.passed_with_the_change_reverted' factory/runs/R/test-integrity.json 2>/dev/null)"
+
+printf '\n-- a module that will not import without the change pins it wholesale --\n\n'
+git checkout -q main && git checkout -q -b importpin
+printf 'def existing():\n    return 1\n\ndef added():\n    return 2\n' > src/a.py
+printf 'from src.a import added\n\ndef test_added():\n    assert added() == 2\n' > tests/test_b.py
+git add -A && git commit -q -m "a test that imports the new symbol by name"
+out="$(ti)"
+check "it says so, rather than calling it unreadable" "does not even import without the change" "$out"
+nope  "and does not blame the runner"  "prints no line per test" "$out"
+
 printf '\n== source changed and no test written is not a pass ==\n\n'
 git checkout -q main && git checkout -q -b untested
 printf 'def existing():\n    return 1\n\ndef added():\n    return 2\n' > src/a.py

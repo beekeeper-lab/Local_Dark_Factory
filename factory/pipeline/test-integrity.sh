@@ -217,15 +217,29 @@ else
   PIN_CMD="$(jq -r 'join(" ")' <<<"$TEST_RUN")"
   vjson="$(jq -c --argjson r "$TEST_RUN" '{kind:"command", run:$r}' <<<'{}')"
 
-  # run_tests <tree> <logfile> — the same command, twice, against two trees.
+  # The revert run asks one more thing of the runner: a line per test, so the
+  # answer can be "these three of your five tests pass without the change"
+  # rather than "at least one test somewhere failed". Only for pytest, and only
+  # on the revert run — appending an unknown flag to cargo or jest would make the
+  # revert run fail for the wrong reason, and a failed revert run reads as
+  # "the tests pin the change". That is the one error this must not make.
+  RUN_JSON="$TEST_RUN"
+  REVERT_RUN="$TEST_RUN"
+  case "$PIN_CMD" in
+    *pytest*) REVERT_RUN="$(jq -c '. + ["-rA"]' <<<"$TEST_RUN")" ;;
+  esac
+
+  # run_tests <tree> <logfile> [<command-json>] — the same command, twice,
+  # against two trees.
   run_tests() {
-    local tree="$1" log="$2" sb=()
+    local tree="$1" log="$2" cmd="${3:-$TEST_RUN}" sb=()
+    local vj; vj="$(jq -c --argjson r "$cmd" '{kind:"command", run:$r}' <<<'{}')"
     [ "$SANDBOX" = 1 ] && sb=( --sandbox "$tree" --gates "$GATES" )
     if [ "$SANDBOX" = 1 ]; then
-      "$PIPELINE_DIR/verify.sh" "$vjson" --out "$log" --timeout 900 \
+      "$PIPELINE_DIR/verify.sh" "$vj" --out "$log" --timeout 900 \
         "${sb[@]}" ${ENV_ARGS+"${ENV_ARGS[@]}"} >/dev/null 2>&1
     else
-      ( cd "$tree" && jq -r '.[]' <<<"$TEST_RUN" | xargs -d '\n' -- timeout 900 ) > "$log" 2>&1
+      ( cd "$tree" && jq -r '.[]' <<<"$cmd" | xargs -d '\n' -- timeout 900 ) > "$log" 2>&1
     fi
   }
 
@@ -245,7 +259,7 @@ else
     PIN_WHY="the tests do not pass on the tree as it is, so a failure after reverting proves nothing about them"
     weigh "fails on revert" "not decidable — $PIN_CMD exits $CONTROL_RC WITH the change (see test-integrity-control.log)"
   else
-    run_tests "$TREE" "$RUN_DIR/test-integrity-revert.log"
+    run_tests "$TREE" "$RUN_DIR/test-integrity-revert.log" "$REVERT_RUN"
     PIN_RC=$?
     if [ "$PIN_RC" -ne 0 ]; then
       PINS="yes"
@@ -256,6 +270,52 @@ else
       PIN_WHY="the tests pass with the source reverted — whatever they assert was already true"
       bad "fails on revert" "$PIN_CMD passed without the change; these tests do not pin it"
     fi
+
+    # Which of the NEW tests pin it, not just whether any does.
+    #
+    # The suite-level answer above is "at least one test in the whole repository
+    # fails without this change", and a suite fails if one test does. A change
+    # that adds five tests, one of which pins it and four of which assert things
+    # that were already true, gets the same "yes" as a change whose five all pin
+    # it. Weakened assertions are the defect the impl rubric calls a blocker and
+    # the one a developer model produces most often, so "yes" over the whole suite
+    # is the wrong resolution for exactly the thing being looked for.
+    #
+    # Only tests in the files THIS DIFF touched. Every other test in the repo
+    # passes on revert, legitimately, because it is about something else.
+    PASSED_ON_REVERT=""
+    RL="$RUN_DIR/test-integrity-revert.log"
+    if [ -f "$RL" ]; then
+      # Both output orders, as hidden-tests.sh takes them: "PASSED path::name"
+      # from -rA and "path::name PASSED" from -v. A runner that prints neither
+      # leaves this empty, and empty is reported as "could not tell" rather than
+      # as "all of them pin it".
+      ALLPASS="$( { grep -oE '^PASSED[[:space:]]+[^[:space:]]+' "$RL" 2>/dev/null | awk '{print $2}'
+                    grep -oE '^[^[:space:]]+::[A-Za-z0-9_]+[[:space:]]+PASSED' "$RL" 2>/dev/null | awk '{print $1}'
+                  } | sort -u)"
+      if [ -n "$ALLPASS" ]; then
+        for tf in "${TEST_FILES[@]}"; do
+          hits="$(printf '%s\n' "$ALLPASS" | grep -F -- "$(basename "$tf")" || true)"
+          [ -n "$hits" ] && PASSED_ON_REVERT="$PASSED_ON_REVERT$hits
+"
+        done
+        PASSED_ON_REVERT="$(printf '%s' "$PASSED_ON_REVERT" | sed '/^$/d' | sort -u)"
+      fi
+    fi
+    N_VACUOUS="$(printf '%s' "$PASSED_ON_REVERT" | sed '/^$/d' | wc -l)"
+    if [ -z "$ALLPASS" ] && grep -qiE 'error collecting|ImportError|ModuleNotFoundError|AttributeError.*collect|Interrupted: .* error' "$RL" 2>/dev/null; then
+      # Not a limitation — a result. The test module does not IMPORT without the
+      # change, so nothing in it could run, and per-test attribution has nothing
+      # to attribute. That is pinning at module level: the file names something
+      # the change introduced.
+      ok "which tests pin it" "the test module does not even import without the change, so every test in it depends on it"
+    elif [ -z "$ALLPASS" ]; then
+      note "which tests pin it" "the runner prints no line per test, so only the suite-level answer applies"
+    elif [ "$N_VACUOUS" -eq 0 ]; then
+      ok "which tests pin it" "every test in the changed test files fails without the change"
+    else
+      weigh "which tests pin it" "$N_VACUOUS test(s) in the changed test files PASS with the change reverted: $(printf '%s' "$PASSED_ON_REVERT" | tr '\n' ' ')"
+    fi
   fi
 fi
 
@@ -263,6 +323,7 @@ fi
 jq -n --arg schema "test-integrity/1.0.0" \
   --arg base "$MERGE_BASE" --arg pins "$PINS" --arg why "$PIN_WHY" \
   --arg cmd "$PIN_CMD" --arg rc "${PIN_RC:-}" --arg crc "${CONTROL_RC:-}" \
+  --argjson vacuous "$(printf '%s\n' "${PASSED_ON_REVERT:-}" | sed '/^$/d' | jq -Rsc 'split("\n") | map(select(length > 0))')" \
   --argjson tests "$(printf '%s\n' ${TEST_FILES+"${TEST_FILES[@]}"} | jq -Rs 'split("\n") | map(select(. != ""))')" \
   --argjson src "$(printf '%s\n' ${SRC_FILES+"${SRC_FILES[@]}"} | jq -Rs 'split("\n") | map(select(. != ""))')" \
   --argjson prose "$(printf '%s\n' ${PROSE_FILES+"${PROSE_FILES[@]}"} | jq -Rs 'split("\n") | map(select(. != ""))')" \
@@ -273,7 +334,8 @@ jq -n --arg schema "test-integrity/1.0.0" \
     fails_on_revert:{result:$pins, why:$why, command:$cmd,
                      exit_code:(if $rc == "" then null else ($rc|tonumber) end),
                      control_exit_code:(if $crc == "" then null else ($crc|tonumber) end),
-                     caveat:"The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something."},
+                     passed_with_the_change_reverted:$vacuous,
+                     caveat:"The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something. passed_with_the_change_reverted is the finer answer where the runner gives one: tests in the CHANGED test files that pass anyway, which is the whole suite result telling you yes while some of the new tests assert what was already true. It is empty both when every new test pins the change and when the module would not import without it — the printed line says which."},
     test_integrity:{deleted_tests:$deleted, new_skips:$skips,
                     removed_asserts:$removed_asserts, added_asserts:$added_asserts,
                     caveat:"Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place."}}' \
