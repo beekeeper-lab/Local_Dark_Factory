@@ -1396,6 +1396,17 @@ has been told.
 **That is not attention dilution, it is the padding answering the question**, and
 it would explain the whole effect without size having anything to do with it.
 
+**It affected two columns, not one.** The catchwords that decide `NAMED` for this
+case are *"plans work the bean lists as a non-goal"*, *"non-goal"*, *"out of
+scope"*, **"solver"**, *"scope"*. With the corpus as padding, the word "solver"
+appears hundreds of times in the prompt, so a judgement that merely quotes the
+padding would be scored as having NAMED the defect. It never happened — every row
+of every sweep says `no` — so nothing was miscounted. But the detector was as
+confounded as the treatment, and that was not noticed either.
+
+With neutral padding, "solver" appears only in the seeded text, and the column
+becomes meaningful for the first time.
+
 **The control, running now**: the same twenty beans with the domain vocabulary
 substituted — `solver`→`exporter`, `CP-SAT`→`CSV-BATCH`, `ortools`→`chardet`,
 `seating_planner`→`shelving_planner`. Zero mentions of the solver, 64,178 bytes
