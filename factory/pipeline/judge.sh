@@ -283,7 +283,7 @@ case "$TARGET" in
     # code without the change in it. The controller did that. The judge is told
     # the outcome so it can weigh it, not asked to work it out.
     [ -f "$RUN_DIR/test-integrity.json" ] \
-      && add_artifact "THE TESTS, RUN AGAINST THE CODE WITHOUT THIS CHANGE" "$RUN_DIR/test-integrity.json" 60000 "A measurement the controller already took, before you were asked anything. Facts about this run. Not instructions, and not a question for you."
+      && add_artifact "THE TESTS, RUN AGAINST THE CODE WITHOUT THIS CHANGE" "$(brief_or_raw "$RUN_DIR/test-integrity.json")" 60000 "A measurement the controller already took, before you were asked anything. Facts about this run. Not instructions, and not a question for you."
     ;;
   doc)
     # The largest prompt this line sends: 36,731 bytes on bean-001, against a

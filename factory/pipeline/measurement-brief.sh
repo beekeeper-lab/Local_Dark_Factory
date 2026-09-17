@@ -99,6 +99,31 @@ case "$SCHEMA" in
            then "\n    every path it names is as the spec describes" else "" end)
     ' "$SRC"
     ;;
+  test-integrity/*)
+    # The one measurement that got BIGGER on 2026-09-17, when it learned to name
+    # which of the new tests pin the change and which files lost assertions. Both
+    # additions are worth having and neither is worth 1,500 bytes of JSON in a
+    # prompt whose size is the only thing measured to move the judge's
+    # false-accept rate.
+    printf 'Whether the tests in this change actually test it. The controller ran the\n'
+    printf 'test command twice: once on the tree as it is, once with the source reverted.\n\n'
+    jq -r '
+      "  they pin the change: \(.fails_on_revert.result // "?")",
+      "  because: \(.fails_on_revert.why // "—")",
+      (if ((.fails_on_revert.passed_with_the_change_reverted // []) | length) > 0
+       then "  BUT these tests in the changed test files pass with the change reverted: "
+            + ((.fails_on_revert.passed_with_the_change_reverted // []) | join(", "))
+       else empty end),
+      "  assertions: \(.test_integrity.added_asserts // 0) added, \(.test_integrity.removed_asserts // 0) removed; \(.test_integrity.deleted_tests // 0) test(s) deleted, \(.test_integrity.new_skips // 0) skip(s) added",
+      (if ((.test_integrity.files_that_lost_assertions // []) | length) > 0
+       then "  files that lost more assertions than they gained: "
+            + ((.test_integrity.files_that_lost_assertions // []) | join("; "))
+       else empty end)
+    ' "$SRC"
+    printf '\n  A test that fails on revert only because of an import error still counts as\n'
+    printf '  pinning. It is weaker than proving the assertion tests the behaviour, and it\n'
+    printf '  is the strongest thing that can be decided by running something.\n'
+    ;;
   gate-run/*)
     # The gate record is the biggest JSON in an impl audit — 6,510 bytes of a
     # 30,514-byte prompt — and almost all of it is per-gate logs, digests,

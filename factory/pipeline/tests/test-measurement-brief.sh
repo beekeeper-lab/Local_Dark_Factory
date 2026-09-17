@@ -95,6 +95,26 @@ check "and what the controller decided about the tests" "tests pin the change: n
 check "the tier is the number, not the object" "tier 2, against base e9a5b33e9482" "$out"
 nope  "and no policy terms leaked in"   "binding_term" "$out"
 
+printf '\n== the test-integrity record, which got bigger today ==\n\n'
+# It learned on 2026-09-17 to name which of the new tests pin the change and
+# which files lost assertions. Both are worth having; neither is worth 1,500
+# bytes of JSON in a prompt whose size is the only thing measured to move the
+# judge.
+cat > "$WORK/ti.json" <<'J'
+{"schema":"test-integrity/1.0.0",
+ "fails_on_revert":{"result":"yes","why":"the tests pass with it and fail without it",
+   "passed_with_the_change_reverted":["test_asserts_the_old_thing"]},
+ "test_integrity":{"added_asserts":4,"removed_asserts":1,"deleted_tests":0,"new_skips":0,
+   "files_that_lost_assertions":["tests/test_a.py (1 removed, 0 added)"]}}
+J
+out="$(bash "$MB" "$WORK/ti.json")"; rc=$?
+rc_is "it renders"                      "$rc" 0
+check "the headline answer"             "they pin the change: yes" "$out"
+check "and the qualification that matters" "pass with the change reverted: test_asserts_the_old_thing" "$out"
+check "the assertion arithmetic"        "4 added, 1 removed" "$out"
+check "and the file that lost"          "tests/test_a.py (1 removed, 0 added)" "$out"
+check "with the caveat about import errors" "still counts as" "$out"
+
 printf '\n== it refuses what it does not understand ==\n\n'
 printf '{"schema":"something-else/9.9","data":[1,2,3]}\n' > "$WORK/x.json"
 out="$(bash "$MB" "$WORK/x.json" 2>&1)"; rc=$?

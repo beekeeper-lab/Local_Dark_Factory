@@ -50,7 +50,7 @@ needs it:**
    constraints, a repaired prompt, four other models, or one question per
    criterion. The controller's own measurements were going to the judge as raw
    JSON and are now prose, which took the spec audit from 25,428 to 21,343 bytes
-   and the impl audit from 30,514 to 24,353. The doc audit is 36,731 and cannot
+   and the impl audit from 30,514 to 23,763. The doc audit is 36,731 and cannot
    be cut. *"The size of the prompt moves the false-accept rate"*.
 4. **Work moved out of the judge instead, and this is the thing that keeps
    working.** **Four of five seeded defects are now decided by a check, with zero
@@ -1263,7 +1263,7 @@ under audit:
 | audit | was | is | what changed |
 | --- | --- | --- | --- |
 | spec | 25,428 | **21,343** | `verify-precheck.json` and `claims-check.json` as prose |
-| impl | 30,514 | **24,353** | and `gate.json` |
+| impl | 30,514 | **23,763** | and `gate.json`, and `test-integrity.json` |
 | doc | 36,731 | 36,731 | nothing to cut — see below |
 
 Spec and impl are inside the band where the judge rejected the seeded defect 3 of
