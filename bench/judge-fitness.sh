@@ -106,6 +106,37 @@ done
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The inputs are frozen here, and every case reads the copies.
+#
+# `--bean` named a file in ANOTHER repository, read fresh by the judge at the
+# start of each case — a six-case run takes two hours, and on 2026-09-16 that
+# bean was annotated at 19:55 and reverted at 20:12 while a run begun at 19:29
+# was on its third case. Two of six cases were measuring a different bean from
+# the other four, and nothing in the artifact would have said so. This harness
+# already re-execs through bench/snapshot.sh precisely so that editing it
+# mid-run cannot corrupt the run; the inputs had no such protection, and an
+# input is more of a measurement than the script is.
+#
+# The hashes go in the artifact. Two figures taken from different specs are two
+# figures nobody can compare, and that has to be visible without reconstructing
+# a timeline out of file mtimes.
+FROZEN="$WORK/inputs"; mkdir -p "$FROZEN"
+freeze() { # freeze <path> <name> -> prints the frozen path
+  cp "$1" "$FROZEN/$2"; printf '%s' "$FROZEN/$2"
+}
+INPUT_SHAS="$(jq -n --arg s "$(sha256sum "$SPEC" | cut -c1-12)" \
+                    --arg t "$(sha256sum "$TASKS" | cut -c1-12)" \
+                    --arg b "$(sha256sum "$BEAN" | cut -c1-12)" \
+                    --arg bn "$(basename "$(dirname "$BEAN")")" \
+                    '{spec:$s, tasks:$t, bean:$b, bean_id:$bn}')"
+SPEC="$(freeze "$SPEC" spec.md)"
+TASKS="$(freeze "$TASKS" tasks.yaml)"
+# The whole bean DIRECTORY, keeping its name: `run.json` records the bean by
+# `basename(dirname)`, so freezing the file alone would have every case report a
+# bean called "inputs".
+cp -a "$(dirname "$BEAN")" "$FROZEN/"
+BEAN="$FROZEN/$(basename "$(dirname "$BEAN")")/$(basename "$BEAN")"
+
 # Each case: a name, whether the judge SHOULD reject it, what the defect is, and
 # a python mutation over (spec_text, tasks_text) returning the pair.
 mutate() { # mutate <case> <specfile> <tasksfile>
@@ -456,11 +487,13 @@ jq -n --argjson r "$RESULTS" --argjson caught "$CAUGHT" --argjson seeded "$SEEDE
   --arg judge_cmd "$(basename "$JUDGE_CMD")" \
   --arg prompt_version "$(_pv="$PIPE/../skills/factory-audit/SKILL.md"; [ -f "$_pv" ] && printf 'factory-audit@%s' "$(sha256sum "$_pv" | cut -c1-12)" || echo 'factory-audit@unknown')" \
   --arg asker_version "$([ -f "$JUDGE_CMD" ] && printf '%s@%s' "$(basename "$JUDGE_CMD")" "$(sha256sum "$JUDGE_CMD" | cut -c1-12)" || echo 'unknown')" \
+  --argjson inputs "$INPUT_SHAS" \
   --arg judge_sh_version "$(_js="$PIPE/judge.sh"; [ -f "$_js" ] && printf 'judge.sh@%s' "$(sha256sum "$_js" | cut -c1-12)" || echo 'judge.sh@unknown')" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "$PIPE/roles.json")")" \
   '{schema:"judge-fitness/1.0.0", measured_at:$ts, provenance:$prov,
     judge:{model:$model, digest:$digest, thinking:$thinking, num_predict:$cap, field_maxlen:$maxlen, asked_by:$judge_cmd,
            prompt_version:$prompt_version, asker_version:$asker_version, judge_sh_version:$judge_sh_version},
+    inputs:$inputs,
     passes:$passes,
     one_pass_is_not_a_measurement: ($passes < 2),
     unmeasurable_cases: ([$r[] | select(.verdict == "cut off" or .verdict == "none") | .case] | unique),

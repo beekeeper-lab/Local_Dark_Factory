@@ -247,6 +247,16 @@ check "and which prompt produced it"   "factory-audit@" "$(jq -r '.judge.prompt_
 # zero to 100% while the prose asking for the same thing changed nothing. A figure
 # that names the rubric and not the grammar names the weaker half.
 check "and which grammar"              "judge.sh@" "$(jq -r '.judge.judge_sh_version' "$WORK/out.json")"
+# And which INPUTS. A six-case run takes two hours and reads the spec, the task
+# list and the bean once per case; on 2026-09-16 the bean was edited in another
+# repository while a run was on its third case, so two cases measured a different
+# bean from the other four and nothing recorded it. They are copied once and
+# hashed now.
+for _f in spec tasks bean; do
+  _v="$(jq -r --arg f "$_f" '.inputs[$f] // ""' "$WORK/out.json")"
+  if [ "${#_v}" -ge 8 ]; then printf '  ok    the %s it measured is named by content\n' "$_f"; PASS=$((PASS+1))
+  else printf '  FAIL  the %s it measured is named by content — got: %s\n' "$_f" "${_v:-<empty>}"; FAIL=$((FAIL+1)); fi
+done
 check "and which asker, by content"    "@"         "$(jq -r '.judge.asker_version' "$WORK/out.json")"
 eq "and one pass is marked as not a measurement" "true" \
    "$(jq -r '.one_pass_is_not_a_measurement' "$WORK/out.json")"
