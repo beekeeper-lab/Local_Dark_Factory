@@ -43,8 +43,10 @@ needs it:**
 2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
-3. **The SIZE of the prompt is the only thing that has ever moved the
-   false-accept rate.** Three passes at 20,422 and 30,422 bytes rejected a seeded
+3. **The SIZE of the prompt looked like the only thing that has ever moved the
+   false-accept rate — and a confound found afterwards may explain all of it.**
+   Read *"OPEN: the padding is not neutral"* before acting on this. The rest of
+   this item is what was measured, which stands as a measurement either way. Three passes at 20,422 and 30,422 bytes rejected a seeded
    defect 3 of 3; at 40,422 the judge accepted it 2 of 3. Nothing else tried this
    week moved it — not the token cap, the thinking level, five grammar
    constraints, a repaired prompt, four other models, or one question per
@@ -113,7 +115,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
-| **twice the artifact bytes** | **rejected 8 of 8 → 0 of 8** | — |
+| **twice the artifact bytes** | **rejected 8 of 8 → 0 of 8** — but see *"the padding is not neutral"* | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1223,7 +1225,12 @@ Re-run 2026-09-17 with `tools: []` declared, three passes, one seeded defect
 | 30,422 | revise, revise, revise | **0 of 3** | 0 |
 | 40,422 | none, **accept**, **accept** | **2 of 3** | 0 |
 
-**This is the only lever measured this week that moved the false-accept rate.**
+**This is the only lever measured this week that moved the false-accept rate —
+and it may not be a lever at all.** A confound was found after this was written:
+the padding is the other beans of the corpus, seventeen of twenty mention the
+solver, and bean-006 owns the exact path the seeded defect writes. See *"OPEN:
+the padding is not neutral"*. What follows is what was measured; what it means is
+being checked.
 A bigger token cap, a lower thinking level, five grammar constraints, a sixth
 that backfired, a repaired prompt, four other models and one question per
 criterion — none of them changed how often the judge passes a spec with a planted
@@ -1402,7 +1409,7 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
-## CONFIRMED: 8 of 8 against 0 of 8. Size is the finding of the week
+## MEASURED: 8 of 8 against 0 of 8 — cause under check, see the section above
 
 Five more passes at the two sizes that matter, 2026-09-17. The prediction below
 called it and the effect is stronger than the three-pass run suggested.
