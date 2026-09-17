@@ -1343,6 +1343,26 @@ list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
 
+## Prediction for the confirming sweep
+
+The size finding is the only actionable thing measured this week and it rests on
+**three passes**. Five more, at the two sizes that matter and nothing in between,
+started 2026-09-17.
+
+**If the effect is real**: 0 of 5 false accepts at 20,422 bytes, and 2 or more of
+5 at 40,422. **If it is the weather**: the two columns look alike, and the 2-of-3
+was this judge disagreeing with itself — which it does for byte-identical input
+at temperature 0, and which is the thing every number here has to survive.
+
+Either answer is worth the GPU hour. The first firms up the one lever that has
+moved; the second removes it, and the honest position becomes that **nothing**
+measured this week changes how often this judge passes a spec with a planted flaw
+— which would be a cleaner statement than the one currently standing, and would
+point the next effort at the controller rather than at the model.
+
+No middle reading is planned in advance: 1 of 5 at the large size against 0 of 5
+at the small one is not a finding, it is two samples.
+
 ## The sixth grammar constraint, and the boundary it found
 
 Five grammar constraints on 2026-09-16 took schema conformance from about zero to
