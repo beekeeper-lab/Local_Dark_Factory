@@ -1849,9 +1849,14 @@ are queued rather than made.
    characters, which the quote check catches and which is worse than an honest
    blank.
 2. **Re-run `size-sweep` now that `tools: []` is declared.** The sweep predates it.
-3. **Re-measure the 14 provenance-less figures**, which are now cheaper to keep:
-   the artifact records the grammar and the asker by content hash, so a figure
-   taken after a15696b names the judge that produced it.
+3. ~~Re-measure the 14 provenance-less figures.~~ **Checked instead, which was
+   the right question.** Thirteen of the fourteen are superseded by a later figure
+   that carries a provenance block, and the fourteenth carries a finding partly
+   overtaken by one that does. **No live decision rests on an unprovenanced
+   number**, so re-measuring them would produce fourteen superseded figures with
+   nicer headers. The audit finding stays red, correctly: it is about the
+   artifacts, not about whether anyone is misled by them. `bench/results/INDEX.md`
+   carries the file-by-file reasoning.
 
 ## What to re-run to confirm nothing drifted
 

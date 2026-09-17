@@ -18,6 +18,21 @@ not about the code.
 
 ## Provenance
 
+**Standing finding, and what is actually left of it.** `figures_have_provenance`
+in the Phase-0 audit reports 14 files without a provenance block and should keep
+reporting them: they were measured before `bench/provenance.sh` existed, and
+writing a block into them afterwards would be inventing it. But "14 figures
+without provenance" is not the same as "14 claims resting on nothing", and the
+second is what would matter. Checked file by file on 2026-09-17: **thirteen are
+superseded by a later figure that does carry a block, and the fourteenth
+(`judge-variance-20260915T134814Z.json`) carries a finding partly overtaken by a
+figure that does.** So no live decision in this repository rests on an
+unprovenanced number.
+
+That is why "re-measure the 14" is not on the list of things to do. Re-measuring
+a superseded figure produces a second superseded figure with a nicer header.
+
+
 | file | provenance | still load-bearing? |
 | --- | --- | --- |
 | `phase0-20260914T173319Z.json` | yes | **yes** — the serial/co-resident regime decision |
@@ -47,7 +62,7 @@ not about the code.
 | `format-support-20260916T201730Z.json` | yes | **yes** — the other candidates on this box, with the real artifacts: `qwen3-coder-next` and `gemma4:26b` hold it with thinking off, `devstral:24b` is cut off mid-answer at 313s. The prerequisite for measuring any of them on the number that matters |
 | `judge-fitness-20260915T012448Z.json` | no | no — one pass, four cases, before the fixtures were right |
 | `judge-fitness-msgsep-20260915T023844Z.json` | no | no — one message per artifact vs one blob; single runs, and the judge is not reproducible |
-| `judge-fitness-gemma4-20260915T025711Z.json` | no | **partly** — gemma4:26b was rejected as a judge on this. Single run, so the comparison is weak; `format-support-20260916T111754Z.json` rejects it again on a different axis, which is why the decision stands |
+| `judge-fitness-gemma4-20260915T025711Z.json` | no | **no longer** — gemma4:26b was rejected as a judge on this, and re-run on 2026-09-16 (`evidence/judge-fitness-gemma4-20260916.log`, three passes, with provenance) it rejected the clean control and then returned nothing at all on four cases in a row. The decision rests on that and on `format-support-20260916T111754Z.json`, both of which carry a provenance block |
 | `judge-fitness-fixedfixtures-20260915T131308Z.json` | no | no — superseded by the three-pass runs |
 | `judge-fitness-20260916T001225Z.json` | yes | superseded — 12000 cap, `thinking: medium` |
 | `judge-fitness-20260916T130042Z.json` | yes | the 16000 half of the token-cap decision (0 of 18 cut off). Its catch-rate columns are **not** usable: two of the six fixtures were not seeding their defects |
