@@ -98,13 +98,20 @@ PY="$(factory_python)"
 # Collect the other beans: id, title. A bean whose file cannot be read is skipped
 # and counted, because "I could not read four of the beans" is a different answer
 # from "none of them matched".
-OTHERS='[]'; UNREADABLE=0
+OTHERS='[]'; UNREADABLE=0; SKIPPED_DRAFT=0
 while IFS= read -r f; do
   [ -f "$f" ] || continue
   oj="$("$PIPELINE_DIR/yaml2json.sh" "$f" 2>/dev/null)" || { UNREADABLE=$((UNREADABLE+1)); continue; }
   oid="$(jq -r '.id // empty' <<<"$oj")"
   [ -n "$oid" ] || { UNREADABLE=$((UNREADABLE+1)); continue; }
   [ "$oid" = "$BEAN_ID" ] && continue
+  # Approved beans only. A draft is a proposal, and a spec should not be refused
+  # because its words resemble something nobody has agreed to build — §04 gates
+  # what enters the line and this check is downstream of that gate, not beside
+  # it. A bean with no status at all is treated as approved, because that is how
+  # every other reader here treats the older schema.
+  ostatus="$(jq -r '.status // "approved"' <<<"$oj")"
+  [ "$ostatus" = "approved" ] || { SKIPPED_DRAFT=$((SKIPPED_DRAFT+1)); continue; }
   OTHERS="$(jq -c --arg i "$oid" --arg t "$(jq -r '.title // ""' <<<"$oj")" '. + [{id:$i, title:$t}]' <<<"$OTHERS")"
 done < <(find "$BEANS_DIR" -maxdepth 2 -name '*.yaml' 2>/dev/null | sort)
 
@@ -187,8 +194,9 @@ CMP="$(jq '.compared_against' <<<"$RESULT")"
 if [ -n "$JSON" ]; then
   mkdir -p "$(dirname "$JSON")"
   jq -n --arg b "$BEAN_ID" --argjson r "$RESULT" --argjson u "$UNREADABLE" --argjson m "$MIN_TERMS" \
+    --argjson d "$SKIPPED_DRAFT" \
     '{schema:"plans-other-beans/1.0.0", bean:$b, compared_against:$r.compared_against,
-      unreadable_beans:$u, min_terms:$m, findings:$r.findings,
+      unreadable_beans:$u, skipped_not_approved:$d, min_terms:$m, findings:$r.findings,
       caveat:"Word overlap between a task intent and another approved bean TITLE, after removing every word this bean already uses about itself and a stoplist of words every corpus shares. Two distinct terms are required, because one is a coincidence of English. It finds a plan describing another bean subject matter; it cannot find one that describes it in different words."}' > "$JSON"
 fi
 
@@ -196,6 +204,7 @@ if [ "$N" -eq 0 ]; then
   printf 'plans-other-beans: %s task(s) against %s other bean(s), none describes another bean'"'"'s work\n' \
     "$(jq '(.tasks // []) | length' <<<"$TASKS_JSON")" "$CMP"
   [ "$UNREADABLE" -gt 0 ] && printf '  (%s bean file(s) could not be read and were not compared)\n' "$UNREADABLE"
+  [ "$SKIPPED_DRAFT" -gt 0 ] && printf '  (%s not approved and not compared — a draft is a proposal, not somebody'"'"'s work yet)\n' "$SKIPPED_DRAFT"
   exit 0
 fi
 printf 'plans-other-beans: %s task(s) plan work that belongs to another bean:\n' "$N" >&2

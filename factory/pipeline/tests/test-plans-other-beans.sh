@@ -95,6 +95,20 @@ out="$(pob)"; rc=$?
 rc_is "its own vocabulary does not fire" "$rc" 0
 nope  "and bean-002 is not accused"      "bean-002" "$out"
 
+printf '\n== a draft bean is a proposal, not work anyone has agreed to ==\n\n'
+#
+# §04 gates what enters the line: a bean is proposed, then approved, then run.
+# This check is downstream of that gate, not beside it, so a spec must not be
+# refused because its words resemble something nobody has agreed to build.
+sed -i 's/^status: approved$/status: draft/' "$BEANS/bean-007.yaml"
+tasks "Implement the complete seating optimizer: soft-constraint scoring and the optimization objective, wired together."
+out="$(pob)"; rc=$?
+rc_is "the draft does not refuse the spec" "$rc" 0
+check "and it says how many it skipped"    "not approved and not compared" "$out"
+sed -i 's/^status: draft$/status: approved/' "$BEANS/bean-007.yaml"
+out="$(pob)"; rc=$?
+rc_is "approved again, it refuses again"   "$rc" 1
+
 printf '\n== the threshold is a knob, and lowering it is visible ==\n\n'
 tasks "Write the scoring helper for this package and nothing else."
 out="$(pob --min-terms 1)"; rc=$?
