@@ -562,6 +562,15 @@ SCHEMA="$(jq --arg d "$MET_MEANS" \
 # name, `JUDGE_FIELD_MAXLEN=0 bench/judge-fitness.sh …`, and the artifact says
 # which value produced it instead of the comparison depending on what the working
 # tree looked like at the time.
+# One observation for whoever tunes this next, recorded 2026-09-17 because it
+# cost an hour to establish and is not obvious from the outside: the cap cuts
+# MID-WORD. A real answer came back with ac1's evidence ending
+# `... == \"seating_pla` at exactly 600 decoded characters, and that whole answer
+# then ended unfinished with done_reason=stop. Whether the cut destabilised the
+# rest of the generation is NOT established — one observation, and this model
+# ends answers unfinished for other reasons too — but if a run shows a lot of
+# unparseable answers whose last complete field sits exactly on the cap, this is
+# the first thing to vary.
 FIELD_MAXLEN="${JUDGE_FIELD_MAXLEN:-600}"
 case "$FIELD_MAXLEN" in ''|*[!0-9]*) die "JUDGE_FIELD_MAXLEN wants a number of characters, or 0 for no cap; got '$FIELD_MAXLEN'" ;; esac
 if [ "$FIELD_MAXLEN" -eq 0 ]; then
