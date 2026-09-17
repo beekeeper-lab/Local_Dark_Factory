@@ -67,5 +67,24 @@ else
   printf '  SKIP  no manifest or no podman\n'
 fi
 
+printf '\n== the digest it pins comes from the REGISTRY ==\n\n'
+#
+# The comment above this code always said "read the digest back from the registry
+# rather than trusting that a push of the same bytes yields the same digest". The
+# code inspected the LOCAL image. So gates.lock.yaml was pinned to the local
+# manifest digest, and the first CI run after publishing answered
+# `manifest unknown`: the registry had sha256:77f23eb0…, the local store called
+# the same bytes sha256:b782278…. podman stores an image by its own manifest and
+# the registry computes its own on receipt, and nothing makes them agree.
+check "it asks the registry"          "remote_digest_of" "$SRC"
+check "by skopeo where there is one"  "skopeo inspect" "$SRC"
+check "or the registry API where not" "docker-content-digest" "$SRC"
+check "and refuses to guess"          "Do NOT pin the local digest" "$SRC"
+check "naming what CI would answer"   "manifest unknown" "$SRC"
+# And it pulls the image back under that digest, or the publishing box cannot run
+# its own gates: a tag is not enough when the manifest names <ref>@<digest>.
+check "it pulls back by the digest"   'podman pull -q "$DEST@$REMOTE_DIGEST"' "$SRC"
+check "and says why a tag is not enough" "does not answer to that digest" "$SRC"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
