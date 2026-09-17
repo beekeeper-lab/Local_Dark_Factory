@@ -56,6 +56,29 @@ check "with what that means"            "says these exist and they do NOT" "$out
 check "and the other direction too"     "says these are absent and they ARE present" "$out"
 check "a clean section says so"         "every path it names is as the spec describes" "$out"
 
+printf '\n== the gate record, which is the biggest JSON in an impl audit ==\n\n'
+# 6,510 bytes of a 30,514-byte prompt, almost all of it per-gate logs, digests,
+# timings and containment records the judge is told not to re-derive.
+cat > "$WORK/g.json" <<'J'
+{"schema":"gate-run/1.0.0","overall":"fail","tier":{"final_tier":2,"terms":{"policy":2}},
+ "base":"e9a5b33e9482f0b23d5678e96622f2c5a92a2a83",
+ "gates":[{"id":"lint","status":"pass"},{"id":"unit","status":"fail"}],
+ "acceptance_criteria":[{"id":"ac1","passed":"pass"},{"id":"ac2","passed":"fail"}],
+ "test_integrity":{"fails_on_revert":{"result":"no"}}}
+J
+out="$(bash "$MB" "$WORK/g.json")"; rc=$?
+rc_is "it renders"                      "$rc" 0
+check "the overall result is first"     "overall: fail" "$out"
+check "each gate by name"               "gate unit: fail" "$out"
+check "each criterion"                  "ac2: fail" "$out"
+check "and what the controller decided about the tests" "tests pin the change: no" "$out"
+# `tier` is an object with the number inside it and `base` is a bare sha.
+# Reading either with `// "?"` printed the whole tier object into the brief —
+# forty lines of policy terms where a number was meant, in the one place whose
+# entire purpose is fewer bytes.
+check "the tier is the number, not the object" "tier 2, against base e9a5b33e9482" "$out"
+nope  "and no policy terms leaked in"   "binding_term" "$out"
+
 printf '\n== it refuses what it does not understand ==\n\n'
 printf '{"schema":"something-else/9.9","data":[1,2,3]}\n' > "$WORK/x.json"
 out="$(bash "$MB" "$WORK/x.json" 2>&1)"; rc=$?

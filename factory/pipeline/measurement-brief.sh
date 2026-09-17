@@ -94,6 +94,31 @@ case "$SCHEMA" in
            then "\n    every path it names is as the spec describes" else "" end)
     ' "$SRC"
     ;;
+  gate-run/*)
+    # The gate record is the biggest JSON in an impl audit — 6,510 bytes of a
+    # 30,514-byte prompt — and almost all of it is per-gate logs, digests,
+    # timings and containment records the judge is told not to re-derive. What a
+    # judgement rests on is: did it pass, which gates ran, which criteria passed,
+    # and what the controller already decided about the tests.
+    printf 'The gates the controller ran against this change, and what it already\n'
+    printf 'decided. Facts about this run.\n\n'
+    printf '  overall: %s\n' "$(jq -r '.overall // "?"' "$SRC")"
+    jq -r '.gates[]? | "  gate \(.id // "?"): \(.status // .result // "?")"' "$SRC"
+    jq -r '.acceptance_criteria[]? | "  \(.id // "?"): \(.passed // .status // "?")"' "$SRC"
+    jq -r '
+      (if (.secret_scan // empty) then "  secret scan: \(.secret_scan.status // .secret_scan.result // "ran")" else empty end),
+      (if (.containment // empty) then "  containment: \(.containment.status // .containment.result // "recorded")" else empty end),
+      (if (.test_integrity // empty) then "  tests pin the change: \(.test_integrity.fails_on_revert.result // .test_integrity.result // "?")" else empty end),
+      (if (.invariants // empty) then "  invariants: \(.invariants.status // .invariants.result // "recorded")" else empty end)
+    ' "$SRC" 2>/dev/null
+    # `tier` is an object in gate-run/1.0.0 and the number is inside it; `base`
+    # is a bare sha. Reading either with `// "?"` printed the whole tier object
+    # into the brief — forty lines of policy terms where a number was meant, in
+    # the one place whose entire purpose is fewer bytes.
+    printf '\n  tier %s, against base %s\n' \
+      "$(jq -r 'if (.tier | type) == "object" then (.tier.final_tier // "?") else (.tier // "?") end' "$SRC")" \
+      "$(jq -r 'if (.base | type) == "object" then (.base.sha // "?") else (.base // "?") end | tostring | .[0:12]' "$SRC")"
+    ;;
   *)
     printf 'measurement-brief: unknown schema %s in %s\n' "${SCHEMA:-<none>}" "$SRC" >&2
     printf '  Refusing rather than summarising it badly: a brief that silently drops a\n' >&2
