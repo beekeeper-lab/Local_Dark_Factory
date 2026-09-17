@@ -131,6 +131,22 @@ out="$(pc)"
 check "the stray file is named"      "impl-attempt1.json" "$out"
 check "and what it means is said"    "a verdict that did not happen" "$out"
 
+printf '\n-- but the files that legitimately live beside a verdict are not strays --\n\n'
+#
+# judge.sh writes two things next to the verdict it produced: the judgement, and
+# `<target>.request.json` — the prompt's byte and artifact counts, recorded
+# because the size of the prompt is the most predictive variable measured on this
+# judge. Neither is a verdict. Without the exemption the request file raises a
+# BLOCKER on every real run, and this suite would not have caught it: its
+# fixtures build their own verdicts directory and nothing put one there.
+reset
+printf '{"schema":"judge-request/1.0.0","artifact_bytes":21343,"artifact_count":5}\n' > "$R/verdicts/spec.request.json"
+printf '{"verdict":"accept"}\n' > "$R/verdicts/spec.judgement.json"
+out="$(pc)"
+nope "the request sidecar is not a stray"  "spec.request.json" "$out"
+nope "nor is the judgement"                "spec.judgement.json" "$out"
+check "and the real verdicts are still counted" "all correctly named" "$out"
+
 printf '\n== a verdict for a target this tier never runs ==\n\n'
 reset
 jq '.tier = "small"' "$R/run.json" > "$R/t" && mv "$R/t" "$R/run.json"

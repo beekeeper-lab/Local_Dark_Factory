@@ -173,13 +173,20 @@ printf '\n== --pad-into bean puts the bytes in a different artifact ==\n\n'
 # displacement crosses an artifact boundary — which is what a real audit is made
 # of.
 K2="$WORK/kept2"
-sweep --pad-from "$CORPUS" --sizes '20000' --repeat 1 --pad-into bean --keep "$K2" --out "$WORK/g.json" >/dev/null 2>&1 &
+sweep --pad-from "$CORPUS" --sizes '20000' --repeat 1 --pad-into bean --keep "$K2" --out "$WORK/g.json" > "$WORK/bean-arm.out" 2>&1 &
 _sp=$!
 # The judge call needs a GPU and this assertion does not: what matters is the
 # tree it built, which exists before the model is asked anything.
 sleep 20
 B="$(find "$K2" -name bean.yaml 2>/dev/null | head -1)"
-if [ -n "$B" ] && [ -s "$B" ]; then
+# The sweep refuses to start while another measurement holds the GPU, and it is
+# right to: two models on one card and the seconds in both records stop meaning
+# what they say. That is a skip here, not a failure — the assertion is about what
+# the sweep builds, and it never got to build anything.
+if grep -q 'another measurement' "$WORK/bean-arm.out" 2>/dev/null; then
+  printf '  SKIP  a measurement is in flight, so the sweep refused to start\n'
+  B=""
+elif [ -n "$B" ] && [ -s "$B" ]; then
   printf '  ok    a padded copy of the bean is written (%s bytes)\n' "$(wc -c < "$B")"; PASS=$((PASS+1))
 else
   printf '  FAIL  --pad-into bean wrote no bean copy\n'; FAIL=$((FAIL+1))

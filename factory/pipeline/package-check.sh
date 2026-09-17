@@ -174,7 +174,16 @@ if [ -d "$RUN_DIR/verdicts" ]; then
   for f in "$RUN_DIR"/verdicts/*.json; do
     [ -e "$f" ] || continue
     b="$(basename "$f")"
-    case "$b" in *.judgement.json) continue ;; esac
+    # What the model said, and what was sent to it. Neither is a verdict, and
+    # both live here because they belong beside the verdict they produced.
+    #
+    # `<target>.request.json` arrived on 2026-09-17 — the prompt's byte count and
+    # artifact count, recorded because the size of the prompt is the most
+    # predictive variable measured on this judge. Without this line it would be
+    # reported as a misnamed verdict and raise a BLOCKER on every real run. The
+    # suite did not catch it: package-check's fixtures build their own verdicts
+    # directory, so nothing put a request file in one.
+    case "$b" in *.judgement.json|*.request.json) continue ;; esac
     if [[ "$b" =~ ^([a-z]+)\.attempt-([0-9]+)\.json$ ]]; then
       t="${BASH_REMATCH[1]}"
       case " $VALID_TARGETS " in
