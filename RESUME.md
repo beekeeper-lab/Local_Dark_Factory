@@ -92,6 +92,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | `thinking: medium` → `low` | fewer cut-offs | fewer generated tokens at medium |
 | five grammar constraints | no change | conformance ~0% → 100%, **first stamped verdict** |
 | prompt stopped contradicting itself | **9 → 4 false accepts** | 1 stamped → 0 |
+| a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
 
@@ -1765,9 +1766,43 @@ Write the end-to-end test before the next long real run, not after it.
   host and refused the pull with the publish command in its error. Every step but
   the one that needs the image has now run on GitHub.
 
-## The per-criterion quote rule would have refused the only verdict ever stamped
+## MEASURED: 0 of 12, and the prediction below was exactly right
 
-Stated before measuring, so that what comes back is a test of this and not a
+`factory reaudit --passes 3` on bean-001's finished run, 2026-09-17, after the
+per-criterion quote rule landed: **0 of 12 audits produced a verdict the
+controller would stamp**, against 1 of 12 before. The spec audit on pass 1 was
+refused for `ac3` — the same criterion named in the prediction below, hours
+earlier, from a different artifact.
+
+Why the twelve were refused:
+
+```
+  5  quoted text that is on disk nowhere
+  4  a criterion with no quote long enough to check   <- the new rule
+  1  no judgement at all (it asked for a tool)
+  1  no quote long enough to prove anything (all under 12 characters)
+  1  revise with no findings
+```
+
+And the number underneath all of it, across the 44 criteria in those 11
+judgements: **31% carry no quote at all.** Not a short quote — none. The old
+check counted quotes rather than criteria, so one real quote in a judgement made
+the other three unexamined, and 4 of the 12 refusals above are judgements that
+would have passed that check this morning.
+
+So the right way to read "1 of 12 became 0 of 12" is: the controller stopped
+stamping a verdict that rested on criteria nobody had verified. The judge did not
+get worse; the instrument stopped rounding up. **Advisory audits and
+`merge_mode: human_required` are carrying the weight, and this is the third
+independent measurement this week saying so.**
+
+The other five refusals are the fabrication the quote check was written for, and
+it is not diminishing: five of twelve judgements quoted text that is on disk
+nowhere.
+
+## The prediction, as written before the run
+
+Stated before measuring, so that what came back was a test of this and not a
 rationalisation of it.
 
 Every criterion now needs its own quote of at least twelve characters — the
@@ -1783,8 +1818,9 @@ run and was not quoted. So the one verdict this line has stamped rested on a
 criterion that was never verified, and the check that was supposed to catch that
 counted quotes rather than criteria.
 
-**The prediction: `factory reaudit` goes from 1 stamped in 12 to 0 in 12.** If it
-does, that is not the controller getting worse. It is the controller stopping
+**The prediction: `factory reaudit` goes from 1 stamped in 12 to 0 in 12.** *(It
+did, and for the predicted reason on the predicted criterion. See above.)* That
+is not the controller getting worse. It is the controller stopping
 saying something that was not true — and the honest reading of "0 of 12" is the
 same as the honest reading of "1 of 12" was: this judge does not produce audit
 verdicts a controller can stamp, and `merge_mode: human_required` is carrying the
