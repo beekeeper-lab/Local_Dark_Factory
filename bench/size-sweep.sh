@@ -341,9 +341,16 @@ fi
 jq -n --argjson r "$RESULTS" --arg case "$CASE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg model "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")" \
   --argjson inputs "$INPUT_SHAS" \
+  --arg pad_from "$(basename "$PAD_FROM")" \
+  --arg pad_sha "$(sha256sum "$PAD_ALL" 2>/dev/null | cut -c1-12)" \
+  --argjson pad_bytes "$PAD_HAVE" \
+  --arg pad_overlap "${OVERLAP:-none}" \
   --argjson prov "$(provenance_block "$(jq -r '.roles.judge.model' "${ROLES_FILE:-$PIPE/roles.json}")")" \
   --argjson passes "$REPEAT" \
   '{schema:"size-sweep/2.0.0", measured_at:$ts, provenance:$prov, case:$case, judge:$model,
+    padding:{from:$pad_from, sha256:$pad_sha, bytes_available:$pad_bytes,
+             words_the_seeded_defect_introduced:$pad_overlap,
+             note:"WHAT the padding says is a variable, not only how much of it there is. The corpus padding contains the bean that owns the path this defect writes; bench/fixtures/pad-neutral is the same text with that removed. A sweep artifact that does not say which was used cannot be compared with one that used the other."},
     inputs:$inputs,
     passes:$passes, one_pass_is_not_a_sweep: ($passes < 2), points:$r,
     by_size: ([$r[] | {k: (.padding_bytes|tostring), v: .}] | group_by(.k)

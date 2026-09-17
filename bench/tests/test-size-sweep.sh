@@ -119,5 +119,21 @@ else
   printf '  FAIL  bench/fixtures/pad-neutral is missing — the control for the size finding\n'; FAIL=$((FAIL+1))
 fi
 
+printf '\n== the artifact says which padding was used ==\n\n'
+#
+# It did not, and that is the provenance gap in exactly the variable that turned
+# out to matter: two sweeps padded from different sources were indistinguishable
+# in their records. The same lesson as every other one today — record what
+# varied — arriving at the thing that varied without anyone noticing.
+#
+# Checked against the script rather than by running a sweep: the run needs a GPU
+# and this is a property of what it writes.
+SRC="$(cat "$SWEEP")"
+check "the source directory is recorded" 'pad_from' "$SRC"
+check "and a hash of the padding itself" 'pad_sha' "$SRC"
+check "and how much there was"           'pad_bytes' "$SRC"
+check "and the confound check's result"  'words_the_seeded_defect_introduced' "$SRC"
+check "with why it is in the record"     "cannot be compared with one that used the other" "$SRC"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
