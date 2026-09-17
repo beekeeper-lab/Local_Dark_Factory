@@ -33,7 +33,8 @@ it stands the less true it gets. **Recommendation: merge it, and open smaller
 ones from here.** The alternative — reviewing it as one change — is not a real
 option at this size, and leaving it open is choosing that option by default.
 
-**What changed on 2026-09-16, in the order a reader needs it:**
+**What changed on 2026-09-16 and the night of the 17th, in the order a reader
+needs it:**
 
 1. **The judge accepts about half the seeded defects put in front of it, and always
    did.** Two of six fixtures were not seeding the defects they claimed; on honest
@@ -42,7 +43,16 @@ option at this size, and leaving it open is choosing that option by default.
 2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
-3. **Work moved out of the judge instead, and this is the thing that keeps
+3. **The SIZE of the prompt is the only thing that has ever moved the
+   false-accept rate.** Three passes at 20,422 and 30,422 bytes rejected a seeded
+   defect 3 of 3; at 40,422 the judge accepted it 2 of 3. Nothing else tried this
+   week moved it — not the token cap, the thinking level, five grammar
+   constraints, a repaired prompt, four other models, or one question per
+   criterion. The controller's own measurements were going to the judge as raw
+   JSON and are now prose, which took the spec audit from 25,428 to 21,343 bytes
+   and the impl audit from 30,514 to 24,353. The doc audit is 36,731 and cannot
+   be cut. *"The size of the prompt moves the false-accept rate"*.
+4. **Work moved out of the judge instead, and this is the thing that keeps
    working.** **Four of five seeded defects are now decided by a check, with zero
    false alarms**, against one this morning. Two mechanisms: a bean's `non_goals`
    and `constraints` can say *where* (`bean-forbids.sh`), and a task intent can be
@@ -50,19 +60,19 @@ option at this size, and leaving it open is choosing that option by default.
    (`plans-other-beans.sh` — the evidence for `unfinishable-task` was never in the
    documents under audit, it was in the other nineteen beans). Only
    `criterion-not-really-met` is still the judge's.
-4. **Hidden tests are built**, bean-001 and bean-002 have suites, and the worker is
+5. **Hidden tests are built**, bean-001 and bean-002 have suites, and the worker is
    told the rule without the answers. *"Hidden tests"*. Verified **both ways** as
    of 2026-09-17: the gate's control proved a suite can fail, nothing proved it
    can pass, and a suite that can never pass blocks its bean forever while the
    worker sees only a count. `hidden-tests/verify.sh` checks both — bean-001:
    11 of 11 pass on its accepted tree, 9 of 11 fail on an empty one, the other
    two declared absences. bean-002 is HALF CHECKED until it runs, and says so.
-5. **Five grammar changes**, each measured, which produced this line's **first
+6. **Five grammar changes**, each measured, which produced this line's **first
    stamped audit verdict** — and none of which is evidence the judge is right.
    *"Then three changes in an afternoon"*.
-6. **`factory reaudit`** answers "did that change anything on a real run", which
+7. **`factory reaudit`** answers "did that change anything on a real run", which
    the seeded-defect harnesses cannot.
-7. **The corpus had drifted under the scaffold, and nobody could have seen it.**
+8. **The corpus had drifted under the scaffold, and nobody could have seen it.**
    `scaffold.sh` copies the control surface into the target repo one way and never
    looks again, so bean-002's annotation — made in the target — was one scaffold
    run from being deleted by the script whose job is keeping the two the same.
