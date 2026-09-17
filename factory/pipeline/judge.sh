@@ -679,6 +679,32 @@ done
 printf 'JUDGE  %s  model=%s ctx=%s thinking=%s cap=%s  (%s artifacts, %s bytes, one message each)\n' \
   "$TARGET" "$MODEL" "$NUM_CTX" "$THINKING" "$NUM_PREDICT" "${#ART_PATHS[@]}" "$ART_BYTES" >&2
 
+# Say when the prompt is in the size band where this judge was MEASURED to fail.
+#
+# bench/size-sweep.sh, eight passes across two runs on 2026-09-17: at 20,422
+# bytes it rejected a seeded defect 8 times out of 8; at 40,422 it accepted it
+# most of the time. That is a false accept — the failure this line exists to
+# prevent and the one invisible from outside — and it is an accuracy problem long
+# before the context window is the issue.
+#
+# Nothing here truncates. A judge given less than the artifacts under audit is a
+# different failure, and a silent one. What it does is say so, in the run log, so
+# that a verdict produced at 40,000 bytes is read knowing what was measured at
+# that size.
+#
+# The cap on an artifact is 120,000 bytes — a big bean's diff can put an impl
+# audit four times past the size where this was measured — so this is not a
+# hypothetical about bean-001, whose whole diff is 2,219 bytes.
+JUDGE_SIZE_WARN="${JUDGE_SIZE_WARN:-30422}"
+if [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
+  printf 'JUDGE  %s: %s bytes of artifacts is above %s, the largest size at which this\n' \
+    "$TARGET" "$ART_BYTES" "$JUDGE_SIZE_WARN" >&2
+  printf '       judge was measured rejecting a seeded defect every time. At 40,422 it\n' >&2
+  printf '       accepted one in most of eight passes. Nothing is truncated — the artifacts\n' >&2
+  printf '       under audit are what they are — but read an accept from this request\n' >&2
+  printf '       knowing that. bench/results/size-sweep-*.json has the measurement.\n' >&2
+fi
+
 # The system message is load-bearing, not decoration. Without it this model
 # answers a repository-shaped prompt by emitting `repo_browser.open_file` tool
 # calls with empty content — measured, repeatedly, including against the raw API

@@ -113,7 +113,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
-| **twice the artifact bytes** | **0 of 3 false accepts → 2 of 3** | — |
+| **twice the artifact bytes** | **rejected 8 of 8 → 0 of 8** | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1342,6 +1342,52 @@ there.
 list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
+
+## CONFIRMED: 8 of 8 against 0 of 8. Size is the finding of the week
+
+Five more passes at the two sizes that matter, 2026-09-17. The prediction below
+called it and the effect is stronger than the three-pass run suggested.
+
+| artifact bytes | rejected the seeded defect | accepted it | no answer |
+| --- | --- | --- | --- |
+| **20,422** | **8 of 8** | 0 | 0 |
+| **40,422** | **0 of 8** | **6** | 2 |
+
+Eight passes at each, across two independent runs four hours apart. At the small
+size this judge rejected a spec with a planted flaw every single time. At twice
+the bytes it never rejected it once.
+
+**This is the only lever that has moved the false-accept rate, and it is not
+subtle.** Everything else tried this week — the token cap, the thinking level,
+five grammar constraints, a sixth that backfired, a repaired prompt, four other
+models, one question per criterion — left it where it was.
+
+**What was done about it.** The controller's own measurements went to the judge
+as raw JSON and now go as prose, which is the only fat there was:
+
+| audit | was | is |
+| --- | --- | --- |
+| spec | 25,428 | **21,343** |
+| impl | 30,514 | **23,763** |
+| doc | 36,731 | 36,731 |
+
+**And what was not.** The doc audit is 36,731 bytes — between the two measured
+points and much nearer the bad one — and every byte of it is the document under
+audit, the spec it claims to meet, or the diff it claims to describe. There is
+nothing to cut that is not evidence. `judge.sh` now says so on every request over
+30,422 bytes, naming the measurement, and truncates nothing: a judge given less
+than the artifacts under audit is a different failure and a silent one.
+
+**The lurking version of this is worse than the doc audit.** An artifact is
+capped at 120,000 bytes, so a bean with a large diff can put an impl audit four
+times past the size where this was measured. bean-001's whole diff is 2,219
+bytes; bean-006 is a CP-SAT solver. The warning is what stands between that and a
+confident accept nobody questions.
+
+**What it does not explain**: the fabricated quotes. Twelve audits with the
+smaller prompts refused for the same reasons in the same proportions as twelve
+without — 5 of 12 "quoted text that is on disk nowhere" both times. Size moves
+the verdict; it does not move the invention.
 
 ## Prediction for the confirming sweep
 
