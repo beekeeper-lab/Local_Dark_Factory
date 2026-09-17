@@ -95,6 +95,18 @@ check "the missing corpus is named"  "missing: name bean_set requirements_sha256
 check "with the fix"                 "scaffold.sh" "$out"
 git -C "$REPO" checkout -q -- factory/pipeline-config.json
 
+printf '\n-- a check that needs no configuration still gets a line --\n\n'
+#
+# plans-other-beans is simply on: it needs no key in pipeline-config.json and no
+# annotation in a bean, only that there be other beans to compare a task intent
+# against. That is exactly why it needs a line here — a check nobody had to set
+# up is a check nobody remembers exists, and this one decides `unfinishable-task`,
+# which was "not decidable from the documents, needs a judge" for two days.
+out="$(fac doctor)"
+check "it is reported"               "plans other beans" "$out"
+# This fixture has one bean, so the honest answer is that the check cannot fire.
+check "and a single bean is not a pass" "nothing to compare a task intent against" "$out"
+
 printf '\n-- free space where the line actually writes --\n\n'
 #
 # The gate tree, the pipeline snapshot, every worker's agent directory and the

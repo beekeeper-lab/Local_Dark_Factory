@@ -434,6 +434,18 @@ run from the working tree."
       good "bean forbids" "$NG_CHECKABLE of $NG_TOTAL machine-readable, across $NG_BEANS bean(s); the rest are prose and remain the audit's"
     fi
 
+    # The other half of "this task does not belong here", and it needs no
+    # configuration at all — only that there be other beans to compare against.
+    # Worth a line for that reason: a check that is simply ON is one nobody
+    # remembers exists, and this one decides `unfinishable-task`, which was "not
+    # decidable from the documents, needs a judge" until 2026-09-16.
+    POB_N="$(find "$TARGET_ROOT/factory/beans" -name bean.yaml 2>/dev/null | wc -l)"
+    if [ "${POB_N:-0}" -le 1 ]; then
+      say note "plans other beans" "$POB_N bean installed — nothing to compare a task intent against, so this check cannot fire here"
+    else
+      good "plans other beans" "$POB_N bean titles to compare task intents against; a task describing a different bean's subject is refused at spec time"
+    fi
+
     # Hidden tests: configured or not, and if configured, actually hidden.
     #
     # "Not configured" is said out loud rather than omitted. A doctor that is

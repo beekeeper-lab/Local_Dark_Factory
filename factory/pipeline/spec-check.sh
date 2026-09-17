@@ -28,6 +28,7 @@ Checks, in order:
   2. tasks.yaml exists and validates against schemas/task.schema.json
   3. every task's write_paths ⊆ the bean's allowed_write_paths
   3b. and none of them inside a path the bean's non_goals or constraints forbid
+  3c. and no task's intent describes what a DIFFERENT approved bean is for
   4. every acceptance criterion is claimed by at least one task
   5. no verify the controller cannot run (manual / judge)
   6. dependencies resolve, and there are no cycles
