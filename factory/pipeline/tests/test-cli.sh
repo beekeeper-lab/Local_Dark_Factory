@@ -95,6 +95,23 @@ check "the missing corpus is named"  "missing: name bean_set requirements_sha256
 check "with the fix"                 "scaffold.sh" "$out"
 git -C "$REPO" checkout -q -- factory/pipeline-config.json
 
+printf '\n-- runs nobody has read --\n\n'
+#
+# The one Phase-1 exit predicate a script cannot settle, and until `factory runs`
+# grew a column it had no surface at all. Doctor is where someone looks to find
+# out what this repository still owes.
+out="$(fac doctor)"
+check "with no completed run it says so"  "nothing to confirm" "$out"
+mkdir -p "$REPO/factory/runs/bean-001-done"
+printf '{"run_id":"done","bean":"bean-001","status":"completed"}\n' > "$REPO/factory/runs/bean-001-done/run.json"
+out="$(fac doctor)"
+check "an unconfirmed run is counted"     "1 of 1 completed run(s) unconfirmed" "$out"
+check "and it says how to confirm it"     "from an interactive shell" "$out"
+printf 'someone <s@e.com>\n' > "$REPO/factory/runs/bean-001-done/documents-read-by.txt"
+out="$(fac doctor)"
+check "and once confirmed it is ok"       "1 completed run(s) confirmed by a person" "$out"
+rm -rf "$REPO/factory/runs/bean-001-done"
+
 printf '\n-- a check that needs no configuration still gets a line --\n\n'
 #
 # plans-other-beans is simply on: it needs no key in pipeline-config.json and no

@@ -452,6 +452,28 @@ run from the working tree."
     # silent about a check nobody set up reads the same as a doctor reporting it
     # green, and the whole value of hidden tests is that a reader knows whether
     # the worker was measured by something it could not read.
+    # Runs nobody has read.
+    #
+    # `factory read` is one of the three things waiting on a person and the only
+    # Phase-1 exit predicate a script cannot settle. It had no surface at all
+    # until `factory runs` grew a column, and doctor is where someone looks to
+    # find out what this repository still owes.
+    RR="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG" 2>/dev/null)"
+    DONE_N=0; UNREAD_N=0
+    while IFS= read -r rd; do
+      [ -f "$rd/run.json" ] || continue
+      [ "$(jq -r '.status // ""' "$rd/run.json" 2>/dev/null)" = "completed" ] || continue
+      DONE_N=$((DONE_N + 1))
+      [ -f "$rd/documents-read-by.txt" ] || UNREAD_N=$((UNREAD_N + 1))
+    done < <(find "$RR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+    if [ "$DONE_N" -eq 0 ]; then
+      say note "documents read" "no completed run yet, so there is nothing to confirm"
+    elif [ "$UNREAD_N" -eq 0 ]; then
+      good "documents read" "all $DONE_N completed run(s) confirmed by a person"
+    else
+      say note "documents read" "$UNREAD_N of $DONE_N completed run(s) unconfirmed — \`factory read <run-dir>\` from an interactive shell; it is the one exit predicate a script cannot settle"
+    fi
+
     # And where to check a suite is a suite. The gate's control proves one can
     # fail; `hidden-tests/verify.sh` is the only thing that proves one can pass,
     # and a suite that cannot pass blocks its bean forever while the worker sees
