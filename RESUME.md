@@ -1060,7 +1060,8 @@ eventually disagree with it.
 ### Nineteen beans are annotated; bean-001 waits for its pull request
 
 **Done 2026-09-16, on the standing instruction to decide where there is a clear
-winner.** Fourteen statements across eight beans joined bean-002's three: every
+winner.** Thirteen statements across eight beans joined bean-002's four —
+`factory doctor` says **17 of 71, across 9 beans** — and every
 non-goal and constraint in the set that is about a PLACE now carries
 `forbidden_paths` or `forbidden_imports`. The text of each is byte-identical to
 what was approved; only `text:` plus the lists were added, which is why this was
@@ -1761,7 +1762,32 @@ time something in a judgement is wrong, before writing another paragraph of
 instruction. Revisit if a grammar constraint ever measurably makes an answer
 worse — `reaudit` is how you would find out.
 
-## Six live gotchas
+## Eight live gotchas
+
+**A decision that lives only in prose will be reversed by the next careful
+reader.** Twice on 2026-09-16, both by me, both within an hour of reading the
+paragraph that said not to. RESUME said the gate workflow was "deliberately NOT
+installed" and said why; I saw it missing from the target, inferred an oversight,
+and installed it onto the open pull request. RESUME said bean-001 was left as
+prose because its pull request is open; the bulk annotation pass took it anyway.
+Neither was carelessness in the sense of not reading — both were *re-derivations*
+that happened to reach the opposite conclusion from a different starting fact.
+**A decision that a script can enforce has to be enforced by the script**:
+`scaffold.sh` now withholds the workflow while the image is local and says why,
+and `test-corpus-forbids.sh` fails if bean-001 stops being prose. The prose stays,
+but it is now the explanation rather than the mechanism.
+
+**A one-way copy drifts, and the copy is what runs.** `scaffold.sh` installs the
+control surface into a target repo and never looks again. bean-002's annotation
+was made in the target and never reached the bean set, so it was one scaffold run
+from deletion by the script whose job is keeping them the same; `hidden_tests` in
+pipeline-config.json existed only downstream, same hazard; and a workflow added
+upstream two days earlier had never arrived. Three drifts, none visible, all found
+in the first minute of `scaffold.sh --check` existing. **Anything this repository
+copies into another repository needs a way to ask whether the copy still
+matches** — and it has to regenerate and diff rather than compare field by field,
+because a second description of what the copy should contain is a second thing to
+keep in sync.
 
 **An argument can walk out of a snapshot.** `bench/judge-fitness.sh` re-execs
 through `bench/snapshot.sh` so that editing it mid-run cannot corrupt the run —
