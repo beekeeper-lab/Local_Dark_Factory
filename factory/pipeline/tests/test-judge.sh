@@ -542,6 +542,33 @@ eq "the quote with it"                 "600" \
 eq "and the one-line fields at a third" "400" \
    "$(jq -r '.format.properties.findings.items.properties.summary.maxLength' "$WORK/last-request.json")"
 
+printf '\n== the quote minimum is a knob, and it is off by default ==\n\n'
+#
+# 31% of the criteria in eleven real judgements carried no quote at all, measured
+# 2026-09-17, and the controller refuses them an hour after the GPU time is spent.
+# A minLength refuses it at decode time. Whether llama.cpp's converter honours
+# minLength is unknown — it honours enum and maxLength and ignores minimum and
+# maximum — so this ships OFF and the measurement that turns it on is the one
+# that finds out.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+judge >/dev/null 2>&1
+q="$(jq -r '.format.properties.criteria.items.properties.quote.minLength // "absent"' "$WORK/last-request.json")"
+eq "by default there is no minimum"     "absent" "$q"
+# clean_verdicts before each: judge.sh will not overwrite a verdict that is
+# already there, and a call that never sends leaves the PREVIOUS request on disk
+# for the assertion to read.
+clean_verdicts
+JUDGE_QUOTE_MINLEN=12 judge >/dev/null 2>&1
+q="$(jq -r '.format.properties.criteria.items.properties.quote.minLength // "absent"' "$WORK/last-request.json")"
+eq "set, it reaches the grammar"        "12" "$q"
+# And it does not disturb the cap that is already there.
+q="$(jq -r '.format.properties.criteria.items.properties.quote.maxLength // "absent"' "$WORK/last-request.json")"
+eq "the maximum is still there"         "300" "$q"
+clean_verdicts
+out="$(JUDGE_QUOTE_MINLEN=nonsense judge)"
+check "a non-number is refused, not ignored" "wants a number of characters" "$out"
+
 printf '\n-- and 0 removes them, which is the experiment --\n\n'
 clean_verdicts
 # With the bean that HAS criteria, so the assertion below about the keyed shape
@@ -657,6 +684,14 @@ want  "before any request is made"     "nothing should have been written" \
       test ! -f "$R/verdicts/spec.attempt-1.judgement.json"
 
 printf '\n-- and a model ollama does not have is refused, not substituted --\n\n'
+#
+# This replaces the `ollama` stub on PATH. It used to leave it replaced, and
+# every judge call added after this point refused with "is not present in
+# ollama" — which is a plausible-looking failure about the thing being tested
+# rather than about the fixture, and it cost twenty minutes on 2026-09-17. The
+# original is saved and restored below, so this section is no longer a trap door
+# for whatever gets appended to this file next.
+cp "$WORK/bin/ollama" "$WORK/ollama.real"
 cat > "$WORK/bin/ollama" <<'STUB'
 #!/usr/bin/env bash
 [ "${1:-}" = list ] && printf 'some-other-model:latest\tfff000\t1 GB\n'
@@ -666,6 +701,11 @@ out="$(judge)"; rc=$?
 rc_is "it refuses"                     "$rc" 1
 check "and names the model"            "test-judge:latest" "$out"
 check "and says it is not present"     "is not present in ollama" "$out"
+mv "$WORK/ollama.real" "$WORK/bin/ollama"; chmod +x "$WORK/bin/ollama"
+clean_verdicts
+out="$(judge 2>&1)"
+nope "and the stub is put back for whatever comes next" "is not present in ollama" "$out"
+
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

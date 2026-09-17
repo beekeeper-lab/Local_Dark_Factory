@@ -540,6 +540,29 @@ else
     || die "could not set the field length caps in the judgement schema"
 fi
 
+# A quote long enough to check, asked for in the GRAMMAR.
+#
+# Measured 2026-09-17 over 44 criteria in 11 real judgements: **31% carry no quote
+# at all** — not a short one, none — and the controller refuses the judgement for
+# it an hour later, after the GPU time is spent. A `minLength` refuses it at
+# decode time, for free, which is where this project's one transferable finding
+# says a constraint belongs: on this model a constraint in the grammar is a rule
+# and the same constraint in prose is a suggestion.
+#
+# Whether llama.cpp's schema-to-grammar converter honours `minLength` is NOT
+# known. It honours `enum` and `maxLength` and ignores `minimum` and `maximum`,
+# which is three data points and not a rule. So this is a knob, default OFF, and
+# the measurement that turns it on is the one that will say whether it does
+# anything — and whether a model forced to produce twelve characters produces
+# twelve real ones or twelve invented ones, which the quote check would then
+# catch and which would be a worse outcome than an honest blank.
+QUOTE_MINLEN="${JUDGE_QUOTE_MINLEN:-0}"
+case "$QUOTE_MINLEN" in ''|*[!0-9]*) die "JUDGE_QUOTE_MINLEN wants a number of characters, or 0 for none; got '$QUOTE_MINLEN'" ;; esac
+if [ "$QUOTE_MINLEN" -gt 0 ]; then
+  SCHEMA="$(jq --argjson n "$QUOTE_MINLEN" '
+      .properties.criteria.items.properties.quote.minLength = $n' <<<"$SCHEMA")"     || die "could not set the quote minimum length in the judgement schema"
+fi
+
 # The criterion ids go in the GRAMMAR, not only in the prose.
 #
 # The prompt has said, in bold, "the criteria you report on are these, and only
