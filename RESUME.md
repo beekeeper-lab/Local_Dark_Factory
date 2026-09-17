@@ -205,7 +205,37 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Eight ways a check goes wrong, found on 2026-09-15, 16
+## Nine ways a check goes wrong, found on 2026-09-15, 16
+
+**(9) The right check at the wrong resolution — and the coarse answer is TRUE,
+which is why nobody sees it.** Three separate instances on 2026-09-16, all found
+in one evening once the shape was recognised, and none of them a bug in the sense
+of code doing what it was not told to:
+
+- **The quote check counted verified quotes, not verified criteria.** A judgement
+  with four criteria — one quoting 300 real characters and three quoting "the
+  test" — printed *"1 quote(s) verified against the artifacts"* and passed. The
+  sentence was true. Three criteria nobody could check rode along on the fourth.
+- **The hidden-test control required the SUITE to fail against an empty tree.** A
+  suite fails if one test does, so three real hidden tests were passing against
+  nothing underneath a control that read green. The judge is handed a count, so a
+  test that cannot fail inflates the number permanently and invisibly.
+- **test-integrity required the whole test command to fail on revert.** Five new
+  tests where one pins the change and four assert what was already true got the
+  same "yes" as five that all pin it — and weakened assertions are the defect the
+  impl rubric calls a blocker and the one a developer model produces most often.
+
+The pattern: a check answers a question about a COLLECTION when the thing it is
+protecting against lives in an ITEM. It never fires falsely, it reports
+truthfully, and it is wrong in exactly the cases it was built for. **Ask of any
+check: if nine of the ten things under it were broken and one was fine, would it
+still say what it says now?**
+
+All three are fixed and all three fixes have the same shape — resolve per item,
+and make the legitimate exceptions declared rather than inferred: `absent-by-design.txt`
+lists the hidden tests that are supposed to pass against nothing, because an
+assertion about an ABSENCE is true of an empty directory and cannot be told from
+a vacuous one by looking.
 
 **(8) Two causes, one symptom, and the message names the likelier.** ollama returns
 200 with a zero-valued struct both when a runner is killed for memory and when the
