@@ -190,10 +190,21 @@ PI_ARGS=( --model "$ROLE_PROVIDER/$ROLE_MODEL" )
 #
 # --no-context-files is deliberate, not incidental: factory-spec tells the model
 # to READ the repo's CLAUDE.md/AGENTS.md if present, which is a recorded act;
-# silent injection is not. Skill discovery stays on (the collision check below
-# covers the one directory it reaches) until --no-skills + --skill is proven to
-# still load the explicit path — that needs a live smoke step, not a stub.
+# silent injection is not.
+#
+# --no-skills is here as of 2026-09-17, and it took a live probe rather than a
+# stub to earn it: with `--no-skills --skill <dir>`, an explicit skill still
+# loads and still invokes by name. Measured with gpt-oss:20b on a skill whose
+# whole content was "answer with exactly one word: PINEAPPLE-7", invoked as
+# `/skill:probe-skill`, which answered PINEAPPLE-7. Discovery off, explicit path
+# on.
+#
+# So the worker now reaches NOTHING it was not handed. The collision check below
+# stays anyway — it costs a directory listing, and a guard removed because
+# another guard covers it is a guard removed on the assumption that the other one
+# never changes.
 HARNESS_FLAGS=( --no-extensions --no-prompt-templates --no-context-files
+                --no-skills
                 --tools read,write,edit,bash )
 PI_ARGS+=( "${HARNESS_FLAGS[@]}" )
 

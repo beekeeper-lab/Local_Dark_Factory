@@ -1677,8 +1677,18 @@ in flight, and the first one restarts ollama:
   `conditions.declared_matches_observed` is exactly where it shows up, and that flag
   started including num_ctx this morning. If it turns out pi forces a reload, the
   global setting comes back onto this list.
-- Smoke step with `--no-skills --skill "$FACTORY_SKILLS"`; if the skill loads, add
-  `--no-skills` to `HARNESS_FLAGS` and demote the collision check to a regression test.
+- ~~Smoke step with `--no-skills --skill "$FACTORY_SKILLS"`.~~ **Done
+  2026-09-17. The skill loads, and `--no-skills` is in `HARNESS_FLAGS`.**
+  Probed live rather than with a stub, because that is what the note asked for: a
+  skill whose whole content was *"answer with exactly one word: PINEAPPLE-7"*,
+  under `--no-skills --skill <dir>`, invoked as `/skill:probe-skill`, answered
+  PINEAPPLE-7. Discovery off, explicit path on.
+
+  **The worker now reaches nothing it was not handed** — no extensions, no prompt
+  templates, no context files, no discovered skills, four tools by name. The
+  collision check stays: it costs a directory listing, and a guard removed
+  because another guard covers it is a guard removed on the assumption that the
+  other one never changes.
 - ~~Spike `pi --mode json` on a smoke step.~~ **Spiked 2026-09-17. It works, it
   gives more than the session file, and it is not a free swap.**
 

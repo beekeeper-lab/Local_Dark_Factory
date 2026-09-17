@@ -91,6 +91,13 @@ check "extension discovery is off"      "--no-extensions" "$out"
 check "prompt-template discovery is off" "--no-prompt-templates" "$out"
 check "context-file injection is off"   "--no-context-files" "$out"
 check "exactly the four tools, by name" "--tools read,write,edit,bash" "$out"
+# Skill DISCOVERY off, explicit skill still passed. Earned by a live probe on
+# 2026-09-17 rather than assumed: with `--no-skills --skill <dir>` a skill whose
+# whole content was "answer with exactly one word: PINEAPPLE-7" still loaded and
+# still answered to `/skill:probe-skill`. Before that the discovery had to stay
+# on, and the worker could reach one directory it was never handed.
+check "skill discovery is off"          "--no-skills" "$out"
+check "and the factory's own skills are still passed explicitly" "--skill" "$out"
 
 # -- an audit cannot be run from here at all -----------------------------------
 # run-step used to build a `factory-audit` pi session for `audit-*`. Nothing in
