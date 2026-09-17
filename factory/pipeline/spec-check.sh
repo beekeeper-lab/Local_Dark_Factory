@@ -172,6 +172,42 @@ case "$ng_rc" in
   *) bad "bean-forbids" "could not be checked — $(printf '%s' "$NG_OUT" | head -1)" ;;
 esac
 
+# ------------------------------- 3c. is this plan doing a later bean's work? --
+#
+# The other half of "this task does not belong here", from the other source.
+# bean-forbids reads what THIS bean says about itself; this reads the rest of the
+# approved set, where every bean says in one line what it is for. The seeded
+# defect is `unfinishable-task` — a task whose intent is "implement the complete
+# seating optimizer: domain models, the CP-SAT solver, soft-constraint scoring,
+# the persistence layer, the REST API and the report renderer" — which
+# controller-fitness had as "not decidable from the documents, needs a judge".
+#
+# It refuses, and the two rules in plans-other-beans.sh are what make that safe:
+# a term must be absent from this bean's own vocabulary and present in exactly one
+# other bean's title. bean-002's non-goals name bean-003's rule model, and those
+# words are therefore its own and cannot match. Measured against the real
+# bean-001 task list before this was wired in: no false alarm, where the first
+# version of the check raised one immediately on "rules" from ruff's rule list.
+# The set is the repository's installed beans, named explicitly rather than
+# inferred from where the bean file happens to sit. A harness may hand this a bean
+# from a fixture directory — bench/fixtures holds two copies of bean-001 for an
+# A/B — and inferring the set from that directory finds one bean, skips it as
+# itself, and reports "nothing to compare against". Which is true of the
+# directory and false of the run.
+POB_ARGS=( --bean "$BEAN_FILE" --tasks "$TASKS" --json "$RUN_DIR/plans-other-beans.json" )
+[ -d "$ROOT/factory/beans" ] && POB_ARGS+=( --beans-dir "$ROOT/factory/beans" )
+pob_rc=0
+POB_OUT="$("$PIPELINE_DIR/plans-other-beans.sh" "${POB_ARGS[@]}" 2>&1)" || pob_rc=$?
+case "$pob_rc" in
+  0) if grep -q 'no other beans to compare' <<<"$POB_OUT"; then
+       ok "plans-other-beans" "nothing to check — this bean set has one bean in it"
+     else
+       ok "plans-other-beans" "$(printf '%s' "$POB_OUT" | sed 's/^plans-other-beans: //')"
+     fi ;;
+  1) bad "plans-other-beans" "plans work that belongs to another bean: $(printf '%s\n' "$POB_OUT" | grep -E '^  - ' | sed 's/^  - //' | paste -sd'; ' -)" ;;
+  *) bad "plans-other-beans" "could not be checked — $(printf '%s' "$POB_OUT" | head -1)" ;;
+esac
+
 # ------------------------------------------- 4. every acceptance criterion claimed --
 CLAIMED="$(jq -c '[.tasks[].satisfies // []] | flatten | unique' <<<"$TASKS_JSON")"
 UNCLAIMED="$(jq -r --argjson c "$CLAIMED" '[(.acceptance_criteria // [])[].id] - $c | join(", ")' <<<"$BEAN_JSON")"

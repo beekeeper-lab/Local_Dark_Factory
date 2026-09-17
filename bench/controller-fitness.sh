@@ -129,11 +129,24 @@ TASKS="$FROZEN/$(basename "$TASKS")"
 BEAN="$FROZEN/$(basename "$BEAN_DIR")/$(basename "$BEAN")"
 
 # case | should_reject | what a controller catch looks like in its output
+#
+# The phrase has to be one the check prints ONLY when it found this defect. It is
+# matched against the FAILING output, and the suite asserts that the same words in
+# a passing line are not a catch — because "non-goals" is both the name of a check
+# and the start of its failure message, and a harness that cannot tell those apart
+# scores a miss as a catch.
+#
+# `unfinishable-task` was blank until 2026-09-16 and read "not decidable from the
+# documents, needs a judge". plans-other-beans.sh decides it: the seeded intent is
+# "implement the complete seating optimizer: domain models, the CP-SAT solver,
+# soft-constraint scoring, the persistence layer, the REST API and the report
+# renderer", and soft-constraint scoring is bean-007's title in two words this
+# bean never uses about itself.
 CASES='clean|no|
 tautological-verify|yes|every verify already passes
 contradicts-non-goal|yes|contradicts its own non-goal
 invented-current-behaviour|yes|describes files that are not there
-unfinishable-task|yes|
+unfinishable-task|yes|plans work that belongs to another bean
 criterion-not-really-met|yes|'
 
 printf '\ncontroller fitness — %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

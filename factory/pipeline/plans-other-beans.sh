@@ -17,9 +17,16 @@
 #
 # Two rules keep this from becoming a word-matching toy:
 #
-#   1. A term counts only if it is DISTINCTIVE — absent from this bean's own
-#      title, intent, criteria and non-goals. A scaffold bean that says "tests"
-#      is not planning the test bean's work.
+#   1. A term counts only if it is DISTINCTIVE, which is two conditions. It must
+#      be absent from this bean's own title, intent, criteria and non-goals — a
+#      scaffold bean that says "tests" is not planning the test bean's work. And
+#      it must appear in exactly ONE other bean's title: a word several beans use
+#      belongs to none of them. That second rule was not in the first version and
+#      the first version raised a false alarm immediately, on the real bean-001
+#      task list: "rules" (from ruff's rule list `E,F,I,UP,B`) and "seating" (from
+#      the name of the product) matched bean-003's title, and two coincidences of
+#      English read as a topic. Both words appear in several bean titles, so the
+#      corpus itself says they are not anybody's subject.
 #   2. TWO distinct terms from the same other bean, not one. One shared word is a
 #      coincidence of English; two is a topic. This is the difference between a
 #      check with no false alarms and a check nobody trusts, and the number was
@@ -138,6 +145,14 @@ for key in ("non_goals", "constraints"):
 own.append(((bean.get("context") or {}).get("background")) or "")
 own_words = words(" ".join(own))
 
+# How many of the other beans' titles each word appears in. A word in more than
+# one belongs to none of them: it is the corpus's own vocabulary, not a subject.
+from collections import Counter
+df = Counter()
+for o in others:
+    for w in words(o["title"]):
+        df[w] += 1
+
 findings = []
 for t in tasks.get("tasks") or []:
     intent = t.get("intent") or ""
@@ -146,7 +161,7 @@ for t in tasks.get("tasks") or []:
         # Distinctive: in the other bean's title, and NOT in this bean's own
         # vocabulary. The title is what a bean is for, in one line, written by a
         # person — a better summary than anything derived.
-        distinctive = words(o["title"]) - own_words
+        distinctive = {w for w in words(o["title"]) if w not in own_words and df[w] == 1}
         hit = sorted(tw & distinctive)
         if len(hit) >= min_terms:
             findings.append({
