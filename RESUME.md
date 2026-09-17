@@ -1669,6 +1669,26 @@ cd /home/gregg/workspace/seating-planner-py
 /home/gregg/workspace/Local_Dark_Factory/factory/bin/factory go
 ```
 
+**What will probably happen, so it is not a surprise: the run reaches
+`audit-spec` and halts.** Audits are blocking by default and the judge produced
+**0 of 12** stampable verdicts on the most recent measurement, so the likeliest
+outcome is a halt with `QUESTIONS.md` written and the two failed attempts
+recorded. The halt says so itself and names the choice:
+
+```
+FACTORY_ADVISORY_AUDITS=1 factory go
+```
+
+which runs every audit, records every judgement, and lets a verdict short of
+`accept` not stop the line. **Every deterministic check stays blocking** —
+spec-check, the gates, package-check, the hidden tests, `bean-forbids`,
+`plans-other-beans`. Only the model's opinion is softened, and a run that used it
+says so in its record and in its pull request.
+
+The strict default is deliberate and should stay: a default that quietly weakens
+a gate is the fail-open shape this whole file is about. But an operator hitting
+that halt is looking at the normal outcome, not at a defect in the artifact.
+
 `factory go` runs the approved beans in order and stops at the first halt.
 `factory run bean-002` is one bean of it. Both snapshot the pipeline and run from
 the copy, so editing the repository mid-run is safe. `factory doctor` says whether

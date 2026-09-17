@@ -876,17 +876,19 @@ handle_other_failure() { # a non-audit step failed: no findings, no blind retry
 # quietly weakens a gate is the fail-open shape this project keeps finding. But
 # "the judge did not produce a judgement" is, on today's measurement, the normal
 # outcome rather than an exception — twelve audits of a real run at the best known
-# configuration produced zero stampable verdicts — so an operator who hits this
-# halt is not looking at something unusual and should not have to read RESUME.md
-# to find that out.
+# configuration produced zero stampable verdicts, measured again on 2026-09-17
+# and still zero — so an operator who hits this halt is not looking at something
+# unusual and should not have to read RESUME.md to find that out.
 #
 # The strict thing stays the default. What changes is that the halt says the
 # choice exists and what it costs.
 say_advisory_exists() {
-  printf '\n  This may not be a defect in the artifact. As of 2026-09-16, twelve audits of\n'
-  printf '  a real run at the best known configuration produced zero verdicts the\n'
-  printf '  controller would stamp — see the audit section of RESUME.md, and\n'
-  printf '  `factory reaudit <run-dir>` to measure it here.\n'
+  printf '\n  This may not be a defect in the artifact. Measured 2026-09-17: twelve audits\n'
+  printf '  of a real run at the best known configuration produced zero verdicts the\n'
+  printf '  controller would stamp. Five of the twelve quoted text that is on disk\n'
+  printf '  nowhere; four backed a criterion with no quote long enough to check. See\n'
+  printf '  the audit section of RESUME.md, and `factory reaudit <run-dir>` to measure\n'
+  printf '  it here.\n'
   printf '  To record audits and keep going instead of halting:\n'
   printf '      FACTORY_ADVISORY_AUDITS=1  (or --advisory-audits)\n'
   printf '  They are recorded either way; advisory means they do not block.\n'
