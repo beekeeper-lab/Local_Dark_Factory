@@ -269,7 +269,33 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Ten ways a check goes wrong, found on 2026-09-15, 16, 17
+## Eleven ways a check goes wrong, found on 2026-09-15, 16, 17
+
+**(11) An instrument that repeats one measurement and reports it as N — and the
+tell was that the noise vanished.** `bench/size-sweep.sh --repeat 5` shared one
+run directory across passes, so passes 2..5 re-read pass 1's judgement. Five
+readings, one measurement. A pass that produced *nothing* was reported with the
+earlier pass's verdict, because the "did it answer?" test was file existence and
+the file was already there.
+
+**What makes this one worth a taxonomy entry is that the evidence was on the
+screen and read the wrong way round.** This judge is known to give different
+verdicts for byte-identical input at temperature 0 — that is written down here in
+three places, and `judge-variance.sh` exists to measure it. Then a sweep came back
+`abstain, abstain, abstain, abstain, abstain` and `accept, accept, accept,
+accept, accept`, and I read the uniformity as *the effect being strong*. Perfect
+consistency from an instrument whose defining property is inconsistency is not a
+strong signal. **It is a broken instrument, and the direction of surprise is the
+clue.**
+
+The generalisation: **when a noisy measurement suddenly reports no noise, suspect
+the measurement.** The same reflex as (2) — a fixture that stopped seeding its
+defect produced *better* numbers — and this is its mirror: a harness that stopped
+measuring produced *cleaner* ones.
+
+It was found by opening a kept judgement to check something unrelated and
+noticing the verdict inside disagreed with the row printed for it. `--keep`
+existed because of a different gap entirely, added two hours earlier.
 
 **(10) A treatment that changed two things, and a control that changed neither.**
 `bench/size-sweep.sh` pads a spec to a target size and asks whether the judge

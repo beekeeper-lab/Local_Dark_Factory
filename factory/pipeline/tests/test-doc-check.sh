@@ -153,10 +153,10 @@ printf '\n== what this document will cost its own audit ==\n\n'
 #
 # The doc audit sends three artifacts: this document, the spec it claims to meet,
 # and the diff it claims to describe. bean-001's comes to 36,731 bytes, and this
-# judge was measured rejecting a seeded defect 18 of 18 times at around 20,000
-# bytes and 0 of 20 at around 40,000 — with the padding in a separate labelled
-# artifact as well as inside the document, so it is not about which artifact
-# carries it.
+# every judgement recovered from a kept sweep that ACCEPTED a spec with a planted
+# flaw was at around 40,000 bytes, and none of the ones at around 20,000 did.
+# Larger counts were published on 2026-09-17 and retracted — the sweep was
+# repeating its first pass — so this note claims the direction and not a rate.
 #
 # A note, never a failure: §07 asks the document to TEACH, doclint refuses thin
 # sections, and the author cannot shrink the spec or the diff.
@@ -174,7 +174,7 @@ PY
 out="$(dc)"
 check "a large one is named with its total"  "bytes will go to the judge" "$out"
 check "and the parts are broken out"         "this document +" "$out"
-check "with what the measurement says"       "stopped rejecting planted defects" "$out"
+check "with what the measurement says"       "accepting a planted defect was above that line" "$out"
 check "and that it is not the document's fault" "Not a fault in the document" "$out"
 check "and what carries it instead"          "human merge" "$out"
 # A note, not a failure: the step must still pass.

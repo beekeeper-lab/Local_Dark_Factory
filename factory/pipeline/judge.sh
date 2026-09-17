@@ -730,10 +730,10 @@ if [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
   printf '       judge was measured rejecting a seeded defect every time (13 of 13). At\n' >&2
   printf '       40,422 it rejected it 0 of 13, and a kept run shows why: it reviewed the\n' >&2
   printf '       padding and filled the criterion ids with another bean\x27s work.\n' >&2
-  printf '       Measured both ways: padding INSIDE the document under audit and padding\n' >&2
-  printf '       a separate labelled artifact give the same result, so an artifact header\n' >&2
-  printf '       is not a boundary for this model. 18 of 18 rejections at ~20,000 bytes,\n' >&2
-  printf '       0 of 20 at ~40,000, across five runs and two padding sources.\n' >&2
+  printf '       Direction measured, magnitude not: every judgement recovered that\n' >&2
+  printf '       ACCEPTED a spec with a planted flaw was at ~40,000 bytes (3 of 11), and\n' >&2
+  printf '       none at ~20,000 (0 of 10). Larger counts were reported earlier and\n' >&2
+  printf '       retracted — the sweep was repeating its first pass. See RESUME.md.\n' >&2
   printf '       Nothing is truncated. bench/results/size-sweep-*.json has the numbers.\n' >&2
 fi
 

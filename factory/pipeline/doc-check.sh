@@ -67,11 +67,13 @@ if out="$("$PIPELINE_DIR/doclint.sh" impl "$DOC" 2>&1)"; then
   # How big the doc AUDIT will be, said here where the author can still act.
   #
   # The doc audit sends three artifacts: this document, the spec it claims to
-  # meet, and the diff it claims to describe. On bean-001 that is 36,731 bytes,
-  # and this judge was measured on 2026-09-17 rejecting a seeded defect 18 times
-  # out of 18 at around 20,000 bytes and 0 times out of 20 at around 40,000 —
-  # with the padding in a separate labelled artifact as well as inside the
-  # document, so it is not about which artifact carries the bytes.
+  # meet, and the diff it claims to describe. On bean-001 that is 36,731 bytes.
+  #
+  # Every judgement recovered from a kept sweep that ACCEPTED a spec with a
+  # planted flaw was at around 40,000 bytes — 3 of 11 — and none of the 10 at
+  # around 20,000 did. Larger counts were published on 2026-09-17 and retracted:
+  # the sweep was repeating its first pass. The direction is what this note rests
+  # on, and the direction is all it claims.
   #
   # A note, never a failure. §07 asks this document to TEACH and doclint already
   # refuses thin sections; a length cap would pull against both, and the author
@@ -83,7 +85,7 @@ if out="$("$PIPELINE_DIR/doclint.sh" impl "$DOC" 2>&1)"; then
   _fsz=$(( $(wc -c < "$RUN_DIR/diff.txt" 2>/dev/null || echo 0) ))
   _tot=$(( _dsz + _ssz + _fsz ))
   if [ "$_tot" -gt "${DOC_AUDIT_SIZE_WARN:-30422}" ]; then
-    note "doc audit size" "$_tot bytes will go to the judge ($_dsz this document + $_ssz spec + $_fsz diff) — above 30,422, where this judge stopped rejecting planted defects in every measurement. Not a fault in the document; the audit of it is less reliable, and the human merge is what carries that"
+    note "doc audit size" "$_tot bytes will go to the judge ($_dsz this document + $_ssz spec + $_fsz diff) — above 30,422, and every judgement measured accepting a planted defect was above that line while none below it did. Not a fault in the document; the audit of it is less reliable, and the human merge is what carries that"
   else
     ok "doc audit size" "$_tot bytes will go to the judge, inside the range where it still rejects planted defects"
   fi

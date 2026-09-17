@@ -10,11 +10,15 @@
 # paragraph each.
 #
 # That matters because of the one thing measured this week that moved the
-# false-accept rate: **size**. Three passes at 20,422 and 30,422 bytes rejected a
-# seeded defect 3 of 3; at 40,422 the judge accepted it 2 of 3. Real audits sit
-# at 25,428. Every byte that does not have to be there is worth removing, and
-# these are the easiest ones in the prompt because nothing in them is under
-# audit — they are the controller's own output.
+# false-accept rate at all: **size**. Every judgement recovered that accepted a
+# spec with a planted flaw was at around 40,000 bytes; none at around 20,000 was.
+# (Larger counts were published on 2026-09-17 and retracted — the sweep was
+# repeating its first pass. The direction survived; the magnitude is unmeasured.)
+#
+# Real audits sat at 25,428. Every byte that does not have to be there is worth
+# removing, and these are the easiest ones in the prompt because nothing in them
+# is under audit — they are the controller's own output. That argument does not
+# depend on the magnitude, which is why this change stands either way.
 #
 # There is a second reason, which is what the judge did with the raw form. On a
 # reaudit it read claims-check.json as "a confusing set of statements about its

@@ -544,17 +544,18 @@ eq "and the one-line fields at a third" "400" \
 
 printf '\n== it says when the prompt is in the size band that was measured to fail ==\n\n'
 #
-# bench/size-sweep.sh, eight passes across two runs: at 20,422 bytes this judge
-# rejected a seeded defect 8 of 8; at 40,422 it rejected it 0 of 8. That is an
-# accuracy problem long before the context window is the issue, and an artifact
-# is capped at 120,000 bytes — one large diff puts an impl audit four times past
-# the size this was measured at.
+# bench/size-sweep.sh: every judgement recovered that ACCEPTED a spec with a
+# planted flaw was at around 40,000 bytes, none at around 20,000. (The counts
+# first published were retracted — the sweep was repeating its first pass — so
+# the warning claims a direction, not a rate.) It is an accuracy problem long
+# before the context window is the issue, and an artifact is capped at 120,000
+# bytes: one large diff puts an impl audit far past anything measured.
 clean_verdicts
 reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
 JUDGE_SIZE_WARN=10 judge >/dev/null 2>&1
 out="$(JUDGE_SIZE_WARN=10 judge 2>&1)"
 check "above the threshold it warns"    "bytes of artifacts is above" "$out"
-check "and names what was measured"     "rejecting a seeded defect every time" "$out"
+check "and names what was measured"     "ACCEPTED a spec with a planted flaw" "$out"
 check "and says nothing was truncated"  "Nothing is truncated" "$out"
 check "and where the measurement is"    "size-sweep" "$out"
 clean_verdicts
