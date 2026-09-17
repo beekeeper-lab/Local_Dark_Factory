@@ -277,6 +277,20 @@ for pad in $SIZES; do
   sed -n '/^mutate() {/,/^}/p' "$ROOT/bench/judge-fitness.sh" > "$TMP/mutate.sh"
   ROOT="$ROOT" bash -c "source '$TMP/mutate.sh'; mutate '$CASE' '$RD/spec.md' '$RD/tasks.yaml'"
 
+  # INSIDE spec.md, and that is the shape of this whole experiment.
+  #
+  # It measures "a document under audit that is mostly other material", not "a
+  # prompt with more separate artifacts". A real audit's bytes are separate
+  # artifacts with labelled headers saying what each is and how to read it. The
+  # displacement result — the judge filling the bean's criterion ids with another
+  # bean's work — is exactly what padding INSIDE the document predicts, and
+  # whether several large labelled artifacts do the same to each other is NOT
+  # measured here.
+  #
+  # The version of this sweep that would settle that appends a separate labelled
+  # artifact instead. It is not built; it is one hour of GPU and the one
+  # measurement that would tell the doc audit — 36,731 bytes across three
+  # artifacts — whether it is actually at risk.
   [ "$pad" -gt 0 ] && head -c "$pad" "$PAD_ALL" >> "$RD/spec.md"
   total=$(( $(wc -c < "$RD/spec.md") + $(wc -c < "$RD/tasks.yaml") + $(wc -c < "$BEAN") ))
 

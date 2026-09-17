@@ -152,5 +152,17 @@ fi
 check "the flag is documented"          "NAMED in particular" "$(cat "$SWEEP")"
 check "with the day it was needed"      "2026-09-17" "$(cat "$SWEEP")"
 
+printf '\n== the script says what shape of prompt it actually measures ==\n\n'
+#
+# The padding goes INSIDE spec.md, so the experiment is "a document under audit
+# that is mostly other material" — not "a prompt with more separate artifacts",
+# which is what a real audit is. That distinction was missing for several hours
+# while a warning was written on the broader reading.
+SRC="$(cat "$SWEEP")"
+check "it says the padding goes inside the document" "INSIDE spec.md" "$SRC"
+# Single-line substrings: these are prose comments and the phrases wrap.
+check "and what that is not"          "prompt with more separate artifacts" "$SRC"
+check "and names the experiment that would settle it" "one hour of GPU" "$SRC"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

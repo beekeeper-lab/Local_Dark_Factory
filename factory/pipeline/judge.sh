@@ -718,10 +718,13 @@ JUDGE_SIZE_WARN="${JUDGE_SIZE_WARN:-30422}"
 if [ "${ART_BYTES:-0}" -gt "$JUDGE_SIZE_WARN" ]; then
   printf 'JUDGE  %s: %s bytes of artifacts is above %s, the largest size at which this\n' \
     "$TARGET" "$ART_BYTES" "$JUDGE_SIZE_WARN" >&2
-  printf '       judge was measured rejecting a seeded defect every time. At 40,422 it\n' >&2
-  printf '       accepted one in most of eight passes. Nothing is truncated — the artifacts\n' >&2
-  printf '       under audit are what they are — but read an accept from this request\n' >&2
-  printf '       knowing that. bench/results/size-sweep-*.json has the measurement.\n' >&2
+  printf '       judge was measured rejecting a seeded defect every time (13 of 13). At\n' >&2
+  printf '       40,422 it rejected it 0 of 13, and a kept run shows why: it reviewed the\n' >&2
+  printf '       padding and filled the criterion ids with another bean\x27s work.\n' >&2
+  printf '       CAVEAT, and it matters here: that measurement pads INSIDE one document.\n' >&2
+  printf '       Whether several large LABELLED artifacts displace each other the same way\n' >&2
+  printf '       is not measured. This is a precaution, not a result about this request.\n' >&2
+  printf '       Nothing is truncated. bench/results/size-sweep-*.json has the numbers.\n' >&2
 fi
 
 # The system message is load-bearing, not decoration. Without it this model

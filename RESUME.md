@@ -1416,10 +1416,33 @@ sources:**
 
 **What the control rules out and what it does not.** It rules out the specific
 confound: that the corpus padding handed the judge the bean which owns the path
-the defect writes. It does not rule out "any large block of bean-shaped text makes
-this judge accept" — the control is still bean-shaped text — but for every
-practical purpose that is the size explanation, because what the line would pad
-an audit with is always artifacts.
+the defect writes.
+
+**And here is the limit of the whole experiment, which I did not state when I
+first acted on it.** `size-sweep.sh` appends the padding *inside `spec.md`* —
+`head -c "$pad" "$PAD_ALL" >> "$RD/spec.md"`. So what is measured is **a document
+under audit that is two-thirds other material**, and the displacement result is
+exactly what that predicts: the judge reviewed the part of the document that was
+not the spec.
+
+**A real audit is not shaped like that.** Its bytes are separate artifacts, each
+with its own labelled header saying what it is and how to read it — `THE SPEC
+UNDER AUDIT`, `THE ACTUAL DIFF`, `THE GATE RESULTS`. Whether three large labelled
+artifacts displace each other the way one padded document does **is not
+measured.**
+
+So the honest statement of the finding is narrower than "size makes this judge
+false-accept". It is: **a document under audit that is mostly other material gets
+reviewed as that other material, and the grammar hides it.** The byte thresholds
+are real for that shape.
+
+**What this does and does not justify.** The measurement briefs stand on their own
+— fewer bytes of raw JSON the judge once mistook for a question is good regardless.
+The `judge.sh` size warning is a precaution resting on a narrower experiment than
+its wording implied, and it now says so. **The experiment that would settle it**
+is a sweep that pads by adding a SEPARATE labelled artifact rather than appending
+to the spec; that is a change to `size-sweep.sh`, an hour of GPU, and the one
+measurement that would tell the doc audit whether it is actually at risk.
 
 **The mechanism, from a kept run: it is displacement, not dilution.** Two more
 passes at 40,422 with `--keep`, and the judgement can be read.
