@@ -82,10 +82,15 @@ case "$SCHEMA" in
     jq -r '
       to_entries[]
       | select(.value | type == "object")
-      | select(.value | has("checked"))
+      # Any section-shaped entry, not only one that has a `checked` key. The
+      # first version selected on `has("checked")`, so a section missing that key
+      # disappeared from the brief entirely — the precise failure this renderer
+      # must not have, because the prompt would still look complete.
+      | select(.value | has("section") or has("checked"))
       | .value as $s
       | "  section \"\($s.section // .key)\": "
-        + (if ($s.checked // false) then "checked" else "NOT CHECKED" end)
+        + (if ($s | has("checked") | not) then "NO RESULT RECORDED"
+           elif ($s.checked // false) then "checked" else "NOT CHECKED" end)
         + (if (($s.missing_paths // []) | length) > 0
            then "\n    says these exist and they do NOT: " + (($s.missing_paths // []) | join(", ")) else "" end)
         + (if (($s.said_absent_but_present // []) | length) > 0

@@ -55,6 +55,22 @@ check "a path the spec invented is named" "src/ghost.py" "$out"
 check "with what that means"            "says these exist and they do NOT" "$out"
 check "and the other direction too"     "says these are absent and they ARE present" "$out"
 check "a clean section says so"         "every path it names is as the spec describes" "$out"
+# No section may vanish. The first version selected on `has("checked")`, so a
+# section without that key disappeared from the brief entirely — the precise
+# failure this renderer must not have, because the prompt would still look
+# complete and nobody would know a section had been dropped.
+cat > "$WORK/cc2.json" <<'J'
+{"schema":"claims-check/1.0.0",
+ "half":{"section":"Recorded no result","missing_paths":[]},
+ "whole":{"section":"Checked","checked":true,"missing_paths":["x.py"]}}
+J
+out2="$(bash "$MB" "$WORK/cc2.json")"
+check "a section with no result still appears" "Recorded no result" "$out2"
+check "and says that is what it is"      "NO RESULT RECORDED" "$out2"
+check "alongside the one that has one"   "\"Checked\": checked" "$out2"
+n="$(grep -c 'section "' <<<"$out2")"
+if [ "$n" = "2" ]; then printf '  ok    both sections are rendered, none dropped\n'; PASS=$((PASS+1))
+else printf '  FAIL  %s of 2 sections rendered — one was silently dropped\n' "$n"; FAIL=$((FAIL+1)); fi
 
 printf '\n== the gate record, which is the biggest JSON in an impl audit ==\n\n'
 # 6,510 bytes of a 30,514-byte prompt, almost all of it per-gate logs, digests,
