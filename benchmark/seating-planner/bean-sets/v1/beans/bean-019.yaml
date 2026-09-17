@@ -47,7 +47,12 @@ acceptance_criteria:
     verify: { kind: test, test_id: "tests/solver/test_determinism.py::test_repeat_run_is_identical" }
 constraints:
   - no behaviour change of any kind
-  - no new dependencies
+  - text: no new dependencies
+    # A dependency is added in exactly one file. A refactor that edits it is not
+    # a refactor.
+    forbidden_paths:
+      - "pyproject.toml"
+      - "requirements*.txt"
   - test assertions must not be edited
 suggested_risk_tier: 1
 size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 400 }

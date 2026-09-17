@@ -41,19 +41,22 @@ usage: scaffold.sh <target-repo> [--bean-set <dir>] [--tier small|full] [--dry-r
   --tier small|full pipeline tier written into each bean.md (default: full —
                     all seven stages and all three audits)
   --dry-run         list what would be written, change nothing
+  --check           change nothing; report every control file in the target that
+                    differs from what this repo would write. Exit 1 if any does.
 
 Re-running is safe: control files are overwritten, the line's own output
 (factory/specs, factory/impl, factory/runs) is never touched.
 EOF
 }
 
-TARGET=""; BEAN_SET="$REPO_ROOT/benchmark/seating-planner/bean-sets/v1"; TIER="full"; DRY=0
+TARGET=""; BEAN_SET="$REPO_ROOT/benchmark/seating-planner/bean-sets/v1"; TIER="full"; DRY=0; CHECK=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --bean-set) BEAN_SET="${2:?--bean-set needs a directory}"; shift 2 ;;
     --tier)     TIER="${2:?--tier needs small or full}"; shift 2 ;;
     --dry-run)  DRY=1; shift ;;
+    --check)    CHECK=1; shift ;;
     -*) usage >&2; echo "unknown flag: $1" >&2; exit 2 ;;
     *)  [ -z "$TARGET" ] || { echo "only one target repo" >&2; exit 2; }
         TARGET="$1"; shift ;;
@@ -70,6 +73,52 @@ git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 || { echo "not a git reposi
 
 PY="${SCAFFOLD_PYTHON:-$REPO_ROOT/.venv/bin/python}"
 [ -x "$PY" ] || PY=python3
+
+# -- --check: has the target drifted from what this repo would write? -----------
+#
+# The scaffold is one-way. It copies the control surface into a target repo and
+# never looks again, so an edit made downstream survives until the next scaffold
+# run silently reverts it. That is not hypothetical: bean-002's non_goals were
+# annotated with forbidden_paths in the deployed copy on 2026-09-16 and the bean
+# set in this repo was never updated, so the annotation was one `scaffold.sh` away
+# from being deleted, by the script whose job is to keep the two the same.
+#
+# It regenerates into a temporary repo and diffs, rather than comparing field by
+# field, because a second description of "what the scaffold writes" is a second
+# thing to keep in sync — the same failure one level up.
+if [ "$CHECK" = 1 ]; then
+  [ "$DRY" = 0 ] || { echo "--check and --dry-run are opposites; pick one" >&2; exit 2; }
+  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+  git init -q "$TMP"
+  SCAFFOLD_PYTHON="$PY" "$HERE/scaffold.sh" "$TMP" --bean-set "$BEAN_SET" --tier "$TIER" >/dev/null || {
+    echo "could not generate a reference scaffold to compare against" >&2; exit 2; }
+  drift=0
+  # Only what the scaffold writes. The line's own output — specs, impl, runs — is
+  # evidence, not control surface, and is not its business.
+  while IFS= read -r rel; do
+    case "$rel" in factory/specs/*|factory/impl/*|factory/runs/*|*/.gitkeep) continue ;; esac
+    if [ ! -e "$TARGET/$rel" ]; then
+      printf '  MISSING   %s\n' "$rel"; drift=$((drift+1))
+    elif ! diff -q "$TMP/$rel" "$TARGET/$rel" >/dev/null 2>&1; then
+      printf '  DIFFERS   %s\n' "$rel"; drift=$((drift+1))
+    fi
+  done < <(cd "$TMP" && find factory .github -type f 2>/dev/null | sort)
+  # A bean the set no longer has, still installed. It would keep queueing.
+  for d in "$TARGET"/factory/beans/*/; do
+    [ -d "$d" ] || continue
+    b="$(basename "$d")"
+    [ -e "$TMP/factory/beans/$b/bean.yaml" ] || { printf '  EXTRA     factory/beans/%s (not in %s)\n' "$b" "$(basename "$BEAN_SET")"; drift=$((drift+1)); }
+  done
+  if [ "$drift" = 0 ]; then
+    printf '\n%s is current with %s\n' "$TARGET" "$BEAN_SET"
+    exit 0
+  fi
+  printf '\n%s control file(s) differ from what this repo would write.\n' "$drift" >&2
+  printf 'Whichever copy is right, they are not the same. `scaffold.sh %s` overwrites the\n' "$TARGET" >&2
+  printf 'target with this one; if the edit downstream is the one worth keeping, copy it\n' >&2
+  printf 'back into %s FIRST, because the scaffold will not ask.\n' "$BEAN_SET" >&2
+  exit 1
+fi
 
 say() { printf '  %-8s %s\n' "$1" "$2"; }
 write() { # write <relative path> <content-on-stdin>
@@ -195,7 +244,25 @@ ng = bean.get("non_goals") or []
 if ng:
     out.append("## Non-goals\n")
     for n in ng:
-        out.append(f"- {n}")
+        # A non-goal is either prose or an object that ALSO says where — paths and
+        # imports the controller checks without asking a judge. Rendering the
+        # object with an f-string printed a Python dict into the document; it read
+        # as `{'text': 'no rule model', 'forbidden_paths': [...]}` and the sentence
+        # a reader needed was inside it. The text is the non-goal either way; what
+        # the machine checks is worth saying, because a reader cannot otherwise
+        # tell which of these the audit is still guessing at.
+        if isinstance(n, dict):
+            checked = []
+            for pat in n.get("forbidden_paths") or []:
+                checked.append(f"`{pat}`")
+            for mod in n.get("forbidden_imports") or []:
+                checked.append(f"import `{mod}`")
+            line = f"- {n.get('text', '(no text)')}"
+            if checked:
+                line += "  \n  *checked, not judged:* " + ", ".join(checked)
+            out.append(line)
+        else:
+            out.append(f"- {n}")
     out.append("")
 print("\n".join(out))
 PY
@@ -228,7 +295,40 @@ done
 # `requirements_sha256` is the field that proves the input never moved between
 # runs — without it, comparing one run to another is comparing two things that
 # may not have had the same requirements.
+# Hidden tests, if this repo has a suite for this target.
+#
+# It was added to the target's pipeline-config.json by hand and the scaffold knew
+# nothing about it, which meant the next `scaffold.sh` run would have deleted the
+# whole block and the gate would have gone back to measuring only what the worker
+# could read — silently, because a missing hidden_tests key is indistinguishable
+# from a repo that never had one. The scaffold owns this file, so the scaffold has
+# to write every part of it.
+#
+# Derived, not configured: the suite lives at hidden-tests/<repo name>/ in THIS
+# repo, so its presence is the whole condition. A target with no suite gets no
+# key, which is the honest statement that nothing hidden is measured there.
+#
+# The name comes from the bean set (`repo: beekeeper-lab/seating-planner-py`), not
+# from the target DIRECTORY. Two reasons, and the second is the one that bit:
+# a suite belongs to a repository rather than to wherever somebody cloned it, and
+# --check regenerates into a temporary directory whose basename is random — keyed
+# on that, the reference scaffold would never find the suite and --check would
+# report this file as drifted forever, which is a drift detector that cries wolf
+# until nobody reads it.
+HIDDEN_REPO="$(basename "$(jq -r '.repo // empty' <<<"$(for b in "$BEAN_SET"/beans/*.yaml "$BEAN_SET"/*.yaml; do [ -e "$b" ] && { "$HERE/pipeline/yaml2json.sh" "$b"; break; }; done)" 2>/dev/null)")"
+HIDDEN_JSON='null'
+if [ -n "$HIDDEN_REPO" ] && [ -d "$REPO_ROOT/hidden-tests/$HIDDEN_REPO" ]; then
+  HIDDEN_JSON="$(jq -n --arg d "../../$(basename "$REPO_ROOT")/hidden-tests/$HIDDEN_REPO/<bean>" \
+    --arg r "../../$(basename "$REPO_ROOT")/hidden-tests/results" '{
+    dir: $d,
+    command: ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+    mount_at: "/hidden",
+    results_dir: $r
+  }')"
+fi
+
 jq -n \
+  --argjson hidden "$HIDDEN_JSON" \
   --arg corpus_name "$(jq -r '.corpus // "unknown"' "$BEAN_SET/manifest.json" 2>/dev/null)" \
   --arg corpus_set "$(jq -r '.bean_set // "unversioned"' "$BEAN_SET/manifest.json" 2>/dev/null)" \
   --arg corpus_sha "$(jq -r '.requirements_sha256 // ""' "$BEAN_SET/manifest.json" 2>/dev/null)" --arg tier "$TIER" '{
@@ -258,9 +358,10 @@ jq -n \
     "install step and §08 gives the gate no network to run one. PYTHONPATH=/work/src",
     "is the honest minimum. It makes the package importable; it is not the same as",
     "an editable install, and a bean whose criterion really means *installed* is",
-    "asking for something this line cannot currently give it."
+    "asking for something this line cannot currently give it.",
+    "hidden_tests names tests the worker never sees. They live in the factory repo, which the worker never mounts -- it gets this repo at /work and factory/skills read-only -- and the gate mounts them read-only at /hidden. <bean> is the bean id of the run, because they are written from the acceptance criteria of one bean. Paths are relative to this file, so they assume the factory repo is a sibling of this one; preflight says so at once if it is not. What comes back to the worker is a count and nothing else."
   ]
-}' | write "factory/pipeline-config.json"
+} | if $hidden == null then . else . + {hidden_tests: $hidden} end' | write "factory/pipeline-config.json"
 
 # The line writes here; git needs the directories to exist before it can.
 for d in specs impl invariants runs; do

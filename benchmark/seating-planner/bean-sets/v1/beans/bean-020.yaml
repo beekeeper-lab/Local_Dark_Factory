@@ -65,5 +65,13 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
-  - no seat positions, no seat assignment
+  - text: no seat positions, no seat assignment
+    # Seats are deferred corpus-wide. The names they would arrive under, so that
+    # a task planning to create one is refused before it is written. The
+    # behaviour half — a hard rule never reported as satisfied — stays the
+    # audit's, because no path forbids that.
+    forbidden_paths:
+      - "src/seating_planner/seats/**"
+      - "src/seating_planner/domain/seat*.py"
+      - "src/seating_planner/solver/seat*.py"
 dependencies: [bean-019]

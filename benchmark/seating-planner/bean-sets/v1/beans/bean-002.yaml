@@ -47,8 +47,13 @@ acceptance_criteria:
     text: An event rejects more than 500 guests, 60 tables, or 5000 rules.
     verify: { kind: test, test_id: "tests/domain/test_event.py::test_production_limits" }
 constraints:
-  - no persistence in this bean
-  - no solver imports
+  # Same shape of statement as a non-goal, and checked the same way: two of these
+  # three are about a PLACE, and a place is countable. The third is about a type
+  # and stays the audit's — bean-002's hidden tests check it structurally instead.
+  - text: no persistence in this bean
+    forbidden_imports: [sqlite3, sqlalchemy, psycopg, psycopg2, pymongo, redis, shelve, pickle]
+  - text: no solver imports
+    forbidden_imports: [ortools]
   - table position is a float pair on an arbitrary unit plane
 suggested_risk_tier: 1
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
@@ -57,7 +62,26 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
+  # The text of each is unchanged. Two of the three are statements about a PLACE,
+  # and a place is checkable: spec-check refuses a task that plans to write into
+  # one before any work starts, and the gate refuses a diff that lands in one.
+  # The third is about a concept and stays the audit's to judge.
+  #
+  # This matters here more than it reads. gpt-oss:120b was measured on 2026-09-16
+  # accepting a spec that plans work its bean forbids in 2 attempts out of 3, and
+  # `contradicts-non-goal` was one of the cases bench/controller-fitness.sh had as
+  # "not decidable from the documents, needs a judge". It is decidable when the
+  # bean says where.
   - no seat-level positions (deferred; see PRD §18.3 assumption)
-  - no rule model (bean-003)
-  - no database
+  - text: no rule model (bean-003)
+    # bean-003 owns the rule model. A Rule type arriving here would make bean-003
+    # edit a file outside its own write paths.
+    forbidden_paths:
+      - "src/seating_planner/domain/rule*.py"
+      - "src/seating_planner/domain/rules/**"
+      - "src/seating_planner/rules/**"
+  - text: no database
+    # "no persistence in this bean" is also a constraint. This is the part of it a
+    # grep over the diff can settle.
+    forbidden_imports: [sqlite3, sqlalchemy, psycopg, psycopg2, pymongo, redis, shelve]
 dependencies: [bean-001]

@@ -44,8 +44,12 @@ acceptance_criteria:
     text: The audit log is append-only — an attempt to modify or delete an existing entry is rejected.
     verify: { kind: test, test_id: "tests/store/test_audit.py::test_audit_log_is_append_only" }
 constraints:
-  - SQLite only; no external database service
-  - no ORM dependency beyond the standard library
+  - text: SQLite only; no external database service
+    # A client library for a service is the service arriving. The ORM half of
+    # this is the next constraint.
+    forbidden_imports: [psycopg, psycopg2, pymysql, MySQLdb, pymongo, redis]
+  - text: no ORM dependency beyond the standard library
+    forbidden_imports: [sqlalchemy, peewee, tortoise, pony, django]
 suggested_risk_tier: 2
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
 definition_of_done:
@@ -53,7 +57,10 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
-  - no migrations framework
+  - text: no migrations framework
+    forbidden_imports: [alembic, yoyo]
   - no multi-user conflict resolution (last write wins; see PRD §18.1 assumption)
-  - no encryption at rest (deployment concern, excluded from the corpus)
+  - text: no encryption at rest (deployment concern, excluded from the corpus)
+    # Excluded from the corpus means it must not appear, not that it is optional.
+    forbidden_imports: [cryptography, nacl, pysqlcipher3]
 dependencies: [bean-003]

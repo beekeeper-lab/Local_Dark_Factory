@@ -49,7 +49,9 @@ acceptance_criteria:
     verify: { kind: test, test_id: "tests/export/test_csv.py::test_table_by_table_export_complete" }
 constraints:
   - exports are built from an explicit field allow-list
-  - CSV only in this bean
+  - text: CSV only in this bean
+    # The other formats, by the library each needs. PDF is the non-goal above.
+    forbidden_imports: [openpyxl, xlsxwriter, xlwt]
 suggested_risk_tier: 2
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
 definition_of_done:
@@ -57,5 +59,6 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
-  - no PDF rendering (excluded from the corpus; see manifest scope_exclusions)
+  - text: no PDF rendering (excluded from the corpus; see manifest scope_exclusions)
+    forbidden_imports: [reportlab, fpdf, fpdf2, weasyprint, pypdf, PyPDF2, pdfkit]
 dependencies: [bean-016]

@@ -58,6 +58,7 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
-  - no Excel or Google Sheets formats
+  - text: no Excel or Google Sheets formats
+    forbidden_imports: [openpyxl, xlrd, xlwt, xlsxwriter, pyexcel, gspread, googleapiclient]
   - no column auto-mapping UI
 dependencies: [bean-004]

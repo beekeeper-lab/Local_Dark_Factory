@@ -49,7 +49,11 @@ acceptance_criteria:
     text: An unsatisfiable hard-constraint set returns an infeasible result rather than a partial assignment.
     verify: { kind: test, test_id: "tests/solver/test_hard_constraints.py::test_infeasible_returns_no_assignment" }
 constraints:
-  - OR-Tools CP-SAT only; no hand-rolled heuristic fallback
+  - text: OR-Tools CP-SAT only; no hand-rolled heuristic fallback
+    # A second solver is the fallback, whatever it is called. These are the
+    # libraries one would arrive as. A fallback written by hand out of the
+    # standard library is not caught by this and stays the audit's to judge.
+    forbidden_imports: [pulp, mip, cvxpy, gurobipy, pyomo, networkx]
   - table-level assignment only
   - solve time bounded by an explicit configurable limit
 suggested_risk_tier: 2

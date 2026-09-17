@@ -49,7 +49,10 @@ acceptance_criteria:
     text: A satisfiable problem reports no findings.
     verify: { kind: test, test_id: "tests/feasibility/test_preflight.py::test_feasible_problem_is_clean" }
 constraints:
-  - no solver imports; this bean must not call CP-SAT
+  - text: no solver imports; this bean must not call CP-SAT
+    # The whole point of a pre-flight check is that it is cheaper than a solve.
+    # One import of ortools here and it is not.
+    forbidden_imports: [ortools]
   - checks are structural only, never a search
 suggested_risk_tier: 1
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }

@@ -50,7 +50,8 @@ acceptance_criteria:
     verify: { kind: test, test_id: "tests/rules/test_template.py::test_default_wedding_template" }
 constraints:
   - rules are data only; no evaluation logic in this bean
-  - no solver imports
+  - text: no solver imports
+    forbidden_imports: [ortools]
 suggested_risk_tier: 1
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
 definition_of_done:
@@ -58,7 +59,13 @@ definition_of_done:
   - gates green
   - spec and impl-detail docs accepted
 non_goals:
-  - no rule evaluation or scoring (bean-005, bean-007)
+  - text: no rule evaluation or scoring (bean-005, bean-007)
+    # Both places already exist as other beans' write paths. Naming them here
+    # means a task that plans to write into one is refused at plan time, by the
+    # bean's own words, rather than at the gate as "path not allowed".
+    forbidden_paths:
+      - "src/seating_planner/feasibility/**"
+      - "src/seating_planner/solver/**"
   - no adjacent-seat evaluation (deferred; see PRD §18.3 assumption)
   - no natural-language rule parsing
 dependencies: [bean-002]
