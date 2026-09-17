@@ -459,19 +459,24 @@ run from the working tree."
     # until `factory runs` grew a column, and doctor is where someone looks to
     # find out what this repository still owes.
     RR="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG" 2>/dev/null)"
-    DONE_N=0; UNREAD_N=0
+    DONE_N=0; UNREAD_N=0; AGENT_N=0
     while IFS= read -r rd; do
       [ -f "$rd/run.json" ] || continue
       [ "$(jq -r '.status // ""' "$rd/run.json" 2>/dev/null)" = "completed" ] || continue
       DONE_N=$((DONE_N + 1))
-      [ -f "$rd/documents-read-by.txt" ] || UNREAD_N=$((UNREAD_N + 1))
+      # An agent read is a WEAKER fact and must not be counted as the stronger
+      # one — otherwise --as-agent is the formality this whole command refuses.
+      if [ ! -f "$rd/documents-read-by.txt" ]; then UNREAD_N=$((UNREAD_N + 1))
+      elif grep -q 'NOT a person' "$rd/documents-read-by.txt" 2>/dev/null; then
+        UNREAD_N=$((UNREAD_N + 1)); AGENT_N=$((AGENT_N + 1))
+      fi
     done < <(find "$RR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
     if [ "$DONE_N" -eq 0 ]; then
       say note "documents read" "no completed run yet, so there is nothing to confirm"
     elif [ "$UNREAD_N" -eq 0 ]; then
       good "documents read" "all $DONE_N completed run(s) confirmed by a person"
     else
-      say note "documents read" "$UNREAD_N of $DONE_N completed run(s) unconfirmed — \`factory read <run-dir>\` from an interactive shell; it is the one exit predicate a script cannot settle"
+      say note "documents read" "$UNREAD_N of $DONE_N completed run(s) unconfirmed by a person${AGENT_N:+ ($AGENT_N read by an agent, which is a weaker record and does not close it)} — \`factory read <run-dir>\` from an interactive shell; it is the one exit predicate a script cannot settle"
     fi
 
     # And where to check a suite is a suite. The gate's control proves one can
@@ -735,7 +740,8 @@ run from the working tree."
       last="$(jq -r '.halted_at_step // .blocked_task // empty' "$rj")"
       # Only a completed run has two documents to read. A halted one has nothing
       # to confirm, and "no" against it would read as a chore nobody owes.
-      if [ -f "$d/documents-read-by.txt" ]; then rd="yes"
+      if [ -f "$d/documents-read-by.txt" ] && grep -q 'NOT a person' "$d/documents-read-by.txt" 2>/dev/null; then rd="agent"
+      elif [ -f "$d/documents-read-by.txt" ]; then rd="yes"
       elif [ "$st" = "completed" ]; then rd="NO"
       # ASCII, not an em dash: printf's %-6s pads by bytes, and a multi-byte
       # character in a MIDDLE column takes one column and three bytes, so the
@@ -757,6 +763,16 @@ run from the working tree."
     # command to write it, that file is a thing someone has to be told about,
     # which is how a predicate quietly becomes a formality.
     require_target
+    AS_AGENT=""; READ_NOTE=""
+    _rargs=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --as-agent) AS_AGENT="${2:?--as-agent needs a name}"; shift 2 ;;
+        --note)     READ_NOTE="${2:?--note needs text}"; shift 2 ;;
+        *) _rargs+=( "$1" ); shift ;;
+      esac
+    done
+    set -- ${_rargs+"${_rargs[@]}"}
     run_dir="${1:-$(newest_run)}"
     [ -n "$run_dir" ] && [ -d "$run_dir" ] || die "no run found; pass a run directory"
     run_dir="${run_dir%/}"
@@ -793,11 +809,39 @@ The two documents this run produced:
     # exists and the permissions allow it — which is always — and says nothing
     # about whether this process has a controlling terminal. With no tty the open
     # fails with ENXIO and the test had already passed.
+    # The agent path, taken before the terminal test because it is not asking
+    # anyone anything. It records a weaker fact, in its own field, with the
+    # reader named and something they found — and says out loud that the human
+    # predicate is still open.
+    if [ -n "$AS_AGENT" ]; then
+      [ -n "$READ_NOTE" ] || die "--as-agent needs --note: an agent recording that it read something, with nothing to show for it, is the rubber stamp this command exists to refuse"
+      printf 'documents-read-by: NOT a person.\n' > "$run_dir/documents-read-by.txt"
+      printf 'read_by_agent: %s\n' "$AS_AGENT" >> "$run_dir/documents-read-by.txt"
+      printf 'at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$run_dir/documents-read-by.txt"
+      printf 'on_instruction_of: %s <%s>\n' \
+        "$(git -C "$TARGET_ROOT" config user.name)" "$(git -C "$TARGET_ROOT" config user.email)" >> "$run_dir/documents-read-by.txt"
+      printf 'what_it_found: %s\n' "$READ_NOTE" >> "$run_dir/documents-read-by.txt"
+      printf '\nThis does NOT satisfy docs_rendered_and_read. That predicate asks whether a\n' >> "$run_dir/documents-read-by.txt"
+      printf 'PERSON found these documents teach, and no person has said so. What is\n' >> "$run_dir/documents-read-by.txt"
+      printf 'recorded here is that an agent read them on the owner-s instruction and what\n' >> "$run_dir/documents-read-by.txt"
+      printf 'it reported. It is weaker, and it is true.\n' >> "$run_dir/documents-read-by.txt"
+      printf '\nRecorded in %s/documents-read-by.txt\n\n' "$run_dir"
+      printf '  read by: %s (an agent, not a person)\n' "$AS_AGENT"
+      printf '  found:   %s\n\n' "$READ_NOTE"
+      printf 'The human predicate stays OPEN. `factory read %s` from an interactive\n' "$run_dir"
+      printf 'shell is what closes it, and nothing here can.\n'
+      exit 0
+    fi
+
     if ! { : < /dev/tty; } 2>/dev/null; then
       printf '\nThere is no terminal here, so there is nobody to ask.\n\n'
       printf 'This is the one Phase-1 predicate a script cannot settle — whether the two\n'
       printf 'documents TEACH — so it is confirmed by a person at a keyboard or not at all.\n'
       printf 'There is no --yes for the same reason.\n\n'
+      printf 'If this project runs autonomously and no person is going to read them, the\n'
+      printf 'honest record is a weaker one rather than a false one:\n'
+      printf '    factory read %s --as-agent <who> --note "<what you found>"\n' "$run_dir"
+      printf 'which records that an agent read them, and says the human predicate is open.\n\n'
       printf 'Run it from an interactive shell:\n'
       printf '    factory read %s\n' "$run_dir"
       exit 1

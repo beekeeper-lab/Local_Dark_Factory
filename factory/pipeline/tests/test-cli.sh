@@ -95,6 +95,47 @@ check "the missing corpus is named"  "missing: name bean_set requirements_sha256
 check "with the fix"                 "scaffold.sh" "$out"
 git -C "$REPO" checkout -q -- factory/pipeline-config.json
 
+printf '\n-- an agent may record a WEAKER fact, and must say what it found --\n\n'
+#
+# There is deliberately no --yes: a flag that lets a script assert a human read
+# something turns the one predicate a script cannot settle into a formality.
+# --as-agent is not that flag. It records a different and true fact — an agent
+# read them, on the owner's instruction, and here is what it reported — in its
+# own field, and says out loud that the human predicate is still open.
+#
+# It exists because the alternative, once a project runs autonomously, is a
+# predicate nobody can ever satisfy, which does not make the documents any
+# better read.
+mkdir -p "$REPO/factory/runs/bean-001-agentread"
+printf '{"run_id":"ar","bean":"bean-001","status":"completed"}\n' > "$REPO/factory/runs/bean-001-agentread/run.json"
+printf '<html>spec</html>\n' > "$REPO/factory/runs/bean-001-agentread/spec.html"
+printf '<html>impl</html>\n' > "$REPO/factory/runs/bean-001-agentread/impl-detail.html"
+out="$(fac read factory/runs/bean-001-agentread --as-agent "a robot" 2>&1)"; rc=$?
+check "a note is required"           "rubber stamp this command exists to refuse" "$out"
+want  "and nothing is recorded"      "no record without a note" \
+      test ! -f "$REPO/factory/runs/bean-001-agentread/documents-read-by.txt"
+out="$(fac read factory/runs/bean-001-agentread --as-agent "a robot" --note "it reads" 2>&1)"
+check "with a note it records"       "Recorded in" "$out"
+check "and names the reader"         "a robot" "$out"
+check "saying it is not a person"    "an agent, not a person" "$out"
+check "and that the predicate is open" "human predicate stays OPEN" "$out"
+REC="$(cat "$REPO/factory/runs/bean-001-agentread/documents-read-by.txt")"
+check "the file says so first"       "NOT a person" "$REC"
+check "and records what was found"   "it reads" "$REC"
+check "and who asked for it"         "on_instruction_of" "$REC"
+nope  "and never claims a person read them" "read by: someone" "$REC"
+# And it must not count as a human read anywhere. Three readers of this file —
+# doctor's unread count, the runs table, and phase1-audit's predicate — and if
+# any of them treats an agent record as a person's, --as-agent IS the formality
+# the missing --yes exists to prevent.
+out="$(fac runs)"
+check "the runs table says agent, not yes" "agent" "$out"
+out="$(fac doctor)"
+check "doctor still counts it unconfirmed"  "unconfirmed by a person" "$out"
+check "and says why it does not close it"   "weaker record" "$out"
+check "phase1-audit distinguishes too"      "read by an AGENT, not a person" "$(cat "$FACTORY_ROOT/../bench/phase1-audit.sh")"
+rm -rf "$REPO/factory/runs/bean-001-agentread"
+
 printf '\n-- runs nobody has read --\n\n'
 #
 # The one Phase-1 exit predicate a script cannot settle, and until `factory runs`

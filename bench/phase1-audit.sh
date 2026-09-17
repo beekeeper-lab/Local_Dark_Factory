@@ -228,6 +228,14 @@ READ_MARKER="$RUN_DIR/documents-read-by.txt"
 if [ -n "$unrendered" ]; then
   bad "docs_rendered_and_read" blocker "not rendered:$unrendered"
   pred docs_rendered_and_read fail
+elif [ -s "$READ_MARKER" ] && grep -q 'NOT a person' "$READ_MARKER" 2>/dev/null; then
+  # An agent read is a different and weaker fact, and the predicate asks about a
+  # person. Counting it as a pass would make `factory read --as-agent` the
+  # formality that the absence of a `--yes` exists to prevent — so it is reported,
+  # and the predicate stays open.
+  bad "docs_rendered_and_read" major \
+    "rendered:$rendered · read by an AGENT, not a person: $(sed -n 's/^read_by_agent: //p' "$READ_MARKER" | head -1). That is a weaker record and does not settle whether these documents teach."
+  pred docs_rendered_and_read pending
 elif [ -s "$READ_MARKER" ]; then
   ok "docs_rendered_and_read" "rendered:$rendered · read by $(head -1 "$READ_MARKER")"
   pred docs_rendered_and_read pass
