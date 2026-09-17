@@ -136,11 +136,14 @@ if [ -f "$BY" ] && diff -q "$BY" "$B2" >/dev/null; then
   ok "the installed bean.yaml is the corpus bean, byte for byte"
 else bad "installed bean.yaml" "differs from $B2"; fi
 
-# bean-001 is deliberately prose while its pull request is open. If that stops
-# being true without the PR having merged, someone edited a bean mid-flight.
+# bean-001 was deliberately prose while its pull request was open — editing a bean
+# mid-flight means a reaudit of the finished run judges it against a bean the run
+# never saw. PR #1 merged 2026-09-17T17:31Z, so the annotation landed then, and
+# the assertion flips: all twenty beans are now annotated wherever they name a
+# place.
 if grep -q 'forbidden_' "$CORPUS/bean-001.yaml"; then
-  bad "bean-001 stays prose while PR #1 is open" "it now carries forbidden_ keys — see RESUME, 'For the owner: the other eighteen beans'"
-else ok "bean-001 stays prose while PR #1 is open"; fi
+  ok "bean-001 is annotated now its PR has merged"
+else bad "bean-001 is annotated now its PR has merged" "it went back to prose — the four annotations are in RESUME"; fi
 PC="$T/factory/pipeline-config.json"
 if jq -e . "$PC" >/dev/null 2>&1; then ok "pipeline-config.json parses"
 else bad "pipeline-config.json" "not valid JSON — a quote in the jq literal ends it silently"; fi
