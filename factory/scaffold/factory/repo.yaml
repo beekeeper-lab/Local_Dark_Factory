@@ -37,6 +37,15 @@ gates_ref: factory/gates.lock.yaml
 # gate.json, in the pull request body, and in the halt summary if it fails. A
 # merge gated only on CI is a merge that did not consider them, which is why the
 # body carries the line.
+#
+# And a fact about THIS repository, measured 2026-09-16: `gates` cannot be
+# enforced here. Branch protection is unavailable on a private repository without
+# GitHub Pro — the API answers HTTP 403, "Upgrade to GitHub Pro or make this
+# repository public to enable this feature" — so this field is a statement of
+# what the line requires and never a rule GitHub applies. Publishing the gate
+# image makes the check RUN and visible on a pull request; it does not make it
+# block one. The human merge is the gate, which is what `merge_mode:
+# human_required` says two lines up.
 required_checks:
   - gates
 
