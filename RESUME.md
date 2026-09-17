@@ -1332,6 +1332,14 @@ The two runs, four hours apart, same run directory, same bean, same model:
 | no quote long enough to prove anything | 1 | 2 |
 | revise with no findings | 1 | 0 |
 
+**That comparison changed two things, and it is worth saying so here rather than
+only in the taxonomy.** Between the two reaudits, judge.sh gained both the briefs
+AND a retry on a tool-call answer. The retry can only reduce "no judgement at
+all", and that column went UP (1 to 3), so it is not what moved anything — but
+the discipline this project just learned the hard way says name it, not reason it
+away. A third run with the briefs and no retry would settle it and is not worth
+an hour: the column that matters did not move at all.
+
 **Five of twelve, exactly, both times.** For a judge that gives different verdicts
 for byte-identical input at temperature 0, that stability is the finding: **prompt
 size is not what makes this judge invent the evidence for a verdict it has already
