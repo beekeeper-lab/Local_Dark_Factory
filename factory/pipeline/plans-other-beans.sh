@@ -33,6 +33,13 @@
 #      chosen by measuring: controller-fitness counts false alarms and the clean
 #      control must stay clean.
 #
+# Task INTENTS only, not spec.md. A task intent is a commitment to do work; spec
+# prose is discussion, and a spec legitimately names other beans — its own
+# dependencies, its non-goals, the seam it is leaving for someone else. Reading
+# the prose would double the words and halve the meaning of a match. If this ever
+# misses a defect that lives only in spec.md, the fix is a different check, not a
+# wider net on this one.
+#
 # It reports; it does not decide alone. A match is a finding for the spec audit
 # with the bean it belongs to named, which is the thing a human or a judge can
 # act on in one line instead of reading twenty beans.
