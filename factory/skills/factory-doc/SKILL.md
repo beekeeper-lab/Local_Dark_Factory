@@ -19,6 +19,30 @@ and saying so is the job rather than an embarrassment.
 
 Write Markdown. Never HTML — the controller renders it.
 
+
+## git is not available in here, and that is not a fault to report
+
+`/work/.git` is an empty read-only mount. Every `git` command answers *"fatal:
+not a git repository"*, `ls /work/.git` answers *"Permission denied"*, and both
+are working as intended: the real worktree stays outside this boundary so that
+history cannot be read or rewritten from inside, and the controller makes every
+commit after it decides an attempt is worth one.
+
+**So do not spend a session establishing what branch you are on.** A worker on
+bean-002 did, carefully and correctly, and reported it as an unresolved
+aggravating detail — which is a session spent on a fact that could have been one
+paragraph. Everything git would have told you is already in the tree, as files:
+
+- `factory/runs/<run>/diff.txt` — exactly what an earlier bean changed.
+- `factory/runs/<run>/gate.json` — whether its gates passed, gate by gate.
+- `factory/runs/<run>/steps.jsonl` — how that run ended, step by step.
+- `factory/runs/<run>/run.json` — which bean, which commit it started from.
+
+**What the tree contains is the answer, not what git would say about it.** If a
+dependency's work is missing from `/work`, it is missing — that is a real finding
+and stopping to say so is right. Say it from the listing, which is evidence, and
+do not qualify it with what you could not check in git.
+
 ## Inputs
 
 `<run-dir>`. Read:

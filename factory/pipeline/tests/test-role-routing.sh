@@ -417,5 +417,34 @@ check "the missing output is named"  "produced none of what it exists to produce
 check "and the file is named"        "impl-detail.md" "$out"
 check "with what it usually means"   "described what" "$out"
 
+printf '\n== every skill run inside the sandbox says git is unavailable ==\n\n'
+#
+# A worker on bean-002 established, carefully and at length, that /work/.git is
+# an empty read-only mount and that git could tell it nothing — then reported it
+# as an unresolved aggravating detail. It is not a fault; it is worker-sandbox.sh
+# masking the real worktree so history cannot be read or rewritten from inside,
+# and the controller committing on the worker's behalf. The environment was
+# correct and undocumented, which cost a session.
+#
+# The three sandboxed skills carry the same paragraph, and it has to STAY the
+# same paragraph in all three: three copies of one fact is two that go stale.
+SK="$(cd "$PIPELINE_DIR/../skills" && pwd)"
+_first=""
+for _s in factory-build-task factory-spec factory-doc; do
+  _f="$SK/$_s/SKILL.md"
+  _sec="$(awk '/^## git is not available in here/,/^## [^g]/' "$_f" | head -n -1)"
+  if [ -n "$_sec" ]; then printf '  ok    %s says so\n' "$_s"; PASS=$((PASS+1))
+  else printf '  FAIL  %s does not say git is unavailable\n' "$_s"; FAIL=$((FAIL+1)); fi
+  if [ -z "$_first" ]; then _first="$_sec"
+  elif [ "$_sec" = "$_first" ]; then printf '  ok    %s says it identically\n' "$_s"; PASS=$((PASS+1))
+  else printf '  FAIL  %s has drifted from factory-build-task\n' "$_s"; FAIL=$((FAIL+1)); fi
+done
+# And it points at the files that answer the question git would have.
+_bt="$(cat "$SK/factory-build-task/SKILL.md")"
+for _w in diff.txt gate.json steps.jsonl; do
+  if grep -qF "$_w" <<<"$_bt"; then printf '  ok    it names %s as where to look instead\n' "$_w"; PASS=$((PASS+1))
+  else printf '  FAIL  it does not name %s\n' "$_w"; FAIL=$((FAIL+1)); fi
+done
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
