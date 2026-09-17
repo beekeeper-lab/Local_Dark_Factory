@@ -29,6 +29,8 @@ not about the code.
 | `controller-fitness-20260915T124249Z.json` | no | superseded ×2 |
 | `controller-fitness-20260916T003558Z.json` | yes | superseded by 142616Z |
 | `controller-fitness-20260916T142616Z.json` | yes | **wrong, and kept because it is** — 1 of 5 named, 4 "not decidable". The `tautological-verify` fixture was not seeding the defect it claimed, so the controller was scored as missing something it catches |
+| `controller-fitness-prose-20260917T003651Z.json` | yes | **yes** — the prose side of the annotation A/B, 2 of 5 named. Reproducible: it reads `bench/fixtures/bean-001-prose.yaml`, not a live bean |
+| `controller-fitness-annotated-20260917T003726Z.json` | yes | **yes** — the annotated side, 3 of 5. The pair is the whole evidence that annotating a bean is worth anything, and the one case that moves is `contradicts-non-goal` |
 | `controller-fitness-20260916T171150Z.json` | yes | no — one case, the broken `tautological-verify` fixture, kept as the before half of finding it |
 | `controller-fitness-20260916T171317Z.json` | yes | no — the same case with the fixture fixed, 1 of 1 caught. The pair is the whole diagnosis |
 | `controller-fitness-20260916T171328Z.json` | yes | no — superseded within the hour by 171837Z, after the same audit of every OTHER mutation found `contradicts-non-goal` spliced too |
