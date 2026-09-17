@@ -2,9 +2,13 @@
 # test-measurement-brief.sh — the controller's own measurements, in fewer bytes.
 #
 # Size is the only lever measured this week that moved the judge's false-accept
-# rate: three passes at 20,422 and 30,422 bytes rejected a seeded defect 3 of 3,
-# and at 40,422 it accepted 2 of 3. A real spec audit sits at 25,428, of which
-# 4,805 are two controller measurements sent as raw JSON. As prose they are 720.
+# A real spec audit sits at 25,428 bytes, of which 4,805 are two controller
+# measurements sent as raw JSON. As prose they are 720.
+#
+# (A size effect was reported on 2026-09-17 and retracted in full the same day —
+# the sweep behind it was repeating its first pass. These briefs never depended
+# on it: the argument is 4,000 fewer bytes of JSON that this judge once read as a
+# question and answered by asking for clarification.)
 #
 # So these assertions are about a summary staying TRUE while getting short. The
 # failure they exist to prevent is a brief that quietly drops the thing the judge

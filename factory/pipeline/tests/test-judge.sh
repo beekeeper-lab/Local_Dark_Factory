@@ -571,9 +571,10 @@ want "the byte count is still recorded"  "spec.request.json should exist" \
 printf '\n== the controller measurements go as prose, and shrink the prompt ==\n\n'
 #
 # Size is the only lever measured this week that moved the false-accept rate:
-# 3-of-3 rejections of a seeded defect at 20,422 and 30,422 bytes, 2-of-3
-# ACCEPTS at 40,422. A real spec audit was 25,428 bytes, of which 4,805 were two
-# controller measurements sent as raw JSON.
+# A real spec audit was 25,428 bytes, of which 4,805 were two controller
+# measurements sent as raw JSON. (A size effect was reported on 2026-09-17 and
+# retracted in full the same day; the briefs never depended on it — this judge
+# once read claims-check.json as a question and asked for clarification.)
 clean_verdicts
 cat > "$R/verify-precheck.json" <<'J'
 {"schema":"verify-precheck/1.0.0","tasks":[{"task":"task-1","verifies":[

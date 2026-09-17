@@ -203,8 +203,15 @@ ART_LABELS=(); ART_PATHS=(); ART_MAX=(); ART_READ=()
 # The two controller measurements sent with a spec audit are 4,805 of its 25,428
 # bytes. Rendered as prose they are 720. That is 19% of the prompt returned, and
 # size is the ONLY lever measured this week that moved the false-accept rate:
-# three passes at 20,422 and 30,422 bytes rejected a seeded defect 3 of 3, and at
-# 40,422 the judge accepted it 2 of 3. A real audit at 25,428 sits between them.
+# it was believed for several hours on 2026-09-17 that this mattered a great deal
+# — a sweep showed the judge accepting a seeded defect at twice the bytes — and
+# that was RETRACTED IN FULL the same day: the sweep was reporting its first pass
+# five times, and a clean re-run gives the same accept rate at both sizes.
+#
+# The briefs stay on their own argument, which never depended on it: 4,000 fewer
+# bytes of raw JSON that this judge once read as "a confusing set of statements
+# about its own task" and answered with "Could you clarify what exactly you'd
+# like me to do?"
 #
 # The brief is written into the RUN DIRECTORY rather than held here, because the
 # quote check searches that directory: a summary existing only inside the prompt
