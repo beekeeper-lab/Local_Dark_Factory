@@ -5,6 +5,7 @@ Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-
 ## Read this first
 
 Two things are waiting on you, and nothing else in this repository is blocked.
+A third, further down, blocks nothing and wants a decision anyway.
 
 1. **Merge https://github.com/beekeeper-lab/seating-planner-py/pull/1**, or say why
    not. The two documents the line wrote are posted as comments on it; reading them
@@ -22,6 +23,15 @@ Two things are waiting on you, and nothing else in this repository is blocked.
 One more, whenever you like: `factory read <run-dir>` in the target repo records
 that a human read the two rendered documents. It is the one Phase-1 exit predicate
 a script cannot settle.
+
+And one that blocks nothing but is worth a decision: **this repository's own
+PR #2 has been open since 2026-09-14 and now carries 308 commits** — all of Phase
+0, all of Phase 1, every measurement above. `main` is still at the Spec v5 merge.
+Nothing needs it: the branch is where the work happens and everything is pushed.
+But a 308-commit pull request is not reviewable as a pull request, and the longer
+it stands the less true it gets. **Recommendation: merge it, and open smaller
+ones from here.** The alternative — reviewing it as one change — is not a real
+option at this size, and leaving it open is choosing that option by default.
 
 **What changed on 2026-09-16, in the order a reader needs it:**
 
