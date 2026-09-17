@@ -88,6 +88,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | five grammar constraints | no change | conformance ~0% → 100%, **first stamped verdict** |
 | prompt stopped contradicting itself | **9 → 4 false accepts** | 1 stamped → 0 |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
+| one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -105,11 +106,11 @@ has never exceeded **1 in 12**.
 3. **Do not weaken the quote check.** It is the instrument catching the
    fabrication, and its refusal rate is the measurement. I nearly redesigned it
    before reading what it had refused.
-4. **The one untried lever** is the size of the question — one criterion at a
-   time. Built (`bench/judge-per-criterion.sh`), unmeasured for accuracy, and
-   stopped on cost: 260 seconds a criterion, because every sub-request re-processes
-   a 12,000-token prompt that could be cached if the criteria list moved after the
-   artifacts.
+4. **The one untried lever has been tried and it is dead.** One criterion at a
+   time, 6,209 seconds of GPU: six cases, six `revise`, the clean control
+   rejected, and **none of the five defects named** against four for the whole
+   question. Zero false accepts, which sounds like the goal and is a stuck
+   needle. *"The lever was tried, and it is dead"*.
 
 Sections with the detail: *"OPEN and important"*, *"Removing a contradiction"*,
 *"Then three changes in an afternoon"*, *"The judge's token cap"*, *"The untried
@@ -1175,7 +1176,51 @@ hidden tests check that one structurally instead. Whether that belongs in the be
 as a third kind of rule, or stays where it is, is a design question and not an
 oversight.
 
-## The untried lever: ask the judge one question at a time
+## The lever was tried, and it is dead: asking one criterion at a time
+
+**Measured 2026-09-16, 6,209 seconds of GPU. Six cases, six `revise`.** Every
+seeded defect rejected, the clean control rejected, and **not one of the five
+defects named**.
+
+| | whole question (3 passes, 15 seeded) | per criterion (1 pass, 5 seeded) |
+| --- | --- | --- |
+| rejected | 11 of 15 | 5 of 5 |
+| **named the actual defect** | **4** | **0** |
+| false accepts | 4 | **0** |
+| clean control | rejected 3 of 3 | rejected |
+| seconds per case | 68–437 | 855–1155 |
+
+**Zero false accepts is not discrimination here; it is a stuck needle.** A judge
+that answers `revise` to everything has a false-accept rate of zero and a value of
+zero — it cannot distinguish a spec with a planted flaw from one without, which is
+the entire question. The whole-question judge is wrong more often *and* is the
+only one of the two that has ever said what was actually wrong.
+
+So the composition is doing its job and the parts are not. Per criterion, the
+model finds something to object to in every criterion of every spec, including the
+clean one, and the arithmetic then faithfully turns "one criterion not met" into
+`revise`. Making the question smaller did not make the answer better; it removed
+the one thing the larger question occasionally got right.
+
+**Recommendation: do not pursue this, and do not spend the cost reduction on it.**
+The prefix-cache refinement below would make four requests share one processed
+prompt and roughly halve the cost — of a measurement that produces nothing.
+`bench/judge-per-criterion.sh` stays in the tree with 25 assertions, because the
+next person to have this idea should find the measurement rather than repeat it.
+
+**Two caveats, neither of which changes the conclusion.** One pass is not a
+measurement, and this harness says so itself. And cases 2 and 3 were contaminated:
+the bean lives in another repository and was edited while the run was on its third
+case — the reason `freeze_inputs` exists now. Both caveats are about *which*
+defects were missed. Neither touches the finding, which is that six of six
+answers were `revise` including the control, and case 1, the control, ran before
+anything was edited.
+
+Versions, since the run predates the artifact recording them: judge.sh
+`2f7d111e8e33`, judge-per-criterion.sh `b19ed337a434`, SKILL.md `0fdb0d90b071`,
+gpt-oss:120b at `low`, 16000 token cap, 600-character field cap.
+
+## How the lever looked before it was pulled
 
 Everything measured on 2026-09-16 points the same way, and the conclusion is not
 "tune the prompt".

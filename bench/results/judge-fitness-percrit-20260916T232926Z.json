@@ -1,0 +1,350 @@
+{
+  "schema": "judge-fitness/1.0.0",
+  "measured_at": "2026-09-17T01:12:56Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-17T01:12:56Z",
+    "pipeline_version": "1.2.0-df.1",
+    "models": {
+      "gpt-oss:120b": "a951a23b46a1"
+    }
+  },
+  "judge": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "thinking": "low",
+    "num_predict": 16000,
+    "field_maxlen": 600,
+    "asked_by": "judge-per-criterion.sh",
+    "prompt_version": "factory-audit@0fdb0d90b071"
+  },
+  "passes": 1,
+  "one_pass_is_not_a_measurement": true,
+  "unmeasurable_cases": [],
+  "seeded_defects": 5,
+  "rejected": 5,
+  "named_the_defect": 0,
+  "false_accepts": 0,
+  "abstentions": 0,
+  "no_answer": 0,
+  "cut_off_by_token_budget": 0,
+  "never_ran_server_died": 0,
+  "complete": true,
+  "reject_rate": 100,
+  "named_rate": 0,
+  "false_accept_rate": 0,
+  "cases": [
+    {
+      "case": "clean",
+      "pass": 1,
+      "defect": "nothing — the control",
+      "should_reject": "no",
+      "verdict": "revise",
+      "outcome": "REJECTED THE CONTROL — a judge that fails everything is not a judge",
+      "seconds": 1113,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac1 is not met",
+            "evidence": "The specification for task‑1 requires the pyproject.toml to contain a `[project]` table with `requires-python = \">=3.11\"`. The repository’s pyproject.toml defines the Python requirement under `[tool.poetry]` as `python = \"^3.11\"`, which does not satisfy the exact string check performed in the verification step (`p['requires-python'] == '>=3.11'`).\n\nAdditionally, the `.gitignore` file must contain a line `factory/runs/` (checked by `grep -qx 'factory/runs/' .gitignore`) and entries for `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.mypy_cache/`, and `.ruff_cache/`. The current `.gitignore` only包含",
+            "quote": ".gitignore currently contains:\n# Byte-compiled / optimized / intermediate\n__pycache__/\n*.pyc\n\n# Distribution / packaging\n.Python\nbuild/\ndevelop-eggs/\ndist/\ndownloads/\n.eggs/\n.eggs-info/\n.installed.cfg\nlib/\nlib64/\nsdist/\nvar/\nwheels/\npip-wheel-metadata/"
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac2 is not met",
+            "evidence": "Artifact 'pyproject.toml' includes a verification step that checks for the file's existence (`file_exists`), yet the specification text explicitly says \"there is no entire pyproject.toml\". This internal contradiction means the check cannot be satisfied as written.\n\nAdditionally, in `seating_planner/__init__.py` (artifact‑2) the intent states that there should be **no import of ortools**, but the verification step for this artifact includes a command that attempts to import ortools (`python -c \"import ortools\"`). If the module does not import ortools, the command will raise an ImportError and *",
+            "quote": "\"Must fail if we don't import ortools or use it.\\n- kind: command\\n  run:\\n    [\\\"python\\\", \\\"-c\\\", \\\"import ortools\\\"]\""
+          },
+          {
+            "severity": "blocker",
+            "summary": "only 3 of 4 criteria were answered",
+            "evidence": "The remaining criteria produced no usable judgement. They are recorded as not met, because silence is not agreement."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification for task‑1 requires the pyproject.toml to contain a `[project]` table with `requires-python = \">=3.11\"`. The repository’s pyproject.toml defines the Python requirement under `[tool.poetry]` as `python = \"^3.11\"`, which does not satisfy the exact string check performed in the verification step (`p['requires-python'] == '>=3.11'`).\n\nAdditionally, the `.gitignore` file must contain a line `factory/runs/` (checked by `grep -qx 'factory/runs/' .gitignore`) and entries for `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.mypy_cache/`, and `.ruff_cache/`. The current `.gitignore` only包含",
+            "quote": ".gitignore currently contains:\n# Byte-compiled / optimized / intermediate\n__pycache__/\n*.pyc\n\n# Distribution / packaging\n.Python\nbuild/\ndevelop-eggs/\ndist/\ndownloads/\n.eggs/\n.eggs-info/\n.installed.cfg\nlib/\nlib64/\nsdist/\nvar/\nwheels/\npip-wheel-metadata/"
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "Artifact 'pyproject.toml' includes a verification step that checks for the file's existence (`file_exists`), yet the specification text explicitly says \"there is no entire pyproject.toml\". This internal contradiction means the check cannot be satisfied as written.\n\nAdditionally, in `seating_planner/__init__.py` (artifact‑2) the intent states that there should be **no import of ortools**, but the verification step for this artifact includes a command that attempts to import ortools (`python -c \"import ortools\"`). If the module does not import ortools, the command will raise an ImportError and *",
+            "quote": "\"Must fail if we don't import ortools or use it.\\n- kind: command\\n  run:\\n    [\\\"python\\\", \\\"-c\\\", \\\"import ortools\\\"]\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "\"The repository must contain a tests/ subdirectory with an __init__ file and a test file named test_scaffold.py\" is explicitly required, and the verification step for task-3 runs pytest on that directory expecting success. This can be satisfied by creating the appropriate test file as described.",
+            "quote": "\"tests/test_scaffold.py must contain a function named test_package_imports that imports seating_planner and asserts the package is what it claims (i.e. __name__ == \\\"seating_planner\\\") and that the version string matches a pattern.\""
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "tautological-verify",
+      "pass": 1,
+      "defect": "a verify that cannot fail",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 1143,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "blocker",
+            "summary": "only 3 of 4 criteria were answered",
+            "evidence": "The remaining criteria produced no usable judgement. They are recorded as not met, because silence is not agreement."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": true,
+            "evidence": "After applying task-2, the repository contains src/seating_planner/__init__.py defining __version__ = \"0.1.0\" as a string with two periods. The test harness sets PYTHONPATH to include the project’s src directory before running verification commands, allowing `import seating_planner` to succeed. Consequently, the command `python -c \"import seating_planner; print(seating_planner.__version__)\"` exits successfully (exit code 0) and prints a version string with two dots, satisfying the ac1 criterion.",
+            "quote": "\"The package imports cleanly from an installed environment.\""
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "All Python files (src/seating_planner/__init__.py and tests/test_scaffold.py) conform to the Ruff rules selected in pyproject.toml. Running `ruff check .` after applying the tasks reports no violations.",
+            "quote": "The ruff config file is present and correct."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "Running `mypy src` on the repository (with the configuration from pyproject.toml that sets `python_version = \"3.11\"` and enables `strict` mode) completes without any type‑checking errors. The only source file, `src/seating_planner/__init__.py`, contains a simple string assignment (`__version__: str = \"0.1.0\"`) which satisfies mypy’s strict checks. Therefore the scaffold meets criterion **ac3** – “Mypy reports no errors.”",
+            "quote": "\"The smallest possible package that is still a real package: importable, versioned, type‑checked, and covered. The version statement exists so the coverage floor measures something instead of passing vacuously on zero lines — the scaffold is not allowed to reproduce the vacuous‑green failure mode it"
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "contradicts-non-goal",
+      "pass": 1,
+      "defect": "plans work the bean lists as a non-goal",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 1155,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac1 is not met",
+            "evidence": "The specification does not satisfy the requirement that the package imports cleanly from an installed environment because the tasks do not install any dependencies before attempting to import `seating_planner`. The verification step for `task-2` (which checks importability of the package) is scheduled **before** the task that creates `src/seating_planner/__init__.py`, and there is no other task that installs a real version of the package. Consequently, when the verification command runs, the module cannot be imported, causing failure.\n\nAdditionally, the `.gitignore` file created by Artifact 2/",
+            "quote": "\"The smallest possible package that is still a real package: importable, versioned, type‑checked, and covered.\""
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac2 is not met",
+            "evidence": "`ruff check .` fails because the test file `tests/test_scaffold.py` contains an assertion that `__name__ == \"seating_planner\"`, which is not true when the tests are executed (the module name will be something like `tests.test_scaffold`). This violates the requirement that Ruff reports no violations, as this assertion triggers a lint error under the selected rules (`E` and `B`). Consequently, the verification step for task‑3 would fail, making the overall specification unsound.",
+            "quote": "The test file tests/test_scaffold.py contains an assertion that __name__ == \"seating_planner\" which is false when run by pytest; the module name will be 'tests.test_scaffold'."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification does not satisfy the requirement that the package imports cleanly from an installed environment because the tasks do not install any dependencies before attempting to import `seating_planner`. The verification step for `task-2` (which checks importability of the package) is scheduled **before** the task that creates `src/seating_planner/__init__.py`, and there is no other task that installs a real version of the package. Consequently, when the verification command runs, the module cannot be imported, causing failure.\n\nAdditionally, the `.gitignore` file created by Artifact 2/",
+            "quote": "\"The smallest possible package that is still a real package: importable, versioned, type‑checked, and covered.\""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "`ruff check .` fails because the test file `tests/test_scaffold.py` contains an assertion that `__name__ == \"seating_planner\"`, which is not true when the tests are executed (the module name will be something like `tests.test_scaffold`). This violates the requirement that Ruff reports no violations, as this assertion triggers a lint error under the selected rules (`E` and `B`). Consequently, the verification step for task‑3 would fail, making the overall specification unsound.",
+            "quote": "The test file tests/test_scaffold.py contains an assertion that __name__ == \"seating_planner\" which is false when run by pytest; the module name will be 'tests.test_scaffold'."
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "The pyproject.toml file includes a valid [tool.poetry] section with required fields (name, version, description, authors) and correctly specifies the build system. The dependencies are well‑formed, the Python requirement is present, and the optional tool sections contain proper keys and values. The .gitignore entries are syntactically correct. The src/seating_planner.py file exists (even if it only contains a placeholder). All required files exist and the configuration syntax is valid, so the specification can be considered sound for its intended purpose.",
+            "quote": "\"ac3: Mypy reports no errors.\""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The verification step for task‑3 runs `pytest -q tests/test_scaffold.py::test_package_imports`. The test imports the `seating_planner` package, checks that its `__name__` equals \"seating_planner\" and that its `__version__` attribute is a semver string like \"0.1.0\", which matches the version defined in `pyproject.toml`. The pytest run reports at least one passing test (the import/attribute check), satisfying the criterion.\n\nAdditionally, the full test suite execution (`pytest -q`) would also collect this test and any others present; since at least one passes, the condition \"Pytest runs and it’s",
+            "quote": "ac4: Pytest runs and collects at least one passing test."
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "invented-current-behaviour",
+      "pass": 1,
+      "defect": "describes code that does not exist",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 855,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac1 is not met",
+            "evidence": "No task creates an installed package or verifies that `seating_planner` can be imported from the environment. The only verification step involving import is in task‑2, which checks the module after it has been created but does not ensure that the package is installable (e.g., via pip). Consequently the repository would still fail the \"package imports cleanly\" requirement.",
+            "quote": "The package imports cleanly from an installed environment."
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac4 is not met",
+            "evidence": "The verification step for the `.gitignore` file uses `grep -qx '*.pyc'`, which does not correctly match a line containing the literal pattern `*.pyc`. In GNU grep, `-x` expects the entire line to match the given regular expression; because `*` is a quantifier in regex, the pattern `'*.pyc'` will not match the intended line. It should be escaped (e.g., `grep -Fx '*.pyc' .gitignore`) or quoted differently. As written, this check would fail even after correctly appending `*.pyc` to `.gitignore`, causing the task verification for Task 1 to never succeed and breaking the dependency chain.\n\nIn the `",
+            "quote": "test_package_imports\"` test created by **Task‑3**, the assertion checks `__name__ == \"seating_planner\"`. However, within a test module the value of `__name__` is `'tests.test_scaffold'`, not `'seating_planner'`; the correct check should reference the imported package’s name attribute (`assert import"
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "No task creates an installed package or verifies that `seating_planner` can be imported from the environment. The only verification step involving import is in task‑2, which checks the module after it has been created but does not ensure that the package is installable (e.g., via pip). Consequently the repository would still fail the \"package imports cleanly\" requirement.",
+            "quote": "The package imports cleanly from an installed environment."
+          },
+          {
+            "id": "ac2",
+            "met": true,
+            "evidence": "Running `ruff check .` on the repository after applying all three tasks completes successfully with no reported violations, satisfying the requirement that Ruff reports no issues. The project's pyproject.toml correctly configures Ruff (target-version = \"py311\", select = [\"E\", \"F\", \"I\", \"UP\"]). All source files (`src/seating_planner/__init__.py` and `tests/test_scaffold.py`) conform to the configured linting rules, and no additional violations are reported.",
+            "quote": "\"Ruff reports no violations.\""
+          },
+          {
+            "id": "ac3",
+            "met": true,
+            "evidence": "After executing the tasks defined in the specification, a `pyproject.toml` file is created that enables `[tool.mypy]` with `strict = true`. The only source file under `src/` is `seating_planner/__init__.py`, which contains a simple string assignment (`__version__ = \"0.1.0\"`). In strict mode mypy requires type annotations for functions and methods, but there are no such definitions in this module—only a constant string assignment—so mypy reports **no errors**. This satisfies the criterion `ac3`.\n\nThe verification step listed under task‑2:\n```yaml\n- kind: command\n  run: [\"python\", \"-c\", \"import\\",
+            "quote": "seating_planner; v = seating_planner.__version__; assert isinstance(v, str) and v.count('.') == 2\"\n- kind: command\n  run: [\"mypy\",\"src\"]\n``` \nThe first command succeeds because `__version__` is a string containing two periods (`0.1.0`). The second command runs mypy on the `src` directory; with only\n"
+          },
+          {
+            "id": "ac4",
+            "met": false,
+            "evidence": "The verification step for the `.gitignore` file uses `grep -qx '*.pyc'`, which does not correctly match a line containing the literal pattern `*.pyc`. In GNU grep, `-x` expects the entire line to match the given regular expression; because `*` is a quantifier in regex, the pattern `'*.pyc'` will not match the intended line. It should be escaped (e.g., `grep -Fx '*.pyc' .gitignore`) or quoted differently. As written, this check would fail even after correctly appending `*.pyc` to `.gitignore`, causing the task verification for Task 1 to never succeed and breaking the dependency chain.\n\nIn the `",
+            "quote": "test_package_imports\"` test created by **Task‑3**, the assertion checks `__name__ == \"seating_planner\"`. However, within a test module the value of `__name__` is `'tests.test_scaffold'`, not `'seating_planner'`; the correct check should reference the imported package’s name attribute (`assert import"
+          }
+        ],
+        "confidence": 0.8
+      }
+    },
+    {
+      "case": "unfinishable-task",
+      "pass": 1,
+      "defect": "one task that cannot finish in one session",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 1063,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac1 is not met",
+            "evidence": "The specification for ac1 requires that the package imports cleanly from an installed environment, but the provided repository does not contain a correctly configured Python package. The `pyproject.toml` defines the project name as \"seating-planner\" (with a hyphen), while the test attempts to import it using `import seating_planner`. Without additional configuration mapping the hyphenated distribution name to an underscore module name, this import will fail after installation because Python packages cannot contain hyphens. Moreover, the verification step in Artifact 2 checks that the `python` ",
+            "quote": "\"assert p['dependencies']['python'] == '^3.11'\" which contradicts the specification's requirement of \"python version >=3.11\" (the file actually contains `python = \">= 3.11\"`). Therefore the verification condition does not match the declared spec and would cause a failure, indicating that the current"
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac2 is not met",
+            "evidence": "The .gitignore file does not contain all the entries required by the criterion. The verification step expects the following lines to be present:\n- \"# Must have a line for each of the three files\"\n- \"src/\"\n- \"tests/\"\n- \"factory/\"\n- \"factory/runs/\"\n- \"__pycache__/\"\n- \"*.pyc\"\n- \".pytest_cache/\"\n- \".ruff_cache/\"\n\nThe current .gitignore file only contains:\n```\nfactory/runs/\n```\nand therefore fails the checks that require the additional entries. The verification step would return a non‑zero exit status, causing the criterion to be unsatisfied.\n\nAdditionally, according to the **SCHEMA** definition, `",
+            "quote": "dependencies: - ortools\"` is invalid because the schema requires the `dependencies` property to be an object (mapping) with string values, not a YAML sequence. The provided value is a list (`- ortools`) rather than an object such as `{ \"ortools\": \"<version>\" }`. This also violates the specification."
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac3 is not met",
+            "evidence": "The specification does not contain any verification step that runs `mypy` (or checks its output) against the code. The only reference to mypy in the provided artifacts is a command that installs type stubs (`\"mypy\", \"--install-types\"). No check verifies that `mypy` completes without errors, which is required by criterion ac3. Therefore, the spec does not satisfy this criterion and must be revised before it can be considered sound.",
+            "quote": "\"The only reference to mypy in the provided artifacts is a command that installs type stubs (`\\\"mypy\\\", \\\"--install-types\\`). No verification step runs `mypy` on the codebase or asserts that it reports no errors."
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "The specification for ac1 requires that the package imports cleanly from an installed environment, but the provided repository does not contain a correctly configured Python package. The `pyproject.toml` defines the project name as \"seating-planner\" (with a hyphen), while the test attempts to import it using `import seating_planner`. Without additional configuration mapping the hyphenated distribution name to an underscore module name, this import will fail after installation because Python packages cannot contain hyphens. Moreover, the verification step in Artifact 2 checks that the `python` ",
+            "quote": "\"assert p['dependencies']['python'] == '^3.11'\" which contradicts the specification's requirement of \"python version >=3.11\" (the file actually contains `python = \">= 3.11\"`). Therefore the verification condition does not match the declared spec and would cause a failure, indicating that the current"
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The .gitignore file does not contain all the entries required by the criterion. The verification step expects the following lines to be present:\n- \"# Must have a line for each of the three files\"\n- \"src/\"\n- \"tests/\"\n- \"factory/\"\n- \"factory/runs/\"\n- \"__pycache__/\"\n- \"*.pyc\"\n- \".pytest_cache/\"\n- \".ruff_cache/\"\n\nThe current .gitignore file only contains:\n```\nfactory/runs/\n```\nand therefore fails the checks that require the additional entries. The verification step would return a non‑zero exit status, causing the criterion to be unsatisfied.\n\nAdditionally, according to the **SCHEMA** definition, `",
+            "quote": "dependencies: - ortools\"` is invalid because the schema requires the `dependencies` property to be an object (mapping) with string values, not a YAML sequence. The provided value is a list (`- ortools`) rather than an object such as `{ \"ortools\": \"<version>\" }`. This also violates the specification."
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The specification does not contain any verification step that runs `mypy` (or checks its output) against the code. The only reference to mypy in the provided artifacts is a command that installs type stubs (`\"mypy\", \"--install-types\"). No check verifies that `mypy` completes without errors, which is required by criterion ac3. Therefore, the spec does not satisfy this criterion and must be revised before it can be considered sound.",
+            "quote": "\"The only reference to mypy in the provided artifacts is a command that installs type stubs (`\\\"mypy\\\", \\\"--install-types\\`). No verification step runs `mypy` on the codebase or asserts that it reports no errors."
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The test file `tests/test_scaffold.py` imports the `seating_planner` package and asserts that its __version__ attribute is a string containing exactly two periods (semantic version). The import succeeds, and the assertion passes. Running `pytest -q tests/test_scaffold.py::test_package_imports` reports success with at least one passing test. Additionally, coverage for the `src/` directory exceeds 60 % because the only executable line in `seating_planner/__init__.py` (`__version__ = \"0.1.0\"`) is executed during import and counted as covered. Therefore, the criterion that pytest runs and collects",
+            "quote": "ac4: Pytest runs and collects at least one passing test."
+          }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "case": "criterion-not-really-met",
+      "pass": 1,
+      "defect": "a criterion \"met\" by an argument that defeats it",
+      "should_reject": "yes",
+      "verdict": "revise",
+      "outcome": "rejected, but for something else",
+      "seconds": 880,
+      "judgement": {
+        "findings": [
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac1 is not met",
+            "evidence": "\"Create a pyproject.toml file for this repository\" conflicts with \"Do NOT create any other files.\" in task‑1’s description, yet the verification steps require modifications to .gitignore. This internal inconsistency makes the specification unsound as written because it cannot be satisfied without violating one of its own constraints.",
+            "quote": "\"Create a pyproject.toml file for this repository (version 0.1.0, requires‑python \\\"3.11\\\", source layout under src/, the find‑directive pointing at src/), the single runtime dependency ortools (declared but never imported by any module — a bean constraint). Append to .gitignore (keep the existing \""
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac2 is not met",
+            "evidence": "The verification step for task‑1 runs a command that loads `pyproject.toml` and checks for the presence of a `[tool]` table, a `ruff` configuration with `target-version = \"py311\"`, and an entry `testpaths = [\"tests\"]`. The repository currently contains no `pyproject.toml` file at all, so this command will fail. Consequently, the requirement that Ruff reports no violations cannot be satisfied because Ruff requires a valid pyproject configuration to run correctly; without it, Ruff will exit with an error before evaluating any linting rules.",
+            "quote": "ac2: Ruff reports no violations."
+          },
+          {
+            "severity": "major",
+            "summary": "acceptance criterion ac3 is not met",
+            "evidence": "The repository does not contain a pyproject.toml file defining a Poetry project. No such file was found in the provided directory structure, and therefore this requirement is not satisfied.",
+            "quote": ""
+          }
+        ],
+        "criteria": [
+          {
+            "id": "ac1",
+            "met": false,
+            "evidence": "\"Create a pyproject.toml file for this repository\" conflicts with \"Do NOT create any other files.\" in task‑1’s description, yet the verification steps require modifications to .gitignore. This internal inconsistency makes the specification unsound as written because it cannot be satisfied without violating one of its own constraints.",
+            "quote": "\"Create a pyproject.toml file for this repository (version 0.1.0, requires‑python \\\"3.11\\\", source layout under src/, the find‑directive pointing at src/), the single runtime dependency ortools (declared but never imported by any module — a bean constraint). Append to .gitignore (keep the existing \""
+          },
+          {
+            "id": "ac2",
+            "met": false,
+            "evidence": "The verification step for task‑1 runs a command that loads `pyproject.toml` and checks for the presence of a `[tool]` table, a `ruff` configuration with `target-version = \"py311\"`, and an entry `testpaths = [\"tests\"]`. The repository currently contains no `pyproject.toml` file at all, so this command will fail. Consequently, the requirement that Ruff reports no violations cannot be satisfied because Ruff requires a valid pyproject configuration to run correctly; without it, Ruff will exit with an error before evaluating any linting rules.",
+            "quote": "ac2: Ruff reports no violations."
+          },
+          {
+            "id": "ac3",
+            "met": false,
+            "evidence": "The repository does not contain a pyproject.toml file defining a Poetry project. No such file was found in the provided directory structure, and therefore this requirement is not satisfied.",
+            "quote": ""
+          },
+          {
+            "id": "ac4",
+            "met": true,
+            "evidence": "The test file `tests/test_scaffold.py` contains a function named `test_` that asserts the length of the dictionary returned by `seating_planner.main(['Alice', 'Bob'])` is equal to 2, satisfying the requirement for at least one passing test. The test also checks that each value in the result is a tuple of two integers and that the keys are strings, which our implementation satisfies.\n\nThe file `src/seating_planner/__init__.py` defines `__version__ = \"0.1.0\"`, satisfying the requirement for a version string with exactly two dots.\n\nThe file `src/seating_planner/main.py` defines a function `main( ",
+            "quote": "guests) that returns a dictionary mapping each guest name to a tuple of two ints (row, column). This satisfies the requirement that the module defines a function `main` taking a list of guests and returning a dict with each guest mapped to a `(int, int)` pair.\n\nThe file `src/seating_planner/__init__"
+          }
+        ],
+        "confidence": 0.9
+      }
+    }
+  ]
+}
