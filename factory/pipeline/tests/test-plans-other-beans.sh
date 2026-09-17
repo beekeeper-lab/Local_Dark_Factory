@@ -144,5 +144,44 @@ else
   printf '  SKIP  no corpus or no real task list\n'
 fi
 
+printf '\n== no bean in the corpus accuses another over its own criteria ==\n\n'
+#
+# The precision guarantee, swept rather than argued. Each bean's own acceptance
+# criteria are used as its task intents — the closest thing to "what this bean's
+# spec will plausibly say" that exists before the spec is written — and none of
+# the twenty may trip the check. A future bean, a change to the stoplist, or a
+# looser threshold breaks this and the suite says which bean.
+#
+# It matters because this check REFUSES a spec. The reason it is allowed to is
+# that it has never raised a false alarm, and that claim needs a standing test
+# rather than an afternoon's observation.
+if [ -d "$CORPUS" ]; then
+  SWEEP="$WORK/sweep"; mkdir -p "$SWEEP"
+  fired=""
+  for b in "$CORPUS"/bean-*.yaml; do
+    "$ROOT/.venv/bin/python" - "$b" "$SWEEP/tasks.yaml" <<'PY' || continue
+import sys, yaml
+b = yaml.safe_load(open(sys.argv[1]))
+tasks = {"schema_version": "tasks/1.0.0", "tasks": [
+    {"id": f"task-{i}", "intent": ac["text"],
+     "write_paths": (b.get("allowed_write_paths") or ["src/x.py"])[:1],
+     "verify": {"kind": "command", "run": ["true"]}, "satisfies": [ac["id"]]}
+    for i, ac in enumerate(b.get("acceptance_criteria") or [], 1)]}
+yaml.safe_dump(tasks, open(sys.argv[2], "w"), sort_keys=False)
+PY
+    if ! bash "$POB" --bean "$b" --tasks "$SWEEP/tasks.yaml" --beans-dir "$CORPUS" >/dev/null 2>&1; then
+      fired="$fired $(basename "$b" .yaml)"
+    fi
+  done
+  n="$(ls -1 "$CORPUS"/bean-*.yaml | wc -l)"
+  if [ -z "$fired" ]; then
+    printf '  ok    all %s beans clean against their own criteria\n' "$n"; PASS=$((PASS+1))
+  else
+    printf '  FAIL  these accuse another bean over their own acceptance criteria:%s\n' "$fired"; FAIL=$((FAIL+1))
+  fi
+else
+  printf '  SKIP  no corpus\n'
+fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
