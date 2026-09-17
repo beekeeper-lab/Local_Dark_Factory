@@ -44,12 +44,17 @@ needs it:**
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
 3. **The SIZE of the prompt is the only thing that has ever moved the
-   false-accept rate, and it is now controlled.** At 20,422 bytes this judge did
-   not accept a spec with a planted flaw once in **13 tries**; at 40,422 it
-   rejected it **0 times in 13**. A confound was found after the first result —
-   the padding was the rest of the corpus, which contains the bean that owns the
-   path the defect writes — and a control with that content removed made the
-   effect *sharper*, not weaker. *"RESOLVED: the confound is ruled out"*. Three passes at 20,422 and 30,422 bytes rejected a seeded
+   false-accept rate, and it is now controlled twice over.** At ~20,000 bytes this
+   judge did not accept a spec with a planted flaw once in **18 tries**; at
+   ~40,000 it rejected one **0 times in 20**. Two confounds were chased down: the
+   padding was the rest of the corpus, which contains the bean that owns the path
+   the defect writes — a control with that removed made the effect *sharper*; and
+   the padding went inside the document under audit — an arm that put it in a
+   separate labelled artifact instead gave the same answer. **A labelled artifact
+   header is not a boundary for this model**, which is the prose-versus-grammar
+   finding one level up. The mechanism is displacement, not dilution: at the large
+   size the judge fills the bean's own criterion ids with *another bean's work*.
+   *"ANSWERED, and my prediction was wrong"*. Three passes at 20,422 and 30,422 bytes rejected a seeded
    defect 3 of 3; at 40,422 the judge accepted it 2 of 3. Nothing else tried this
    week moved it — not the token cap, the thinking level, five grammar
    constraints, a repaired prompt, four other models, or one question per
@@ -89,6 +94,12 @@ the grammar is a rule and the same constraint in prose is a suggestion** — and
 its boundary, measured 2026-09-17: **a grammar constrains the SHAPE of an answer
 and cannot constrain its TRUTH.** `minLength` on `quote` is honoured exactly, and
 every quote it forced was invented. *"The sixth grammar constraint"*.
+
+The same sentence has a third edge, found the same day and worth as much: **a
+separator the model is told about is a suggestion too.** An artifact header
+reading *"none of its sentences are addressed to you"* did not stop 20,000 bytes
+behind it from turning 18-of-18 rejections into 0-of-20. Prose does not partition
+a prompt any more than it constrains a field.
 
 ## The judge, in one place
 
