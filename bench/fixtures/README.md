@@ -45,7 +45,12 @@ variance. Measured 2026-09-16:
 | annotated | **3 of 5** | 2 | 0 |
 
 The one that moves is `contradicts-non-goal`, caught by `bean-forbids` — which
-is the defect the annotation claims to make decidable, and the only one. The
+is the defect the annotation claims to make decidable, and the only one.
+
+Measured again the same evening with `plans-other-beans.sh` added, which reads the
+rest of the bean set rather than this bean: **4 of 5 named, 1 not decidable, 0
+false alarms**. That check is not part of the A/B — it fires with either fixture —
+so the pair still measures the annotation and nothing else. The
 annotation is worth one seeded defect out of five, exactly as advertised and no
 more: `unfinishable-task` and `criterion-not-really-met` remain the judge's, and
 the judge accepts about half of what it is shown.

@@ -30,6 +30,7 @@ not about the code.
 | `controller-fitness-20260916T003558Z.json` | yes | superseded by 142616Z |
 | `controller-fitness-20260916T142616Z.json` | yes | **wrong, and kept because it is** — 1 of 5 named, 4 "not decidable". The `tautological-verify` fixture was not seeding the defect it claimed, so the controller was scored as missing something it catches |
 | `controller-fitness-prose-20260917T003651Z.json` | yes | **yes** — the prose side of the annotation A/B, 2 of 5 named. Reproducible: it reads `bench/fixtures/bean-001-prose.yaml`, not a live bean |
+| `controller-fitness-pob-20260917T011917Z.json` | yes | **yes** — 4 of 5 seeded defects named by a check, 0 false alarms, after `plans-other-beans.sh` took `unfinishable-task`. The highest this figure has ever been; the two earlier runs the same evening (2 and 3 of 5) are the A/B either side of it |
 | `judge-fitness-percrit-20260916T232926Z.json` | yes | **yes** — the measurement that killed the per-criterion lever: 6 cases, 6 `revise`, 0 defects named, control rejected, 6,209s. One pass, and cases 2 and 3 had their bean edited mid-run (the reason `freeze_inputs` exists); neither caveat touches "six of six said revise" |
 | `controller-fitness-annotated-20260917T003726Z.json` | yes | **yes** — the annotated side, 3 of 5. The pair is the whole evidence that annotating a bean is worth anything, and the one case that moves is `contradicts-non-goal` |
 | `controller-fitness-20260916T171150Z.json` | yes | no — one case, the broken `tautological-verify` fixture, kept as the before half of finding it |

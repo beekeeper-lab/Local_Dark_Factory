@@ -42,9 +42,14 @@ option at this size, and leaving it open is choosing that option by default.
 2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
-3. **Work moved out of the judge instead.** A bean's `non_goals` and `constraints`
-   can now say *where*, and the controller decides them — three of five seeded
-   defects, against one this morning. *"What a bean forbids"*.
+3. **Work moved out of the judge instead, and this is the thing that keeps
+   working.** **Four of five seeded defects are now decided by a check, with zero
+   false alarms**, against one this morning. Two mechanisms: a bean's `non_goals`
+   and `constraints` can say *where* (`bean-forbids.sh`), and a task intent can be
+   compared against what every other approved bean says it is for
+   (`plans-other-beans.sh` — the evidence for `unfinishable-task` was never in the
+   documents under audit, it was in the other nineteen beans). Only
+   `criterion-not-really-met` is still the judge's.
 4. **Hidden tests are built**, bean-001 and bean-002 have suites, and the worker is
    told the rule without the answers. *"Hidden tests"*.
 5. **Five grammar changes**, each measured, which produced this line's **first
@@ -100,9 +105,11 @@ has never exceeded **1 in 12**.
 1. **Advisory audits are the best-supported decision in this repository**, and not
    a holding position. `merge_mode: human_required` carries the weight.
 2. **Move work out of the judge rather than into prompting it.** Done today:
-   `bean-forbids.sh` takes `contradicts-non-goal` — 3 of 5 seeded defects now
-   decided by the controller, against 1. Hidden tests measure the build against
-   something nobody in the loop can read.
+   `bean-forbids.sh` takes `contradicts-non-goal` and `plans-other-beans.sh` takes
+   `unfinishable-task` — **4 of 5 seeded defects decided by a check with 0 false
+   alarms**, against 1 this morning. Hidden tests measure the build against
+   something nobody in the loop can read. Every lever aimed AT the judge has
+   produced nothing this week; every piece of work taken away from it has stuck.
 3. **Do not weaken the quote check.** It is the instrument catching the
    fabrication, and its refusal rate is the measurement. I nearly redesigned it
    before reading what it had refused.
