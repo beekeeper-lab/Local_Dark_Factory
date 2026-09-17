@@ -141,12 +141,28 @@ printf '  %s test file(s), %s source file(s), %s prose file(s)\n\n' \
 # hollowed out in place. Reported as counts so a reader can tell the difference
 # between "none" and "not looked for".
 DELETED_TESTS=0; NEW_SKIPS=0; REMOVED_ASSERTS=0; ADDED_ASSERTS=0
+LOST_FILES=""
 if [ "${#TEST_FILES[@]}" -gt 0 ]; then
   DIFF_TEXT="$(git -C "$ROOT" diff "$MERGE_BASE"...HEAD -- "${TEST_FILES[@]}")"
   DELETED_TESTS="$(grep -cE '^-[[:space:]]*(def|async def) test_' <<<"$DIFF_TEXT" || true)"
   NEW_SKIPS="$(grep -cE '^\+.*(@pytest\.mark\.(skip|xfail)|pytest\.skip\(|unittest\.skip)' <<<"$DIFF_TEXT" || true)"
   REMOVED_ASSERTS="$(grep -cE '^-[[:space:]]*assert[[:space:]]' <<<"$DIFF_TEXT" || true)"
   ADDED_ASSERTS="$(grep -cE '^\+[[:space:]]*assert[[:space:]]' <<<"$DIFF_TEXT" || true)"
+
+  # Per FILE as well as in total, because the total is a net and a net hides the
+  # thing being looked for. Six assertions added to a new test file and five
+  # stripped out of an existing one reads as "6 added, 5 removed" — which is true,
+  # and is also a change that gutted a test file while the arithmetic said it had
+  # gained. The same defect class as the quote check counting quotes rather than
+  # criteria; see "Nine ways a check goes wrong" in RESUME.md.
+  for tf in "${TEST_FILES[@]}"; do
+    fd="$(git -C "$ROOT" diff "$MERGE_BASE"...HEAD -- "$tf")"
+    r="$(grep -cE '^-[[:space:]]*assert[[:space:]]' <<<"$fd" || true)"
+    a="$(grep -cE '^\+[[:space:]]*assert[[:space:]]' <<<"$fd" || true)"
+    [ "$r" -gt "$a" ] && LOST_FILES="$LOST_FILES$tf ($r removed, $a added)
+"
+  done
+  LOST_FILES="$(printf '%s' "$LOST_FILES" | sed '/^$/d')"
 fi
 # Files removed entirely count too — a deleted test file deletes every test in it.
 while IFS= read -r f; do
@@ -160,6 +176,8 @@ done < <(git -C "$ROOT" diff --diff-filter=D --name-only "$MERGE_BASE"...HEAD --
   || weigh "new skips" "$NEW_SKIPS skip/xfail marker(s) added"
 if [ "$REMOVED_ASSERTS" -gt "$ADDED_ASSERTS" ]; then
   weigh "assertions" "$REMOVED_ASSERTS removed, $ADDED_ASSERTS added — net loss of $((REMOVED_ASSERTS - ADDED_ASSERTS))"
+elif [ -n "$LOST_FILES" ]; then
+  weigh "assertions" "$ADDED_ASSERTS added and $REMOVED_ASSERTS removed overall, but these files lost more than they gained: $(printf '%s' "$LOST_FILES" | tr '\n' ' ')"
 else
   ok "assertions" "$ADDED_ASSERTS added, $REMOVED_ASSERTS removed"
 fi
@@ -329,6 +347,7 @@ jq -n --arg schema "test-integrity/1.0.0" \
   --argjson prose "$(printf '%s\n' ${PROSE_FILES+"${PROSE_FILES[@]}"} | jq -Rs 'split("\n") | map(select(. != ""))')" \
   --argjson deleted "$DELETED_TESTS" --argjson skips "$NEW_SKIPS" \
   --argjson removed_asserts "$REMOVED_ASSERTS" --argjson added_asserts "$ADDED_ASSERTS" \
+  --argjson lost "$(printf '%s\n' "${LOST_FILES:-}" | sed '/^$/d' | jq -Rsc 'split("\n") | map(select(length > 0))')" \
   '{schema:$schema, base:$base,
     test_files:$tests, source_files:$src, prose_files:$prose,
     fails_on_revert:{result:$pins, why:$why, command:$cmd,
@@ -338,7 +357,8 @@ jq -n --arg schema "test-integrity/1.0.0" \
                      caveat:"The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something. passed_with_the_change_reverted is the finer answer where the runner gives one: tests in the CHANGED test files that pass anyway, which is the whole suite result telling you yes while some of the new tests assert what was already true. It is empty both when every new test pins the change and when the module would not import without it — the printed line says which."},
     test_integrity:{deleted_tests:$deleted, new_skips:$skips,
                     removed_asserts:$removed_asserts, added_asserts:$added_asserts,
-                    caveat:"Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place."}}' \
+                    files_that_lost_assertions:$lost,
+                    caveat:"Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place. removed_asserts and added_asserts are totals across the diff, and a total is a net: files_that_lost_assertions names each file that removed more than it added, because six added in a new file and five stripped from an existing one is a true total and a gutted test file."}}' \
   > "$RUN_DIR/test-integrity.json"
 
 printf '\n'

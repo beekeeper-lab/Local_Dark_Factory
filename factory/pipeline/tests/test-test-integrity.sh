@@ -163,5 +163,28 @@ check "it does not settle it either way" "TEST INTEGRITY UNDECIDED" "$out"
 nope  "and it never claims the tests pin anything"    '"result":"yes"' \
       "$(tr -d ' \n' < factory/runs/R/test-integrity.json)"
 
+printf '\n== a net of assertions is not an accounting of them ==\n\n'
+#
+# Six assertions added to a new test file and five stripped out of an existing
+# one is "6 added, 5 removed" — true, and also a change that gutted a test file
+# while the arithmetic said it had gained. The total is a net, and a net hides
+# exactly the thing this check is for.
+git checkout -q main && git checkout -q -b netted
+printf 'def existing():\n    return 1\n\ndef added():\n    return 2\n' > src/a.py
+# The existing test file is hollowed out: its one assertion becomes a pass.
+printf 'from src.a import existing\n\ndef test_existing():\n    existing()\n' > tests/test_a.py
+# And a new file arrives with four, so the total reads as a gain of three.
+{ printf 'from src import a\n\n'
+  printf 'def test_new_one():\n    assert a.added() == 2\n    assert a.added() > 1\n    assert a.added() < 3\n    assert a.added() != 0\n'
+} > tests/test_b.py
+git add -A && git commit -q -m "hollow out one test file and add another"
+out="$(ti)"
+check "the total still reads as a gain"  "4 added" "$out"
+check "but the file that lost is named"  "lost more than they gained" "$out"
+check "by name"                          "tests/test_a.py" "$out"
+check "with the numbers for that file"   "(1 removed, 0 added)" "$out"
+check "and it is in the record"          "tests/test_a.py" \
+      "$(jq -c '.test_integrity.files_that_lost_assertions' factory/runs/R/test-integrity.json 2>/dev/null)"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
