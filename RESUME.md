@@ -1543,6 +1543,24 @@ criterion arm.
   directly — bean-001's criterion ids filled with three other beans' work. That
   does not depend on any count.
 
+**And this repository already knew.** `evidence/README.md` has carried this since
+2026-09-16, about the first reaudit:
+
+> Also kills the obvious hypothesis: the largest payload (doc, 36,731 bytes) is
+> the one that worked and the smallest failure (spec, 25,428) is not the smallest
+> payload, **so size is not the variable**.
+
+Written a day before the size finding, sitting in the ledger the whole time it
+was believed. **A new result that contradicts a recorded one is a fact about one
+of them**, and the contradiction should have been the first thing surfaced rather
+than something noticed while grepping for something else. The reaudit note was
+right.
+
+The lesson is cheap to state and was not applied: **before publishing a finding,
+grep the evidence ledger for the thing it contradicts.** This file exists so that
+the project can disagree with itself out loud, and it only works if somebody
+reads it.
+
 **Which other figures are affected: none, checked rather than assumed.** It is
 the first question this retraction raises, so: `bench/judge-fitness.sh` uses
 `RD="$WORK/$name.$REP"` and `bench/judge-variance.sh` uses `RD="$TMP/run-$i"` —
