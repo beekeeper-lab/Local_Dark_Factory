@@ -1,37 +1,45 @@
 # Resume here — Phase 1
 
-Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Branch `factory/phase0-prep-and-bean-set-v1`.
+Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
+the working branch is `main` again, and new work opens small pull requests off it.
 
 ## Read this first
 
-Two things are waiting on you, and nothing else in this repository is blocked.
-A third, further down, blocks nothing and wants a decision anyway.
+**One thing is waiting on you, and it is a settings page, not a decision about
+the work.** Everything that was on this list has been done.
 
-1. **Merge https://github.com/beekeeper-lab/seating-planner-py/pull/1**, or say why
-   not. The two documents the line wrote are posted as comments on it; reading them
-   is the review the pull request asks for. Until it lands, `factory go` has nothing
-   to run — see below.
-2. **`gh auth refresh --scopes write:packages`**, then the two lines under
-   "CI is built and waiting on one command" in Still Open. That publishes the pinned
-   gate image, and the next `scaffold.sh` run then installs the workflow by itself.
-   It does **not** make `required_checks` enforceable: branch protection is
-   unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
-   so `gates` will be a visible check and never a gate on this repository. The
-   human merge is the gate, which is what `merge_mode: human_required` already
-   said.
+1. **Make `ghcr.io/beekeeper-lab/factory-gate-python` public** — or grant
+   seating-planner-py Actions access to it. The package is private and linked to
+   no repository, so CI's `GITHUB_TOKEN` cannot see the gate image and `gates`
+   is red for a reason unrelated to any change under test. There is no REST
+   endpoint for container visibility; this is a toggle in the package's settings
+   page. Recommendation: **public** — it is ruff, mypy and pytest on a python
+   base image, and a public image means every repo this factory scaffolds gets a
+   working `gates` job with no per-repo grant. Full reasoning in "OPEN, and it
+   needs one toggle in a settings page" below.
 
-One more, whenever you like: `factory read <run-dir>` in the target repo records
-that a human read the two rendered documents. It is the one Phase-1 exit predicate
-a script cannot settle.
+Done since the last time this list was written:
 
-And one that blocks nothing but is worth a decision: **this repository's own
-PR #2 has been open since 2026-09-14 and now carries 308 commits** — all of Phase
-0, all of Phase 1, every measurement above. `main` is still at the Spec v5 merge.
-Nothing needs it: the branch is where the work happens and everything is pushed.
-But a 308-commit pull request is not reviewable as a pull request, and the longer
-it stands the less true it gets. **Recommendation: merge it, and open smaller
-ones from here.** The alternative — reviewing it as one change — is not a real
-option at this size, and leaving it open is choosing that option by default.
+- **PR #1 merged** (2026-09-17 17:31Z) — read first: diff, gates, criteria,
+  non-goals, hidden suite. bean-002 is now `ready` and running.
+- **PR #2 merged** (17:52Z) — 409 commits, all of Phase 0 and Phase 1. `main` is
+  the working branch again and new work opens smaller pull requests.
+- **`write:packages` granted and the gate image published.** The scaffold then
+  installed `.github/workflows/gates.yml` by itself, which is the first time its
+  hold-back condition has fired the other way.
+- **`factory read` resolved honestly.** An agent may now record that it read the
+  documents — `factory read --as-agent <who> --note "<what it found>"`, which
+  refuses without a substantive note. It records a **weaker, true** fact: all
+  three readers of that file (`factory runs`, `factory doctor`,
+  `bench/phase1-audit.sh`) distinguish it from a human read, and
+  `docs_rendered_and_read` stays **pending** until a human does it. That
+  predicate is still the one thing a script cannot settle, and now it says so
+  without either lying or blocking.
+
+Publishing the image does **not** make `required_checks` enforceable: branch protection is
+unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
+so `gates` is a visible check and never a gate here. The human merge is the
+gate, which is what `merge_mode: human_required` already said.
 
 **What changed on 2026-09-16 and the night of the 17th, in the order a reader
 needs it:**
@@ -182,32 +190,78 @@ lever"*, *"Why bean-001 has no binding audit verdict"*, *"The judge has been
 running at the one thinking level that does not work"*, *"The judge does not run
 as an agent"*.
 
-## The line is blocked on one human action, and correctly
+## The human merge happened, the chain is unblocked, and bean-002 is running
 
-`factory go` runs the approved beans in dependency order. It ran bean-002 this
-morning and stopped, because bean-001's work is in an **open pull request**, not
-on `main`, and `main` is what the next bean builds against. `merge_mode:
-human_required` means that is by design.
+`merge_mode: human_required` did its job and then got out of the way. PR #1 was
+read — diff, gates, criteria, non-goals, hidden suite — and merged on
+2026-09-17 at 17:31Z. `factory queue` immediately says:
 
 ```
-$ factory queue
-bean-001   pr_open   Project scaffold with linting…   pull request open, not merged: …/pull/1
-ready: nothing
-waiting on a human to merge: bean-001
+BEAN       STATE   TITLE
+bean-002   ready   Core domain models for events, tables, gue
+ready: bean-002
 ```
 
-**Merging https://github.com/beekeeper-lab/seating-planner-py/pull/1 unblocks the
-whole chain** — bean-002 becomes ready, and `factory go` will work down the
-dependency order from there. Read the two documents posted as comments on it
-first; that is the review the pull request asks for.
+That is the first time the queue has offered work off the back of a finished
+bean, which is the whole point of the arrangement: the line stops at the one
+place a human is meant to look, and starts again when they have looked.
 
-The developer model found this before the queue did: it opened bean-002's tree,
-saw no `src/`, cross-checked bean-001's own spec and gate record, and stopped
-rather than planning around the missing precondition
+Both pull requests are merged. seating-planner-py is at bean-001's scaffold on
+`main`; Local_Dark_Factory's PR #2 (409 commits, all of Phase 0 and Phase 1)
+merged at 17:52Z and `main` is the working branch again.
+
+The developer model found the block before the queue did: it opened bean-002's
+tree, saw no `src/`, cross-checked bean-001's own spec and gate record, and
+stopped rather than planning around the missing precondition
 (`evidence/bean-002-worker-questions-20260916.md`).
 
 
-## State: Phase 0 closed. Phase 1 is built end to end, and one real run has now finished — PR #1 is open.
+## OPEN, and it needs one toggle in a settings page: CI cannot pull the gate image
+
+The gate image is published — `ghcr.io/beekeeper-lab/factory-gate-python:20260914`
+— and the scaffold installed `.github/workflows/gates.yml` for the first time,
+because its hold-back condition ("gates.lock.yaml still pins localhost/…")
+finally fired the other way. Three CI runs since, all red.
+
+The first two were mine: `publish.sh` read the digest back from the LOCAL image
+while the comment directly above it said, and had always said, that it read it
+back from the registry. podman stores an image under the manifest it built;
+the registry computes its own on receipt; the same bytes were
+`sha256:b782278…` locally and `sha256:77f23eb0…` in ghcr.io. CI pulled by the
+local one and got `manifest unknown`. Fixed, pinned to the registry's digest,
+pulled back under it so this box can still run its own gates.
+
+The third is not mine to fix. The package is **private and linked to no
+repository**, so seating-planner-py's `GITHUB_TOKEN` cannot see it, and GHCR
+answers `manifest unknown` for that too — it will not confirm that a private
+image exists, which is correct of it and indistinguishable from here. Login
+succeeds; the pull does not.
+
+**The fix is one of two settings changes, neither of which has a REST endpoint**
+(`PATCH /user/packages/container/…` is 404, and container visibility is
+UI-only):
+
+- make the package **public** — recommended. It is ruff, mypy and pytest on a
+  python base image; there is nothing in it to keep. A public image needs no
+  token at all, which also means every repo this factory scaffolds gets a
+  working `gates` job with no per-repo grant, and the digest pin still decides
+  identity.
+- or grant **this repository** Actions access to the package, and repeat that
+  for every repository the factory ever scaffolds.
+
+Until then `gates` is red on seating-planner-py for a reason that has nothing
+to do with any change under test. The pull step now prints both possibilities
+in the order worth checking, rather than sending a reader off to re-verify a
+digest that is correct.
+
+Not a candidate: pip-installing the tools in the workflow. A green from *a*
+ruff at whatever version resolved that morning and a green from *the* gate are
+two different claims wearing the same checkmark, and the difference is
+invisible in the checkmark. That is the failure this repository exists to
+prevent.
+
+
+## State: Phase 0 closed. Phase 1 is built end to end, one real bean has merged, and the second is running.
 
 **Test coverage as of 2026-09-16 evening: 1533 assertions across 36 suites, all
 green, in about two minutes.** `factory/pipeline/tests/run-all.sh` runs both
