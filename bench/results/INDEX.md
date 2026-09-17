@@ -16,6 +16,23 @@ afterwards would be inventing it. `figures_have_provenance` reports those files
 as a standing major finding, and it should: the finding is about the artifacts,
 not about the code.
 
+## Every multi-pass `size-sweep-*.json` here is the first pass, repeated
+
+Found 2026-09-17. The sweep shared one run directory across passes, `judge.sh`
+numbers its output `attempt-N`, and the reader was pinned to `attempt-1` — so
+passes 2..N re-read pass 1, and a pass that produced nothing was reported with
+the earlier pass's verdict. **Treat the `points` array of every size-sweep
+artifact dated 2026-09-17 as one measurement per size, not N.**
+
+`size-sweep-padbean-*`, `size-sweep-kept-*` and `size-sweep-critcase-*` were run
+with `--keep`, so their real judgements exist outside the artifact and are quoted
+in RESUME. The others deleted their run directories and cannot be recovered.
+
+Fixed by giving each pass its own run directory. Artifacts written after that
+carry `schema: size-sweep/…` with the same shape and are not affected; there is
+no marker inside the files themselves, which is the honest limitation of finding
+this after the fact.
+
 ## Provenance
 
 **Standing finding, and what is actually left of it.** `figures_have_provenance`

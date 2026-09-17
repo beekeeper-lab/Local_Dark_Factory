@@ -211,5 +211,25 @@ if [ -n "$B" ]; then
 fi
 kill "$_sp" 2>/dev/null; wait "$_sp" 2>/dev/null || true
 
+printf '\n== every pass gets its own run directory ==\n\n'
+#
+# The worst bug this harness has had, and it was silent. The run directory was
+# shared by every pass, judge.sh numbers its output attempt-N by counting the
+# files already there, and the reader was pinned to attempt-1 — so passes 2..N
+# reported pass 1 again. The "did it answer?" guard is file existence, which a
+# previous pass satisfies, so a pass that produced nothing was reported with the
+# earlier pass's verdict rather than as a failure.
+#
+# Measured from a kept run on 2026-09-17: the table said accept five times where
+# the judgements on disk were accept, revise, revise, revise and one pass that
+# wrote no answer. Every multi-pass figure from this harness before the fix was
+# the first pass, repeated.
+check "the run dir carries the pass number" 'pad-$pad.$_pass' "$(cat "$SWEEP")"
+check "and the reason is recorded there"    "the first pass, repeated" "$(cat "$SWEEP")"
+# The reader is still pinned to attempt-1, and that is now CORRECT: a fresh
+# directory per pass means attempt-1 is always this pass's. Asserted so that
+# anyone who un-does the directory change sees this break.
+check "the reader expects attempt-1"        "spec.attempt-1.judgement.json" "$(cat "$SWEEP")"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

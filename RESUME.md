@@ -44,9 +44,11 @@ needs it:**
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
 3. **The SIZE of the prompt is the only thing that has ever moved the
-   false-accept rate, and it is now controlled twice over.** At ~20,000 bytes this
-   judge did not accept a spec with a planted flaw once in **18 tries**; at
-   ~40,000 it rejected one **0 times in 20**. Two confounds were chased down: the
+   false-accept rate — direction established, magnitude RETRACTED.** The harness
+   reported its first pass N times (*"RETRACTED IN PART"*), so the counts were
+   wrong. What the judgements on disk support: **3 accepts in 11 at ~40,000 bytes
+   and 0 in 10 at ~20,000**, every accept at the large size. A clean re-run is
+   what would put a number on it. Two confounds were chased down: the
    padding was the rest of the corpus, which contains the bean that owns the path
    the defect writes — a control with that removed made the effect *sharper*; and
    the padding went inside the document under audit — an arm that put it in a
@@ -135,7 +137,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
-| **twice the artifact bytes** | **rejected 13 of 13 → 0 of 13**, confound controlled | — |
+| **twice the artifact bytes** | direction only: every recovered accept is at the large size (3 of 11 vs 0 of 10). Earlier counts retracted | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1559,7 +1561,58 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
-## ANSWERED, and my prediction was wrong: the bytes do not have to be in the document
+## RETRACTED IN PART: the sweep reported its first pass N times
+
+Found 2026-09-17, after five runs and several confident paragraphs. **Every
+multi-pass figure this harness produced was the first pass, repeated.**
+
+The run directory was shared by every pass. `judge.sh` numbers its output
+`attempt-N` by counting the files already there, so pass 2 wrote `attempt-2` —
+and the reader was pinned to `attempt-1`. Worse, the "did it answer?" guard is
+`[ -f "$J" ]`, which a previous pass satisfies, so a pass that produced **nothing**
+was reported with the earlier pass's verdict instead of as a failure.
+
+**What the judgements on disk actually say**, from the three runs that used
+`--keep` (the others deleted their run directories, and their numbers cannot be
+recovered at all):
+
+| arm | ~20,000 bytes | ~40,000 bytes |
+| --- | --- | --- |
+| padding in the bean | **5 revise, 0 accept** | **1 accept, 3 revise**, 1 no answer |
+| `criterion-not-really-met` | **5 revise, 0 accept** | **1 accept, 3 revise** |
+| padding in the spec, kept | — | 1 accept, 1 no answer |
+
+Against a table that claimed `accept ×4` for the bean arm and `revise ×5` for the
+criterion arm.
+
+**So what stands and what does not.**
+
+- **Does not stand: the magnitude.** "18 of 18 against 0 of 20" counted one
+  judgement as five. The real recoverable picture is **3 accepts in 11 judgements
+  at the large size and 0 in 10 at the small size.**
+- **Does not stand: "size does not move `criterion-not-really-met`".** Its large
+  arm has an accept in it. The table hid that.
+- **Probably stands: the direction.** Every accept recovered is at a large size;
+  no small-size judgement accepted. But 3 of 11 is not 20 of 20, and this judge
+  gives different verdicts for byte-identical input, so **the honest position is
+  that the effect is unmeasured in magnitude** until a clean run is done.
+- **Stands on its own evidence: displacement.** The judgement in
+  `evidence/judge-answered-about-the-padding-20260917.md` is one file read
+  directly — bean-001's criterion ids filled with three other beans' work. That
+  does not depend on any count.
+
+**The fix**: a fresh run directory per pass, so `attempt-1` is always this pass's
+and the file-existence guard means what it says. Asserted in
+`bench/tests/test-size-sweep.sh`, including that the reader stays pinned to
+`attempt-1` — which is correct *only* with the per-pass directory, so undoing one
+breaks the other visibly.
+
+**How it was found**: by opening a kept judgement to check something else
+entirely — whether a `NAMED` hit was genuine — and noticing the verdict inside
+disagreed with the row printed for it. `--keep` was added two hours earlier for an
+unrelated reason. Without it this would still be standing.
+
+## The claims as they were written, before the bug was found
 
 Five passes with `--pad-into bean` — identical padding, appended to a copy of the
 BEAN so it reaches the judge under its own header, with `spec.md` left exactly as
@@ -1636,13 +1689,15 @@ writing down precisely because it argues against the thing I built.**
 
 ## What size actually costs, in one line
 
-**At 20,422 bytes this judge did not once accept a spec with a planted flaw — 13
-of 13. At 40,422 it did not once reject it — 0 of 13.** Same defect, same model,
-same temperature, three runs, two padding sources, one of them built to remove
-the only alternative explanation anyone could name.
+**RETRACTED — see *"RETRACTED IN PART"*.** These counts came from a harness that
+reported its first pass N times. What the judgements on disk support is 3 accepts
+in 11 at the large size and 0 in 10 at the small one: the same direction, an
+unmeasured magnitude, and a clean re-run outstanding.
 
-That is the whole of it, and it is the only thing measured this week that changed
-how often the judge is wrong.
+What follows was written before the bug was found and is kept because the actions
+it justified are still the right actions — fewer bytes of raw JSON, a warning
+that truncates nothing — and because a document that silently deletes what it
+used to claim teaches nobody anything.
 
 **What the line does about it, today:** the controller's own measurements go to
 the judge as prose rather than raw JSON, which took the spec audit to 21,343

@@ -276,7 +276,20 @@ RESULTS='[]'
 for _pass in $(seq 1 "$REPEAT"); do
 [ "$REPEAT" -gt 1 ] && printf '\n-- pass %s of %s --\n' "$_pass" "$REPEAT"
 for pad in $SIZES; do
-  RD="$TMP/pad-$pad"; mkdir -p "$RD/verdicts"
+  # A FRESH directory per pass. This was `$TMP/pad-$pad`, shared by every pass,
+  # and it made multi-pass sweeps report the first pass five times.
+  #
+  # Two failures, one cause. judge.sh numbers its output `attempt-N` by counting
+  # the files already there, so pass 2 wrote `attempt-2` — and the reader below is
+  # pinned to `attempt-1`. And the "did it answer?" guard is `[ -f "$J" ]`, which
+  # a previous pass satisfies, so a pass that produced NOTHING was reported with
+  # the earlier pass's verdict instead of as a failure.
+  #
+  # Measured from a kept run on 2026-09-17: the table said `accept` five times
+  # where the judgements on disk were `accept, revise, revise, revise` and one
+  # pass that wrote no answer at all. Every multi-pass figure this harness
+  # produced before this line was the first pass, repeated.
+  RD="$TMP/pad-$pad.$_pass"; mkdir -p "$RD/verdicts"
   cp "$SPEC" "$RD/spec.md"; cp "$TASKS" "$RD/tasks.yaml"
   printf '{"run_id":"s","bean":"%s","branch":"b"}\n' \
     "$("$PIPE/yaml2json.sh" "$BEAN" | jq -r '.id')" > "$RD/run.json"
