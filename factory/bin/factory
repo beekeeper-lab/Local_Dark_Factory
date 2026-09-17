@@ -452,6 +452,11 @@ run from the working tree."
     # silent about a check nobody set up reads the same as a doctor reporting it
     # green, and the whole value of hidden tests is that a reader knows whether
     # the worker was measured by something it could not read.
+    # And where to check a suite is a suite. The gate's control proves one can
+    # fail; `hidden-tests/verify.sh` is the only thing that proves one can pass,
+    # and a suite that cannot pass blocks its bean forever while the worker sees
+    # only a count. It is not run from here — it needs a tree the bean produced,
+    # which exists only after the bean has run.
     HT="$(jq -c '.hidden_tests // empty' "$CONFIG" 2>/dev/null || true)"
     if [ -z "$HT" ]; then
       say note "hidden tests" "none configured — every check in this repo runs code the worker could read"
@@ -478,7 +483,7 @@ run from the working tree."
             if [ "$HTPB" = 1 ]; then
               HTB="$(find "$HTDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
               if [ "$HTN" -gt 0 ]; then
-                good "hidden tests" "$HTN file(s) for $HTB bean(s), outside the repository"
+                good "hidden tests" "$HTN file(s) for $HTB bean(s), outside the repository — verify one both ways with hidden-tests/verify.sh"
               else
                 say note "hidden tests" "configured per bean, and no bean has one yet ($HTDIR)"
               fi

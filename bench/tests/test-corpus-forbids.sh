@@ -125,6 +125,12 @@ BM="$(cat "$T"/factory/beans/bean-002-*/bean.md)"
 check "an annotated non-goal renders as its text" "- no rule model (bean-003)" "$BM"
 nope  "not as a Python dict"                      "{'text':" "$BM"
 check "and says what is machine-checked"          "checked, not judged" "$BM"
+# Constraints too. `non_goals` is what the bean is not for and `constraints` is
+# what it may not do — the same shape of statement, checked by the same script —
+# and bean.md carried only the first. A reader of bean-002's document saw three
+# of its six statements.
+check "constraints are rendered at all"          "## Constraints" "$BM"
+check "and carry their own annotations"          "no solver imports" "$BM"
 BY="$(ls "$T"/factory/beans/bean-002-*/bean.yaml)"
 if [ -f "$BY" ] && diff -q "$BY" "$B2" >/dev/null; then
   ok "the installed bean.yaml is the corpus bean, byte for byte"

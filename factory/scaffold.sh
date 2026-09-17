@@ -261,29 +261,42 @@ for ac in bean.get("acceptance_criteria") or []:
     detail = " ".join(v.get("run", [])) or v.get("test_id") or v.get("gate_id") or v.get("note") or ""
     out.append(f"| {ac.get('id','')} | {ac.get('text','').strip()} | `{kind}` {('`' + detail + '`') if detail else ''} |")
 out.append("")
+def render_statement(n):
+    """A non-goal or a constraint, which are the same shape of statement.
+
+    Either prose or an object that ALSO says where — paths and imports the
+    controller checks without asking a judge. Rendering the object with an
+    f-string printed a Python dict into the document; it read as
+    `{'text': 'no rule model', 'forbidden_paths': [...]}` and the sentence a
+    reader needed was inside it. The text is the statement either way; what the
+    machine checks is worth saying, because a reader cannot otherwise tell which
+    of these the audit is still guessing at.
+    """
+    if not isinstance(n, dict):
+        return f"- {n}"
+    checked = [f"`{pat}`" for pat in (n.get("forbidden_paths") or [])]
+    checked += [f"import `{mod}`" for mod in (n.get("forbidden_imports") or [])]
+    line = f"- {n.get('text', '(no text)')}"
+    if checked:
+        line += "  \n  *checked, not judged:* " + ", ".join(checked)
+    return line
+
+# Constraints as well as non-goals. `non_goals` is what the bean is not for and
+# `constraints` is what it may not do — the same shape of statement, checked by
+# the same script, and bean.md carried only the first. A reader of the generated
+# document saw three of bean-002's statements and not the other three.
+cons = bean.get("constraints") or []
+if cons:
+    out.append("## Constraints\n")
+    for c in cons:
+        out.append(render_statement(c))
+    out.append("")
+
 ng = bean.get("non_goals") or []
 if ng:
     out.append("## Non-goals\n")
     for n in ng:
-        # A non-goal is either prose or an object that ALSO says where — paths and
-        # imports the controller checks without asking a judge. Rendering the
-        # object with an f-string printed a Python dict into the document; it read
-        # as `{'text': 'no rule model', 'forbidden_paths': [...]}` and the sentence
-        # a reader needed was inside it. The text is the non-goal either way; what
-        # the machine checks is worth saying, because a reader cannot otherwise
-        # tell which of these the audit is still guessing at.
-        if isinstance(n, dict):
-            checked = []
-            for pat in n.get("forbidden_paths") or []:
-                checked.append(f"`{pat}`")
-            for mod in n.get("forbidden_imports") or []:
-                checked.append(f"import `{mod}`")
-            line = f"- {n.get('text', '(no text)')}"
-            if checked:
-                line += "  \n  *checked, not judged:* " + ", ".join(checked)
-            out.append(line)
-        else:
-            out.append(f"- {n}")
+        out.append(render_statement(n))
     out.append("")
 print("\n".join(out))
 PY
