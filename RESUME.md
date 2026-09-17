@@ -116,8 +116,17 @@ must be present"*, *"The repository does not contain a .gitignore file"* (it doe
 `evidence/judge-invented-quotes-20260916.md` has the list, including one where it
 quoted its own instructions as text from the document under audit.
 
-**How often it is wrong.** 4 false accepts in 15 seeded defects at the best
-configuration, 9 before the prompt was fixed. *(And "named the defect 4 of 15" is
+**How often it is wrong — two independent harnesses, and they agree.**
+
+| measurement | false accepts |
+| --- | --- |
+| `judge-fitness --repeat 3`, 5 seeded defects (`judge-fitness-rubricfix-20260916T211029Z`) | **4 of 15** |
+| `size-sweep` clean run, one seeded defect, 5 passes at each of two sizes (`size-sweep-clean-20260917T135317Z`) | **2 of 10** — 1 at each size |
+
+**A fifth to a quarter, from different harnesses, different case mixes and
+different days.** That is the number the advisory-audits decision rests on, and it
+is the number nothing measured this week moved. 9 in 15 before the prompt stopped
+contradicting itself is the one change that ever did. *(And "named the defect 4 of 15" is
 an UPPER BOUND: NAMED is a keyword match over the judgement body, and the body
 may be invented — a control on 2026-09-17 produced an ACCEPT scored as naming the
 defect because a catchword sat inside a fabricated finding about "a guest can be
@@ -137,6 +146,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | prompt stopped contradicting itself | **9 → 4 false accepts** | 1 stamped → 0 |
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
+| *(for contrast, the one that DID move it)* | prompt stopped contradicting itself: **9 → 4 in 15** | 1 stamped → 0 |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
 | twice the artifact bytes | **nothing** — 1 accept in 5 at each size, clean run. Earlier figures retracted in full | — |
 
