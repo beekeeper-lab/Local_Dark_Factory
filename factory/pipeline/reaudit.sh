@@ -51,8 +51,18 @@ if [ "${FACTORY_REAUDIT_SNAPSHOTTED:-0}" != 1 ] && [ "${FACTORY_NO_SNAPSHOT:-0}"
   # Asserted, not hoped for. A snapshot missing the validator does not fail; it
   # downgrades every verdict check to "structural only" and says so in a line
   # nobody reads.
+  #
+  # The fixed list plus everything judge.sh and audit-check.sh actually call.
+  # The fixed list alone goes stale the moment either grows a dependency: on
+  # 2026-09-17 judge.sh started calling measurement-brief.sh, which was not on it,
+  # and a snapshot without that script does not fail — it silently sends the judge
+  # 4,000 more bytes than the run being measured was supposed to send, and the
+  # measurement is of a prompt nobody chose. Derived, so it cannot go stale again.
+  _calls="$(grep -hoE '\$PIPELINE_DIR/[A-Za-z0-9_.-]+\.(sh|py)' \
+              "$_fr/factory/pipeline/judge.sh" "$_fr/factory/pipeline/audit-check.sh" 2>/dev/null \
+            | sed 's|\$PIPELINE_DIR/|factory/pipeline/|' | sort -u)"
   for _needed in factory/pipeline/judge.sh factory/pipeline/audit-check.sh \
-                 factory/pipeline/roles.json schemas bench/validate.py; do
+                 factory/pipeline/roles.json schemas bench/validate.py $_calls; do
     [ -e "$_snap/$_needed" ] || { printf 'reaudit: the snapshot is missing %s — refusing to measure with a pipeline that is not the one in the repository.\n' "$_needed" >&2; rm -rf "$_snap"; exit 2; }
   done
   [ -x "$_fr/.venv/bin/python" ] && export PIPELINE_PYTHON="$_fr/.venv/bin/python"

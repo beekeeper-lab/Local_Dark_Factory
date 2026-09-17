@@ -214,5 +214,38 @@ check "and the reason drops the ids" "a criterion with no quote long enough to c
 # testing a copy of something that no longer runs.
 check "and reaudit.sh carries it"    "not backed by a quote long enough" "$(cat "$PIPELINE_DIR/reaudit.sh")"
 
+printf '\n== the snapshot check is derived, not remembered ==\n\n'
+#
+# reaudit refuses to run from a snapshot missing a file the pipeline needs. That
+# list used to be five names typed by hand, and it went stale the moment judge.sh
+# grew a dependency: on 2026-09-17 it started calling measurement-brief.sh, which
+# was not on the list. A snapshot without that script does not fail — it silently
+# sends the judge 4,000 more bytes than the run being measured was meant to send,
+# and the measurement is of a prompt nobody chose.
+CALLS="$(grep -hoE '\$PIPELINE_DIR/[A-Za-z0-9_.-]+\.(sh|py)' \
+          "$PIPELINE_DIR/judge.sh" "$PIPELINE_DIR/audit-check.sh" 2>/dev/null | sort -u)"
+if [ -n "$CALLS" ]; then
+  printf '  ok    judge.sh and audit-check.sh call %s script(s) through $PIPELINE_DIR\n' \
+    "$(printf '%s\n' "$CALLS" | grep -c .)"; PASS=$((PASS+1))
+else
+  printf '  FAIL  found no $PIPELINE_DIR calls at all — the derivation matches nothing\n'; FAIL=$((FAIL+1))
+fi
+check "reaudit derives the list rather than listing it" 'grep -hoE' "$(cat "$PIPELINE_DIR/reaudit.sh")"
+# Every derived name must exist in the repository, or the refusal fires on a real
+# run for a file that was never there.
+missing=""
+while IFS= read -r c; do
+  [ -n "$c" ] || continue
+  f="${c#\$PIPELINE_DIR/}"
+  [ -e "$PIPELINE_DIR/$f" ] || missing="$missing $f"
+done <<< "$CALLS"
+if [ -z "$missing" ]; then
+  printf '  ok    and every one of them is in the repository\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  judge.sh or audit-check.sh calls something that is not there:%s\n' "$missing"; FAIL=$((FAIL+1))
+fi
+# The one that was missing from the hand-written list, by name, so a revert shows.
+check "measurement-brief is among them"  "measurement-brief.sh" "$CALLS"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
