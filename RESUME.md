@@ -1459,6 +1459,30 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
+## Next on this thread: sweep the case the judge still owns
+
+Whatever the control says, the sweep has been measuring `contradicts-non-goal` —
+and **the controller decides that one now**. `bean-forbids.sh` catches it at plan
+time from the bean's own `forbidden_paths`, which is why controller fitness is 4
+of 5. So the sweep is measuring the judge on a case the line no longer depends on
+it for.
+
+That does not make the result useless: how a judge behaves under size plausibly
+generalises, and it is the case with the longest history here. But the
+decision-relevant question is whether size moves **`criterion-not-really-met`** —
+the one seeded defect that is still the judge's alone, and the one recorded as
+staying that way on purpose.
+
+`bench/size-sweep.sh --case criterion-not-really-met --sizes '0 20000' --repeat 5`,
+padded from `bench/fixtures/pad-neutral`. Roughly an hour. Predict before running
+it, as the last three were.
+
+One thing to expect: the confound probe will likely warn on the real corpus for
+that case too, on incidental words like `mypy` and `annotations`, which appear in
+bean-001 for reasons that have nothing to do with a vacuous satisfaction
+argument. That is the probe working as designed — a warning, not a refusal, and a
+person deciding whether the overlap matters.
+
 ## MEASURED: 8 of 8 against 0 of 8 — cause under check, see the section above
 
 Five more passes at the two sizes that matter, 2026-09-17. The prediction below
