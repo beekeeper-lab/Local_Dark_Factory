@@ -80,14 +80,27 @@ def test_the_four_nouns_exist() -> None:
 
 
 def test_rsvp_has_exactly_the_four_named_values() -> None:
-    src = _source()
+    # Case-insensitively, and that is not a weakening.
+    #
+    # ac2 reads "RSVP status accepts exactly Confirmed, Pending, Declined and
+    # Cancelled, and rejects anything else." Those are capitalised because they
+    # are nouns in an English sentence, not because the bean fixes a wire
+    # spelling — it never mentions one. The first implementation wrote
+    # `CONFIRMED = "confirmed"`, which names all four and coerces
+    # case-insensitively, and this test failed it on the capital C. That is the
+    # exact over-specification this file's docstring says it is avoiding when it
+    # declines to guess between `capacity` and `seats`: a hidden test that fails
+    # for a spelling reason costs a build cycle and teaches nobody anything.
+    src = _source().lower()
     expected = ["Confirmed", "Pending", "Declined", "Cancelled"]
     for value in expected:
-        assert value in src, f"RSVP status {value!r} is named by ac2 and is not in the domain source"
+        assert value.lower() in src, (
+            f"RSVP status {value!r} is named by ac2 and is not in the domain source"
+        )
     # "and rejects anything else" — a fifth status is a different contract from
     # the one the bean asked for, and every later bean reads this one.
     for extra in ("Tentative", "Waitlist", "Maybe", "Unknown", "Invited"):
-        assert extra not in src, (
+        assert extra.lower() not in src, (
             f"ac2 says exactly four RSVP values; {extra!r} appears in the domain source"
         )
 
