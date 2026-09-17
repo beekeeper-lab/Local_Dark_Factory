@@ -22,6 +22,12 @@
 # reasoning with "Could you clarify what exactly you'd like me to do?". A
 # measurement rendered as sentences is harder to mistake for a question.
 #
+# What this did NOT fix, measured the same night: the fabricated quotes. Twelve
+# audits with the briefs in place refused for the same reasons in the same
+# proportions as twelve without them. Prompt size is not what makes this judge
+# invent the evidence for a verdict it has already reached — worth knowing before
+# anyone spends more effort there.
+#
 # The brief is written INTO the run directory, not held in memory. The quote
 # check searches the run directory, so a judge quoting the brief must be able to
 # have its quote found — a summary that exists only inside the prompt would make
