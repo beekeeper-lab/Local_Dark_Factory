@@ -107,7 +107,9 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
 whether it produces a verdict the controller will stamp on a real run. The second
-has never exceeded **1 in 12**.
+has never exceeded **1 in 12**, and as of 2026-09-17 it is **0 in 12** — because
+the controller stopped stamping a verdict that rested on criteria nobody had
+verified. *"MEASURED: 0 of 12"*.
 
 **What follows, and what the line already does about it.**
 
@@ -806,7 +808,9 @@ whether the judge can find a planted flaw in a mutated spec. `factory reaudit`
 asks whether it can produce a verdict a controller will stamp on a real run.
 Nothing measured today has moved the second above **1 in 12**, and the reason is
 always the same: the judge fabricates the evidence for a verdict it has already
-reached, and the quote check catches it every time.
+reached, and the quote check catches it every time. *(2026-09-17: it is 0 in 12
+now. Not a regression — a criterion whose quote was too short to check used to
+ride along on one that was checked, and 4 of the 12 refusals are exactly that.)*
 
 Do not report the fitness number without this one beside it.
 
@@ -1046,8 +1050,11 @@ verify and it is the tautological one. A mutation that has been wrong twice does
 not get a third chance to be wrong quietly.
 
 **What it changes**: `tautological-verify` is decided by `spec-check`'s verify
-precheck and always was. Controller fitness is **2 of 5 named by a check, 3 not
-decidable, 0 false alarms** (`controller-fitness-20260916T171328Z.json`).
+precheck and always was. Controller fitness was **2 of 5 named by a check, 3 not
+decidable, 0 false alarms** at that point (`controller-fitness-20260916T171328Z.json`);
+it is **4 of 5, 1 not decidable, 0 false alarms** as of 2026-09-17, after
+`bean-forbids` took `contradicts-non-goal` and `plans-other-beans` took
+`unfinishable-task`.
 
 **And what it invalidates**: every `judge-fitness` figure involving this case
 scored the judge against a fixture that was not the defect. That is one of six
