@@ -61,6 +61,12 @@ usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
   --pad-from  directory of bean.yaml files to pad with (default: the bean's own
               beans directory)
   --sizes     padding sizes in bytes, whitespace separated
+  --pad-into  spec (default) or bean. WHERE the bytes go, which is a different
+              question from how many. `spec` appends inside the document under
+              audit; `bean` appends to a copy of the bean, which reaches the judge
+              as a SEPARATE labelled artifact while the document under audit stays
+              clean. A real audit's bytes are separate artifacts, so `bean` is the
+              arm that says whether displacement crosses an artifact boundary.
   --keep      keep the run directories and judgements under this path instead of
               deleting them. The verdict column is a summary; NAMED in particular
               is a keyword match that can fire on a fabricated finding, and on
@@ -73,7 +79,7 @@ usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
 EOF
 }
 
-SPEC=""; TASKS=""; BEAN=""; CASE="contradicts-non-goal"; PAD_FROM=""; OUT=""; KEEP=""
+SPEC=""; TASKS=""; BEAN=""; CASE="contradicts-non-goal"; PAD_FROM=""; OUT=""; KEEP=""; PAD_INTO="spec"
 # One reading per size is not a sweep, it is six coin flips in a row.
 #
 # This harness asks whether the judge gets worse as the prompt grows. The judge
@@ -93,6 +99,7 @@ while [ $# -gt 0 ]; do
     --pad-from) PAD_FROM="${2:?}"; shift 2 ;;
     --sizes)    SIZES="${2:?}"; shift 2 ;;
     --keep)     KEEP="${2:?--keep needs a directory}"; shift 2 ;;
+    --pad-into) PAD_INTO="${2:?--pad-into needs spec or bean}"; shift 2 ;;
     --out)      OUT="${2:?}"; shift 2 ;;
     --repeat)   REPEAT="${2:?}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
@@ -277,7 +284,11 @@ for pad in $SIZES; do
   sed -n '/^mutate() {/,/^}/p' "$ROOT/bench/judge-fitness.sh" > "$TMP/mutate.sh"
   ROOT="$ROOT" bash -c "source '$TMP/mutate.sh'; mutate '$CASE' '$RD/spec.md' '$RD/tasks.yaml'"
 
-  # INSIDE spec.md, and that is the shape of this whole experiment.
+  # WHERE the bytes go is a separate question from how many, and until
+  # 2026-09-17 only one answer was ever measured.
+  #
+  # --pad-into spec: INSIDE spec.md, and that is the shape of the original
+  # experiment.
   #
   # It measures "a document under audit that is mostly other material", not "a
   # prompt with more separate artifacts". A real audit's bytes are separate
@@ -291,12 +302,31 @@ for pad in $SIZES; do
   # artifact instead. It is not built; it is one hour of GPU and the one
   # measurement that would tell the doc audit — 36,731 bytes across three
   # artifacts — whether it is actually at risk.
-  [ "$pad" -gt 0 ] && head -c "$pad" "$PAD_ALL" >> "$RD/spec.md"
-  total=$(( $(wc -c < "$RD/spec.md") + $(wc -c < "$RD/tasks.yaml") + $(wc -c < "$BEAN") ))
+  #
+  # --pad-into bean: the same bytes as a block scalar on a COPY of the bean, which
+  # reaches the judge under its own header — "THE BEAN ... the standard the
+  # artifacts under audit are measured against" — while spec.md stays exactly as
+  # written. A block scalar rather than raw YAML because two concatenated
+  # documents is not YAML, and yaml2json is what reads this to build the criterion
+  # id list.
+  USE_BEAN="$BEAN"
+  if [ "$pad" -gt 0 ]; then
+    case "$PAD_INTO" in
+      bean)
+        USE_BEAN="$RD/bean.yaml"
+        cp "$BEAN" "$USE_BEAN"
+        { printf '\nrelated_context: |\n'
+          head -c "$pad" "$PAD_ALL" | sed 's/^/  /'
+        } >> "$USE_BEAN"
+        ;;
+      *) head -c "$pad" "$PAD_ALL" >> "$RD/spec.md" ;;
+    esac
+  fi
+  total=$(( $(wc -c < "$RD/spec.md") + $(wc -c < "$RD/tasks.yaml") + $(wc -c < "$USE_BEAN") ))
 
   t0="$(date +%s)"
   rc=0
-  "$PIPE/judge.sh" "$RD" --target spec --bean "$BEAN" > "$RD/judge.log" 2>&1 || rc=$?
+  "$PIPE/judge.sh" "$RD" --target spec --bean "$USE_BEAN" > "$RD/judge.log" 2>&1 || rc=$?
   t1="$(date +%s)"
 
   J="$RD/verdicts/spec.attempt-1.judgement.json"

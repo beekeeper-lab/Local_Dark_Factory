@@ -164,5 +164,43 @@ check "it says the padding goes inside the document" "INSIDE spec.md" "$SRC"
 check "and what that is not"          "prompt with more separate artifacts" "$SRC"
 check "and names the experiment that would settle it" "one hour of GPU" "$SRC"
 
+printf '\n== --pad-into bean puts the bytes in a different artifact ==\n\n'
+#
+# WHERE the bytes go is a different question from how many, and only one answer
+# was ever measured. `spec` appends inside the document under audit; `bean`
+# appends to a copy of the bean, which reaches the judge under its own header
+# while spec.md stays exactly as written. That is the arm that says whether
+# displacement crosses an artifact boundary — which is what a real audit is made
+# of.
+K2="$WORK/kept2"
+sweep --pad-from "$CORPUS" --sizes '20000' --repeat 1 --pad-into bean --keep "$K2" --out "$WORK/g.json" >/dev/null 2>&1 &
+_sp=$!
+# The judge call needs a GPU and this assertion does not: what matters is the
+# tree it built, which exists before the model is asked anything.
+sleep 20
+B="$(find "$K2" -name bean.yaml 2>/dev/null | head -1)"
+if [ -n "$B" ] && [ -s "$B" ]; then
+  printf '  ok    a padded copy of the bean is written (%s bytes)\n' "$(wc -c < "$B")"; PASS=$((PASS+1))
+else
+  printf '  FAIL  --pad-into bean wrote no bean copy\n'; FAIL=$((FAIL+1))
+fi
+# Two concatenated YAML documents is not YAML, and yaml2json is what reads this
+# to build the criterion id list — so the padding goes in as a block scalar.
+if [ -n "$B" ]; then
+  ids="$("$ROOT/factory/pipeline/yaml2json.sh" "$B" 2>/dev/null | jq -r '[.acceptance_criteria[]?.id] | join(",")')"
+  if [ "$ids" = "ac1,ac2,ac3,ac4" ]; then
+    printf '  ok    and it still parses, with its criterion ids intact\n'; PASS=$((PASS+1))
+  else
+    printf '  FAIL  the padded bean does not parse as the same bean: got "%s"\n' "$ids"; FAIL=$((FAIL+1))
+  fi
+  SP="$(find "$K2" -name spec.md 2>/dev/null | head -1)"
+  if [ -n "$SP" ] && [ "$(wc -c < "$SP")" -lt 20000 ]; then
+    printf '  ok    and the document under audit is left alone\n'; PASS=$((PASS+1))
+  else
+    printf '  FAIL  spec.md was padded too — the arm measures nothing new\n'; FAIL=$((FAIL+1))
+  fi
+fi
+kill "$_sp" 2>/dev/null; wait "$_sp" 2>/dev/null || true
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

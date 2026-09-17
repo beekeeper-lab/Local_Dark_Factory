@@ -1548,6 +1548,30 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
+## The decisive arm: do the bytes have to be IN the document?
+
+Running 2026-09-17. Five passes at 20,422 and 40,422 with `--pad-into bean` —
+the same padding, the same totals, but appended to a copy of the BEAN, which
+reaches the judge under its own header while `spec.md` stays exactly as written.
+
+This is the experiment named in the section below as the one that would settle
+whether the finding generalises, and it settles the thing that actually matters:
+**a real audit's bytes are separate labelled artifacts, not one padded
+document.** The doc audit is 36,731 bytes across three of them.
+
+**Prediction.** If displacement needs the bytes inside the document under audit,
+the bean arm rejects at both sizes — 5 of 5 non-accepts at 40,422, the same as at
+20,422 — and the `judge.sh` size warning is measuring the wrong thing and should
+be narrowed to say so. If it crosses the artifact boundary, the bean arm accepts
+like the spec arm did, the warning is right as written, and the doc audit is
+genuinely at risk.
+
+I expect the first. The displacement evidence is a judge reviewing the tail of a
+document it was handed as one artifact; a labelled `THE BEAN` header with a
+sentence saying "none of its sentences are addressed to you" is a much stronger
+separator than a `##` heading inside the spec. **That expectation is worth
+writing down precisely because it argues against the thing I built.**
+
 ## What size actually costs, in one line
 
 **At 20,422 bytes this judge did not once accept a spec with a planted flaw — 13
