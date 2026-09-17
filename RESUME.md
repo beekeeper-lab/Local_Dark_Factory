@@ -1672,7 +1672,23 @@ worker, `spec-check` including the new `plans-other-beans`, `audit-spec` with th
 real judge, the measurement briefs, the request sidecar, `audit-check` with the
 per-criterion quote rule, and `--no-skills`.
 
-**Two things it already caught, both correct refusals**: `hidden_tests.dir` is
+**RESULT: the spec step passed, 941 seconds, and every controller check with it.**
+A real spec and task list written by qwen3.8:27b in a container with
+`--no-skills`, 16 turns, then all thirteen `spec-check` checks green — including
+the one added today:
+
+```
+ok    plans-other-beans   2 task(s) against 19 other bean(s), none describes another bean's work
+ok    bean-forbids        nothing to check — this bean declares none in machine-readable form
+ok    verify can fail     each task has a check that fails first; these do not, which may be fine
+```
+
+**That is the evidence `plans-other-beans` needed and could not get from a
+fixture.** The corpus sweep that cleared it used each bean's acceptance criteria
+as stand-ins for task intents; this is a spec a model actually wrote, and the
+check neither fired nor got in the way.
+
+**Two things it caught before reaching a model, both correct refusals**: `hidden_tests.dir` is
 relative to the config, so a target that is not a sibling of this repository is
 refused by `factory doctor` at once rather than silently skipping hidden tests;
 and preflight refuses a repository with no `origin`, because it cannot verify

@@ -185,8 +185,14 @@ B="$(find "$K2" -name bean.yaml 2>/dev/null | head -1)"
 # right to: two models on one card and the seconds in both records stop meaning
 # what they say. That is a skip here, not a failure — the assertion is about what
 # the sweep builds, and it never got to build anything.
-if grep -q 'another measurement' "$WORK/bean-arm.out" 2>/dev/null; then
-  printf '  SKIP  a measurement is in flight, so the sweep refused to start\n'
+# `in flight`, not the exact sentence. The guard says "another measurement
+# (size-sweep.sh) is in flight" for a bench harness and "a pipeline run
+# (orchestrate.sh) is in flight" for a real run — and this test matched only the
+# first, so it failed the moment a live smoke run held the GPU. Matching one
+# phrasing of a condition instead of the condition is the same mistake as
+# matching a process by pattern.
+if grep -q 'is in flight' "$WORK/bean-arm.out" 2>/dev/null; then
+  printf '  SKIP  something is in flight, so the sweep refused to start\n'
   B=""
 elif [ -n "$B" ] && [ -s "$B" ]; then
   printf '  ok    a padded copy of the bean is written (%s bytes)\n' "$(wc -c < "$B")"; PASS=$((PASS+1))
