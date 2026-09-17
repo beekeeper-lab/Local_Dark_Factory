@@ -280,7 +280,29 @@ session file path in a log. Every uncontained developer session now prints why,
 `FACTORY_VERIFY_SANDBOX` governs every verification sandbox in one place, and the snapshot
 refuses to start if it is missing anything the line resolves paths against.
 
-## Eleven ways a check goes wrong, found on 2026-09-15, 16, 17
+## Twelve ways a check goes wrong, found on 2026-09-15, 16, 17
+
+**(12) A check that worked, recorded its answer, and was never read.** On
+2026-09-16 the evidence ledger recorded, about the first reaudit: *"the largest
+payload (doc, 36,731 bytes) is the one that worked and the smallest failure
+(spec, 25,428) is not the smallest payload, **so size is not the variable**."*
+Twenty-four hours later this project spent most of a day establishing,
+retracting, controlling and re-retracting a size effect. **The answer was already
+in the repository, in the file whose entire purpose is to hold answers.**
+
+This is not the same as the other eleven. Nothing malfunctioned: the check ran,
+was right, and wrote its result where it belonged. It failed at the last step,
+which is a person reading it.
+
+The rule it produces is one line and it is not enforceable by a script, which is
+why it is written here rather than built: **before publishing a finding, grep the
+evidence ledger for the thing it contradicts.** A repository that can disagree
+with itself out loud only works if somebody listens.
+
+There is a second-order version worth naming too. The contradiction was found
+while grepping for *stale citations of the retracted claim* — that is, the
+clean-up after the mistake is what surfaced the evidence that would have
+prevented it. **Tidying is not separate from thinking.**
 
 **(11) An instrument that repeats one measurement and reports it as N — and the
 tell was that the noise vanished.** `bench/size-sweep.sh --repeat 5` shared one
