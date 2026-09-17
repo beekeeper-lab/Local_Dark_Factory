@@ -2805,6 +2805,37 @@ don't design role-batching as if it were.
 **Context barely affects throughput** across 16K–49K. The old 39-minute InvTrac spec step
 was the 262144 default context, not model speed.
 
+## Decisions recorded 2026-09-17 (same rule: don't re-litigate, do revisit on trigger)
+
+**`three_verdicts_schema_valid` does not get weakened to match what the line can
+do.** It is unmet, and it will stay unmet while the judge produces no stampable
+verdict — zero in twelve measured audits, and one more refused on bean-002's
+first real audit. The tempting move is to redefine it as "every audit reached a
+recorded DECISION", which refusal records now make satisfiable and which is
+arguably the better question. That is taxonomy entry (4), overruling the thing
+being measured, with the file open in front of me. An exit predicate that is
+adjusted until the system passes it is not an exit predicate.
+
+What is legitimate: recording WHY it is unmet, per run, by rule, which is what
+the refusal records are for. The predicate stays; the reason it fails is now
+arithmetic. If it is ever changed it should be by the person who set it, with
+the measurement in hand, and not as a side effect of a session that wanted a
+green line.
+
+**The gate image package stays private.** CI cannot pull it and `gates` is red
+on seating-planner-py for a reason that has nothing to do with any change under
+test. That costs less than it looks like — the gates that decide a bean run here
+in the pinned image before anything is pushed, and branch protection cannot
+enforce a required check on a private repo without GitHub Pro anyway. Revisit
+when the owner wants a green tick a reviewer can see, or when a second repo is
+scaffolded and per-repo grants become a recurring chore.
+
+**`OLLAMA_CONTEXT_LENGTH` stays the operator's.** Measured 2026-09-17: pi
+reloads the model at the server default eight seconds after the controller
+preloads it at the role's context, and nothing inside a session can hold it. The
+only real fix is the server-wide setting, which is one number for every role and
+every other project on this machine. Written down rather than done quietly.
+
 ## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
 
 **`criterion-not-really-met` stays the judge's, and I am not building a check for
