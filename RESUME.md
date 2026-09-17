@@ -1655,6 +1655,23 @@ what it was built to do.
 
 ## The end-to-end smoke, with real models, that the suite cannot do
 
+**It is `bench/smoke-line.sh` now**, so it can be re-run in one command:
+
+```
+./bench/smoke-line.sh --stop-after spec
+```
+
+It builds a throwaway repo, scaffolds from this one, gives it a bare `origin`,
+drops `hidden_tests` (the path is relative to a sibling a scratch repo does not
+have), runs `doctor`, then runs the line. A failed run keeps the repo and prints
+where it is; a passing one cleans up unless `--keep`. `bench/tests/test-smoke-line.sh`
+covers the setup — everything up to the point a model is asked anything, which is
+where it failed twice by hand.
+
+Not cheap: the spec step alone was 941 seconds and 16 turns of a 27B model. Run
+it when the pipeline has changed, not on every commit.
+
+
 Started 2026-09-17. `factory run bean-001 --stop-after spec` against a scratch
 repository at `/tmp/smoke-repo` with a bare local `origin`.
 
@@ -1687,6 +1704,31 @@ ok    verify can fail     each task has a check that fails first; these do not, 
 fixture.** The corpus sweep that cleared it used each bean's acceptance criteria
 as stand-ins for task intents; this is a spec a model actually wrote, and the
 check neither fired nor got in the way.
+
+**RESULT: `audit-spec` ran, the judge fabricated its quotes, and the line halted
+exactly as documented.** 16,304 bytes, 9,742 prompt tokens (31% of the window), a
+judgement in 95 seconds — then:
+
+```
+AUDIT spec: all 4 criterion(s) reported on, none invented
+AUDIT spec: the judgement quotes text that is not on disk anywhere.
+  - "The repository should contain a pyproject.toml file."
+  - "The repository should contain a .gitignore file that includes …"
+  - "The repository should contain a src/seating_planner/__init__.py that …"
+HALT  audit-spec failed with no usable verdict file — not retrying blind
+```
+
+Every quote is a paraphrase of what the spec *should* contain, in the third
+person, none of it text the spec actually holds.
+
+**This is the third independent observation of the same fabrication**, and the
+first on a repository the line had never seen, a spec written that hour by a
+different model. It is not a property of bean-001's run. The whole chain behaved:
+the criteria-coverage check passed, the quote check refused, orchestrate halted
+with `QUESTIONS.md` and did not retry blind.
+
+**So the smoke did its job twice over** — it proved today's changes work on a real
+run, and it reproduced the judge's central failure in a clean room.
 
 **Two things it caught before reaching a model, both correct refusals**: `hidden_tests.dir` is
 relative to the config, so a target that is not a sibling of this repository is
