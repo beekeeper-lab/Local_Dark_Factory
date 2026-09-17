@@ -1225,9 +1225,27 @@ fix a content problem.
 reproducible from there and a later model may behave differently.
 `evidence/judge-minlength-probe-20260917.md` has the fabrications in full.
 
-**The loose thread worth pulling**: nothing in the controller reads two criteria
-of one judgement *together*. `ac2` asserting a file exists and `ac4` asserting it
-does not is decidable without a model, and no check looks.
+**The loose thread, pulled the same evening and dropped on purpose.** Nothing in
+the controller reads two criteria of one judgement *together*, and `ac2`
+asserting a file exists while `ac4` asserts it does not looks decidable without a
+model. Two designs, both measured against the actual instance, both fail on it:
+
+- *"a criterion naming a path that is not in the repository"*. Measured over the
+  44 criteria of the reaudit: 27 of 44 — and the number is meaningless, because
+  at SPEC time the tree is pre-bean-001 and every path a spec audit cites is a
+  path that does not exist yet. Existence is only authoritative after the work
+  lands, and `claims-check.json` already does this properly for the spec, with
+  `said_absent_but_present` and the rest.
+- *"two criteria naming the same path with opposite polarity"*. Needs negation of
+  EXISTENCE specifically — "pyproject.toml has no `[tool.ruff]` section" and
+  "pyproject.toml declares ortools" are not a contradiction — and the actual `ac4`
+  text contains no path at all: *"there is no test file matching the pattern
+  'test_*' or '*_test.py'"*. The check that inspired this would not catch the case
+  that inspired it.
+
+So it stays the judge's, for the same reason `criterion-not-really-met` does: the
+controller checks are worth having because they have never raised a false alarm,
+and both of these would. Recorded so the next reader knows it was tried.
 
 ## The lever was tried, and it is dead: asking one criterion at a time
 

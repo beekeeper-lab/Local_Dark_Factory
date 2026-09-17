@@ -56,9 +56,11 @@ says *"there is a test file tests/test_scaffold.py that imports seating_planner"
 the repository"*. Same document, same model, same request. Nothing downstream
 caught that, because nothing looks for it — the criteria are checked against the
 bean's list and each quote against the disk, and neither check reads two criteria
-together. That is a candidate for the controller and it is cheap: two criteria of
-one judgement asserting the presence and the absence of the same file is
-decidable without a model.
+together. That looked like a candidate for the controller and it is not — see RESUME.md,
+"The sixth grammar constraint". Two designs were measured against this exact
+judgement and both fail on it, the second because `ac4` names no path at all: it
+says *"no test file matching the pattern 'test_*' or '*_test.py'"*. A check built
+from this instance would not catch this instance.
 
 For comparison, at 12 characters, the one that was real:
 
