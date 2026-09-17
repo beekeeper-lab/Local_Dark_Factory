@@ -1243,9 +1243,30 @@ padding; 134, 37, 47 at 10,000. Twice the prompt, a fifth of the time. Whatever
 governs how long this judge takes, it is not the number of bytes.
 
 **Three passes at one size is thin** — this harness says so itself — and the
-comparison is between 3 of 3 and 2 of 3. Before acting on it, the thing to do is
-the cheap half: measure whether the line can send the judge fewer bytes at all,
-which is a question about the artifacts and needs no GPU.
+comparison is between 3 of 3 and 2 of 3. So the cheap half was done first, and it
+needed no GPU: **can the line send fewer bytes at all?**
+
+It can, and it does now. The controller's own measurements were going as raw
+JSON, and they are the easiest bytes in the prompt because nothing in them is
+under audit:
+
+| audit | was | is | what changed |
+| --- | --- | --- | --- |
+| spec | 25,428 | **21,343** | `verify-precheck.json` and `claims-check.json` as prose |
+| impl | 30,514 | **24,353** | and `gate.json` |
+| doc | 36,731 | 36,731 | nothing — see below |
+
+Spec and impl are inside the band where the judge rejected the seeded defect 3 of
+3. `measurement-brief.sh` does it, the brief is written into the run directory so
+a quote from it can be found by the quote check, an unknown schema is refused and
+the raw file sent instead, and a brief that came out bigger is not used.
+
+**The doc audit is the one left and there is nothing in it to cut.** Its three
+artifacts are the bean, the spec, and the 23,176-byte implementation document
+under audit. It is the largest prompt this line sends and it sits nearest the
+size where the judge started accepting a spec it had rejected. That is worth
+knowing and it is not worth fixing by dropping an artifact: every byte of it is
+either the standard or the thing being judged.
 
 ## The sixth grammar constraint, and the boundary it found
 
