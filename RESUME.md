@@ -43,10 +43,13 @@ needs it:**
 2. **Changing the model does not help.** `qwen3-coder-next` accepts 15 of 15,
    perfectly reproducibly; `gemma4` cannot be driven under a grammar at all;
    `devstral` cannot hold the schema. gpt-oss:120b is the best available.
-3. **The SIZE of the prompt looked like the only thing that has ever moved the
-   false-accept rate — and a confound found afterwards may explain all of it.**
-   Read *"OPEN: the padding is not neutral"* before acting on this. The rest of
-   this item is what was measured, which stands as a measurement either way. Three passes at 20,422 and 30,422 bytes rejected a seeded
+3. **The SIZE of the prompt is the only thing that has ever moved the
+   false-accept rate, and it is now controlled.** At 20,422 bytes this judge did
+   not accept a spec with a planted flaw once in **13 tries**; at 40,422 it
+   rejected it **0 times in 13**. A confound was found after the first result —
+   the padding was the rest of the corpus, which contains the bean that owns the
+   path the defect writes — and a control with that content removed made the
+   effect *sharper*, not weaker. *"RESOLVED: the confound is ruled out"*. Three passes at 20,422 and 30,422 bytes rejected a seeded
    defect 3 of 3; at 40,422 the judge accepted it 2 of 3. Nothing else tried this
    week moved it — not the token cap, the thinking level, five grammar
    constraints, a repaired prompt, four other models, or one question per
@@ -121,7 +124,7 @@ configuration measured** — it has never once passed a spec with nothing wrong.
 | a quote per criterion, not per judgement | — | 1 stamped → **0 of 12**, and 31% of criteria carry no quote at all |
 | a different model | qwen3-coder 15/15; gemma4 cannot run; devstral cannot hold the schema | — |
 | one criterion at a time | 0 false accepts and **0 defects named**, control rejected, 4× the cost | — |
-| **twice the artifact bytes** | **rejected 8 of 8 → 0 of 8** — but see *"the padding is not neutral"* | — |
+| **twice the artifact bytes** | **rejected 13 of 13 → 0 of 13**, confound controlled | — |
 
 **The two numbers are different questions and only one has ever moved.**
 `judge-fitness` asks whether it finds a planted flaw. `factory reaudit` asks
@@ -1256,12 +1259,11 @@ Re-run 2026-09-17 with `tools: []` declared, three passes, one seeded defect
 | 30,422 | revise, revise, revise | **0 of 3** | 0 |
 | 40,422 | none, **accept**, **accept** | **2 of 3** | 0 |
 
-**This is the only lever measured this week that moved the false-accept rate —
-and it may not be a lever at all.** A confound was found after this was written:
-the padding is the other beans of the corpus, seventeen of twenty mention the
-solver, and bean-006 owns the exact path the seeded defect writes. See *"OPEN:
-the padding is not neutral"*. What follows is what was measured; what it means is
-being checked.
+**This is the only lever measured this week that moved the false-accept rate.** A
+confound was found after this was written and then ruled out by a control that
+made the effect sharper — see *"RESOLVED: the confound is ruled out"*. The
+numbers below are the first three passes; the standing figures are 13 of 13
+against 0 of 13.
 A bigger token cap, a lower thinking level, five grammar constraints, a sixth
 that backfired, a repaired prompt, four other models and one question per
 criterion — none of them changed how often the judge passes a spec with a planted
@@ -1389,7 +1391,47 @@ list, with no controller measurements in the run directory, so the briefs never
 apply. That is worth saying out loud because it is the harness everyone reaches
 for, and here it would have reported "no change" for the wrong reason.
 
-## OPEN, and it may undo the finding above: the padding is not neutral
+## RESOLVED: the confound is ruled out. Size is the cause
+
+The control ran and it is unambiguous. Five passes, padding with the corpus
+rewritten to remove every mention of the solver:
+
+| padding | artifact bytes | verdicts |
+| --- | --- | --- |
+| none | 20,422 | `abstain` ×5 — **0 accepts** |
+| **neutral** | 40,422 | **`accept` ×5 — 5 false accepts of 5** |
+
+With the confounding content removed the effect is not weakened, it is **sharper**
+than with the real corpus (5 of 5 against 6 of 8). So the padding was not telling
+the judge the write was legitimate. Twice the bytes is what does it.
+
+**Everything measured at these two sizes, across three runs and two padding
+sources:**
+
+| artifact bytes | non-accepts | false accepts | no answer |
+| --- | --- | --- | --- |
+| 20,422 | **13 of 13** (8 `revise`, 5 `abstain`) | **0** | 0 |
+| 30,422 | 3 of 3 | 0 | 0 |
+| 40,422 | **0 of 13** | **11** | 2 |
+
+**What the control rules out and what it does not.** It rules out the specific
+confound: that the corpus padding handed the judge the bean which owns the path
+the defect writes. It does not rule out "any large block of bean-shaped text makes
+this judge accept" — the control is still bean-shaped text — but for every
+practical purpose that is the size explanation, because what the line would pad
+an audit with is always artifacts.
+
+**One loose end I cannot close from this run.** All five large-size rows scored
+`NAMED` = yes, and with neutral padding "solver" appears only in the seeded text,
+so that should mean the judge identified the forbidden work and accepted it
+anyway — the sharpest possible characterisation. But `NAMED` is an upper bound
+(see the judge section), an earlier control row was scored `named` because a
+catchword sat inside a *fabricated* finding, and `size-sweep.sh` deletes its run
+directories on exit, so the judgements are gone and I cannot tell which this was.
+**That is why `--keep` now exists on the sweep.** Until a kept run says
+otherwise, treat those five as "accepted", not as "identified and accepted".
+
+## What the confound was, and how it was found
 
 Found 2026-09-17, after acting on the size result and before locating its knee —
 which is the wrong order, and is why this section exists.
@@ -1421,13 +1463,13 @@ confounded as the treatment, and that was not noticed either.
 With neutral padding, "solver" appears only in the seeded text, and the column
 becomes meaningful for the first time.
 
-**The control, running now**: the same twenty beans with the domain vocabulary
+**The control** (it has now run — see the section above): the same beans with the domain vocabulary
 substituted — `solver`→`exporter`, `CP-SAT`→`CSV-BATCH`, `ortools`→`chardet`,
 `seating_planner`→`shelving_planner`. Zero mentions of the solver, 64,178 bytes
 against 63,737, same schema and same shape. Five passes at 20,422 and 40,422.
 
 - **If size is the cause**, 40,422 with neutral padding still accepts — near 0 of
-  5 rejections, matching the 0 of 8 measured.
+  5 rejections, matching the 0 of 8 measured. ← **this is what happened: 5 of 5.**
 - **If the padding was the cause**, 40,422 with neutral padding rejects like the
   small size, near 5 of 5, and *"size is the finding of the week"* becomes *"the
   fixture told the judge the answer"*.
@@ -1483,7 +1525,7 @@ bean-001 for reasons that have nothing to do with a vacuous satisfaction
 argument. That is the probe working as designed — a warning, not a refusal, and a
 person deciding whether the overlap matters.
 
-## MEASURED: 8 of 8 against 0 of 8 — cause under check, see the section above
+## MEASURED: 8 of 8 against 0 of 8 — the first confirmation, now superseded by 13 of 13
 
 Five more passes at the two sizes that matter, 2026-09-17. The prediction below
 called it and the effect is stronger than the three-pass run suggested.

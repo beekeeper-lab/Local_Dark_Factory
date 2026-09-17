@@ -61,6 +61,11 @@ usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
   --pad-from  directory of bean.yaml files to pad with (default: the bean's own
               beans directory)
   --sizes     padding sizes in bytes, whitespace separated
+  --keep      keep the run directories and judgements under this path instead of
+              deleting them. The verdict column is a summary; NAMED in particular
+              is a keyword match that can fire on a fabricated finding, and on
+              2026-09-17 a row could not be checked because the directories were
+              already gone.
   --repeat    how many times to measure every size (default 1). Use at least 3:
               this judge gives different verdicts for byte-identical input at
               temperature 0, so one reading per size cannot tell a trend from the
@@ -68,7 +73,7 @@ usage: size-sweep.sh --spec <spec.md> --tasks <tasks.yaml> --bean <bean.yaml>
 EOF
 }
 
-SPEC=""; TASKS=""; BEAN=""; CASE="contradicts-non-goal"; PAD_FROM=""; OUT=""
+SPEC=""; TASKS=""; BEAN=""; CASE="contradicts-non-goal"; PAD_FROM=""; OUT=""; KEEP=""
 # One reading per size is not a sweep, it is six coin flips in a row.
 #
 # This harness asks whether the judge gets worse as the prompt grows. The judge
@@ -87,6 +92,7 @@ while [ $# -gt 0 ]; do
     --case)     CASE="${2:?}"; shift 2 ;;
     --pad-from) PAD_FROM="${2:?}"; shift 2 ;;
     --sizes)    SIZES="${2:?}"; shift 2 ;;
+    --keep)     KEEP="${2:?--keep needs a directory}"; shift 2 ;;
     --out)      OUT="${2:?}"; shift 2 ;;
     --repeat)   REPEAT="${2:?}"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
@@ -107,7 +113,19 @@ done
 [ -n "$OUT" ] || OUT="$ROOT/bench/results/size-sweep-$(date -u +%Y%m%dT%H%M%SZ).json"
 mkdir -p "$(dirname "$OUT")"
 
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+# --keep makes the run directories survive, because the table is a summary and a
+# summary cannot be re-examined. On 2026-09-17 five rows read NAMED=yes with
+# neutral padding — which would mean the judge identified the forbidden work and
+# accepted it anyway, the sharpest reading available — and it could not be
+# checked, because NAMED is a keyword match that can fire on a FABRICATED finding
+# and the judgements had already been deleted.
+if [ -n "$KEEP" ]; then
+  mkdir -p "$KEEP" || { printf 'size-sweep: cannot write to --keep %s\n' "$KEEP" >&2; exit 2; }
+  TMP="$(mktemp -d "$KEEP/sweep.XXXXXX")"
+  printf 'keeping run directories: %s\n' "$TMP"
+else
+  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+fi
 
 # Frozen, for the reason freeze_inputs gives: these three point outside the
 # snapshot this harness re-execs through, and a run long enough to be worth doing

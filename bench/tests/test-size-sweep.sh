@@ -135,5 +135,22 @@ check "and how much there was"           'pad_bytes' "$SRC"
 check "and the confound check's result"  'words_the_seeded_defect_introduced' "$SRC"
 check "with why it is in the record"     "cannot be compared with one that used the other" "$SRC"
 
+printf '\n== --keep, because a table cannot be re-examined ==\n\n'
+#
+# Five rows of the control on 2026-09-17 read NAMED=yes, which would mean the
+# judge identified the forbidden work and accepted it anyway — the sharpest
+# reading available. It could not be checked: NAMED is a keyword match that can
+# fire on a FABRICATED finding, and the run directories had already been deleted.
+K="$WORK/kept"
+out="$(sweep --pad-from "$CORPUS" --sizes '0' --repeat 1 --keep "$K" --out "$WORK/f.json" 2>&1 | head -6)"
+check "it says where it is keeping them" "keeping run directories" "$out"
+if [ -n "$(ls -A "$K" 2>/dev/null)" ]; then
+  printf '  ok    and the directory survives the run\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  --keep was given and nothing was kept\n'; FAIL=$((FAIL+1))
+fi
+check "the flag is documented"          "NAMED in particular" "$(cat "$SWEEP")"
+check "with the day it was needed"      "2026-09-17" "$(cat "$SWEEP")"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
