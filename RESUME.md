@@ -1658,6 +1658,25 @@ Write the end-to-end test before the next long real run, not after it.
   host and refused the pull with the publish command in its error. Every step but
   the one that needs the image has now run on GitHub.
 
+## The first three things to do when the per-criterion run lands
+
+It is the last measurement of this judge that can be compared to the ones above
+it; every change below is one that alters what a fitness number means, so they
+are queued rather than made.
+
+1. **`minLength: 12` on `quote` in judge.sh's schema.** The controller now refuses
+   a criterion whose quote is under twelve characters — a threshold below which a
+   quote matches everything and proves nothing — but it refuses it *after* an hour
+   of GPU time. A grammar constraint stops it being emitted, which is where this
+   day's finding says a constraint belongs. Unknown whether llama.cpp's converter
+   honours `minLength`: it honours `enum` and `maxLength` and ignores `minimum`
+   and `maximum`, so this needs the same one-case probe the others got. If it is
+   ignored, the controller rule is the whole of it and that is worth knowing too.
+2. **Re-run `size-sweep` now that `tools: []` is declared.** The sweep predates it.
+3. **Re-measure the 14 provenance-less figures**, which are now cheaper to keep:
+   the artifact records the grammar and the asker by content hash, so a figure
+   taken after a15696b names the judge that produced it.
+
 ## What to re-run to confirm nothing drifted
 
 There is no bare `python` on this box; the interpreter is the venv's. Run one per line:
