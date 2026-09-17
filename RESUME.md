@@ -1887,6 +1887,22 @@ was the 262144 default context, not model speed.
 
 ## Decisions recorded 2026-09-16 (same rule: don't re-litigate, do revisit on trigger)
 
+**`criterion-not-really-met` stays the judge's, and I am not building a check for
+it.** It is the last of the five seeded defects a controller cannot decide, and
+the temptation to go five for five is exactly why this is written down. The
+seeded spec argues that *"ac3 (mypy reports no errors) is satisfied because the
+package contains no type annotations, so mypy has nothing to check and therefore
+cannot report an error"* — a criterion satisfied vacuously, argued in prose. What
+a script could match is the phrasing: "nothing to check", "cannot report", "no X
+so Y cannot". That is a phrase matcher, it would fire on honest prose that
+happens to explain why something is absent, and the property that makes the
+controller checks worth having is **zero false alarms across every measurement
+so far**. Trading that for one more seeded defect is a bad trade: a controller
+check that cries wolf gets ignored, and then none of them work.
+
+Revisit if a corpus of real specs shows the pattern appearing often enough to
+measure a false-alarm rate against — not before.
+
 **The judge stays advisory**, and it is not a holding position — it is now the
 best-supported decision in this repository. Best measured figure: **4 false
 accepts in 15**, after the prompt stopped contradicting itself, with the clean
