@@ -1552,7 +1552,7 @@ worker on the host — the containment guarantee held during a resource failure,
 which is when guarantees usually do not — and the run halted rather than recording
 a pass.
 
-## OPEN: something SIGTERMs the doc worker at ~1000 seconds
+## OPEN: something SIGTERMs the doc worker at ~1000 seconds — now self-identifying
 
 Not identified as of 2026-09-15 evening. A doc session wrote a complete
 18,626-byte document, printed its report, and its container died at 1022 seconds
@@ -1570,6 +1570,26 @@ child stamped; that now extends to a step whose output is a file. Every expected
 output freshly written by this attempt — verified by hash, not by existence — is a
 PASS regardless of the exit code, and the checks that read the file run next, so a
 half-written one still fails on its contents.
+
+**2026-09-17: it cannot be diagnosed backwards, so it is made to identify itself
+forwards.** The container is named (`factory-worker-<pid>-<epoch>`) and on any
+non-zero exit `worker-sandbox.sh` reads back that container's own podman events
+and prints them — the `died` event carries the exit code the runtime saw. The
+container used to be anonymous and `--rm`'d, so by the time anyone looked there
+was nothing left to ask.
+
+And on 143 specifically it now says what 143 rules out: nothing in the script
+sends SIGTERM, and the `timeout` wrapper would have exited 124, so it came from
+outside the process tree — and if the events show no `stop` before the `died`,
+nobody asked podman to stop it either. **The first suspect is named: an
+operator's `pkill -f`.** That is not proof, and it is the one cause consistent
+with all of the evidence — unreproducible, unlogged, arriving in the middle of a
+long session while someone was working alongside — and this repository has done
+it to itself five times. The sentinel experiment that cleared the test suite does
+not clear a person at a terminal.
+
+14 assertions in `test-worker-sandbox-death.sh`, with podman stubbed: the message
+is the thing being tested, not the runtime.
 
 ## DONE: one real run reached a pull request
 

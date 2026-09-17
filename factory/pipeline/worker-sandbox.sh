@@ -184,8 +184,46 @@ if [ -n "$SKILLS_DIR" ]; then
 fi
 for kv in ${EXTRA_ENV+"${EXTRA_ENV[@]}"}; do RUN_ARGS+=( --env "$kv" ); done
 
+# The container is named, and the time is noted, so that a death can be asked
+# about afterwards.
+#
+# On 2026-09-15 a doc session wrote a complete 18,626-byte document and its
+# container died at 1022 seconds with 143 — SIGTERM, from outside, when nothing
+# in this script sends one and `timeout` would have exited 124. It has been an
+# open unidentified failure since, because by the time anyone looked the podman
+# events had rolled and `--rm` had taken the container with them.
+#
+# It cannot be diagnosed retroactively. It can be made to identify itself the
+# next time, which is what this does: on any non-zero exit, the container's own
+# events are read back and printed, and the `died` event carries the exit code
+# the runtime saw. 143 there, with no `stop` event before it, is somebody outside
+# this process tree sending SIGTERM — and the first suspect is an operator's
+# `pkill -f`, which this repository has done to itself five times and which is
+# the one cause consistent with the evidence: unreproducible, unlogged, and
+# arriving in the middle of a long session while someone was working alongside.
+CNAME="factory-worker-$$-$(date +%s)"
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+RUN_ARGS+=( --name "$CNAME" )
+
 timeout --signal=TERM --kill-after=30 "$TIMEOUT" \
   podman run "${RUN_ARGS[@]}" "$IMAGE" "${CMD[@]}"
 rc=$?
 [ "$rc" -eq 124 ] && printf 'worker-sandbox: the session was killed after %ss\n' "$TIMEOUT" >&2
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+  printf '\nworker-sandbox: the container exited %s. What podman saw:\n' "$rc" >&2
+  # Captured, not redirected in place. `2>/dev/null >&2` sends stdout to the fd
+  # that was just pointed at /dev/null — the events came back and went nowhere,
+  # and the diagnosis printed under an empty heading.
+  EV="$(podman events --since "$STARTED_AT" --stream=false --filter "container=$CNAME" \
+    --format '  {{.Time}}  {{.Status}}{{if .ContainerExitCode}} (exit {{.ContainerExitCode}}){{end}}' 2>/dev/null)"
+  if [ -n "$EV" ]; then printf '%s\n' "$EV" >&2
+  else printf '  (no events; podman may have rolled them, or the container was never named)\n' >&2; fi
+  if [ "$rc" -eq 143 ]; then
+    printf '\n  143 is SIGTERM, and nothing in this script sends one: `timeout` would have\n' >&2
+    printf '  exited 124. So it came from outside this process tree. If there is no `stop`\n' >&2
+    printf '  event above, nobody asked podman to stop it either.\n' >&2
+    printf '  First suspect is a pattern kill from a terminal — `pkill -f` has hit this\n' >&2
+    printf '  repository five times. See "Never pkill -f" in RESUME.md.\n' >&2
+  fi
+fi
 exit "$rc"
