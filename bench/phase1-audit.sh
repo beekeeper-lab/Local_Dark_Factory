@@ -123,8 +123,22 @@ if [ -f "$RSCHEMA" ] && [ -x "$ROOT/.venv/bin/python" ]; then
   else
     # The validator's own words, trimmed of its leading whitespace. A grep that
     # reshapes them risks saying something the validator did not.
+    #
+    # It used to take `<root>:` lines only, and every error nested under a key —
+    # `conditions: 'judge' is a required property` — was dropped. A run.json
+    # missing half of `conditions` produced the finding "run.json does not
+    # validate — " with nothing after the dash. Found by the first test ever
+    # written against this script, in its first run.
+    # A run older than the schema cannot be made to conform, and a reader sent to
+    # fix one wastes the trip. Say which it is: `schema_version` absent means the
+    # record predates the field, and what the finding is really about is whether
+    # the CURRENT line still writes records like this one.
+    vintage=""
+    if ! jq -e 'has("schema_version")' "$RUNJSON" >/dev/null 2>&1; then
+      vintage=" · this record has no schema_version at all, so it predates the schema; the question a reader should ask is whether the line still writes records like it"
+    fi
     bad "run_record_conforms" major \
-      "run.json does not validate — $(printf '%s\n' "$rout" | sed -n 's/^ *<root>: //p' | tr '\n' '@' | sed 's/@$//; s/@/; /g')"
+      "run.json does not validate — $(printf '%s\n' "$rout" | sed -n 's/^ \{6,\}//p' | tr '\n' '@' | sed 's/@$//; s/@/; /g')$vintage"
     pred run_record_conforms fail
   fi
 fi
@@ -196,12 +210,48 @@ BRANCH="$(jq -r '.branch // empty' "$RUNJSON")"
 ntasks=0
 [ -f "$RUN_DIR/tasks.jsonl" ] && ntasks="$(jq -rs '[.[] | select(.event == "task" and .result == "verified")] | length' "$RUN_DIR/tasks.jsonl" 2>/dev/null)"
 ntasks="${ntasks:-0}"
-ncommits=0
-[ -n "$BRANCH" ] && ncommits="$(git -C "$REPO" rev-list --count "main..$BRANCH" 2>/dev/null)"
-ncommits="${ncommits:-0}"
+# How the commits are counted, and why it is not `rev-list main..<branch>`.
+#
+# That was the original instrument, and it answers "how many commits are not yet
+# on main" — which is zero once the pull request merges. So this predicate passed
+# on bean-001 while its PR was open and failed an hour later BECAUSE the bean had
+# succeeded. The predicate is about whether each verified task handed off as a
+# commit; that is a fact about the repository, not a distance from a branch that
+# moves underneath it.
+#
+# So: the build loop records the sha it made for each task (tasks.jsonl, event
+# "commit"), and this counts the ones git can still resolve. Runs from before
+# that existed have no such events, and fall back to the branch count — with the
+# instrument named in the message, because two runs scored by two instruments
+# should not look identical in a report.
+ncommits=0; how=""
+recorded=0
+[ -f "$RUN_DIR/tasks.jsonl" ] && recorded="$(jq -rs '[.[] | select(.event == "commit")] | length' "$RUN_DIR/tasks.jsonl" 2>/dev/null)"
+recorded="${recorded:-0}"
+if [ "$recorded" -gt 0 ]; then
+  while IFS= read -r sha; do
+    [ -n "$sha" ] || continue
+    git -C "$REPO" cat-file -e "$sha^{commit}" 2>/dev/null && ncommits=$((ncommits+1))
+  done < <(jq -rs '[.[] | select(.event == "commit")] | unique_by(.task) | .[].sha' "$RUN_DIR/tasks.jsonl" 2>/dev/null)
+  how="recorded by the build loop"
+  [ "$ncommits" -eq "$recorded" ] || how="$how ($((recorded - ncommits)) of $recorded no longer resolve)"
+else
+  # No recorded shas: an older run. Its commits are still findable — `commit_task`
+  # has always written `bean: <id>` into the body and `build(<task>):` into the
+  # subject — so count the distinct tasks named by commits reachable from the
+  # branch. Reachable, not `main..branch`: after a merge those are the same
+  # commits and the range is empty.
+  BEAN_ID_RR="$(jq -r '.bean_id // .bean // empty' "$RUNJSON" 2>/dev/null)"
+  if [ -n "$BRANCH" ] && [ -n "$BEAN_ID_RR" ]; then
+    ncommits="$(git -C "$REPO" log "$BRANCH" --format='%s' --grep="^bean: $BEAN_ID_RR\$" 2>/dev/null \
+      | sed -n 's/^build(\([^)]*\)).*/\1/p' | sort -u | wc -l)"
+  fi
+  ncommits="${ncommits:-0}"
+  how="found by message on $BRANCH — this run predates the recorded shas"
+fi
 dirty="$(git -C "$REPO" status --porcelain 2>/dev/null | grep -v '^?? factory/runs/' | head -3)"
 if [ "$ntasks" -gt 0 ] && [ "$ncommits" -ge "$ntasks" ] && [ -z "$dirty" ]; then
-  ok "every_handoff_is_commit" "$ntasks verified task(s), $ncommits commit(s) on $BRANCH, tree clean"
+  ok "every_handoff_is_commit" "$ntasks verified task(s), $ncommits commit(s) — $how — tree clean"
   pred every_handoff_is_commit pass
 elif [ "$ntasks" -eq 0 ]; then
   bad "every_handoff_is_commit" blocker "no task was verified, so nothing was handed off"
@@ -210,7 +260,7 @@ elif [ -n "$dirty" ]; then
   bad "every_handoff_is_commit" blocker "the tree is dirty; work exists that was never committed: $(tr '\n' ' ' <<<"$dirty")"
   pred every_handoff_is_commit fail
 else
-  bad "every_handoff_is_commit" blocker "$ntasks verified task(s) but only $ncommits commit(s) on $BRANCH"
+  bad "every_handoff_is_commit" blocker "$ntasks verified task(s) but only $ncommits commit(s) — $how"
   pred every_handoff_is_commit fail
 fi
 

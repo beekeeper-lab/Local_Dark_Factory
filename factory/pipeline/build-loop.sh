@@ -395,7 +395,17 @@ commit_task() {
     "$tid" "$title" "$BEAN_ID" "$attempt" "$result" \
     "$(jq -r '.verify[] | "  - " + (.kind + (if .run then ": " + (.run|join(" ")) elif .test_id then ": " + .test_id elif .gate_id then ": " + .gate_id else "" end))' <<<"$T")")"
   git -C "$ROOT" commit -q -m "$msg" || die "could not commit task $tid"
-  printf 'COMMIT %-10s %s\n' "$tid" "$(git -C "$ROOT" rev-parse --short HEAD)"
+  local sha; sha="$(git -C "$ROOT" rev-parse HEAD)"
+  # Record the sha, because "the branch has a commit per verified task" was being
+  # checked as `rev-list --count main..<branch>` — which is the number of commits
+  # NOT YET on main, and goes to zero the moment the pull request merges. The
+  # phase-1 predicate therefore failed on bean-001 an hour after bean-001 landed,
+  # for the reason that it had landed. A commit is a fact about the repository;
+  # count it as one, not as a distance from a branch that moves.
+  log_event "$(jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg t "$tid" \
+    --arg sha "$sha" --arg a "$attempt" --argjson paths "$(printf '%s\n' "${paths[@]}" | jq -R . | jq -sc .)" \
+    '{ts:$ts, event:"commit", task:$t, sha:$sha, attempt:($a|tonumber), paths:$paths}')"
+  printf 'COMMIT %-10s %s\n' "$tid" "${sha:0:7}"
 }
 
 # write_blocked_evidence <task-id> — a blocked bean must arrive with its reasons
