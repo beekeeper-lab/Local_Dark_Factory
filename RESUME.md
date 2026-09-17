@@ -1587,6 +1587,20 @@ audit specifically.
 The 30,422 arm is there to firm up a figure that rests on three passes, and to
 catch the case where the whole effect fails to reproduce a third time.
 
+## Running: the clean re-measurement the retraction calls for
+
+Five passes at 20,422 and 40,422, neutral padding, `--keep`, with the per-pass
+run directory in place. Started 2026-09-17, after the retraction below.
+
+**Prediction, from the judgements that could be recovered**: 0 of 5 accepts at the
+small size, and **1 to 3 of 5** at the large one. Not 5 of 5 — that number came
+from the bug.
+
+**The check that matters is not the table.** It is that the table and the kept
+judgements agree. Five passes should leave five `attempt-1` files in five
+directories, and every row should match the file beside it. If they do not, the
+fix is wrong and the retraction is not finished.
+
 ## RETRACTED IN PART: the sweep reported its first pass N times
 
 Found 2026-09-17, after five runs and several confident paragraphs. **Every
