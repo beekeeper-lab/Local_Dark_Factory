@@ -672,6 +672,36 @@ BODY="$(jq -n --arg m "$MODEL" --argjson msgs "$MESSAGES" --arg t "$THINKING" \
 T0="$(date +%s)"
 RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
   printf 'JUDGE  %s: the request failed: %s\n' "$TARGET" "${RESP:0:200}" >&2; exit 1; }
+
+# Asked once more when the model answered with a TOOL CALL and nothing else.
+#
+# `tools: []` is declared in the request above and gpt-oss:120b sometimes emits a
+# call anyway, to something out of its own training — `repo_browser.print_tree` on
+# a reaudit pass this evening. There are no tools on this path and the artifacts
+# are already in the prompt, so the call cannot be answered and the audit dies
+# with no judgement, no findings, and nothing for a retry to act on. orchestrate
+# halts the run on that, correctly: a step that failed without a verdict is never
+# retried blindly.
+#
+# This is not a blind retry. Nothing was judged, so there is nothing to carry
+# forward and no risk of laundering a bad answer into a good one — it is asking
+# the same question again after the transport, in effect, returned nothing. That
+# it can work at all is this model's non-determinism, which is otherwise a
+# nuisance: judge-variance got two different verdicts from five identical
+# requests at temperature 0.
+#
+# Once. A model that asks for tools twice is telling you something, and the
+# message says which attempt it was so a reader can see the difference between
+# "it did this once" and "it does this".
+JUDGE_RETRIED=0
+if [ -z "$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)" ] \
+   && [ "$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)" -gt 0 ]; then
+  printf 'JUDGE  %s: the model asked for tools instead of answering (%s); asking once more.\n' \
+    "$TARGET" "$(jq -r '[.message.tool_calls[].function.name] | join(", ")' <<<"$RESP" 2>/dev/null)" >&2
+  JUDGE_RETRIED=1
+  RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
+    printf 'JUDGE  %s: the second request failed: %s\n' "$TARGET" "${RESP:0:200}" >&2; exit 1; }
+fi
 T1="$(date +%s)"
 
 # Ollama answers HTTP 200 with a zero-valued struct — empty model, empty message,
@@ -732,8 +762,9 @@ fi
 CONTENT="$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)"
 NTOOLS="$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)"
 if [ -z "$CONTENT" ] && [ "${NTOOLS:-0}" -gt 0 ]; then
-  printf 'JUDGE  %s: the model tried to call tools instead of answering (%s call(s): %s).\n' \
-    "$TARGET" "$NTOOLS" "$(jq -r '[.message.tool_calls[].function.name] | join(", ")' <<<"$RESP" 2>/dev/null)" >&2
+  printf 'JUDGE  %s: the model tried to call tools instead of answering (%s call(s): %s)%s.\n' \
+    "$TARGET" "$NTOOLS" "$(jq -r '[.message.tool_calls[].function.name] | join(", ")' <<<"$RESP" 2>/dev/null)" \
+    "$([ "$JUDGE_RETRIED" = 1 ] && printf ' — twice, asked again after the first' || true)" >&2
   printf '       There are no tools on this path and the artifacts were in the prompt.\n' >&2
   exit 1
 fi

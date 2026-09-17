@@ -88,7 +88,16 @@ class H(http.server.BaseHTTPRequestHandler):
         # unassertable while this was a discarded read.
         raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         open(REQ, "wb").write(raw)
-        body = open(REPLY, "rb").read()
+        # A second reply file, consumed once, for the paths where judge.sh asks
+        # twice. Without it the retry gets the same answer and a test can only
+        # assert that asking twice fails twice — never that the second answer is
+        # the one used.
+        nxt = os.path.join(os.path.dirname(REPLY), "reply-2.json")
+        if os.path.exists(nxt):
+            body = open(nxt, "rb").read()
+            os.remove(nxt)
+        else:
+            body = open(REPLY, "rb").read()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -232,12 +241,31 @@ want  "what it sent is kept"           "verdicts/spec.unparseable.json should ex
 
 printf '\n== it tried to call tools that do not exist ==\n\n'
 clean_verdicts
-reply '{"model":"test-judge:latest","done":true,"done_reason":"stop","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"repo_browser.open_file"}},{"function":{"name":"repo_browser.search"}}]}}'
+TOOLCALL='{"model":"test-judge:latest","done":true,"done_reason":"stop","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"repo_browser.open_file"}},{"function":{"name":"repo_browser.search"}}]}}'
+reply "$TOOLCALL"
 out="$(judge)"; rc=$?
 rc_is "it fails"                       "$rc" 1
 check "it counts them"                 "2 call(s)" "$out"
 check "and names them"                 "repo_browser.open_file" "$out"
 check "and says there are no tools"    "no tools on this path" "$out"
+check "and that it had already asked again" "twice, asked again after the first" "$out"
+
+printf '\n-- asked once more, because nothing was judged the first time --\n\n'
+#
+# `tools: []` is declared in the request and gpt-oss:120b emits a call anyway —
+# `repo_browser.print_tree` on a reaudit pass on 2026-09-16. The call cannot be
+# answered, so the audit dies with no judgement and nothing for a retry to act
+# on, and orchestrate halts the run. Asking the same question again is not a
+# blind retry: nothing was judged, so there is nothing to launder.
+clean_verdicts
+reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
+printf '%s' "$TOOLCALL" > "$WORK/reply-2.json"   # the FIRST answer; reply.json is the second
+out="$(judge)"; rc=$?
+rc_is "the second answer is used"      "$rc" 0
+check "and it says it asked again"     "asking once more" "$out"
+check "naming what it asked for"       "repo_browser.open_file" "$out"
+want  "and the judgement is on disk"   "a judgement file should exist" \
+      test -n "$(ls -1 "$R"/verdicts/spec*.judgement.json 2>/dev/null)"
 
 # --------------------------------------------------------------------------
 printf '\n== it answered in JSON, but not with a judgement ==\n\n'
