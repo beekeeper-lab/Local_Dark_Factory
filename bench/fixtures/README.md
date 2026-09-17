@@ -58,3 +58,19 @@ the judge accepts about half of what it is shown.
 **Do not edit these to match a bean.** A fixture that tracks a live file is the
 live file with extra steps. If bean-001 changes in a way that matters, that is a
 new fixture next to these two, and the old figures stay attached to the old one.
+
+## pad-neutral/
+
+The control for the size finding, and the reason this directory exists at all is
+visible in it: **a control must differ from the treatment in exactly one thing.**
+
+`bench/size-sweep.sh` pads a spec to a target size with the rest of the bean
+corpus. That changes two things at once — how many bytes the judge reads, and
+what those bytes say — and the seeded defect writes
+`src/seating_planner/solver/cpsat.py` while bean-006 *owns*
+`src/seating_planner/solver/**`. `pad-neutral/` is the same nineteen beans with
+the domain vocabulary substituted: zero mentions of the solver, the same schema,
+the same shape, within 1% of the same bytes.
+
+`size-sweep.sh` warns when the padding contains words the mutation introduced,
+and points here. Its own README has the detail.
