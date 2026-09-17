@@ -375,8 +375,10 @@ variance. The other 4 are the judge's actual job.
 
 The earlier figure of 2 of 5 was measured with the target repo on a bean branch — the work
 already committed, so every verify already passed and the clean control failed. The harness
-refuses that state now. **1 of 5 is the honest number**, and the drop is a measurement
-improving, not a check regressing.
+refuses that state now. **1 of 5 was the honest number then**, and the drop was a
+measurement improving, not a check regressing. It is **4 of 5** now — two checks
+later, both measured the same way and both against a pinned fixture rather than a
+live bean: *"What annotating buys"* and *"The fourth of five seeded defects"*.
 
 The one that moved is worth naming, because the claim in the table above is narrower than it
 reads. The `tautological-verify` case replaces *one* of task-1's verifies with `test -d .`.
