@@ -1703,6 +1703,36 @@ Write the end-to-end test before the next long real run, not after it.
   host and refused the pull with the publish command in its error. Every step but
   the one that needs the image has now run on GitHub.
 
+## The per-criterion quote rule would have refused the only verdict ever stamped
+
+Stated before measuring, so that what comes back is a test of this and not a
+rationalisation of it.
+
+Every criterion now needs its own quote of at least twelve characters — the
+threshold the existing all-quotes rule already used, below which a quote matches
+everything and proves nothing. `evidence/first-stamped-verdict-20260916.json` is
+the line's first and only stamped audit verdict, and its four criteria quote 22,
+12, 21 and **8** characters. The eight is `"mypy src"`, offered as evidence for
+*"Mypy reports no errors"*.
+
+That quote is real — it is in `gates.lock.yaml` — and it proves the command
+exists, not that it passed. The output showing no errors is on disk in the same
+run and was not quoted. So the one verdict this line has stamped rested on a
+criterion that was never verified, and the check that was supposed to catch that
+counted quotes rather than criteria.
+
+**The prediction: `factory reaudit` goes from 1 stamped in 12 to 0 in 12.** If it
+does, that is not the controller getting worse. It is the controller stopping
+saying something that was not true — and the honest reading of "0 of 12" is the
+same as the honest reading of "1 of 12" was: this judge does not produce audit
+verdicts a controller can stamp, and `merge_mode: human_required` is carrying the
+weight. If it comes back with a stamped row anyway, the rule is looser than I
+think it is and the number to look at is which criterion carried it.
+
+The other direction is worth saying too: the rule is easy to satisfy honestly.
+Twelve characters of an artifact a judge actually read is no effort, and the
+judgements measured here emit 200 to 600 characters when they quote at all.
+
 ## The first three things to do when the per-criterion run lands
 
 It is the last measurement of this judge that can be compared to the ones above
