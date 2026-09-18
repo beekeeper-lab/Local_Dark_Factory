@@ -243,6 +243,15 @@ want "the model's questions are kept"   "questions-from-worker/ should hold them
 check "with the model's own words"      "never installed" "$(cat "$kept" 2>/dev/null)"
 check "and the halt points at them"     "The model stopped and wrote its own questions first" \
   "$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
+# And it does not then say the opposite three lines further down. The generic
+# sentence — "the failure carries no findings a retry could address" — is for the
+# steps that genuinely have nothing to hand back. `ci` got it under a full page
+# explaining why the remote run never opened the tree, which is the flat
+# contradiction of what was sitting above it.
+nope "and does not deny they exist"     "carries no findings a retry could address" \
+  "$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
+check "it asks for a decision instead"  "That account is the findings" \
+  "$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
 cleanup_run
 
 printf '\n== a spec with no document does not reach an audit ==\n\n'

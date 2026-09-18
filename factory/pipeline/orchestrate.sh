@@ -990,7 +990,15 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
         printf '\nThe step was re-entered once with exactly these lines and they were not\nfixed. Full output: `%s`.\n' "$checkfile"
       fi
       printf '\n## Question for a human\n\n'
-      if [ -n "$checkfile" ] && [ -s "$checkfile" ]; then
+      if [ -n "$worker_questions" ]; then
+        # The step wrote its own account and it is quoted at the top of this
+        # file. Saying "the failure carries no findings a retry could address"
+        # under it is the flat opposite of what is sitting three lines above —
+        # which is what `ci` got: a full page on why the remote run never opened
+        # the tree, and then a sentence saying there was nothing to go on.
+        printf '`%s` stopped and said why, in `%s`. That account is the findings. What it asks for is a decision, not a retry: read it, and say whether the thing it names should be fixed or the run should continue without it.\n' \
+          "$step" "$worker_questions"
+      elif [ -n "$checkfile" ] && [ -s "$checkfile" ]; then
         printf '`%s` failed its controller check twice — once on its own, once with the findings above in its prompt. The findings are specific and were handed back verbatim, so this is not a transcription job: either they are wrong about what the bean needs, or the model cannot act on them. Which?\n' "$step"
       else
         printf 'I do not retry `%s` blindly: the failure carries no findings a retry could address. What precondition or fix does `%s` need before this run can continue?\n' "$step" "$step"
@@ -1169,7 +1177,20 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
   else
     existing="$(failed_count "$STEP")"
     if [ "$existing" -ge 2 ]; then
+      # Say what a person can do about it. The count is per RUN and nothing in
+      # the line clears it, so a step whose failures were caused by a controller
+      # bug stays unreachable on every resume after the bug is fixed — which is
+      # where bean-002 sat, twice refused over a question the controller had
+      # itself answered, and then unable to try again once that was fixed.
+      #
+      # The records are the evidence and are not deleted: `failed-attempts/
+      # resolved/` already exists for exactly this, and the advisory records use
+      # it. Moving one is a decision a person makes and leaves visible.
       printf 'HALT   %s already has %s failed attempts — not starting a third\n' "$STEP" "$existing"
+      printf '       They are in %s/failed-attempts/. If a fix has made one of them\n' "$RUN_DIR"
+      printf '       obsolete — a controller defect rather than the step failing at its job —\n'
+      printf '       move it into failed-attempts/resolved/ and resume. Deleting it loses the\n'
+      printf '       evidence; moving it says a person looked.\n'
       halt "$STEP"
     fi
     rc=0
