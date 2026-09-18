@@ -191,6 +191,19 @@ for t in spec impl doc package; do
 done
 printf '{"internally_consistent":true}\n' > $R/package-check.json
 printf '{"status":"pass"}\n' > $R/doc-check.json
+# The controller's own record of why each audit reached nothing. "the judge
+# produced no judgement" is true and tells a reviewer nothing about whether to
+# trust the change; the rule that refused does.
+mkdir -p "$R/verdicts"
+jq -nc '{schema:"refusal/1.1.0", by:"audit-check", target:"spec", attempt:1,
+         rule:"quote-not-on-disk",
+         reason:"the judgement quotes text that is not in any artifact",
+         details:{quotes:["a thing nobody wrote"]}, judgement:null,
+         refused_at:"2026-09-17T23:00:00Z"}' > "$R/verdicts/spec.attempt-1.refused.json"
+jq -nc '{schema:"refusal/1.1.0", by:"judge", target:"doc", attempt:2,
+         rule:"answer-not-json", reason:"the answer is not JSON",
+         details:{done_reason:"stop"}, judgement:null,
+         refused_at:"2026-09-17T23:05:00Z"}' > "$R/verdicts/doc.attempt-2.refused.json"
 out="$(pr)"; rc=$?
 if [ "$rc" -ne 0 ]; then
   printf '  --- pr.sh refused; its output ---\n'
@@ -208,6 +221,20 @@ check "it names which audits"            "reached no verdict for" "$body"
 check "and why, without excusing it"     "not reproducible on identical input" "$body"
 check "it says what did authorise it"    "What *did* authorise it is deterministic" "$body"
 check "and tells the reviewer their job" "Read the two documents and the diff yourself" "$body"
+printf -- '\n-- and the body says which rule refused, not only that something did --\n\n'
+#
+# The reviewer is the only gate on this repository. A judgement refused because
+# it quoted text that is in no artifact is a judge that did not read the thing,
+# which says nothing about the code; a judgement refused because it reported on
+# criteria the bean does not declare is the same. That is the difference between
+# "an audit did not accept" and "an audit did not happen", and it is the whole
+# of what a reviewer needs from this section.
+check "the rule is named"                "quote-not-on-disk" "$body"
+check "and the target it was about"      "**spec** audit" "$body"
+check "the judge's own refusals too"     "answer-not-json" "$body"
+check "with what by means"               "no answer came back that could be read" "$body"
+check "and that neither is about the change" "Neither is a statement about this change" "$body"
+
 if grep -qF 'Every audit was clean' <<<"$body"; then
   printf '  FAIL  it must not claim a clean audit when none reached a verdict\n'; FAIL=$((FAIL+1))
 else

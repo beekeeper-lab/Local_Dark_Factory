@@ -381,6 +381,29 @@ BODY="$(mktemp)"
         "$(grep '^note:' "$a" | head -1 | sed 's/^note: *//')"
     done
     printf '\n'
+    # And WHICH RULE refused, where the controller recorded one.
+    #
+    # "the judge produced no judgement" is true and tells a reviewer nothing
+    # about whether to trust the change. These do: a judgement refused because
+    # it quoted text that is in no artifact is a judge that did not read the
+    # thing, which says nothing about the code. A judgement refused because it
+    # reported on criteria the bean does not declare is the same. The reviewer
+    # is the only gate on this repository, and this is the difference between
+    # "an audit did not accept" and "an audit did not happen".
+    REF=( "$RUN_DIR"/verdicts/*.refused.json )
+    if [ -e "${REF[0]}" ]; then
+      printf 'What the controller refused, and why:\n\n'
+      for r in "${REF[@]}"; do
+        [ -e "$r" ] || continue
+        printf -- '- **%s** audit, attempt %s — refused by `%s` (%s): %s\n' \
+          "$(jq -r '.target' "$r")" "$(jq -r '.attempt' "$r")" \
+          "$(jq -r '.rule' "$r")" "$(jq -r '.by // "audit-check"' "$r")" \
+          "$(jq -r '.reason' "$r")"
+      done
+      printf '\n`by: judge` means no answer came back that could be read as a judgement.\n'
+      printf '`by: audit-check` means one did and the controller would not stamp it.\n'
+      printf 'Neither is a statement about this change.\n\n'
+    fi
   fi
 } > "$BODY"
 
