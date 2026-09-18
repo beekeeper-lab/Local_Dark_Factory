@@ -46,6 +46,9 @@ factory — run the line against the repository you are standing in.
   factory read [<run-dir>]  confirm you have read the run's two documents, and
                             record who and when — the one exit predicate a script
                             cannot settle
+  factory refusals [--all]  every audit that reached no verdict, tallied by the
+                            rule that refused it — the arithmetic behind "the
+                            judge produces no stampable verdicts"
   factory policy            the tier every bean lands in, and the rule that put
                             it there — for reviewing risk-policy.yaml by its
                             consequences rather than by reading globs
@@ -878,6 +881,61 @@ The two documents this run produced:
       *) printf 'Not recorded.
 '; exit 1 ;;
     esac
+    ;;
+
+  refusals)
+    # Every audit in this repository that reached no verdict, and which rule said
+    # so — across runs, not one at a time.
+    #
+    # This exists because the numbers in RESUME.md that carry the whole judge
+    # argument — "5 of 12 reaudit refusals were fabricated quotes", "four backed
+    # a criterion with no quote long enough to check" — were counted by hand off
+    # terminal scrollback, twice, and could not be recomputed afterwards. They
+    # are the most load-bearing figures in the project and they were anecdotes.
+    #
+    # `by` is kept separate in the tally on purpose: `judge` means no answer came
+    # back that could be read as a judgement at all, which is a model or server
+    # problem, and `audit-check` means one arrived and could not be stamped,
+    # which is about its content. Summing them would produce a number that means
+    # nothing.
+    require_target
+    _showall=0
+    [ "${1:-}" = "--all" ] && _showall=1
+    _files="$(ls -1 "$TARGET_ROOT"/factory/runs/*/verdicts/*.refused.json 2>/dev/null || true)"
+    if [ -z "$_files" ]; then
+      printf '\nno refusals recorded in %s\n\n' "$TARGET_ROOT/factory/runs"
+      printf 'Either no audit has been refused here, or the runs predate the record\n'
+      printf '(audit-check and judge started writing them on 2026-09-17). A run with\n'
+      printf 'no verdicts and no refusals is the case worth looking at: something\n'
+      printf 'reached no decision and left no account of why.\n'
+      exit 0
+    fi
+    printf '\nrefusals — %s\n\n' "$TARGET_ROOT"
+    # shellcheck disable=SC2086
+    jq -s '
+      def pad($n): (. + "                              ")[0:$n];
+      group_by((.by // "audit-check") + "\u0000" + .rule)
+      | map({by: ((.[0].by) // "audit-check"), rule: .[0].rule, n: length})
+      | sort_by(-.n)
+      | (map(.n) | add) as $total
+      | (.[] | "  \(.by | pad(13))\(.rule | pad(30))\(.n)"),
+        "",
+        "  \("total" | pad(43))\($total)"
+    ' -r $_files
+    printf '\n  %s run(s) carry at least one refusal\n' \
+      "$(printf '%s\n' "$_files" | xargs -r -n1 dirname | xargs -r -n1 dirname | sort -u | wc -l)"
+    if [ "$_showall" = 1 ]; then
+      printf '\neach one:\n\n'
+      # shellcheck disable=SC2086
+      for f in $_files; do
+        printf '  %-42s %-9s %-13s %s\n' \
+          "$(basename "$(dirname "$(dirname "$f")")")" \
+          "$(jq -r '.target' "$f")" "$(jq -r '.by // "audit-check"' "$f")" "$(jq -r '.rule' "$f")"
+      done
+    else
+      printf '  --all lists them one per line, with the run each came from\n'
+    fi
+    printf '\n'
     ;;
 
   policy)

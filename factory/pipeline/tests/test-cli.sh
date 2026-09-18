@@ -77,6 +77,18 @@ done
 want "and nothing that is not a step" "named in usage but not a step:$bogus" test -z "$bogus"
 nope "the old wrong name is gone"    " specify," "$usage"
 
+# Every subcommand the CLI dispatches is in the help, and nothing in the help is
+# a subcommand it does not dispatch. A command nobody can find is a command that
+# does not exist, and a command in the help that answers "unknown" is worse.
+DISPATCHED="$(sed -n 's/^  \([a-z][a-z-]*\))$/\1/p' "$FACTORY_ROOT/bin/factory" | sort -u)"
+undocumented=""
+for c in $DISPATCHED; do
+  case "$c" in *\|*) continue ;; esac
+  grep -qE "^  factory $c( |\$)" <<<"$usage" || undocumented="$undocumented $c"
+done
+want "every subcommand is in the help" "dispatched but not documented:$undocumented" \
+     test -z "$undocumented"
+
 # --------------------------------------------------------------------------
 printf '\n== doctor answers the question it exists to answer ==\n\n'
 out="$(fac doctor)"; rc=$?
@@ -343,10 +355,35 @@ printf '\n-- and a refusal record is never read as a verdict --\n\n'
 # learn it by printing something wrong first.
 nope  "no null verdict line"         "verdict: null" "$out"
 
+printf '\n-- and `factory refusals` counts them across runs --\n\n'
+#
+# The numbers that carry the whole judge argument in RESUME.md — "5 of 12
+# reaudit refusals were fabricated quotes", "four backed a criterion with no
+# quote long enough to check" — were counted by hand off terminal scrollback,
+# twice, and could not be recomputed afterwards. The most load-bearing figures
+# in the project were anecdotes. This makes them arithmetic.
+out="$(fac refusals)"
+check "it tallies by rule"           "quote-not-on-disk" "$out"
+check "and by who refused"           "audit-check" "$out"
+check "keeping the judge separate"   "judge" "$out"
+check "with a total"                 "total" "$out"
+check "and how many runs"            "run(s) carry at least one refusal" "$out"
+out="$(fac refusals --all)"
+check "--all names the run"          "bean-001-20260915T120000Z" "$out"
+check "and the target"               "spec" "$out"
+
 printf '\n-- a run with no refusals says nothing about them --\n\n'
 rm -f "$SR"/*.refused.json
 out="$(fac status "$REPO/factory/runs/bean-001-20260915T120000Z")"
 nope  "no empty heading"             "refused" "$out"
+
+printf '\n-- and with none anywhere, refusals says so rather than printing an empty table --\n\n'
+#
+# "no refusals" and "no record of refusals" are different, and the second is the
+# one worth looking at: a run that reached no decision and left no account of why.
+out="$(fac refusals)"
+check "it says there are none"       "no refusals recorded" "$out"
+check "and names the case to watch"  "reached no decision and left no account" "$out"
 
 # --------------------------------------------------------------------------
 printf '\n== read refuses until there is something to read ==\n\n'
