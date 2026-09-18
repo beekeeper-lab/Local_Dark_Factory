@@ -58,6 +58,40 @@ unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
 so `gates` is a visible check and never a gate here. The human merge is the
 gate, which is what `merge_mode: human_required` already said.
 
+## The finding of the night, which is about where to look next
+
+**Every defect found after bean-002 started running was found BY bean-002
+running, and all but two were in the controller's own bookkeeping — not in any
+model.** Fourteen of them, in one evening, against a line that had 2,000 green
+assertions and a week of judge measurements behind it:
+
+- an entrypoint that turned every worker exit into 143
+- a freshness rule that scored a correct minimal edit as "wrote nothing"
+- a halt a resume walked straight past
+- a killed process leaving an attempt open so every later resume lost the step
+- `jq -s` without `-c` quietly un-JSONL-ing the step log
+- three separate readers of one directory each mis-reading it in front of a
+  real run
+- two instructions the environment made impossible, both of which the worker
+  dutifully worked around and apologised for
+- a halt telling a person there were no findings, beside the findings
+
+None of these is subtle, and none was going to be found by another sweep of the
+judge. They were found because a real bean walked the whole line and each of
+them sat on the path.
+
+**The decision that follows: run beans.** A week of judge measurement moved the
+false-accept rate by nothing; one evening of a bean running moved the line's
+reliability more than any of it. The judge is measured out and advisory; the
+controller is where the work is; and the controller's defects are only visible
+under a real run, because that is the only thing that exercises resume, halt,
+retry, and the parts of the record nothing else writes.
+
+Corollary for the suite: **2,000 passing assertions did not catch any of these.**
+Most were in the seams the tests stub out — a container's exit path, a resumed
+run's bookkeeping, a directory three scripts read differently. The tests are
+worth what they cost; they are not a substitute for the line running.
+
 ## The night of the 17th, in the order it happened
 
 Nine things, and the first four were all found by bean-002 actually running.
