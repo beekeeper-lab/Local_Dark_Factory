@@ -15,11 +15,22 @@ PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(cd "$PIPELINE_DIR/../.." && pwd)"
 V="$ROOT/hidden-tests/verify.sh"
 WORK="$(mktemp -d)"
+# Every verify.sh in this suite writes its record into the temp directory, not
+# into the repository's own. Two sections here deliberately verify half-way or
+# against an edited suite, and without this they downgrade records someone
+# earned by running the command properly — a test that mutates the evidence it
+# is testing makes a green suite mean less than it says. It was set for one
+# section first, which left the section ABOVE it still writing to the real
+# records, and the real bean-002 record duly came back as `half_checked`.
+export HIDDEN_VERIFIED_DIR="$WORK/verified"
 trap 'rm -rf "$WORK"' EXIT
 
 PASS=0; FAIL=0
 check() { if grep -qF -- "$2" <<<"$3"; then printf '  ok    %s\n' "$1"; PASS=$((PASS+1))
           else printf '  FAIL  %s\n          expected: %s\n          got: %s\n' "$1" "$2" "${3:0:250}"; FAIL=$((FAIL+1)); fi }
+want()  { local n="$1" d="$2"; shift 2
+          if "$@"; then printf '  ok    %s\n' "$n"; PASS=$((PASS+1))
+          else printf '  FAIL  %s — %s\n' "$n" "$d"; FAIL=$((FAIL+1)); fi; }
 rc_is() { if [ "$2" = "$3" ]; then printf '  ok    %s (exit %s)\n' "$1" "$3"; PASS=$((PASS+1))
           else printf '  FAIL  %s — expected exit %s, got %s\n' "$1" "$3" "$2"; FAIL=$((FAIL+1)); fi }
 
@@ -112,6 +123,32 @@ else
 fi
 out="$(bash "$V" seating-planner-py/bean-002 2>&1)"; rc=$?
 rc_is "bean-002 is half checked, because it has not run" "$rc" 3
+
+printf '\n== it leaves a record, because this check used to run and write nothing --\n\n'
+#
+# verify.sh's own header says what is at stake: a suite that can never pass
+# "blocks every attempt of its bean forever, and all the worker is told is a
+# count". Whether that had been ruled out for a given bean lived in whoever last
+# ran the command and remembered.
+#
+# The hash is the useful half. A suite EDITED since it was verified is back to
+# unknown, and editing a hidden test is exactly what happens when one turns out
+# to be wrong — which happened to bean-002's on 2026-09-17, the same day.
+REC="$WORK/verified/seating-planner-py/bean-002.json"
+want  "a record is written"              "$REC should exist" test -s "$REC"
+want  "and a half check is not verified" "both_directions should be false" \
+      test "$(jq -r .both_directions "$REC")" = false
+want  "it says which"                    "outcome should be half_checked" \
+      test "$(jq -r .outcome "$REC")" = half_checked
+want  "and hashes the suite it checked"  "suite_sha256 should be 64 hex" \
+      bash -c "jq -r .suite_sha256 '$REC' | grep -Eq '^[0-9a-f]{64}\$'"
+SHA_BEFORE="$(jq -r .suite_sha256 "$REC")"
+printf '\n# a comment\n' >> "$(dirname "$V")/seating-planner-py/bean-002/test_hidden_domain.py"
+bash "$V" seating-planner-py/bean-002 >/dev/null 2>&1 || true
+want  "an edited suite hashes differently" "the hash must move when the suite does" \
+      bash -c "[ \"\$(jq -r .suite_sha256 '$REC')\" != '$SHA_BEFORE' ]"
+git -C "$(cd "$(dirname "$V")/.." && pwd)" checkout -- "hidden-tests/seating-planner-py/bean-002/test_hidden_domain.py" 2>/dev/null || true
+bash "$V" seating-planner-py/bean-002 >/dev/null 2>&1 || true
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

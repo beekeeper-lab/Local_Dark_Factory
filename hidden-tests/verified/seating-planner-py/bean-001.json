@@ -1,0 +1,11 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-001",
+  "suite_sha256": "b17cd082bcd4ee3119a0ff2e7bb9ab0be9d603d8b44f8cc7f9b20fa661c11795",
+  "tests": 11,
+  "outcome": "ok",
+  "checked_against": "bean/bean-001-project-scaffold-with-linting-typing-and",
+  "tree_sha": "ca950efaec565e821fe1bf6ad294f7fac86c14de",
+  "both_directions": true,
+  "verified_at": "2026-09-18T01:08:28Z"
+}

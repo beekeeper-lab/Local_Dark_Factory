@@ -1,0 +1,11 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "_test-fixture/bean-x",
+  "suite_sha256": "3382deee341933d84a8f482376f40f0d059b620a34dd3166fb8e845adc93fdff",
+  "tests": 2,
+  "outcome": "half_checked",
+  "checked_against": null,
+  "tree_sha": null,
+  "both_directions": false,
+  "verified_at": "2026-09-18T01:08:28Z"
+}

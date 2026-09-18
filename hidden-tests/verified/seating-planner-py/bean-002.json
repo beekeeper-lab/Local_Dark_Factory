@@ -1,0 +1,11 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-002",
+  "suite_sha256": "c085695508bb78ad2bbb224ea7f64168247706884a3562b968b75557d991edce",
+  "tests": 9,
+  "outcome": "ok",
+  "checked_against": "bean/bean-002-core-domain-models-for-events-tables-gue",
+  "tree_sha": "736f234acbb050756a5d9599c02e4e398454b7aa",
+  "both_directions": true,
+  "verified_at": "2026-09-18T01:08:43Z"
+}

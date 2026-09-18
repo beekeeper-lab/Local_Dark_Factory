@@ -124,6 +124,35 @@ fi
 STALE="$(comm -13 <(printf '%s\n' "$PASS_EMPTY") <(printf '%s\n' "$DECLARED"))"
 [ -n "$STALE" ] && printf '  note    declared as absence tests but failing against nothing: %s\n' "$(printf '%s ' $STALE)"
 
+# Leave a record, because this check was the one thing in the line that ran and
+# wrote nothing down.
+#
+# Its own header says what is at stake: a suite that can never pass "blocks every
+# attempt of its bean forever, and all the worker is told is a count". Whether
+# that had been ruled out for a given bean lived in whoever last ran this command
+# and remembered. The hash is the useful half — a suite EDITED since it was
+# verified is back to unknown, and editing hidden tests is exactly what happens
+# when one turns out to be wrong.
+SUITE_SHA="$(cat "$DIR"/*.py "$DIR"/absent-by-design.txt 2>/dev/null | sha256sum | cut -d' ' -f1)"
+# Overridable so the suite for this script does not overwrite the real records.
+# A test that verifies a suite half-way would otherwise downgrade a record a
+# person had earned by running it both ways — tests that mutate the evidence
+# they are testing are how a green suite ends up meaning less than it says.
+VERIFIED_DIR="${HIDDEN_VERIFIED_DIR:-$HERE/verified}"
+mkdir -p "$VERIFIED_DIR/$(dirname "$SUITE")" 2>/dev/null || true
+TREE_REF="${BRANCH:-$TREE}"
+TREE_SHA=""
+[ -n "$BRANCH" ] && [ -n "$REPO" ] && TREE_SHA="$(git -C "$REPO" rev-parse "$BRANCH" 2>/dev/null || true)"
+jq -n --arg suite "$SUITE" --arg sha "$SUITE_SHA" --arg ref "$TREE_REF" \
+      --arg tsha "$TREE_SHA" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --argjson rc "$rc" --argjson half "$HALF" --argjson n "$N_ALL" \
+  '{schema:"hidden-verify/1.0.0", suite:$suite, suite_sha256:$sha, tests:$n,
+    outcome:(if $rc != 0 then "not_verified" elif $half == 1 then "half_checked" else "ok" end),
+    checked_against:(if $ref == "" then null else $ref end),
+    tree_sha:(if $tsha == "" then null else $tsha end),
+    both_directions:($rc == 0 and $half == 0), verified_at:$at}' \
+  > "$VERIFIED_DIR/$SUITE.json" 2>/dev/null || true
+
 printf '\n'
 if [ "$rc" -ne 0 ]; then
   printf 'HIDDEN SUITE NOT VERIFIED.\n' >&2

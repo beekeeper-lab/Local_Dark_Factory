@@ -534,7 +534,37 @@ run from the working tree."
             if [ "$HTPB" = 1 ]; then
               HTB="$(find "$HTDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
               if [ "$HTN" -gt 0 ]; then
-                good "hidden tests" "$HTN file(s) for $HTB bean(s), outside the repository — verify one both ways with hidden-tests/verify.sh"
+                # Which of them have been verified BOTH WAYS against a real
+                # tree, and whether they have been edited since.
+                #
+                # verify.sh says in its own header what is at stake: a suite that
+                # can never pass "blocks every attempt of its bean forever, and
+                # all the worker is told is a count". Whether that had been ruled
+                # out for a given bean lived in whoever last ran the command and
+                # remembered — it ran and wrote nothing down, which is the shape
+                # this repository keeps finding. It leaves a record now, and the
+                # hash is the useful half: a suite EDITED since it was verified
+                # is back to unknown, and editing a hidden test is exactly what
+                # happens when one of them turns out to be wrong.
+                HTV=0; HTS=0; HTU=0
+                for _hb in "$HTDIR"/*/; do
+                  [ -d "$_hb" ] || continue
+                  _rec="$(dirname "$HTDIR")/verified/$(basename "$HTDIR")/$(basename "$_hb").json"
+                  [ -f "$_rec" ] || _rec="$HTDIR/../verified/$(basename "$HTDIR")/$(basename "$_hb").json"
+                  if [ ! -f "$_rec" ]; then HTU=$((HTU + 1)); continue; fi
+                  _now="$(cat "$_hb"/*.py "$_hb/absent-by-design.txt" 2>/dev/null | sha256sum | cut -d' ' -f1)"
+                  if [ "$(jq -r '.both_directions' "$_rec" 2>/dev/null)" != true ]; then HTU=$((HTU + 1))
+                  elif [ "$(jq -r '.suite_sha256' "$_rec" 2>/dev/null)" != "$_now" ]; then HTS=$((HTS + 1))
+                  else HTV=$((HTV + 1)); fi
+                done
+                _hmsg="$HTN file(s) for $HTB bean(s), outside the repository"
+                if [ "$HTU" -eq 0 ] && [ "$HTS" -eq 0 ]; then
+                  good "hidden tests" "$_hmsg · all $HTV verified both ways against a real tree"
+                elif [ "$HTS" -gt 0 ]; then
+                  say note "hidden tests" "$_hmsg · $HTV verified, $HTS EDITED since being verified, $HTU never verified — re-run hidden-tests/verify.sh <repo>/<bean> --branch <ref> --repo <dir>"
+                else
+                  say note "hidden tests" "$_hmsg · $HTV verified both ways, $HTU not — a suite that cannot pass blocks its bean forever and tells the worker only a count; hidden-tests/verify.sh"
+                fi
               else
                 say note "hidden tests" "configured per bean, and no bean has one yet ($HTDIR)"
               fi
