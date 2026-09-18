@@ -370,6 +370,13 @@ check "with a total"                 "total" "$out"
 check "and how many runs"            "run(s) carry at least one refusal" "$out"
 check "with a denominator"           "audit(s) reached no verdict" "$out"
 #
+# By stage as well as by rule. bean-002 showed the failure mode depends on the
+# stage — four audits, four different rules — and "the judge fabricates quotes"
+# turned out to be one of four stories, not the story.
+check "and a per-stage cut"          "by stage" "$out"
+check "naming the stage"             "spec" "$out"
+check "with the rules it hit there"  "quote-not-on-disk" "$out"
+#
 # "2 refusals" is half a measurement. The claim this project keeps making is
 # about a RATE, and a reader should not have to take the denominator on trust
 # from a sentence in RESUME.md. A stamped verdict beside the two refusals has to

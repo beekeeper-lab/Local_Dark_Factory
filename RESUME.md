@@ -58,6 +58,47 @@ unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
 so `gates` is a visible check and never a gate here. The human merge is the
 gate, which is what `merge_mode: human_required` already said.
 
+## MEASURED on bean-002: the judge fails four different ways, one per stage
+
+The first bean to reach a pull request with refusal records in place. Four
+audits, four DIFFERENT rules — and `factory refusals` now says so without
+anyone counting:
+
+```
+by stage
+
+  doc       1   budget-spent-thinking
+  impl      1   criterion-quote-too-short
+  package   1   verdict-without-findings
+  spec      1   quote-not-on-disk
+
+  4 of 4 audit(s) reached no verdict; 0 were stamped
+```
+
+**This changes the story.** Every tally before it was dominated by fabricated
+quotes, and "the judge quotes text that is not there" became the explanation for
+why it produces no stampable verdict. On this run that is one of four, and the
+other three are not quote problems at all:
+
+- **impl**: it quoted, and the quote was too short to check. A different
+  failure from quoting fiction — it read something and could not point at it.
+- **package**: a `revise` verdict with nothing to point at. The package rubric
+  is arithmetic the controller has already done; the judge disagreed with it and
+  could not say where.
+- **doc**: 16,000 tokens of reasoning and no answer, on a 61KB prompt. That is
+  `exit 8` and deliberately NOT scored as the judge failing — it is the
+  controller's cap, and the doc target is the biggest prompt in the line.
+
+**Trigger, not a conclusion:** if the doc audit hits `budget-spent-thinking`
+again, raise `JUDGE_NUM_PREDICT` for that target specifically rather than
+globally — the cap of 16000 was measured against the spec and impl prompts, and
+the doc prompt is three times their size. One occurrence is not a rate.
+
+What does NOT change: the judge stays advisory, the controller stays the thing
+that decides, and `three_verdicts_schema_valid` stays unmet rather than
+redefined. What changes is that the next person asking "why does the judge
+produce nothing" gets four answers with counts instead of one anecdote.
+
 ## The finding of the night, which is about where to look next
 
 **Every defect found after bean-002 started running was found BY bean-002

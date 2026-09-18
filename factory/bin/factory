@@ -974,6 +974,23 @@ The two documents this run produced:
       done
     done
     _attempted=$((_stamped + _refused))
+    # And by TARGET, because bean-002 showed the failure mode depends on the
+    # stage: four audits on one bean, four different rules — the spec audit
+    # quoted text that is nowhere, the impl audit backed a criterion with a
+    # quote too short to check, the package audit returned a revise with nothing
+    # to point at, and the doc audit spent its whole token budget thinking and
+    # wrote nothing. Before that run the tally was dominated by fabricated
+    # quotes, and "the judge fabricates quotes" was the story. It is one of four.
+    printf '\nby stage\n\n'
+    # shellcheck disable=SC2086
+    jq -s -r '
+      def pad($n): (. + "                              ")[0:$n];
+      group_by(.target)
+      | map({target: .[0].target, n: length,
+             rules: ([.[] | .rule] | unique | join(", "))})
+      | sort_by(-.n)
+      | .[] | "  \(.target | pad(10))\(.n | tostring | pad(4))\(.rules)"
+    ' $_files
     printf '\n  %s of %s audit(s) reached no verdict; %s were stamped\n' \
       "$_refused" "$_attempted" "$_stamped"
     printf '  %s run(s) carry at least one refusal\n' \
