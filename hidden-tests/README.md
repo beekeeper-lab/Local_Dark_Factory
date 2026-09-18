@@ -142,3 +142,39 @@ checked after the bean has run — a bean with no tree yet reports
 | --- | --- | --- |
 | `seating-planner-py/bean-001` | 9 of 11, 2 declared | **yes, 11 of 11** (2026-09-17) |
 | `seating-planner-py/bean-002` | 8 of 9, 1 declared | unknown — bean-002 has not run |
+
+## Which beans have one, and how to tell if it can be trusted
+
+`verify.sh <repo>/<bean> [--branch <ref> --repo <dir>]` answers the two
+questions that matter, and writes what it found into `verified/`:
+
+- **can it fail?** Every test except the declared absences must fail against an
+  empty tree. `hidden-tests.sh` checks this at gate time too and refuses a suite
+  that passes against nothing.
+- **can it pass?** Against the tree the bean actually produced. This one can
+  only be answered after the bean has run, and until then `verify.sh` says
+  HALF CHECKED rather than pretending.
+
+The second question is the one with teeth. A suite that can never pass **blocks
+every attempt of its bean forever**, and the worker is told only a count — so it
+cannot tell a wrong test from its own wrong code. That is the worst failure this
+design can have.
+
+`factory doctor` reads `verified/` and says how many suites are verified both
+ways, how many have been EDITED since they were verified, and how many have
+never been checked. The hash matters: editing a hidden test is exactly what
+happens when one of them turns out to be wrong, and bean-002's was edited the
+same day it was verified, because it failed a correct implementation on the
+capital letter in `Confirmed`.
+
+**Write the suite before the bean runs.** bean-003's and bean-004's were written
+while bean-003's spec step was still going, which is the only way the first rule
+above can be relied on rather than promised. It also means `verify.sh` can prove
+the suite can fail long before there is anything for it to pass against.
+
+**Do not repeat a machine-readable constraint.** If `bean.yaml` gives a non-goal
+`forbidden_paths` or `forbidden_imports`, `bean-forbids` already checks it
+against the diff, at the right resolution. bean-001's suite restated one — "no
+CI workflow files" — as a property of the whole TREE, and duly failed on
+`.github/workflows/gates.yml`, which the factory's own scaffold installs. A
+hidden test earns its cost by asking something nothing visible asks.

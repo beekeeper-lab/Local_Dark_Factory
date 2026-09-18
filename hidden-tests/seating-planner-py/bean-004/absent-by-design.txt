@@ -1,0 +1,20 @@
+# Tests here pass against a tree with NOTHING in it, and are supposed to.
+#
+# One name per line. Adding one is a decision: say in a comment why the thing it
+# looks for is absent from an empty tree for the same reason it must be absent
+# from a finished one.
+#
+# THIS FILE IS EMPTY ON PURPOSE.
+#
+# bean-004's suite asserts no absences of its own. Every constraint and non-goal
+# it has is already machine-readable in bean.yaml — psycopg, sqlalchemy,
+# alembic, cryptography and the rest — and `bean-forbids` checks each of them
+# against the diff at gate time. Repeating them here would cost a run and add
+# nothing, which is the mistake bean-001's suite made with
+# `test_no_ci_workflow_files`: a bean-forbids non-goal restated at the wrong
+# resolution, which then failed on a file the factory's own scaffold installed.
+#
+# The one test here that looks like an absence —
+# `test_nothing_updates_or_deletes_the_audit_log` — fails against an empty tree,
+# because the helper it reads asserts the store package exists first. It needs no
+# declaration.
