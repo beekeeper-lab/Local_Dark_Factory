@@ -1,0 +1,21 @@
+# Tests here pass against a tree with NOTHING in it, and are supposed to.
+#
+# Each asserts an absence, and an absence is true of an empty directory. The
+# control run refuses any other test that passes against nothing, because the
+# judge is handed a count and a test that cannot fail inflates it.
+#
+# One name per line. Adding one is a decision: say in a comment why the thing it
+# looks for is absent from an empty tree for the same reason it must be absent
+# from a finished one.
+
+# The evaluation packages belong to bean-005 and bean-007. Absent from an empty
+# tree for the same reason they must be absent here: nobody has written them.
+test_no_evaluation_package_yet
+
+# `test_no_solver_import` and `test_no_natural_language_parsing` are NOT here,
+# and they assert absences. They fail against an empty tree anyway, because the
+# `_source()` helper they read asserts the rules package exists before it
+# collects anything — so on nothing they fail for the missing package rather
+# than passing vacuously. That is stronger than a declared absence and needs no
+# declaration. Listing them would have been a small untruth in the file whose
+# whole job is to say which tests cannot fail.

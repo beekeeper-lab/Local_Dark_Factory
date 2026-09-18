@@ -1,0 +1,11 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-003",
+  "suite_sha256": "fd3873ad6f378b9fcab750e3c870d8c6cef1002a8761830c5c0bcc5e1a95c6c6",
+  "tests": 10,
+  "outcome": "half_checked",
+  "checked_against": null,
+  "tree_sha": null,
+  "both_directions": false,
+  "verified_at": "2026-09-18T02:40:47Z"
+}
