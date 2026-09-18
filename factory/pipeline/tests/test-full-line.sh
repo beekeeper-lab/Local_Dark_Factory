@@ -760,30 +760,53 @@ want  "run.json no longer says halted"    "halted_at_step should be gone" \
 
 printf '\n-- and a question about the step that WROTE it does not deadlock --\n\n'
 #
-# When `pr` is what halted, the file blocking `pr` is the one `pr` wrote.
-# Clearing it only after the step passes would mean it can never be cleared, and
-# a run that halts at `pr` could never open a pull request on any resume — which
-# is where the first version of this fix landed, on bean-002, one step from a
-# finished bean.
-printf '# QUESTIONS — halted at spec\n\nwhat does spec need?\n' > "${QR}QUESTIONS.md"
-jq -c '. + {status:"halted", halted_at_step:"spec"}' \
-  "${QR}run.json" > "${QR}run.json.tmp" && mv "${QR}run.json.tmp" "${QR}run.json"
-out="$(run_line --resume "$QR" --stop-after spec 2>&1 || true)"
-want  "it is cleared on arrival"          "reaching the step is the answer" \
-      test ! -f "${QR}QUESTIONS.md"
+# The case that tells the two designs apart, and the reason the first version of
+# this fix shipped broken. When `pr` is what halted, the file blocking `pr` is
+# the one `pr` wrote: clearing it only AFTER the step passes means `pr` must
+# pass to clear the thing stopping it from passing. bean-002 halted at `pr`
+# twice under that version, one step from a finished bean.
+#
+# It has to be a step that actually RUNS and would fail — a question about a
+# step already recorded PASS clears under either design, which is why the first
+# version of this section passed against the broken code.
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+rm -f "$GH_CALLS"
+run_line --stop-after sync > /dev/null 2>&1 || true
+DL="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+printf '# QUESTIONS — bean-001: pipeline halted at `pr`\n\nQUESTIONS.md was at the run root.\n' > "${DL}QUESTIONS.md"
+jq -c '. + {status:"halted", halted_at_step:"pr"}' \
+  "${DL}run.json" > "${DL}run.json.tmp" && mv "${DL}run.json.tmp" "${DL}run.json"
+out="$(run_line --resume "$DL" --stop-after pr 2>&1 || true)"
+check "the question clears on arrival"  "RESOLVED" "$out"
+nope  "so pr does not refuse for it"    "something asked for a human and never got one" "$out"
+check "and records none outstanding"    "questions                none outstanding" "$out"
+nope  "so the step is not refused"       "PR REFUSED" "$out"
+# Deliberately not asserting that the push succeeds: this fixture shares one
+# origin across sections, so the branch is already there from an earlier run and
+# the push is a non-fast-forward. What is under test is the precondition, and
+# reaching the push is proof it passed.
 
 printf '\n-- but a question about a DIFFERENT step is left alone --\n\n'
 #
-# Resolving on "some step passed" would clear a question about the step still
-# blocking the run, which is the whole failure mode in reverse.
-printf '# QUESTIONS — halted at gate\n\nwhat does gate need?\n' > "${QR}QUESTIONS.md"
+# Resolving on "some step ran" would clear a question about a step the run has
+# not reached, which is the whole failure mode in reverse.
+#
+# Against $DL, the run the section above left behind: the section before that
+# wiped factory/runs, so a run dir captured earlier no longer exists — and the
+# only sign was two "No such file or directory" lines above a failing
+# assertion. Sixth fixture in this repository to break by sharing state across
+# sections.
+printf '# QUESTIONS — halted at gate\n\nwhat does gate need?\n' > "${DL}QUESTIONS.md"
 jq -c '. + {status:"halted", halted_at_step:"gate"}' \
-  "${QR}run.json" > "${QR}run.json.tmp" && mv "${QR}run.json.tmp" "${QR}run.json"
+  "${DL}run.json" > "${DL}run.json.tmp" && mv "${DL}run.json.tmp" "${DL}run.json"
 out="$(run_line --resume "$QR" --stop-after spec 2>&1 || true)"
 want  "it is still there"                 "a question about gate is not answered by spec" \
-      test -f "${QR}QUESTIONS.md"
+      test -f "${DL}QUESTIONS.md"
 nope  "and nothing claims otherwise"      "RESOLVED" "$out"
-rm -f "${QR}QUESTIONS.md"
+rm -f "${DL}QUESTIONS.md"
 
 printf '\n== a resume closes attempts the previous process left open ==\n\n'
 #

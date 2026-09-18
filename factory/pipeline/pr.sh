@@ -91,7 +91,11 @@ VERDICT_FILE=""; VN=0
 for target in package impl; do
   for f in "$RUN_DIR/verdicts/$target".attempt-*.json; do
     [ -e "$f" ] || continue
-    case "$f" in *judgement.json) continue ;; esac
+    # Fifth reader of this directory. `impl.attempt-1.refused.json` matches the
+    # glob, and the attempt number parsed out of it is "1.refused" — which this
+    # compared with `-ge` and got `[: 1.refused: integer expected`, twice, in the
+    # middle of the step that decides whether a pull request opens.
+    [ "$(verdicts_role "$(basename "$f")")" = verdict ] || continue
     n="${f##*attempt-}"; n="${n%.json}"
     if [ "$n" -ge "$VN" ]; then VN="$n"; VERDICT_FILE="$f"; fi
   done

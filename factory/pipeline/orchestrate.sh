@@ -1135,6 +1135,32 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
       spec|build|implement|doc|pr) assert_off_main "$STEP" ;;  # pr is controller work, but still never from main
     esac
   fi
+  # The question this run halted on is answered by re-running the step it names.
+  #
+  # `pr` refuses while a QUESTIONS.md sits at the run root — "something asked for
+  # a human and never got one" — and it is the second-to-last step, so a run that
+  # halts anywhere and recovers could not open a pull request at all. bean-002
+  # halted at `doc`, passed `doc` on the retry an hour later, and had its pull
+  # request refused over that answered question.
+  #
+  # Clearing it AFTER the step passes does not work, and the deadlock says why:
+  # when `pr` itself is what halted, the file blocking `pr` is the one `pr`
+  # wrote, and `pr` can never pass to clear it. That version shipped and
+  # bean-002 halted at `pr` twice under it.
+  #
+  # So it is archived when the run REACHES the step it is about. Resuming a run
+  # at a step is the operator answering the question about that step: they read
+  # the halt and chose to continue. A question about any OTHER step still blocks,
+  # which is the property worth keeping — run.json records which step it names.
+  if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/QUESTIONS.md" ] \
+     && [ "$(jq -r '.halted_at_step // ""' "$RUN_DIR/run.json" 2>/dev/null)" = "$STEP" ]; then
+    mkdir -p "$RUN_DIR/resolved-questions"
+    mv "$RUN_DIR/QUESTIONS.md" \
+       "$RUN_DIR/resolved-questions/QUESTIONS.md.$(date -u +%Y%m%dT%H%M%SZ)"
+    jq -c 'del(.halted_at_step, .halted_at, .halt_reason) | .status = "running"' \
+      "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
+    printf 'RESOLVED %-12s the run is back at the step its open question named\n' "$STEP"
+  fi
   # sync is never skipped. It asks a question about the world outside the run —
   # has the base moved? — and the answer it gave an hour ago is not evidence
   # about now.
@@ -1157,29 +1183,6 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
     fi
   fi
   unset "FORCE_STEP[$STEP]"
-  # The question this run halted on has now been answered by the run itself.
-  #
-  # `finish()` moves QUESTIONS.md into resolved-questions/ when a run completes,
-  # which is right and far too late: `pr` comes before the finish and refuses
-  # while a QUESTIONS.md sits at the run root — "something asked for a human and
-  # never got one". bean-002 halted at `doc`, was resumed, passed `doc` on the
-  # retry, walked the rest of the line, and then had its pull request refused
-  # over a question about a step that had since succeeded.
-  #
-  # The question was "what does `doc` need before this run can continue?" and
-  # `doc` has continued. Archived here, at the step it was about, rather than at
-  # the end of a run it was blocking. run.json records which step it was, so
-  # this cannot resolve a question about some other one.
-  if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/QUESTIONS.md" ] \
-     && [ "$(jq -r '.halted_at_step // ""' "$RUN_DIR/run.json" 2>/dev/null)" = "$STEP" ] \
-     && step_is_pass "$STEP"; then
-    mkdir -p "$RUN_DIR/resolved-questions"
-    mv "$RUN_DIR/QUESTIONS.md" \
-       "$RUN_DIR/resolved-questions/QUESTIONS.md.$(date -u +%Y%m%dT%H%M%SZ)"
-    jq -c 'del(.halted_at_step, .halted_at, .halt_reason) | .status = "running"' \
-      "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
-    printf 'RESOLVED %-12s the question this run halted on — %s passed\n' "$STEP" "$STEP"
-  fi
   if [ -n "$STOP_AFTER" ] && [ "$STEP" = "$STOP_AFTER" ]; then
     break
   fi
