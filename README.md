@@ -85,3 +85,9 @@ One check is not in the repository at all. `allowed_write_paths` stops the worke
 | `dark-factory-guide.html` | The specification (v5). Open in a browser. |
 | `DARK_FACTORY_IMPLEMENTATION_PLAN.md` | The resumable phase ledger — check boxes as work completes. |
 | `RESUME.md` | Where the work is, what is measured, and what is still open. Read this first when picking the work back up. |
+
+## Licence
+
+MIT — see `LICENSE`. The corpus under `bean-sets/` and the seating-planner
+requirements are part of it: they are synthetic, written for this experiment,
+and describe no real customer or product.
