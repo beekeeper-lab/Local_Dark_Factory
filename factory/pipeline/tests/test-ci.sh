@@ -220,6 +220,27 @@ check "and why that matters"           "never opened" "$(cat "$R/QUESTIONS.md")"
 check "naming the private-package case" "private and linked to no repository" "$(cat "$R/QUESTIONS.md")"
 want  "the log is still kept"          "ci-logs.txt should exist" test -s "$R/ci-logs.txt"
 
+printf '\n-- against the real log, not an approximation of one --\n\n'
+#
+# The fixture above is hand-written and could be wrong about the shape in ways
+# that matter — `--log-failed` tags every line with the job and step name, and
+# the whole classification turns on those. This is the actual output of
+# seating-planner-py run 35257490473, the third red run on 2026-09-17, saved
+# because a check tuned against a guess at its input is a check nobody has
+# tested.
+REAL="$(cd "$PIPELINE_DIR/../.." && pwd)/evidence/ci-manifest-unknown-20260917.log"
+if [ -s "$REAL" ]; then
+  clean
+  printf '[{"name":"gates","state":"FAILURE","bucket":"fail","link":"https://github.com/example/x/actions/runs/44"}]\n' > "$GH_CHECKS"
+  cp "$REAL" "$GH_LOG"
+  out="$(ci)"; rc=$?
+  rc_is "the real log halts, not rewinds" "$rc" 3
+  check "and is read as the pull failing"  "pulling the gate image" "$out"
+  want  "with no rewind"                   "rewind.json must not exist" test ! -f "$R/rewind.json"
+else
+  printf '  SKIP  no saved CI log to check against\n'
+fi
+
 printf '\n-- a gate that ran and failed still goes back to build --\n\n'
 #
 # The discriminator is whether the tree was examined, not whether the word

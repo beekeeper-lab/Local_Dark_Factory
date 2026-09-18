@@ -1,0 +1,16 @@
+gates	Pull the gate image, by digest	﻿2026-09-17T18:13:25.3498370Z ##[group]Run set -euo pipefail
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3498756Z [36;1mset -euo pipefail[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3499740Z [36;1mIMAGE='ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2'[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3500449Z [36;1mcase "$IMAGE" in[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3500699Z [36;1m  localhost/*)[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3501087Z [36;1m    echo "::error::factory/gates.lock.yaml still pins a local image ($IMAGE)."[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3501598Z [36;1m    echo "::error::CI cannot pull it. Publish it first:"[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3502059Z [36;1m    echo "::error::  factory/gate-image/publish.sh --registry ghcr.io/<org>"[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3502556Z [36;1m    echo "::error::then put the printed digest in gates.lock.yaml."[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3502934Z [36;1m    exit 1 ;;[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3503157Z [36;1mesac[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3503365Z [36;1mdocker pull "$IMAGE"[0m
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3540081Z shell: /usr/bin/bash -e {0}
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.3540411Z ##[endgroup]
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.6332795Z Error response from daemon: manifest unknown
+gates	Pull the gate image, by digest	2026-09-17T18:13:25.6360593Z ##[error]Process completed with exit code 1.
