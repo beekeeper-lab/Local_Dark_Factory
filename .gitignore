@@ -40,3 +40,7 @@ bench/results/*
 # `git add -A` on 2026-09-16 and would have churned on every run. One that
 # evidences a claim goes in evidence/, by hand.
 bench/results/judge-fitness-logs/
+
+# Reference material saved from other people's videos and articles. Useful to
+# read, not mine to redistribute — and this repository is public.
+knowledgeDump/

@@ -1,5 +1,22 @@
 # Local Dark Factory
 
+> **Work in progress, and published as one.** This is an active experiment, not a
+> product and not a finished system. It runs, it has produced two merged pull
+> requests written end to end by local models, and it halts often — usually for
+> good reasons and sometimes for bad ones that are fixed the same day. Phase 1 is
+> not closed: two of its eight exit predicates are unmet, deliberately, and
+> `STATE-OF-THE-LINE.md` says which and why.
+>
+> Read it as a lab notebook. The commit messages carry the reasoning, the
+> measurements are in `bench/results/` and `evidence/`, and several conclusions
+> in this repository have been **retracted in full** after the harness behind
+> them turned out to be wrong. That is the interesting part rather than an
+> embarrassment: what a claim rests on is written down next to the claim.
+>
+> No support, no stability guarantees, no API. Nothing here is a
+> recommendation for how you should build anything.
+
+
 A lights-out software line running on local models on **Forge** (Framework Desktop, Fedora Server, ~126 GB unified memory). Humans and AI refine requirements into *beans*; the line writes the spec, audits it, builds it task by task, audits the build, writes the implementation-detail document, audits that, and opens the PR. Frontier models build and tune the line — they never run on it.
 
 Roles: developer `qwen3.8:27b-mtp-q8_0` via Pi · judge `gpt-oss:120b` · deterministic Python and shell controller · human at intake and merge · Opus as outside builder via PRs to this repo.
