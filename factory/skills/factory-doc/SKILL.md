@@ -80,12 +80,25 @@ is a fragment rather than a paragraph. The spec step has failed a real run on a
 77-character section, which is the near miss that happens when the writer does
 not know the number.
 
-The controller lints these. A thin one fails the step before a judge sees it.
+The controller lints these, by heading, before a judge sees the document. A
+section it cannot find is a section missing, so use these headings as they are
+written here rather than a synonym — a real run wrote its deviations under
+another name and the check reported it absent, which it was, as far as anything
+reading the document could tell.
 
 - **Summary** — what was done, in two sentences, matching the diff.
 - **Walkthrough by task** — per task: the diff hunks that matter, explained line
   by line as a teaching block, plus that task's `teaching_note`. This is the bulk
   of the document and the part a reviewer actually uses.
+
+  **Every changed file has to be named in THIS section, by path.** The controller
+  diffs the branch against main and checks each path against the walkthrough
+  alone — a filename that appears only in Deviations or Evidence is a mention,
+  not a walkthrough, and does not count. "The hunks that matter" is about which
+  LINES to explain, not which files to cover: a file changed by this bean and
+  absent from here leaves the reviewer with no account of it, and the check says
+  so by name. A real run failed on two of five files, both of them real changes
+  the author had decided were obvious.
 - **Deviations from the spec** — anything that differs from the plan, and why.
   If nothing differs, say what you compared and how you checked, not just "None":
   the pre-PR audit's `matches_diff` needs a claim it can agree or disagree with,

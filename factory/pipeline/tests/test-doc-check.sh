@@ -162,5 +162,30 @@ nope "no size note"                  "doc audit size" "$out"
 nope "and no threshold"              "30,422" "$out"
 check "and the script says why it went" "retracted" "$(cat "$PIPELINE_DIR/doc-check.sh")"
 
+printf '\n== the skill tells the author what this check requires ==\n\n'
+#
+# Not a test of doc-check. A test that the instruction and the check agree,
+# because when they disagree the author cannot win and does not know why.
+#
+# bean-002 failed coverage on two of five changed files. The skill said to show
+# "the diff hunks that matter", which invites selection; the check requires every
+# changed path to appear in the walkthrough section alone. Both sentences are
+# reasonable and together they are a trap — the same shape as the build skill
+# telling a worker to run verify commands in a container with no python.
+SKILLDOC="$(cd "$PIPELINE_DIR/../skills/factory-doc" && pwd)/SKILL.md"
+if [ -f "$SKILLDOC" ]; then
+  d="$(cat "$SKILLDOC")"
+  check "the skill says every changed file" "Every changed file has to be named" "$d"
+  check "and that only the walkthrough counts" "not a walkthrough, and does not count" "$d"
+  check "and that headings are matched"        "section it cannot find is a section missing" "$d"
+  # The check itself has to still be the thing described. If doc-check stops
+  # looking at the walkthrough alone, the skill above becomes a lie, and this is
+  # the line that notices.
+  check "and doc-check still looks there only" "a filename that appears only in a" \
+        "$(cat "$PIPELINE_DIR/doc-check.sh")"
+else
+  printf '  SKIP  no factory-doc skill to cross-check\n'
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
