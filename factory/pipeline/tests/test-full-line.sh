@@ -785,6 +785,20 @@ cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
 baddoc2="$(cat "$WORK/o-baddoc2")"
 check "it says it will not try again" "Not retrying further" "$baddoc2"
 check "and the run halts"             "HALT  doc" "$baddoc2"
+
+printf '\n-- and the halt shows what the check said, instead of denying it exists --\n\n'
+#
+# This file used to tell a person "the failure carries no findings a retry could
+# address" while doc-check.txt sat beside it naming two. The sentence was
+# written for steps that genuinely have nothing to hand back, and `doc` is not
+# one of them — saying it here sends a reader away from the answer.
+BADQ="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)QUESTIONS.md"
+want  "QUESTIONS.md was written"      "$BADQ should exist" test -s "$BADQ"
+q="$(cat "$BADQ" 2>/dev/null)"
+check "it quotes the check"           "doc-check" "$q"
+check "with the failing line"         "FAIL" "$q"
+check "and says it was handed back"   "handed back verbatim" "$q"
+nope  "and no longer denies findings" "carries no findings a retry could address" "$q"
 want  "exactly two doc attempts"      "one, plus the single retry" \
       bash -c "[ \"\$(grep -c 're-entering .doc. with the findings' <<<\"\$1\")\" = 1 ]" _ "$baddoc2"
 

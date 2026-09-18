@@ -930,8 +930,31 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
         printf '\n- A task exhausted its attempts. Its evidence — every attempt, the '
         printf 'containment result and the last failure in full — is in `%s`.\n' "$blocked"
       fi
+      # What the controller's own check said, when there is one.
+      #
+      # bean-002 halted at `doc` and this file told a person "the failure carries
+      # no findings a retry could address" while doc-check.txt sat beside it
+      # naming two — a missing section and two changed files the walkthrough
+      # never covers. The sentence was written for the steps that genuinely have
+      # nothing to hand back; `spec` and `doc` are not those steps, and saying it
+      # about them sends a reader away from the answer.
+      local checkfile="" checkname=""
+      case "$step" in
+        doc)  checkfile="$RUN_DIR/doc-check.txt";  checkname="doc-check" ;;
+        spec) checkfile="$RUN_DIR/spec-check.txt"; checkname="spec-check" ;;
+      esac
+      if [ -n "$checkfile" ] && [ -s "$checkfile" ]; then
+        printf '\n- The controller checked what `%s` produced, and `%s` said:\n\n```\n' "$step" "$checkname"
+        grep -E '^\s*(FAIL|ok|note)' "$checkfile" 2>/dev/null | head -40
+        printf '```\n'
+        printf '\nThe step was re-entered once with exactly these lines and they were not\nfixed. Full output: `%s`.\n' "$checkfile"
+      fi
       printf '\n## Question for a human\n\n'
-      printf 'I do not retry `%s` blindly: the failure carries no findings a retry could address. What precondition or fix does `%s` need before this run can continue?\n' "$step" "$step"
+      if [ -n "$checkfile" ] && [ -s "$checkfile" ]; then
+        printf '`%s` failed its controller check twice — once on its own, once with the findings above in its prompt. The findings are specific and were handed back verbatim, so this is not a transcription job: either they are wrong about what the bean needs, or the model cannot act on them. Which?\n' "$step"
+      else
+        printf 'I do not retry `%s` blindly: the failure carries no findings a retry could address. What precondition or fix does `%s` need before this run can continue?\n' "$step" "$step"
+      fi
     fi
   } > "$RUN_DIR/QUESTIONS.md"
 
