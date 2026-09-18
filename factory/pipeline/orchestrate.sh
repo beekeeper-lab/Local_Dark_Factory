@@ -363,7 +363,13 @@ record_failure() { # <step> <exit-status> [context note...]
 mark_step_failed() {
   local s="$1" why="$2" tmp="$RUN_DIR/steps.jsonl.tmp"
   [ -f "$RUN_DIR/steps.jsonl" ] || return 0
-  jq -s --arg s "$s" --arg why "$why" '
+  # `-sc`, not `-s`. Without `-c` jq pretty-prints and steps.jsonl stops being
+  # JSONL — one object spread over five lines. Every jq reader in this
+  # repository survives that, because jq parses a stream of values rather than
+  # lines, which is exactly why the first version of this went unnoticed: the
+  # test asserted the verdict with `jq -rs` and passed against a corrupted file.
+  # A test that checks the value and not the shape cannot see a format break.
+  jq -sc --arg s "$s" --arg why "$why" '
     . as $arr
     | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx
     | if ($idx | length) == 0 then $arr

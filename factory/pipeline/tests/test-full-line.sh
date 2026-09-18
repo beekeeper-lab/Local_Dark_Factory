@@ -818,6 +818,13 @@ want  "the step record says FAIL"     "the last doc end must not be PASS" \
       bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"doc\" and .event == \"end\")] | last.verdict' '${BADR2}steps.jsonl')\" = FAIL ]"
 want  "and names what rejected it"    "rejected_by should be doc-check" \
       bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"doc\" and .event == \"end\")] | last.rejected_by' '${BADR2}steps.jsonl')\" = doc-check ]"
+# And it is still JSONL. jq reads a stream of values, so every reader in this
+# repository keeps working against a pretty-printed steps.jsonl — which is how
+# the first version of the amend shipped: `jq -s` without `-c`, one object over
+# five lines, and the assertion above still green because it asked for the value
+# and not the shape.
+want  "steps.jsonl is still one object per line" "the amend must not pretty-print" \
+      bash -c "while IFS= read -r l; do printf '%s' \"\$l\" | jq -e . >/dev/null || exit 1; done < '${BADR2}steps.jsonl'"
 cp "$WORK/bin/pi-baddoc" "$WORK/bin/pi"
 run_line --resume "$BADR2" --stop-after doc > "$WORK/o-badresume" 2>&1 || true
 cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
