@@ -58,6 +58,44 @@ unavailable on a private repo without GitHub Pro (HTTP 403, checked 2026-09-16),
 so `gates` is a visible check and never a gate here. The human merge is the
 gate, which is what `merge_mode: human_required` already said.
 
+## The night of the 17th, in the order it happened
+
+Nine things, and the first four were all found by bean-002 actually running.
+
+1. **The 143 was the worker image's own entrypoint** — `set -e`, then `wait` on
+   the forwarder it had just killed. Open for two days as an external SIGTERM.
+   `pi --version` in that image settles it in one second. Taxonomy (14).
+2. **`OUTPUT_FRESH` required every output to be rewritten**, so a retry that
+   fixed the one file with a finding and correctly left the other alone was
+   scored as "this attempt wrote nothing". Now: nothing missing, at least one
+   written.
+3. **A red CI check that ran no gate was being treated as a finding about the
+   bean** and rewound the build. `ci.sh` now asks whether the remote run ever
+   examined the tree. Taxonomy (13).
+4. **doc-check halted instead of handing its findings back**, which spec-check
+   has done since the 16th. A person reading that halt would have been
+   retyping two lines into a prompt.
+5. **A halt that a resume forgot.** `doc` is recorded PASS by run-step; doc-check
+   rejects the document and halts; the resume reads the PASS, prints `SKIP doc`,
+   and audits the document the controller refused. `mark_step_failed` amends the
+   step record. This is the fail-open shape, in the place that decides whether a
+   halt means anything after the terminal is closed.
+6. **Every refusal is now a record**, from both halves of the audit — eleven
+   rules in `audit-check.sh`, six in `judge.sh`, `by` keeping them apart — with
+   a schema, and `factory refusals` to count them across runs with a
+   denominator. The numbers this project's judge argument rests on were counted
+   off scrollback by hand, twice.
+7. **pi does not keep a context the controller loads.** Preload at
+   `n_ctx_slot = 65536`, reload at `262144` eight seconds later, measured in
+   ollama's journal. `declared_matches_observed` had been false on every step of
+   every run because of it; the server context has its own field now.
+8. **The worker container has no python and the skills said it should run the
+   verify commands.** Three workers in one run worked around the impossible
+   instruction, and one softened a correct conclusion because of it.
+9. **A hidden test failed on a capital letter** the bean never asked for —
+   `Confirmed` vs `CONFIRMED = "confirmed"` — in a file whose own docstring says
+   it declines to guess between `capacity` and `seats` for exactly that reason.
+
 **What changed on 2026-09-16 and the night of the 17th, in the order a reader
 needs it:**
 
