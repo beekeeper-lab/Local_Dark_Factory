@@ -679,7 +679,52 @@ FINDINGS
       fi
 
       [ "$rc" -eq 0 ] || return "$rc"
-      "$PIPELINE_DIR/doc-check.sh" "$RUN_DIR" || rc=$?
+      local dc_out="$RUN_DIR/doc-check.txt"
+      "$PIPELINE_DIR/doc-check.sh" "$RUN_DIR" 2>&1 | tee "$dc_out"
+      rc="${PIPESTATUS[0]}"
+      [ "$rc" -eq 0 ] && return 0
+
+      # Hand the findings back and try once, exactly as the spec branch does.
+      #
+      # doc-check has the same property spec-check has: its complaints are more
+      # actionable than any judge has managed. bean-002 halted on "deviations
+      # from the spec — section missing" and "changed files the walkthrough never
+      # covers: src/seating_planner/domain/__init__.py tests/domain/test_group.py".
+      # A person reading that halt would have had one job — retyping those two
+      # lines into a prompt. That is a transcription, not a decision, and the
+      # machinery to avoid it was already here: doc-findings.md and the `--`
+      # EXTRA argument, used for the "you did not write the document" retry a few
+      # lines up. Only this failure, the far more common one, did not use it.
+      #
+      # Once, and only once. A second failure against findings this specific
+      # means the model cannot act on them, which is a real question for a person.
+      # The guard is on re-ENTRY to this branch, not on the inline retry below,
+      # because a resumed run reaches here again with the variable unset.
+      if [ "${DOC_CHECK_RETRIED:-0}" = 1 ]; then
+        printf '\nDOC CHECK failed again. Not retrying further.\n' >&2
+        return "$rc"
+      fi
+      DOC_CHECK_RETRIED=1
+      {
+        printf '# The controller checked your document and it did not pass\n\n'
+        printf 'These are not opinions. Each line is a check the controller ran against\n'
+        printf 'what you wrote and the diff it describes. Fix every one, then finish.\n\n'
+        printf 'Overwrite `impl-detail.md` whole rather than editing around what is there.\n\n'
+        printf '```\n'
+        cat "$dc_out"
+        printf '```\n'
+      } > "$RUN_DIR/doc-findings.md"
+      printf '\nRETRY  doc-check FAIL → re-entering `doc` with the findings, then re-checking\n'
+      rc=0
+      "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" -- "$RUN_DIR/doc-findings.md" || rc=$?
+      [ "$rc" -eq 0 ] || return "$rc"
+      "$PIPELINE_DIR/doc-check.sh" "$RUN_DIR" 2>&1 | tee "$dc_out"
+      rc="${PIPESTATUS[0]}"
+      # Said here, where the second failure actually happens. The guard above
+      # only fires on a THIRD entry, which a single run never reaches — so the
+      # message that explains the halt has to be on this path or it is
+      # unreachable, which is what the first version of it was.
+      [ "$rc" -eq 0 ] || printf '\nDOC CHECK failed again after re-entry with the findings.\n       Not retrying further: a model that cannot act on complaints this specific\n       is a question for a person, not for a third attempt.\n' >&2
       return "$rc" ;;
     spec)
       local rc=0 sy

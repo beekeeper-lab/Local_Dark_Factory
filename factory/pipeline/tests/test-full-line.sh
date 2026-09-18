@@ -731,6 +731,63 @@ check "and the exit code is still said" "child exited 143" "$late"
 nope  "the run does not halt on it"     "HALT  doc" "$late"
 check "and the step is recorded PASS"   "STEP   doc   PASS" "$late"
 
+printf '\n== a document the controller rejects is handed the findings, once ==\n\n'
+#
+# doc-check produces more actionable complaints than any judge has managed, and
+# the run used to halt on them. bean-002 stopped on "deviations from the spec —
+# section missing" and "changed files the walkthrough never covers: ...", and the
+# person reading that halt would have had exactly one job: retyping those two
+# lines into a prompt. The spec branch has re-entered its authoring step with
+# spec-check's findings since 2026-09-16 for precisely this reason; doc did not,
+# and the machinery — doc-findings.md, the `--` EXTRA argument — was already
+# there and used by the rarer "you wrote nothing" retry.
+#
+# The stub writes a document missing one required section the first time, and the
+# real one when it sees the findings file in its prompt.
+sed "s|\*) printf 'I am currently writing the documentation.*|*) run_dir=\"\${prompt##* }\"; printf '# What was built\\n\\n## Summary\\n\\nOne sentence, and none of the sections the check wants.\\n' > \"\$run_dir/impl-detail.md\" ;;|" \
+  "$WORK/bin/pi-nodoc" > "$WORK/bin/pi-baddoc"
+chmod +x "$WORK/bin/pi-baddoc"
+
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+rm -f "$GH_CALLS"
+cp "$WORK/bin/pi-baddoc" "$WORK/bin/pi"
+run_line > "$WORK/o-baddoc" 2>&1 || true
+cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
+baddoc="$(cat "$WORK/o-baddoc")"
+
+check "the check rejects it"          "DOC CHECK FAIL" "$baddoc"
+check "and the step is re-entered"    "re-entering \`doc\` with the findings" "$baddoc"
+BADR="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+check "the findings are the check's own words" "deviations from the spec" \
+      "$(cat "${BADR}doc-findings.md" 2>/dev/null)"
+check "and they say these are not opinions" "not opinions" \
+      "$(cat "${BADR}doc-findings.md" 2>/dev/null)"
+check "the re-check passes"           "DOC CHECK PASS" "$baddoc"
+nope  "so the run does not halt on it" "HALT  doc" "$baddoc"
+
+printf '\n-- but only once: a second failure is a question for a person --\n\n'
+#
+# A model that cannot act on findings this specific is not going to act on them
+# the third time either, and spending attempts on it hides the real problem.
+sed "s|\*doc-findings.md\*)|*doc-findings-never-matches*)|" \
+  "$WORK/bin/pi-baddoc" > "$WORK/bin/pi-baddoc2"
+chmod +x "$WORK/bin/pi-baddoc2"
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+cp "$WORK/bin/pi-baddoc2" "$WORK/bin/pi"
+run_line > "$WORK/o-baddoc2" 2>&1 || true
+cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
+baddoc2="$(cat "$WORK/o-baddoc2")"
+check "it says it will not try again" "Not retrying further" "$baddoc2"
+check "and the run halts"             "HALT  doc" "$baddoc2"
+want  "exactly two doc attempts"      "one, plus the single retry" \
+      bash -c "[ \"\$(grep -c 're-entering .doc. with the findings' <<<\"\$1\")\" = 1 ]" _ "$baddoc2"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed
