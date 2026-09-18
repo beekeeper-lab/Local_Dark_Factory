@@ -1157,6 +1157,29 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
     fi
   fi
   unset "FORCE_STEP[$STEP]"
+  # The question this run halted on has now been answered by the run itself.
+  #
+  # `finish()` moves QUESTIONS.md into resolved-questions/ when a run completes,
+  # which is right and far too late: `pr` comes before the finish and refuses
+  # while a QUESTIONS.md sits at the run root — "something asked for a human and
+  # never got one". bean-002 halted at `doc`, was resumed, passed `doc` on the
+  # retry, walked the rest of the line, and then had its pull request refused
+  # over a question about a step that had since succeeded.
+  #
+  # The question was "what does `doc` need before this run can continue?" and
+  # `doc` has continued. Archived here, at the step it was about, rather than at
+  # the end of a run it was blocking. run.json records which step it was, so
+  # this cannot resolve a question about some other one.
+  if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/QUESTIONS.md" ] \
+     && [ "$(jq -r '.halted_at_step // ""' "$RUN_DIR/run.json" 2>/dev/null)" = "$STEP" ] \
+     && step_is_pass "$STEP"; then
+    mkdir -p "$RUN_DIR/resolved-questions"
+    mv "$RUN_DIR/QUESTIONS.md" \
+       "$RUN_DIR/resolved-questions/QUESTIONS.md.$(date -u +%Y%m%dT%H%M%SZ)"
+    jq -c 'del(.halted_at_step, .halted_at, .halt_reason) | .status = "running"' \
+      "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
+    printf 'RESOLVED %-12s the question this run halted on — %s passed\n' "$STEP" "$STEP"
+  fi
   if [ -n "$STOP_AFTER" ] && [ "$STEP" = "$STOP_AFTER" ]; then
     break
   fi
@@ -1169,7 +1192,18 @@ finish() { # <stopped-after step or empty>
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   # A successful finish clears the halt: QUESTIONS.md moves out of the way so
   # the history survives, and the run.json status stops saying 'halted'.
-  if [ -f "$RUN_DIR/QUESTIONS.md" ]; then
+  #
+  # Unless the step it was about was never reached. `--stop-after` ends a run
+  # early and this would archive a question about a step further down the tier —
+  # answering, on a technicality, a question nobody has looked at. The step-level
+  # resolution in the loop above is the one that does the work; this is the case
+  # where the tier ran out before the question's step came round.
+  local hstep
+  hstep="$(jq -r '.halted_at_step // ""' "$RUN_DIR/run.json" 2>/dev/null || true)"
+  if [ -n "$hstep" ] && ! step_is_pass "$hstep"; then
+    printf '\nNOTE   %s is still open — it asks about `%s`, which this run did not pass.\n' \
+      "QUESTIONS.md" "$hstep"
+  elif [ -f "$RUN_DIR/QUESTIONS.md" ]; then
     mkdir -p "$RUN_DIR/resolved-questions"
     qname="QUESTIONS.md.$(date -u +%Y%m%dT%H%M%SZ)"
     mv "$RUN_DIR/QUESTIONS.md" "$RUN_DIR/resolved-questions/$qname"

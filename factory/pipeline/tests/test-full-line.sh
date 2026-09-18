@@ -731,6 +731,46 @@ check "and the exit code is still said" "child exited 143" "$late"
 nope  "the run does not halt on it"     "HALT  doc" "$late"
 check "and the step is recorded PASS"   "STEP   doc   PASS" "$late"
 
+printf '\n== the question a run halted on is resolved when that step passes ==\n\n'
+#
+# `finish()` archives QUESTIONS.md when a run completes, which is right and far
+# too late: `pr` runs before the finish and refuses while one sits at the run
+# root — "something asked for a human and never got one". bean-002 halted at
+# `doc`, was resumed, passed `doc` on the retry, walked the rest of the line and
+# had its pull request refused over a question about a step that had since
+# succeeded.
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+run_line --stop-after spec > /dev/null 2>&1 || true
+QR="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+# A run that halted at `spec` and was left with the question on disk.
+printf '# QUESTIONS — halted at spec\n\nwhat does spec need?\n' > "${QR}QUESTIONS.md"
+jq -c '. + {status:"halted", halted_at_step:"spec", halted_at:"2026-09-18T00:00:00Z"}' \
+  "${QR}run.json" > "${QR}run.json.tmp" && mv "${QR}run.json.tmp" "${QR}run.json"
+out="$(run_line --resume "$QR" --stop-after spec 2>&1 || true)"
+check "it says the question is resolved" "RESOLVED" "$out"
+want  "QUESTIONS.md is off the run root"  "it must not block the pull request" \
+      test ! -f "${QR}QUESTIONS.md"
+want  "and kept, not deleted"             "the history is the point" \
+      bash -c "ls '${QR}resolved-questions/' 2>/dev/null | grep -q QUESTIONS"
+want  "run.json no longer says halted"    "halted_at_step should be gone" \
+      bash -c "[ \"\$(jq -r '.halted_at_step // \"none\"' '${QR}run.json')\" = none ]"
+
+printf '\n-- but a question about a DIFFERENT step is left alone --\n\n'
+#
+# Resolving on "some step passed" would clear a question about the step still
+# blocking the run, which is the whole failure mode in reverse.
+printf '# QUESTIONS — halted at gate\n\nwhat does gate need?\n' > "${QR}QUESTIONS.md"
+jq -c '. + {status:"halted", halted_at_step:"gate"}' \
+  "${QR}run.json" > "${QR}run.json.tmp" && mv "${QR}run.json.tmp" "${QR}run.json"
+out="$(run_line --resume "$QR" --stop-after spec 2>&1 || true)"
+want  "it is still there"                 "a question about gate is not answered by spec" \
+      test -f "${QR}QUESTIONS.md"
+nope  "and nothing claims otherwise"      "RESOLVED" "$out"
+rm -f "${QR}QUESTIONS.md"
+
 printf '\n== a resume closes attempts the previous process left open ==\n\n'
 #
 # step.sh refuses a second `start` while one is open, which is right: without it

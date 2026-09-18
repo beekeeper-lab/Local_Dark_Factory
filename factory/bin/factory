@@ -963,12 +963,13 @@ The two documents this run produced:
     _stamped=0; _refused=0
     for _d in "$TARGET_ROOT"/factory/runs/*/verdicts; do
       [ -d "$_d" ] || continue
-      for _f in "$_d"/*.attempt-*.json; do
+      for _f in "$_d"/*.json; do
         [ -e "$_f" ] || continue
-        case "$_f" in
-          *.refused.json) _refused=$((_refused + 1)) ;;
-          *.judgement.json|*.request.json) ;;
-          *) _stamped=$((_stamped + 1)) ;;
+        # Fourth reader of this directory, asking the one function rather than
+        # writing the list out again. That is what it is for.
+        case "$(verdicts_role "$(basename "$_f")")" in
+          refusal) _refused=$((_refused + 1)) ;;
+          verdict) _stamped=$((_stamped + 1)) ;;
         esac
       done
     done
