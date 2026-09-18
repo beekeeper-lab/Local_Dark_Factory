@@ -322,6 +322,23 @@ check "a pass says so"                 "hidden tests: **passed**" "$body"
 check "with how many"                  "11 file(s)" "$body"
 check "and what makes them hidden"     "never readable by the model that wrote this change" "$body"
 check "and which ones, by hash"        "abc123def456" "$body"
+#
+# And the control, which is what makes "passed" mean anything. It was recorded
+# in gate.json from the start and left out of the body for a fortnight: a hidden
+# suite that passes against an empty tree has not been shown to test anything,
+# and this is the one check a reviewer cannot eyeball, because nobody who wrote
+# the code could read it. "It passed" without "and it can fail" is the same
+# sentence as a green tick from a job that never ran.
+gate_with '{"status":"passed","test_files":11,"dir_sha256":"abc123def456789","failed_count":0,"control":"failed against an empty tree, as it must"}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "the control is reported"        "failed against an empty tree" "$body"
+
+printf -- '\n-- and a run with no control says that, rather than nothing --\n\n'
+gate_with '{"status":"passed","test_files":11,"dir_sha256":"abc123def456789","failed_count":0}'
+pr >/dev/null 2>&1 || true
+body="$(cat "$WORK/last-body" 2>/dev/null || true)"
+check "the absence is named"           "a suite nobody showed can fail" "$body"
 
 gate_with '{"status":"failed","failed_count":3,"dir_sha256":"abc123def456789","output_path":"/outside/r.log","test_files":11}'
 pr >/dev/null 2>&1 || true

@@ -109,11 +109,50 @@ sed -i 's/^status: draft$/status: approved/' "$BEANS/bean-007.yaml"
 out="$(pob)"; rc=$?
 rc_is "approved again, it refuses again"   "$rc" 1
 
-printf '\n== the threshold is a knob, and lowering it is visible ==\n\n'
+printf '\n== one word is English; an adjacent pair is a topic ==\n\n'
+#
+# The rule was "two distinctive words of another bean title appear in this
+# intent", and on 2026-09-18 it fired on bean-003's task-1 for `construction`
+# and `module`, against bean-019, "Extract constraint construction from the
+# solver module". Every condition held: both generic software English, neither
+# in bean-003's own vocabulary, each in exactly one other title. The intent is
+# 1,600 words of implementation detail and says "module docstring" in one place
+# and "on the way in as on construction" four hundred words later.
+#
+# Corpus document frequency does not separate them — measured, `construction`
+# is in 1 of 20 beans' full text, the same as `template`, `wedding`, `distance`
+# and `feasibility`, which are the words that SHOULD be distinctive. Adjacency
+# does: a subject is a phrase.
 tasks "Write the scoring helper for this package and nothing else."
 out="$(pob --min-terms 1)"; rc=$?
-rc_is "at one term it fires"        "$rc" 1
-check "on the single word"          "scoring" "$out"
+rc_is "a single word never fires, even at --min-terms 1" "$rc" 0
+check "and it says nothing was found"  "none describes another bean" "$out"
+
+printf '\n-- and two words that are not a pair in the title do not fire --\n\n'
+#
+# bean-003's case, in one line. `scoring` and `objective` are three words apart
+# in "Soft-constraint scoring and the optimization objective", so they are not
+# an adjacent distinctive pair however close they sit in the intent.
+tasks "Add a scoring column, and separately an objective field, to this package."
+out="$(pob)"; rc=$?
+rc_is "scattered words are not a subject" "$rc" 0
+
+printf '\n-- but the pair itself fires, and the window is the knob --\n\n'
+tasks "Implement soft-constraint scoring for this package."
+out="$(pob)"; rc=$?
+rc_is "an adjacent pair fires"      "$rc" 1
+check "naming both words"           "scoring" "$out"
+# The same pair, pushed apart. The tokenizer keeps hyphens, so bean-007's title
+# is `soft-constraint`, `scoring`, `optimization`, `objective` — and the pair is
+# (soft-constraint, scoring). Here six words of unrelated prose sit between them,
+# which is what
+# "the intent mentions both somewhere" looks like as opposed to "the intent is
+# about that subject".
+tasks "Implement soft-constraint validation for tables here, and quite separately elsewhere, scoring of seats."
+out="$(pob)"; rc=$?
+rc_is "seven words apart does not fire" "$rc" 0
+out="$(pob --window 20)"; rc=$?
+rc_is "and a wide window does"          "$rc" 1
 
 printf '\n== nothing to compare against is not a pass ==\n\n'
 ONE="$WORK/one"; mkdir -p "$ONE"; cp "$BEANS/bean-001.yaml" "$ONE/"

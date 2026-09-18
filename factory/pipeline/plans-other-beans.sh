@@ -65,13 +65,18 @@ Exit: 0 nothing, or nothing decidable · 1 a task describes another bean's work
 EOF
 }
 
-BEAN=""; TASKS=""; BEANS_DIR=""; MIN_TERMS=2; JSON=""
+BEAN=""; TASKS=""; BEANS_DIR=""; MIN_TERMS=2; JSON=""; WINDOW=4
 while [ $# -gt 0 ]; do
   case "$1" in
     --bean)      BEAN="${2:?--bean needs a file}"; shift 2 ;;
     --tasks)     TASKS="${2:?--tasks needs a file}"; shift 2 ;;
     --beans-dir) BEANS_DIR="${2:?--beans-dir needs a directory}"; shift 2 ;;
     --min-terms) MIN_TERMS="${2:?--min-terms needs a number}"; shift 2 ;;
+    # The knob that matters now. A distinctive PAIR is the floor — see the
+    # adjacency comment in the python below — so --min-terms can no longer be
+    # lowered to fire on one word, and how far apart the pair may sit is the
+    # dial worth having.
+    --window)    WINDOW="${2:?--window needs a number}"; shift 2 ;;
     --json)      JSON="${2:?--json needs a path}"; shift 2 ;;
     -h|--help)   usage; exit 0 ;;
     --version)   cat "$PIPELINE_DIR/VERSION"; exit 0 ;;
@@ -121,7 +126,7 @@ if [ "$(jq 'length' <<<"$OTHERS")" -eq 0 ]; then
   exit 0
 fi
 
-RESULT="$("$PY" - "$BEAN_JSON" "$TASKS_JSON" "$OTHERS" "$MIN_TERMS" <<'PY'
+RESULT="$("$PY" - "$BEAN_JSON" "$TASKS_JSON" "$OTHERS" "$MIN_TERMS" "$WINDOW" <<'PY'
 import json, re, sys
 
 bean = json.loads(sys.argv[1]); tasks = json.loads(sys.argv[2])
@@ -167,16 +172,66 @@ for o in others:
     for w in words(o["title"]):
         df[w] += 1
 
+def ordered(text):
+    """The words of a title or intent, in order, stoplist removed."""
+    return [w for w in WORD.findall((text or "").lower()) if w not in STOP]
+
+
+# Adjacency, and it is the whole difference between this check and a coincidence.
+#
+# The rule was "two distinctive words of another bean's title appear in this
+# intent". It fired on bean-003's task-1 for `construction` and `module`,
+# against bean-019, "Extract constraint construction from the solver module".
+# Both words are generic software English; neither is in bean-003's own
+# vocabulary; each appears in exactly one other title. Every condition held and
+# the finding was wrong — the intent is 1,600 words of implementation detail and
+# says "module docstring" in one place and "on the way in as on construction" in
+# another, four hundred words apart.
+#
+# Document frequency across the whole corpus does not separate them either:
+# measured, `construction` appears in 1 of 20 beans' full text — the same as
+# `template`, `wedding`, `distance` and `feasibility`, which are exactly the
+# words that SHOULD be distinctive.
+#
+# What separates them is adjacency. A task that really plans another bean's work
+# describes its SUBJECT, and a subject is a phrase: the seeded defect says
+# "soft-constraint scoring", which is bean-007's title verbatim. Two scattered
+# words are English; two adjacent ones are a topic.
+#
+# So: a distinctive PAIR, adjacent in the other bean's title, appearing in the
+# intent within a short window of each other. bean-019's title gives the pairs
+# (constraint, construction) and (solver, module) — `construction` and `module`
+# are not a pair at all.
+WINDOW = int(sys.argv[5]) if len(sys.argv) > 5 else 4
+
+
+def near(seq_positions, a, b):
+    for i in seq_positions.get(a, ()):
+        for j in seq_positions.get(b, ()):
+            if abs(i - j) <= WINDOW:
+                return True
+    return False
+
+
 findings = []
 for t in tasks.get("tasks") or []:
     intent = t.get("intent") or ""
-    tw = words(intent)
+    seq = ordered(intent)
+    pos = {}
+    for i, w in enumerate(seq):
+        pos.setdefault(w, []).append(i)
     for o in others:
         # Distinctive: in the other bean's title, and NOT in this bean's own
         # vocabulary. The title is what a bean is for, in one line, written by a
         # person — a better summary than anything derived.
-        distinctive = {w for w in words(o["title"]) if w not in own_words and df[w] == 1}
-        hit = sorted(tw & distinctive)
+        title_seq = ordered(o["title"])
+        distinctive = {w for w in title_seq if w not in own_words and df[w] == 1}
+        pairs = [
+            (title_seq[i], title_seq[i + 1])
+            for i in range(len(title_seq) - 1)
+            if title_seq[i] in distinctive and title_seq[i + 1] in distinctive
+        ]
+        hit = sorted({w for pair in pairs if near(pos, *pair) for w in pair})
         if len(hit) >= min_terms:
             findings.append({
                 "task": t.get("id") or "?",
@@ -197,7 +252,7 @@ if [ -n "$JSON" ]; then
     --argjson d "$SKIPPED_DRAFT" \
     '{schema:"plans-other-beans/1.0.0", bean:$b, compared_against:$r.compared_against,
       unreadable_beans:$u, skipped_not_approved:$d, min_terms:$m, findings:$r.findings,
-      caveat:"Word overlap between a task intent and another approved bean TITLE, after removing every word this bean already uses about itself and a stoplist of words every corpus shares. Two distinct terms are required, because one is a coincidence of English. It finds a plan describing another bean subject matter; it cannot find one that describes it in different words."}' > "$JSON"
+      caveat:"An ADJACENT pair of distinctive words from another approved bean TITLE, appearing close together in a task intent. Distinctive means: not in this bean own vocabulary, and in exactly one other title. Adjacency is the condition that matters — two scattered words are English, two adjacent ones are a topic. The pair rule replaced a two-word rule that fired on bean-003 for construction and module against Extract constraint construction from the solver module, which was wrong. It finds a plan describing another bean subject matter; it cannot find one that describes it in different words."}' > "$JSON"
 fi
 
 if [ "$N" -eq 0 ]; then

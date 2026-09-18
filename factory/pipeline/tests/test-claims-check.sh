@@ -225,5 +225,50 @@ rc_is "and does not fail the spec"     "$rc" 0
 # right trade only because `checked` is carried into the run.
 check "the distinction is recorded"    '"checked"' "$out"
 
+printf '\n== a bare filename is looked for as a basename ==\n\n'
+#
+# The first spec this check met in the wild, and it failed it. bean-003's said,
+# correctly:
+#
+#   and `tests/` contains only `test_scaffold.py` and `tests/domain/`
+#
+# `tests/test_scaffold.py` is there. The sentence names the directory once and
+# then the file, which is how anyone writes it — and the check looked for
+# `./test_scaffold.py`, did not find it, and failed the spec for describing a
+# file that is not there. The spec was right; the check sent it back, and the
+# worker spent a retry on prose that was already true.
+mkdir -p "$WORK/repo2/tests/domain"
+: > "$WORK/repo2/tests/test_scaffold.py"
+cat > "$WORK/spec-bare.md" <<'MD'
+## Current behaviour
+
+The repository contains `src/seating_planner/` and `tests/` contains only
+`test_scaffold.py` and `tests/domain/`. Nothing else is there yet.
+MD
+out="$("$PY" "$PIPELINE_DIR/claims-check.py" "$WORK/spec-bare.md" --root "$WORK/repo2" --json 2>&1)"
+if [ "$(jq -r '[(.current_behaviour.missing_paths // [])[]] | length' <<<"$out" 2>/dev/null || echo 1)" = 0 ] \
+   || [ "$(jq -r '[(.missing_paths // [])[]] | length' <<<"$out" 2>/dev/null || echo 1)" = 0 ]; then
+  printf '  ok    it is not reported missing\n'; PASS=$((PASS+1))
+else
+  printf '  FAIL  a bare filename that exists somewhere is reported absent: %s\n' \
+    "$(jq -c '.missing_paths // .current_behaviour.missing_paths' <<<"$out" 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
+
+printf '\n-- but a path WITH a directory is still resolved from the root --\n\n'
+#
+# `src/config.py` and `config.py` are different claims, and the seeded defect
+# this check exists to catch — "The repository ALREADY CONTAINS
+# `src/seating_planner/config.py`" — has a directory in it. Relaxing that would
+# cost the check the thing it is for.
+: > "$WORK/repo2/tests/config.py"
+cat > "$WORK/spec-dir.md" <<'MD'
+## Current behaviour
+
+The repository already contains `src/seating_planner/config.py`, which is where
+the settings live.
+MD
+out="$("$PY" "$PIPELINE_DIR/claims-check.py" "$WORK/spec-dir.md" --root "$WORK/repo2" --json 2>&1)"
+check "the invented path is still caught" "src/seating_planner/config.py" "$out"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

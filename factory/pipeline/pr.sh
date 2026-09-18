@@ -305,9 +305,17 @@ BODY="$(mktemp)"
     # and a reviewer who wants the detail has the path in gate.json.
     ht="$(jq -r '.hidden_tests.status // "absent"' "$RUN_DIR/gate.json")"
     case "$ht" in
-      passed)   printf -- '- hidden tests: **passed** — %s file(s) written from the bean, kept outside this repository, never readable by the model that wrote this change (`%s`)\n' \
+      passed)   printf -- '- hidden tests: **passed** — %s file(s) written from the bean, kept outside this repository, never readable by the model that wrote this change (`%s`). Control: %s.\n' \
                   "$(jq -r '.hidden_tests.test_files // 0' "$RUN_DIR/gate.json")" \
-                  "$(jq -r '(.hidden_tests.dir_sha256 // "")[0:12]' "$RUN_DIR/gate.json")" ;;
+                  "$(jq -r '(.hidden_tests.dir_sha256 // "")[0:12]' "$RUN_DIR/gate.json")" \
+                  "$(jq -r '.hidden_tests.control // "not run — a suite nobody showed can fail"' "$RUN_DIR/gate.json")" ;;
+                  # The control is what makes "passed" mean anything, and it was
+                  # recorded in gate.json and left out of the body. A hidden
+                  # suite that passes against an empty tree has not been shown
+                  # to test anything, and it is the one check a reviewer cannot
+                  # eyeball — the whole point is that nobody who wrote the code
+                  # could read it. "It passed" without "and it can fail" is the
+                  # same sentence as a green tick from a job that never ran.
       failed)   printf -- '- hidden tests: **FAILED**, %s of them — full output outside this repository, see `hidden_tests.output_path` in gate.json\n' \
                   "$(jq -r '.hidden_tests.failed_count // "?"' "$RUN_DIR/gate.json")" ;;
       could_not_run) printf -- '- hidden tests: **did not run** — %s. Not a pass.\n' \

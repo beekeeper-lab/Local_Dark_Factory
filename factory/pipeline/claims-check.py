@@ -249,7 +249,39 @@ def main() -> int:
     # check on a maybe costs a line someone skims, and firing one on a maybe
     # costs the check its credibility.
     denied_set = set(denied)
-    missing = [p for p in asserted if p not in denied_set and not (root / p).exists()]
+
+    def present(rel: str) -> bool:
+        """Is this path in the repository — under that name, or as a basename?
+
+        `(root / rel).exists()` alone was wrong on the first spec that met it.
+        bean-003's said, correctly:
+
+            and `tests/` contains only `test_scaffold.py` and `tests/domain/`
+
+        `tests/test_scaffold.py` is there. The sentence names the directory once
+        and then the file, which is how anyone writes it — and this check looked
+        for `./test_scaffold.py`, did not find it, and failed the spec for
+        describing a file that is not there. The spec was right and the check
+        sent it back.
+
+        So a bare filename — no directory component — is also looked for as a
+        basename. Narrow on purpose: it is not a glob, it does not match
+        directories, and a path that names a directory is still resolved from
+        the root, because `src/config.py` and `config.py` are different claims.
+        The seeded defect this check exists to catch says "The repository ALREADY
+        CONTAINS `src/seating_planner/config.py`", which has a directory in it
+        and is unaffected.
+        """
+        if (root / rel).exists():
+            return True
+        if "/" in rel.strip("/"):
+            return False
+        return any(
+            q.is_file() for q in root.rglob(rel)
+            if ".git" not in q.parts and "factory" not in q.parts[:1]
+        )
+
+    missing = [p for p in asserted if p not in denied_set and not present(p)]
     absent = [s for s in symbols if not grep(root, s)]
     # The reverse check — a path the spec says is absent which is in fact there —
     # was implemented and then removed, and the removal is the point.
@@ -266,7 +298,7 @@ def main() -> int:
     #
     # So denials are recorded and never judged. What they are is a list of things
     # the spec claims are absent, which a reader — or a judge — can weigh.
-    denied_and_present = [p for p in denied if (root / p).exists()]
+    denied_and_present = [p for p in denied if present(p)]
 
     result = {
         "section": args.section,
