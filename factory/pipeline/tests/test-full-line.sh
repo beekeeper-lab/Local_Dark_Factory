@@ -731,7 +731,7 @@ check "and the exit code is still said" "child exited 143" "$late"
 nope  "the run does not halt on it"     "HALT  doc" "$late"
 check "and the step is recorded PASS"   "STEP   doc   PASS" "$late"
 
-printf '\n== the question a run halted on is resolved when that step passes ==\n\n'
+printf '\n== the question a run halted on is cleared when the run reaches its step ==\n\n'
 #
 # `finish()` archives QUESTIONS.md when a run completes, which is right and far
 # too late: `pr` runs before the finish and refuses while one sits at the run
@@ -757,6 +757,20 @@ want  "and kept, not deleted"             "the history is the point" \
       bash -c "ls '${QR}resolved-questions/' 2>/dev/null | grep -q QUESTIONS"
 want  "run.json no longer says halted"    "halted_at_step should be gone" \
       bash -c "[ \"\$(jq -r '.halted_at_step // \"none\"' '${QR}run.json')\" = none ]"
+
+printf '\n-- and a question about the step that WROTE it does not deadlock --\n\n'
+#
+# When `pr` is what halted, the file blocking `pr` is the one `pr` wrote.
+# Clearing it only after the step passes would mean it can never be cleared, and
+# a run that halts at `pr` could never open a pull request on any resume — which
+# is where the first version of this fix landed, on bean-002, one step from a
+# finished bean.
+printf '# QUESTIONS — halted at spec\n\nwhat does spec need?\n' > "${QR}QUESTIONS.md"
+jq -c '. + {status:"halted", halted_at_step:"spec"}' \
+  "${QR}run.json" > "${QR}run.json.tmp" && mv "${QR}run.json.tmp" "${QR}run.json"
+out="$(run_line --resume "$QR" --stop-after spec 2>&1 || true)"
+want  "it is cleared on arrival"          "reaching the step is the answer" \
+      test ! -f "${QR}QUESTIONS.md"
 
 printf '\n-- but a question about a DIFFERENT step is left alone --\n\n'
 #
