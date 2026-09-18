@@ -226,6 +226,34 @@ if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json"
     "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$REF"
 fi
 
+printf '\n-- and a record is still written when the details cannot be built --\n\n'
+#
+# Each call site builds `details` with its own `jq -nc`. If one of those ever
+# fails — a value it did not expect, a quoting slip — `--argjson details ""`
+# fails the whole record and the refusal disappears, leaving exactly the silence
+# these records exist to end. The refusal matters more than its details.
+rm -f "$V"/spec.attempt-*
+judgement "$(jq -c '. + {verdict:"accept"} | .criteria[0].quote = "## Architecture\n\nThe pipeline reads from the Input section"' <<<"$BASE")"
+JQ_REAL="$(command -v jq)"
+mkdir -p "$WORK/brokenbin"
+# Matched on the details PROGRAM, not on the word "quotes": the refusal record's
+# own `--arg reason` says "the judgement quotes text that is not in any
+# artifact", so a broader pattern broke the very jq under test and the assertion
+# would have passed for the wrong reason — an empty file where the fix was
+# supposed to put a complete one.
+printf '#!/bin/sh\ncase "$*" in *"map(select"*) exit 1 ;; esac\nexec %s "$@"\n' "$JQ_REAL" > "$WORK/brokenbin/jq"
+chmod +x "$WORK/brokenbin/jq"
+# Exported, not prefixed. `run_check` is a function that runs bash as a child,
+# and a prefix assignment on a function call does not reach it — the gotcha this
+# repository has now hit four times, most recently here.
+OLDPATH="$PATH"; export PATH="$WORK/brokenbin:$PATH"
+run_check >/dev/null 2>&1
+export PATH="$OLDPATH"
+want  "the refusal is still recorded" "a details failure must not lose the refusal" \
+  test -s "$V/spec.attempt-1.refused.json"
+want  "with the rule intact"          "rule should be quote-not-on-disk" \
+  test "$(jq -r .rule "$V/spec.attempt-1.refused.json")" = quote-not-on-disk
+
 printf '\n-- a different rule writes a different record --\n\n'
 rm -f "$V"/spec.attempt-*
 judgement "$(jq -c '. + {verdict:"accept", confidence:100}' <<<"$BASE")"

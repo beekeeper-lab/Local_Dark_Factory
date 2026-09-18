@@ -83,6 +83,11 @@ done
 # split in JUDGEMENT-CONTRACT.md exists to prevent.
 refuse() {
   local rule="$1" code="$2" reason="$3" details="${4:-null}"
+  # An empty fourth argument is what a failed `jq -nc` in the caller looks like,
+  # and `--argjson details ""` below would then fail the whole record and write
+  # nothing. The refusal matters more than its details.
+  [ -n "$details" ] || details=null
+  jq -e . >/dev/null 2>&1 <<<"$details" || details=null
   mkdir -p "$VERDICTS" 2>/dev/null || true
   jq -n --arg t "$TARGET" --argjson n "${N:-0}" --arg rule "$rule" --arg reason "$reason" \
         --argjson details "$details" --arg j "${JUDGEMENT:-}" \

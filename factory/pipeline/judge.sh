@@ -168,6 +168,11 @@ OUT="$VERDICTS/$TARGET.attempt-$ATTEMPT.judgement.json"
 # that merged them would be worth nothing.
 refuse_j() {
   local rule="$1" code="$2" reason="$3" details="${4:-null}"
+  # An empty fourth argument is what a failed `jq -nc` in the caller looks like,
+  # and `--argjson details ""` below would then fail the whole record and write
+  # nothing. The refusal matters more than its details.
+  [ -n "$details" ] || details=null
+  jq -e . >/dev/null 2>&1 <<<"$details" || details=null
   mkdir -p "$VERDICTS" 2>/dev/null || true
   jq -n --arg t "$TARGET" --argjson n "${ATTEMPT:-0}" --arg rule "$rule" --arg reason "$reason" \
         --argjson details "$details" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
