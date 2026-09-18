@@ -922,7 +922,30 @@ The two documents this run produced:
         "",
         "  \("total" | pad(43))\($total)"
     ' -r $_files
-    printf '\n  %s run(s) carry at least one refusal\n' \
+    # The denominator, which a count of refusals on its own does not have. "2
+    # refusals" is half a measurement; "2 of 2 audits" is the claim this project
+    # keeps making about the judge, and it should not have to be taken on trust
+    # from a sentence in RESUME.md.
+    #
+    # An audit is counted as attempted if it left anything behind at all — a
+    # stamped verdict, a judgement, or a refusal. An audit that left none of
+    # those did not happen, and is not in either column.
+    _stamped=0; _refused=0
+    for _d in "$TARGET_ROOT"/factory/runs/*/verdicts; do
+      [ -d "$_d" ] || continue
+      for _f in "$_d"/*.attempt-*.json; do
+        [ -e "$_f" ] || continue
+        case "$_f" in
+          *.refused.json) _refused=$((_refused + 1)) ;;
+          *.judgement.json|*.request.json) ;;
+          *) _stamped=$((_stamped + 1)) ;;
+        esac
+      done
+    done
+    _attempted=$((_stamped + _refused))
+    printf '\n  %s of %s audit(s) reached no verdict; %s were stamped\n' \
+      "$_refused" "$_attempted" "$_stamped"
+    printf '  %s run(s) carry at least one refusal\n' \
       "$(printf '%s\n' "$_files" | xargs -r -n1 dirname | xargs -r -n1 dirname | sort -u | wc -l)"
     if [ "$_showall" = 1 ]; then
       printf '\neach one:\n\n'

@@ -368,6 +368,17 @@ check "and by who refused"           "audit-check" "$out"
 check "keeping the judge separate"   "judge" "$out"
 check "with a total"                 "total" "$out"
 check "and how many runs"            "run(s) carry at least one refusal" "$out"
+check "with a denominator"           "audit(s) reached no verdict" "$out"
+#
+# "2 refusals" is half a measurement. The claim this project keeps making is
+# about a RATE, and a reader should not have to take the denominator on trust
+# from a sentence in RESUME.md. A stamped verdict beside the two refusals has to
+# move it.
+printf '{"schema_version":"verdict/2.0.0","stage":"spec_audit","verdict":"accept"}\n' \
+  > "$SR/doc.attempt-1.json"
+out="$(fac refusals)"
+check "a stamped verdict is counted"  "2 of 3 audit(s) reached no verdict; 1 were stamped" "$out"
+rm -f "$SR/doc.attempt-1.json"
 out="$(fac refusals --all)"
 check "--all names the run"          "bean-001-20260915T120000Z" "$out"
 check "and the target"               "spec" "$out"
