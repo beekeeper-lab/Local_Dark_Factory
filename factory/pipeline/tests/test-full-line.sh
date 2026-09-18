@@ -731,6 +731,36 @@ check "and the exit code is still said" "child exited 143" "$late"
 nope  "the run does not halt on it"     "HALT  doc" "$late"
 check "and the step is recorded PASS"   "STEP   doc   PASS" "$late"
 
+printf '\n== a resume closes attempts the previous process left open ==\n\n'
+#
+# step.sh refuses a second `start` while one is open, which is right: without it
+# steps.jsonl could carry an `end` with no `start`, and telemetry joins them on
+# (step, attempt). But a process that was KILLED leaves exactly that shape, and
+# the resume then cannot record the step at all:
+#
+#   pipeline: error: step audit-doc already has an open attempt
+#             (starts=1, ends=0); close it before starting another
+#
+# Seen on bean-002 after I stopped a run mid-audit to fix the bug it had just
+# exposed. The run carried on and the step went unrecorded — the invariant held
+# and the record lost the step, which is the worst of both.
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+run_line --stop-after spec > /dev/null 2>&1 || true
+ORPH="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+# An attempt left open by a process that is gone.
+printf '{"ts":"2026-09-18T00:00:00.000Z","step":"audit-doc","event":"start","attempt":1,"verdict":null}\n' \
+  >> "${ORPH}steps.jsonl"
+out="$(run_line --resume "$ORPH" --stop-after spec 2>&1 || true)"
+check "the resume says it closed one"  "closing an attempt the previous process left open" "$out"
+want  "and it is closed"               "starts and ends must balance for audit-doc" \
+      bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"audit-doc\" and .event == \"start\")] | length' '${ORPH}steps.jsonl')\" = \"\$(jq -rs '[.[] | select(.step == \"audit-doc\" and .event == \"end\")] | length' '${ORPH}steps.jsonl')\" ]"
+want  "as ABANDONED, not as a pass"    "nothing judged the work" \
+      bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"audit-doc\" and .event == \"end\")] | last.verdict' '${ORPH}steps.jsonl')\" = ABANDONED ]"
+nope  "and step.sh no longer refuses"  "already has an open attempt" "$out"
+
 printf '\n== a document the controller rejects is handed the findings, once ==\n\n'
 #
 # doc-check produces more actionable complaints than any judge has managed, and

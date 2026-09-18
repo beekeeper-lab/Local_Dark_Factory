@@ -232,6 +232,40 @@ if [ -n "$RESUME_DIR" ]; then
   [ -f "$RUN_DIR/run.json" ] || die "run directory has no run.json: $RUN_DIR"
   bean_recorded="$(jq -r '.bean // empty' "$RUN_DIR/run.json")"
   [ "$bean_recorded" = "$BEAN_ID" ] || die "run.json bean is '$bean_recorded', expected '$BEAN_ID'"
+
+  # Close attempts the previous process left open, before anything tries to
+  # start a new one.
+  #
+  # step.sh refuses a second `start` while one is open, which is right: without
+  # it steps.jsonl could carry an `end` with no `start` and telemetry would
+  # misattribute the work. But a process that was killed — Ctrl-C, a reboot, or
+  # me stopping a run to fix the bug it had just exposed — leaves exactly that
+  # shape, and a resume then cannot record the step at all. Seen on bean-002:
+  #
+  #   pipeline: error: step audit-doc already has an open attempt
+  #             (starts=1, ends=0); close it before starting another
+  #
+  # The run carried on and the step went unrecorded, which is the worst of both:
+  # the invariant held and the record lost the step.
+  #
+  # An attempt open at the moment a run is RESUMED belongs to a process that is
+  # gone. ABANDONED says that and nothing more — it is not a FAIL, because
+  # nothing judged the work, and `step_is_pass` treats it as not-passed, so the
+  # step runs again, which is what a resume is for.
+  if [ -s "$RUN_DIR/steps.jsonl" ]; then
+    while IFS= read -r _st; do
+      [ -n "$_st" ] || continue
+      printf 'RESUME %-14s closing an attempt the previous process left open
+' "$_st"
+      "$PIPELINE_DIR/step.sh" "$RUN_DIR" "$_st" end ABANDONED >/dev/null 2>&1 || true
+    done < <(jq -rs '
+      [.[] | select(.event == "start" or .event == "end")]
+      | group_by(.step)
+      | map({step: .[0].step,
+             open: (([.[] | select(.event == "start")] | length)
+                    - ([.[] | select(.event == "end")] | length))})
+      | .[] | select(.open > 0) | .step' "$RUN_DIR/steps.jsonl" 2>/dev/null)
+  fi
 else
   # A fresh run creates NO run dir before preflight has run: the run dir
   # itself (ai/runs/…) dirties the tree that preflight inspects.
