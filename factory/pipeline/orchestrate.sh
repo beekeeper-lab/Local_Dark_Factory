@@ -343,6 +343,36 @@ record_failure() { # <step> <exit-status> [context note...]
   } > "$FAILDIR/${s}.$((n+1))"
 }
 
+# mark_step_failed <step> <why> — the step ran, and the controller rejected what
+# it produced. Amend the last `end` record so the verdict says so.
+#
+# Without this a resumed run walks straight past it. `doc` is recorded PASS by
+# run-step because the model wrote a document and exited cleanly; doc-check then
+# rejects it and the run halts — correctly. On resume, `step_is_pass doc` reads
+# the PASS, prints "SKIP doc already PASS", and the run continues with the
+# document the controller refused. Seen on bean-002 on 2026-09-17: the resume
+# skipped a document missing a required section and went on to audit it.
+#
+# That is the fail-open shape this repository keeps finding, in the one place
+# that decides whether a halt means anything after the terminal is closed. A
+# halt that a resume forgets is not a halt.
+#
+# Amends rather than appends: step.sh's invariant is that no `end` exists without
+# a matching `start`, and a second end for one attempt is exactly the unpaired
+# shape that broke telemetry once already.
+mark_step_failed() {
+  local s="$1" why="$2" tmp="$RUN_DIR/steps.jsonl.tmp"
+  [ -f "$RUN_DIR/steps.jsonl" ] || return 0
+  jq -s --arg s "$s" --arg why "$why" '
+    . as $arr
+    | ([ to_entries[] | select(.value.step == $s and .value.event == "end") | .key ]) as $idx
+    | if ($idx | length) == 0 then $arr
+      else $arr | .[ ($idx | last) ] |= (.verdict = "FAIL" | .rejected_by = $why)
+      end
+    | .[]' "$RUN_DIR/steps.jsonl" > "$tmp" 2>/dev/null     && mv "$tmp" "$RUN_DIR/steps.jsonl"
+  rm -f "$tmp"
+}
+
 step_is_pass() {
   local s="$1" v
   v="$(jq -rs --arg x "$s" '[.[] | select(.step == $x and .event == "end")] | last.verdict // "missing"' \
@@ -702,6 +732,7 @@ FINDINGS
       # because a resumed run reaches here again with the variable unset.
       if [ "${DOC_CHECK_RETRIED:-0}" = 1 ]; then
         printf '\nDOC CHECK failed again. Not retrying further.\n' >&2
+        mark_step_failed doc "doc-check"
         return "$rc"
       fi
       DOC_CHECK_RETRIED=1
@@ -724,7 +755,10 @@ FINDINGS
       # only fires on a THIRD entry, which a single run never reaches — so the
       # message that explains the halt has to be on this path or it is
       # unreachable, which is what the first version of it was.
-      [ "$rc" -eq 0 ] || printf '\nDOC CHECK failed again after re-entry with the findings.\n       Not retrying further: a model that cannot act on complaints this specific\n       is a question for a person, not for a third attempt.\n' >&2
+      if [ "$rc" -ne 0 ]; then
+        printf '\nDOC CHECK failed again after re-entry with the findings.\n       Not retrying further: a model that cannot act on complaints this specific\n       is a question for a person, not for a third attempt.\n' >&2
+        mark_step_failed doc "doc-check"
+      fi
       return "$rc" ;;
     spec)
       local rc=0 sy
@@ -757,6 +791,7 @@ FINDINGS
       # something to spend more attempts on.
       if [ "${SPEC_CHECK_RETRIED:-0}" = 1 ]; then
         printf '\nSPEC CHECK failed again after re-entry. Not retrying further.\n' >&2
+        mark_step_failed spec "spec-check"
         return "$rc"
       fi
       SPEC_CHECK_RETRIED=1

@@ -788,6 +788,29 @@ check "and the run halts"             "HALT  doc" "$baddoc2"
 want  "exactly two doc attempts"      "one, plus the single retry" \
       bash -c "[ \"\$(grep -c 're-entering .doc. with the findings' <<<\"\$1\")\" = 1 ]" _ "$baddoc2"
 
+printf '\n-- and a resumed run does not walk past the document it rejected --\n\n'
+#
+# The hole this closes. run-step records `doc` as PASS because the model wrote a
+# document and exited cleanly; doc-check then rejects it and the run halts,
+# correctly. On resume, the skip rule reads that PASS, prints "SKIP doc already
+# PASS", and the run continues with the document the controller refused — which
+# is what bean-002 did on 2026-09-17, carrying a document missing a required
+# section into its own audit.
+#
+# A halt that a resume forgets is not a halt. The step's end record now says FAIL
+# and why, so the resume re-enters it.
+BADR2="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+want  "the step record says FAIL"     "the last doc end must not be PASS" \
+      bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"doc\" and .event == \"end\")] | last.verdict' '${BADR2}steps.jsonl')\" = FAIL ]"
+want  "and names what rejected it"    "rejected_by should be doc-check" \
+      bash -c "[ \"\$(jq -rs '[.[] | select(.step == \"doc\" and .event == \"end\")] | last.rejected_by' '${BADR2}steps.jsonl')\" = doc-check ]"
+cp "$WORK/bin/pi-baddoc" "$WORK/bin/pi"
+run_line --resume "$BADR2" --stop-after doc > "$WORK/o-badresume" 2>&1 || true
+cp "$WORK/bin/pi-keep" "$WORK/bin/pi"
+badresume="$(cat "$WORK/o-badresume")"
+nope  "the resume does not skip doc"  "SKIP   doc" "$badresume"
+check "it runs the step again"        "DOC CHECK" "$badresume"
+
 printf '\n== a spec the controller rejects is handed back once, not halted ==\n\n'
 #
 # spec-check produces the most actionable complaints in the line — "proposed
