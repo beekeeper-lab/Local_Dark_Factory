@@ -21,6 +21,15 @@ set -uo pipefail
 # shellcheck source=provenance.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/provenance.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# For `verdicts_role`: what each file in a run's verdicts/ directory is. Three
+# readers of that directory learned that list separately and each got it wrong
+# first, so it lives in one place now.
+# lib.sh reads PIPELINE_DIR at load time; this script is not in the pipeline, so
+# it says where the pipeline is rather than being sourced into a shell that
+# happens to have it set.
+PIPELINE_DIR="${PIPELINE_DIR:-$ROOT/factory/pipeline}"
+# shellcheck source=../factory/pipeline/lib.sh
+source "$ROOT/factory/pipeline/lib.sh"
 PIPE="$ROOT/factory/pipeline"
 
 usage() {
@@ -151,7 +160,8 @@ VSCHEMA="$ROOT/schemas/verdict.schema.json"
 nv=0; invalid=""
 for f in "$RUN_DIR"/verdicts/*.attempt-*.json; do
   [ -e "$f" ] || continue
-  case "$f" in *.judgement.json|*.request.json|*.refused.json) continue ;; esac
+  # One list, in lib.sh: `verdicts_role`, and the three halts that taught it.
+  [ "$(verdicts_role "$(basename "$f")")" = verdict ] || continue
   nv=$((nv+1))
   if [ -f "$VSCHEMA" ] && [ -x "$ROOT/.venv/bin/python" ]; then
     "$ROOT/.venv/bin/python" - "$VSCHEMA" "$f" <<'PY' >/dev/null 2>&1 || invalid="$invalid $(basename "$f")"

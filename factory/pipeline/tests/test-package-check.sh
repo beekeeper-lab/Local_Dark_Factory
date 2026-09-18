@@ -208,5 +208,36 @@ nope  "with it, the open step is ignored" "audit-package attempt 1" "$out"
 check "and everything else still pairs"  "each opened and closed exactly once" "$out"
 check "the check passes"                 "PACKAGE CHECK PASS" "$out"
 
+printf '\n== the judge leaves things beside a verdict that are not verdicts ==\n\n'
+#
+# This check has halted a real run three times on exactly this, each time with
+# "the run record contradicts itself" about a file something wrote on purpose:
+# the request sidecar, then refusal records, then `spec.unparseable.json` — which
+# judge.sh writes when the model's answer will not parse, so that the evidence
+# for "not JSON" is kept rather than printed and dropped. bean-002 halted at
+# audit-package on the third.
+#
+# The fixtures never caught one because they build their own verdicts directory.
+# This section puts every file the line actually writes into one.
+for f in spec.attempt-1.judgement.json spec.request.json spec.attempt-1.refused.json \
+         spec.unparseable.json spec.truncated.json doc.thinking.txt \
+         impl.attempt-1.json.rejected; do
+  printf '{}\n' > "$R/verdicts/$f"
+done
+out="$(pc --current-step audit-package)"
+check "the record is still consistent" "PACKAGE CHECK PASS" "$out"
+nope  "nothing is called misnamed"     "misnamed" "$out"
+
+printf '\n-- but a file nobody writes on purpose is still a finding --\n\n'
+#
+# The exemptions must not become "anything in this directory is fine". A verdict
+# under a name the driver cannot read is a verdict nobody will act on, which is
+# the thing this check exists for.
+printf '{}\n' > "$R/verdicts/spec-audit-final.json"
+out="$(pc --current-step audit-package)"
+check "it is reported"                 "misnamed" "$out"
+check "by name"                        "spec-audit-final.json" "$out"
+rm -f "$R/verdicts/spec-audit-final.json"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

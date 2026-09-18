@@ -300,7 +300,7 @@ run from the working tree."
     # within an hour of refusal records existing.
     for f in "$run_dir"/verdicts/*.attempt-*.json; do
       [ -e "$f" ] || continue
-      case "$f" in *.judgement.json|*.request.json|*.refused.json) continue ;; esac
+      [ "$(verdicts_role "$(basename "$f")")" = verdict ] || continue
       printf 'verdict: %-14s %s\n' "$(jq -r '.stage' "$f")" "$(jq -r '.verdict' "$f")"
     done
 

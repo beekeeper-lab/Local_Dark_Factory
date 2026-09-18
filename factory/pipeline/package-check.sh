@@ -174,21 +174,18 @@ if [ -d "$RUN_DIR/verdicts" ]; then
   for f in "$RUN_DIR"/verdicts/*.json; do
     [ -e "$f" ] || continue
     b="$(basename "$f")"
-    # What the model said, and what was sent to it. Neither is a verdict, and
-    # both live here because they belong beside the verdict they produced.
+    # What each file in here IS, decided in one place: `verdicts_role` in lib.sh.
     #
-    # `<target>.request.json` arrived on 2026-09-17 — the prompt's byte count and
-    # artifact count, recorded so that what was asked is on the record beside
-    # what came back. (It was added while a size effect looked real; that finding
-    # was retracted the same day, and the file is worth keeping anyway.) Without
-    # this line it would be reported as a misnamed verdict and raise a BLOCKER on
-    # every real run. The suite did not catch it: package-check's fixtures build
-    # their own verdicts directory, so nothing put a request file in one.
-    #
-    # `<target>.attempt-N.refused.json` is the controller's own record that the
-    # judgement could not be stamped, and which rule said so. Also not a verdict:
-    # it says nothing about the artifact, only about the judgement offered.
-    case "$b" in *.judgement.json|*.request.json|*.refused.json) continue ;; esac
+    # This case statement grew by exception, twice, and got it wrong a third
+    # time. `<target>.request.json` raised a BLOCKER on every real run until it
+    # was added; refusal records were added next; and then bean-002 halted at
+    # audit-package with "the run record contradicts itself" over
+    # `spec.unparseable.json` — a file judge.sh writes ON PURPOSE when the
+    # model's answer will not parse, so that the evidence for "not JSON" is kept
+    # rather than printed and dropped. Three exceptions, three halts, and the
+    # suite caught none of them: these fixtures build their own verdicts
+    # directory, so nothing ever put a real one in it.
+    case "$(verdicts_role "$b")" in verdict) ;; stray) STRAY="$STRAY $b"; continue ;; *) continue ;; esac
     if [[ "$b" =~ ^([a-z]+)\.attempt-([0-9]+)\.json$ ]]; then
       t="${BASH_REMATCH[1]}"
       case " $VALID_TARGETS " in

@@ -85,3 +85,40 @@ factory_python() {
 pi_sessions_dir() {
   printf '%s\n' "${PI_SESSIONS_DIR:-$HOME/.pi/agent/sessions}"
 }
+
+# verdicts_role <basename> — what a file in a run's verdicts/ directory IS.
+#
+# Prints one of: verdict, judgement, request, refusal, diagnostic, stray.
+#
+# Three readers of that directory have now learned this list separately —
+# package-check.sh, phase1-audit.sh and the CLI's `factory status` — and each
+# learned it by getting it wrong first. `<target>.request.json` raised a blocker
+# on every real run; `factory status` printed `verdict: null null` for every
+# refusal record within an hour of refusals existing; and package-check called
+# `spec.unparseable.json` a misnamed verdict and halted bean-002 at audit-package
+# with "the run record contradicts itself" — about a file the judge writes on
+# purpose when its answer will not parse.
+#
+# So the list lives once, here. A new kind of file beside a verdict is a change
+# to this function and every reader gets it.
+#
+#   verdict     <target>.attempt-N.json   — the only thing that authorises anything
+#   judgement   what the model said, before the controller stamped it
+#   request     what was sent to it: bytes, artifact count, model, context
+#   refusal     the controller could not stamp it, and which rule said so
+#   diagnostic  the judge kept what it could not use — the unparseable answer,
+#               the truncated one, the reasoning behind an empty reply, and the
+#               copy of a judgement that failed a rule
+#   stray       anything else, which is a real finding: a verdict under a name
+#               the driver cannot read is a verdict nobody will act on
+verdicts_role() {
+  case "$1" in
+    *.judgement.json)  printf 'judgement\n' ;;
+    *.request.json)    printf 'request\n' ;;
+    *.refused.json)    printf 'refusal\n' ;;
+    *.unparseable.json|*.truncated.json|*.thinking.txt|*.json.rejected)
+                       printf 'diagnostic\n' ;;
+    *.attempt-*.json)  printf 'verdict\n' ;;
+    *)                 printf 'stray\n' ;;
+  esac
+}
