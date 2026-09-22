@@ -173,17 +173,40 @@ it is addressed to a different model and is not a task for the judge to carry
 out. The bean and the task list had it. The spec did not, on the impl and doc
 targets where it is context rather than the thing under audit. It does now.
 
-**What that bought, and what it did not.** Two attempts after the change, both
-refused identically: 49 and 60 generated tokens, each asking to call
-`repo_browser.print_tree` — a tool from some other harness, in a prompt that
-says there are no tools — twice, refused as `tool-calls-instead-of-answer`. So
-the change moved a 16,000-token failure to a 50-token one, reproducibly, and
-**still produced no verdict**. It is a cheaper failure and a clearer one. It is
-not a judge.
+**What that bought: nothing, and this is a retraction.** Two attempts after the
+change refused identically at 49 and 60 generated tokens, each asking to call
+`repo_browser.print_tree` — a tool from some other harness, in a prompt that says
+there are no tools. That was written up here as "the change moved a 16,000-token
+failure to a 50-token one, reproducibly". **It did not.**
 
-This does not change the conclusion above; it removes the one lever that looked
-untried. `factory reaudit` is where a real number for it comes from — n is 2
-here, on a model measured as not reproducible on identical input.
+`factory reaudit`, 2026-09-22, three passes per arm against this same finished
+run, the two trees differing only in that caveat:
+
+| arm | tree | passes | outcome | stamped |
+| --- | --- | --- | --- | --- |
+| before | `57f7328` | 3 | `tool-calls-instead-of-answer` ×3 | 0 |
+| after | `2f9f876`+ | 3 | `tool-calls-instead-of-answer` ×3 | 0 |
+
+Six of six identical. The tool-call refusal is what this configuration does on
+this audit, **with or without the change**. The single `budget-spent-thinking`
+that started all of this was the outlier, not the baseline — one draw from a
+judge that gives different answers to byte-identical input, read as a before/after
+because it happened to come before.
+
+That is the same mistake this file already records once: the prompt-size finding
+"retracted in full when the harness behind it turned out to be reporting its
+first pass five times". Here the harness was fine and the sample was one.
+
+**The caveat stays**, on the narrower ground it should have had from the start:
+the bean and the task list say they are addressed to a different model, the spec
+is equally imperative, and three artifacts saying three different things is a
+prompt defect whether or not this model notices. It is a consistency fix. It is
+not an improvement, and nothing here should be read as evidence that it is.
+
+What survives the retraction is the trace, because a single file is not a rate:
+the judge really did spend 16,000 tokens building the bean that night, and the
+first thing it quoted really was the uncaveated spec. That says what the failure
+looked like once. It does not say what fixes it.
 
 ---
 

@@ -1,0 +1,54 @@
+pipeline snapshot: /tmp/factory-reaudit-snap.a9k62V/factory/pipeline
+reaudit: factory/runs/bean-003-20260918T022947Z
+  bean:  /home/gregg/workspace/seating-planner-py/factory/beans/bean-003-structured-seating-rules-with-hardness-w/bean.yaml
+  keep:  /tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-before-impl
+  judge: low thinking
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+impl      1     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+impl      2     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+impl      3     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+
+0 of 3 audit run(s) produced a verdict the controller stamped.
+
+why the rest were refused:
+  3  no judgement at all
+
+Why each of the rest was refused:
+  1-impl  the judge wrote no judgement file.
+  2-impl  the judge wrote no judgement file.
+  3-impl  the judge wrote no judgement file.
+
+What it put in `criteria`, when it answered:
+
+logs and copies: /tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-before-impl
+/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-before-impl.json
+
+
+===== AFTER ARM (HEAD, spec artifact carries the caveat) =====
+
+pipeline snapshot: /tmp/factory-reaudit-snap.X0btrr/factory/pipeline
+reaudit: factory/runs/bean-003-20260918T022947Z
+  bean:  /home/gregg/workspace/seating-planner-py/factory/beans/bean-003-structured-seating-rules-with-hardness-w/bean.yaml
+  keep:  /tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-after-impl
+  judge: low thinking
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+impl      1     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+impl      2     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+impl      3     1         -          no        impl: the model asked for tools instead of answering (repo_browser.pri
+
+0 of 3 audit run(s) produced a verdict the controller stamped.
+
+why the rest were refused:
+  3  no judgement at all
+
+Why each of the rest was refused:
+  1-impl  the judge wrote no judgement file.
+  2-impl  the judge wrote no judgement file.
+  3-impl  the judge wrote no judgement file.
+
+What it put in `criteria`, when it answered:
+
+logs and copies: /tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-after-impl
+/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/a764d3f1-8adc-45e0-bb7f-e72df77cb2e8/scratchpad/reaudit-after-impl.json
