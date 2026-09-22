@@ -175,35 +175,6 @@ if [ "$VERDICT" = "accept" ] && awk -v c="$CONF" -v f="$CONF_FLOOR" 'BEGIN{exit 
   VERDICT="abstain"
 fi
 
-# A `revise` with nothing to revise is not a verdict the line can act on.
-#
-# orchestrate.sh routes a failed audit back into the authoring step WITH THE
-# FINDINGS: that is the entire mechanism by which an audit changes anything. A
-# `revise` carrying zero findings re-enters the step with nothing attached, which
-# asks the identical question again and burns an attempt — and the second failure
-# halts the run for a human whose only information is "the judge said revise".
-#
-# Measured: judge-variance on 2026-09-16, five identical runs at temperature 0,
-# returned `revise` every time with findings counts of 4, 0, 4, 3 and 1. The
-# zero is not hypothetical and it is not rare.
-#
-# `abstain` is different and is left alone: it means "I cannot form a judgement",
-# it goes to a human rather than to a retry, and feedback_to_worker is where its
-# reason lives.
-NFIND="$(jq '[.findings[]?] | length' <<<"$J")"
-case "$VERDICT" in
-  revise|block)
-    if [ "$NFIND" -eq 0 ]; then
-      printf 'AUDIT %s: verdict "%s" with zero findings.\n' "$TARGET" "$VERDICT" >&2
-      printf '      A failed audit is routed back into the authoring step carrying its findings;\n' >&2
-      printf '      that is the only way an audit changes anything. With none, the step is asked\n' >&2
-      printf '      the identical question again and the second failure halts the run.\n' >&2
-      printf '      If there is genuinely nothing to point at, the verdict is "abstain".\n' >&2
-      cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
-      refuse verdict-without-findings 1 "a revise or block verdict with nothing to point at" \
-        "$(jq -nc --arg v "$VERDICT" '{verdict:$v, findings:0}')"
-    fi ;;
-esac
 
 BLOCKERS="$(jq '[.findings[]? | select(.severity == "blocker")] | length' <<<"$J")"
 if [ "$BLOCKERS" -gt 0 ] && [ "$VERDICT" = "accept" ]; then
@@ -392,6 +363,21 @@ fi
 # they quote at all. So this costs an honest judge nothing, and it is the same
 # argument the quote check itself is built on.
 SHORT="$(jq -r --argjson min "$QUOTE_MIN_CHARS" '[.criteria[]? | select((.quote // "" | length) < $min) | .id] | join(", ")' <<<"$J" 2>/dev/null)"
+# Not on disk before too short, since 2026-09-22. A short quote is a quote that
+# proves nothing; an absent one means the text was never there to quote. Where a
+# judgement has both — some criteria under the length floor, others citing
+# fiction — the fiction is the finding worth recording, and it is the one the
+# tally should count.
+if [ -n "$UNFOUND" ]; then
+  printf 'AUDIT %s: the judgement quotes text that is not on disk anywhere.\n' "$TARGET" >&2
+  printf '%s\n' "$UNFOUND" >&2
+  printf '\n      A quote is not a paraphrase. If the judge cannot point at real text, the\n' >&2
+  printf '      audit did not happen — which is exactly how a confident false accept gets\n' >&2
+  printf '      into a run. Refusing rather than recording it.\n' >&2
+  refuse quote-not-on-disk 2 "the judgement quotes text that is not in any artifact, the run directory or the repository" \
+    "$(printf '%s' "$UNFOUND" | sed 's/^ *- //' | jq -R . | jq -sc '{quotes: map(select(. != ""))}')"
+fi
+
 if [ -n "$SHORT" ]; then
   printf 'AUDIT %s: these criteria are not backed by a quote long enough to check: %s\n' "$TARGET" "$SHORT" >&2
   printf '\n      A verdict rests on every criterion, not on the best one. %s characters\n' "$QUOTE_MIN_CHARS" >&2
@@ -402,17 +388,57 @@ if [ -n "$SHORT" ]; then
     "$(jq -nc --arg s "$SHORT" --argjson min "$QUOTE_MIN_CHARS" \
        '{min_chars:$min, criteria:($s|split(", ")|map(select(. != "")))}')"
 fi
-
-if [ -n "$UNFOUND" ]; then
-  printf 'AUDIT %s: the judgement quotes text that is not on disk anywhere.\n' "$TARGET" >&2
-  printf '%s\n' "$UNFOUND" >&2
-  printf '\n      A quote is not a paraphrase. If the judge cannot point at real text, the\n' >&2
-  printf '      audit did not happen — which is exactly how a confident false accept gets\n' >&2
-  printf '      into a run. Refusing rather than recording it.\n' >&2
-  refuse quote-not-on-disk 2 "the judgement quotes text that is not in any artifact, the run directory or the repository" \
-    "$(printf '%s' "$UNFOUND" | sed 's/^ *- //' | jq -R . | jq -sc '{quotes: map(select(. != ""))}')"
-fi
 printf 'AUDIT %s: %s quote(s) verified against the artifacts\n' "$TARGET" "$CHECKED" >&2
+
+# A `revise` with nothing to revise is not a verdict the line can act on.
+#
+# orchestrate.sh routes a failed audit back into the authoring step WITH THE
+# FINDINGS: that is the entire mechanism by which an audit changes anything. A
+# `revise` carrying zero findings re-enters the step with nothing attached, which
+# asks the identical question again and burns an attempt — and the second failure
+# halts the run for a human whose only information is "the judge said revise".
+#
+# Measured: judge-variance on 2026-09-16, five identical runs at temperature 0,
+# returned `revise` every time with findings counts of 4, 0, 4, 3 and 1. The
+# zero is not hypothetical and it is not rare.
+#
+# `abstain` is different and is left alone: it means "I cannot form a judgement",
+# it goes to a human rather than to a retry, and feedback_to_worker is where its
+# reason lives.
+#
+# AFTER the quote checks since 2026-09-22, and that is the whole of the change.
+# This file already has the rule — "the cheaper check and the more specific
+# sentence" first — and already records a case where the wrong one fired: a doc
+# audit with zero criteria was caught only by the quote check, "by accident",
+# and "the judgement quotes nothing" was the wrong sentence about it.
+#
+# bean-003's package audit is the same mistake from the other side. It came back
+# `revise` with zero findings and was refused for that — while every quote in it
+# was invented, about a `src/sum.py` holding `def solution(arr): return sum(arr)`
+# that exists in no repository here. `quote-not-on-disk` had that exactly right
+# and never ran. A missing finding is a coherence defect in an audit that may
+# still have happened; a fabricated quote means it did not happen, which is the
+# more specific sentence and subsumes the other — the findings are missing
+# BECAUSE there was nothing real to point at.
+#
+# The tally is the reason this matters rather than the message alone. `factory
+# refusals` groups by rule to answer "which check is doing the work?", and a rule
+# that fires first takes the credit for judgements a later rule diagnosed better.
+NFIND="$(jq '[.findings[]?] | length' <<<"$J")"
+case "$VERDICT" in
+  revise|block)
+    if [ "$NFIND" -eq 0 ]; then
+      printf 'AUDIT %s: verdict "%s" with zero findings.\n' "$TARGET" "$VERDICT" >&2
+      printf '      A failed audit is routed back into the authoring step carrying its findings;\n' >&2
+      printf '      that is the only way an audit changes anything. With none, the step is asked\n' >&2
+      printf '      the identical question again and the second failure halts the run.\n' >&2
+      printf '      If there is genuinely nothing to point at, the verdict is "abstain".\n' >&2
+      cp "$JUDGEMENT" "$VERDICTS/$TARGET.attempt-$N.json.rejected" 2>/dev/null || true
+      refuse verdict-without-findings 1 "a revise or block verdict with nothing to point at" \
+        "$(jq -nc --arg v "$VERDICT" '{verdict:$v, findings:0}')"
+    fi ;;
+esac
+
 
 # ------------------------------------------------------ the observable facts --
 # BEAN_JSON and BEAN_ID are parsed above, by the criteria check.

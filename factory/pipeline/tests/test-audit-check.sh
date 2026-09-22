@@ -226,6 +226,35 @@ if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json"
     "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$REF"
 fi
 
+# When two rules both apply, the more specific one is the one recorded.
+#
+# bean-003's package audit came back `revise` with zero findings AND every quote
+# invented — a src/sum.py holding `def solution(arr): return sum(arr)`, which is
+# in no repository here. It was refused as verdict-without-findings, because that
+# check ran first, and the tally recorded a coherence defect for a judgement that
+# was about somebody else's homework. A missing finding is a defect in an audit
+# that may still have happened; a fabricated quote means it did not.
+#
+# The tally is what this protects: `factory refusals` groups by rule to answer
+# "which check is doing the work?", and a rule that merely runs earlier must not
+# take credit for judgements a later rule diagnosed better.
+printf '\n-- fabricated quotes outrank a missing finding, and a short quote --\n\n'
+rm -f "$V"/spec.attempt-*.refused.json "$V"/spec.attempt-*.json
+judgement "$(jq -c '. + {verdict:"revise", findings:[]}
+  | .criteria[0].quote = "## Architecture\n\nThe pipeline reads from the Input section"' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+want  "it refuses as quote-not-on-disk" "the fabricated quote is the more specific sentence" \
+  test "$(jq -r .rule "$V/spec.attempt-1.refused.json")" = quote-not-on-disk
+nope  "and not for the missing finding" "with zero findings" "$out"
+
+printf '\n-- but a revise with nothing to point at is still caught on its own --\n\n'
+rm -f "$V"/spec.attempt-*.refused.json "$V"/spec.attempt-*.json
+judgement "$(jq -c '. + {verdict:"revise", findings:[]}' <<<"$BASE")"
+out="$(run_check)"; rc=$?
+want  "it refuses as verdict-without-findings" "nothing else is wrong with it" \
+  test "$(jq -r .rule "$V/spec.attempt-1.refused.json")" = verdict-without-findings
+check "and says why that cannot be acted on" "with zero findings" "$out"
+
 printf '\n-- and a record is still written when the details cannot be built --\n\n'
 #
 # Each call site builds `details` with its own `jq -nc`. If one of those ever
