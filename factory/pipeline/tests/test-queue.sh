@@ -166,6 +166,37 @@ out="$(q --all)"
 eq "now it is done"                  "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
 eq "and the next is ready"            "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 
+printf '\n-- a merged branch that no longer exists locally is still merged --\n\n'
+#
+# Found on the real line, 2026-09-22: bean-003 was merged and the queue still
+# said `pr_open`, so bean-004 and bean-005 stayed blocked and the summary asked a
+# human to merge a pull request they had merged an hour earlier.
+#
+# Nothing was wrong with the merge. A merged pull request usually takes the
+# branch with it — GitHub deletes the remote branch, `fetch --prune` deletes the
+# tracking ref — and here the local branch never existed at all, because the
+# pull request was opened by `gh` from a worktree rather than from a checkout.
+# The fallback rev-parsed the bare name recorded in run.json, nothing by that
+# name resolved, and no sha is reported as not merged. Which is the safe
+# direction for an unknown and the wrong answer for this one: the sha was
+# sitting in refs/remotes, unasked.
+git -C "$REPO" update-ref "refs/remotes/origin/bean/bean-001-x" "$(git -C "$REPO" rev-parse bean/bean-001-x)"
+git -C "$REPO" branch -qD "bean/bean-001-x"
+git -C "$REPO" remote add origin "$REPO" 2>/dev/null || true
+out="$(q --all)"
+eq "the merge is still seen"      "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
+eq "and the next is still ready"  "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+nope "nobody is asked to re-merge it" "waiting on a human to merge: bean-001" "$out"
+
+printf '\n-- and a branch that is nowhere at all is still not merged --\n\n'
+#
+# The other half of the same rule: widening the lookup must not turn "I cannot
+# find this" into "this landed". An unknown blocks.
+git -C "$REPO" update-ref -d "refs/remotes/origin/bean/bean-001-x"
+eq "an unresolvable branch blocks" "pr_open" \
+   "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"
+git -C "$REPO" branch -q "bean/bean-001-x" "$(git -C "$REPO" rev-parse main^2)"
+
 printf '\n== building one unblocks exactly the next ==\n\n'
 out="$(q --all)"
 eq "the built one is done"        "done" "$(jq -r '.beans[] | select(.id=="bean-001") | .state' <<<"$(qj)")"

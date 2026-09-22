@@ -109,6 +109,30 @@ pr_for() { # pr_for <bean-id> -> a pr url recorded by ANY run of it, or empty
 
 DEFAULT_BRANCH="$([ -f "$ROOT/factory/repo.yaml" ] && "$PIPELINE_DIR/yaml2json.sh" "$ROOT/factory/repo.yaml" 2>/dev/null | jq -r '.default_branch // "main"' || echo main)"
 
+# resolve_branch <recorded-name> -> a sha, or empty.
+#
+# A merged pull request usually takes the branch with it: GitHub deletes the
+# remote branch, `git fetch --prune` deletes the tracking ref, and a local branch
+# that was never created here — the pull request was opened by `gh` from a
+# worktree, not from a checkout — never existed to begin with. bean-003 merged
+# 2026-09-22 and the queue still called it `pr_open`, because the fallback below
+# rev-parsed the bare name `bean/bean-003-...`, nothing by that name resolves
+# locally, and no sha means not merged. The queue was telling a human to merge a
+# pull request they had merged an hour earlier, and bean-004 and bean-005 sat
+# behind it.
+#
+# So try the tracking refs too, in order of how much they are worth trusting: a
+# local branch, then this remote's copy, then any remote's. Still all local
+# reads — no network, which is the property the comment below is protecting.
+resolve_branch() {
+  local name="$1" r
+  git -C "$ROOT" rev-parse --verify --quiet "refs/heads/$name" 2>/dev/null && return 0
+  for r in $(git -C "$ROOT" remote 2>/dev/null); do
+    git -C "$ROOT" rev-parse --verify --quiet "refs/remotes/$r/$name" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 merged() { # merged <bean-id> — is this bean's work on the default branch?
   # The question the first version of this file never asked, and the one that
   # matters: a pull request being OPEN is the finished state of a bean's own run,
@@ -135,7 +159,7 @@ merged() { # merged <bean-id> — is this bean's work on the default branch?
     for d in $(ls -1dt "$RUNS_ROOT/$id"-*/ 2>/dev/null); do
       [ -f "$d/run.json" ] || continue
       sha="$(jq -r '.branch // empty' "$d/run.json" 2>/dev/null)"
-      [ -n "$sha" ] && sha="$(git -C "$ROOT" rev-parse "$sha" 2>/dev/null || true)"
+      [ -n "$sha" ] && sha="$(resolve_branch "$sha")"
       [ -n "$sha" ] && break
     done
   fi
