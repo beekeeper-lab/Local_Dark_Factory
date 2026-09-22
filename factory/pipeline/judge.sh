@@ -920,6 +920,30 @@ USED_TOK=$(( PROMPT_TOK + GEN_TOK ))
 CTX_TIGHT=0
 if [ "$NUM_CTX" -gt 0 ] && [ "$USED_TOK" -gt 0 ] \
    && [ "$(( USED_TOK * 100 / NUM_CTX ))" -ge 98 ]; then CTX_TIGHT=1; fi
+# The same four numbers, in the RECORD and not only on the terminal.
+#
+# Every message below that ends "Raise JUDGE_NUM_PREDICT" was advice nobody could
+# act on afterwards: the refusal record carried the cap and nothing else, so the
+# two questions that decide whether the cap is even the right lever — how big was
+# the prompt, and how much of the window is left — could only be answered by
+# whoever was watching stderr at the time. bean-003's impl audit refused on
+# 2026-09-22 with `{"num_predict": 16000}` and that was the whole of it, while the
+# line it printed a second earlier said 12303 prompt + 16000 generated of 32768.
+#
+# `headroom_for_answer` is the one that settles it: num_ctx minus the prompt is
+# the ceiling any raise of the cap has to fit under, and a prompt that has eaten
+# the window is a `num_ctx` problem — or a fewer-bytes problem — however high the
+# cap goes. Refusals became countable when they were first written down; this is
+# the arithmetic that makes them sizeable.
+TOK_JSON="$(jq -nc --argjson p "${PROMPT_TOK:-0}" --argjson g "${GEN_TOK:-0}" \
+  --argjson c "${NUM_CTX:-0}" --argjson tight "$CTX_TIGHT" \
+  '{prompt_tokens:$p, generated_tokens:$g, num_ctx:$c,
+    headroom_for_answer:(if $c > 0 and $p > 0 then $c - $p else null end),
+    context_was_the_limit:($tight == 1)}' 2>/dev/null)"
+[ -n "$TOK_JSON" ] || TOK_JSON='{}'
+# Merge, never replace: each rule's own details are what that rule saw, and a
+# shape nothing downstream depends on is still a shape somebody reads.
+tok_details() { jq -nc --argjson t "$TOK_JSON" --argjson d "${1:-{\}}" '$t + $d' 2>/dev/null || printf '%s' "$TOK_JSON"; }
 printf 'JUDGE  %s  tokens: %s prompt + %s generated = %s of %s ctx (%s%%)\n' \
   "$TARGET" "$PROMPT_TOK" "$GEN_TOK" "$USED_TOK" "$NUM_CTX" \
   "$([ "$NUM_CTX" -gt 0 ] && echo $(( USED_TOK * 100 / NUM_CTX )) || echo '?')" >&2
@@ -950,7 +974,7 @@ if [ -z "$CONTENT" ] && [ "$DONE_REASON" = "length" ]; then
   printf 'JUDGE  %s: spent the whole %s-token budget thinking and wrote no answer.\n' "$TARGET" "$NUM_PREDICT" >&2
   printf '       Its reasoning is in verdicts/%s.thinking.txt. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
   refuse_j budget-spent-thinking 8 "the whole token budget went on reasoning and no answer was written" \
-    "$(jq -nc --argjson cap "$NUM_PREDICT" '{num_predict:$cap}')"
+    "$(tok_details "$(jq -nc --argjson cap "$NUM_PREDICT" '{num_predict:$cap}')")"
 fi
 if [ -z "$CONTENT" ]; then
   # Three different things produce an empty `content`, and only one of them is
@@ -973,7 +997,7 @@ if [ -z "$CONTENT" ]; then
     printf '       judgement: %s\n' "$(printf '%s' "$RESP" | head -c 300)" >&2
   fi
   refuse_j no-answer 1 "the response carries no answer" \
-    "$(jq -nc --arg d "$DONE_REASON" '{done_reason:$d}')"
+    "$(tok_details "$(jq -nc --arg d "$DONE_REASON" '{done_reason:$d}')")"
 fi
 if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
   # Cut off mid-object is not the same failure as ignoring the schema, and saying
@@ -992,7 +1016,7 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
       "$TARGET" "$NUM_PREDICT" >&2
     printf '       What it managed is in verdicts/%s.truncated.json. Raise JUDGE_NUM_PREDICT.\n' "$TARGET" >&2
     refuse_j answer-truncated 8 "the answer was cut off at the token cap" \
-      "$(jq -nc --argjson cap "$NUM_PREDICT" --argjson b "${#CONTENT}" '{num_predict:$cap, bytes:$b}')"
+      "$(tok_details "$(jq -nc --argjson cap "$NUM_PREDICT" --argjson b "${#CONTENT}" '{num_predict:$cap, bytes:$b}')")"
   fi
   # Not `length`, and still not JSON. Keep ALL of it and say what jq objected to.
   #
@@ -1024,8 +1048,8 @@ if ! jq -e . >/dev/null 2>&1 <<<"$CONTENT"; then
       ;;
   esac
   refuse_j answer-not-json 1 "the answer is not JSON, and the server did not say it ran out of room" \
-    "$(jq -nc --arg d "$DONE_REASON" --arg e "$PARSE_ERR" --argjson b "${#CONTENT}" \
-       '{done_reason:$d, jq_error:$e, bytes:$b}')"
+    "$(tok_details "$(jq -nc --arg d "$DONE_REASON" --arg e "$PARSE_ERR" --argjson b "${#CONTENT}" \
+       '{done_reason:$d, jq_error:$e, bytes:$b}')")"
 fi
 
 # Constrained decoding is a request, not a guarantee. Measured: `required` is

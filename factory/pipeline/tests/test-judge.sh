@@ -259,12 +259,35 @@ fi
 printf '\n-- a different failure writes a different rule --\n\n'
 clean_verdicts
 reply "$(jq -nc --arg t "thinking that went on and on" \
-  '{model:"test-judge:latest", done:true, done_reason:"length", message:{role:"assistant", content:"", thinking:$t}}')"
+  '{model:"test-judge:latest", done:true, done_reason:"length", prompt_eval_count:12303, eval_count:16000,
+    message:{role:"assistant", content:"", thinking:$t}}')"
 judge >/dev/null 2>&1
+BUDJ="$R/verdicts/spec.attempt-1.refused.json"
 want  "the budget case is named"       "rule should be budget-spent-thinking" \
-      test "$(jq -r .rule "$R/verdicts/spec.attempt-1.refused.json")" = budget-spent-thinking
+      test "$(jq -r .rule "$BUDJ")" = budget-spent-thinking
 want  "with the cap it had"            "details.num_predict should be a number" \
-      bash -c "jq -e '.details.num_predict | type == \"number\"' '$R/verdicts/spec.attempt-1.refused.json' >/dev/null"
+      bash -c "jq -e '.details.num_predict | type == \"number\"' '$BUDJ' >/dev/null"
+
+# Every message on this path ends "Raise JUDGE_NUM_PREDICT", and until
+# 2026-09-22 the record carried the cap alone — so whether the cap was even the
+# right lever could only be answered by whoever was watching stderr. These are
+# the numbers that answer it, and they are asserted here so they cannot quietly
+# stop being written.
+printf '\n   and the arithmetic that says whether the cap is the lever\n\n'
+want  "the prompt is counted"          "details.prompt_tokens should be 12303" \
+      test "$(jq -r .details.prompt_tokens "$BUDJ")" = 12303
+want  "and what it generated"          "details.generated_tokens should be 16000" \
+      test "$(jq -r .details.generated_tokens "$BUDJ")" = 16000
+want  "and the window it had"          "details.num_ctx should be a number" \
+      bash -c "jq -e '.details.num_ctx | type == \"number\"' '$BUDJ' >/dev/null"
+want  "and the room left for an answer" "headroom_for_answer should be num_ctx - prompt_tokens" \
+      bash -c "jq -e '.details | .headroom_for_answer == (.num_ctx - .prompt_tokens)' '$BUDJ' >/dev/null"
+want  "and which limit it hit"         "context_was_the_limit should be false here" \
+      test "$(jq -r .details.context_was_the_limit "$BUDJ")" = false
+if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json" ]; then
+  want "and it still validates"        "the refusal record must conform" \
+    "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$BUDJ"
+fi
 
 printf '\n-- and an answer the controller can read leaves none --\n\n'
 clean_verdicts
