@@ -46,6 +46,12 @@ case "${1:-}" in
     # Remember the name it was given, so the test can assert the container is
     # identifiable at all — an unnamed container cannot be asked about later.
     while [ $# -gt 0 ]; do [ "$1" = --name ] && { printf '%s\n' "$2" > "$FAKE_NAMEFILE"; }; shift; done
+    # PODMAN_SLEEP so a test can put the container's death on either side of the
+    # wall clock, which is the only thing separating a timeout from a kill.
+    # PODMAN_IGNORE_TERM makes it survive the TERM `timeout` sends first, so the
+    # escalation to KILL — the thing that turns 124 into 137 — really happens.
+    [ -n "${PODMAN_IGNORE_TERM:-}" ] && trap '' TERM
+    if [ -n "${PODMAN_SLEEP:-}" ]; then sleep "$PODMAN_SLEEP" & wait $!; fi
     exit "${PODMAN_RC:-0}" ;;
 esac
 exit 0
@@ -60,6 +66,10 @@ export FAKE_NAMEFILE="$WORK/name"
 ws() {
   bash "$PIPELINE_DIR/worker-sandbox.sh" --tree "$WORK/tree" --agent-dir "$WORK/agent" \
     --socket-dir "$WORK/sock" --image localhost/fake:1 --unpinned -- --version 2>&1
+}
+ws_t() { # ws_t <timeout-seconds>
+  bash "$PIPELINE_DIR/worker-sandbox.sh" --tree "$WORK/tree" --agent-dir "$WORK/agent" \
+    --socket-dir "$WORK/sock" --image localhost/fake:1 --unpinned --timeout "$1" -- --version 2>&1
 }
 
 printf '\n== a container that dies is named, so it can be asked about ==\n\n'
@@ -103,6 +113,55 @@ out="$(ws)"; rc=$?
 rc_is "the code is passed through"      "$rc" 1
 check "the events are still shown"      "What podman saw" "$out"
 nope  "but 143's explanation is not"    "pattern kill from a terminal" "$out"
+
+printf '\n== the wall clock does not always announce itself as 124 ==\n\n'
+#
+# `timeout --kill-after` sends TERM at the deadline and KILL thirty seconds
+# later, and GNU timeout reports the SECOND signal. So a container that ignores
+# TERM comes back 137, the `rc -eq 124` line never fired, and the operator was
+# shown a bare "the container exited 137" — which reads like the OOM killer, and
+# was read that way.
+#
+# bean-004's task-2, 2026-09-22: podman's own event log said `start` at
+# 1790101820 and `kill` at 1790105420. 3600 seconds to the second, against a
+# --timeout of 3600, and nothing in the output said so.
+printf '  2026-09-22 01:00:00  kill\n' > "$WORK/events"
+# A container that ignores TERM, with the escalation shortened to a second so the
+# real mechanism runs rather than a fake exit code standing in for it: TERM at 1s,
+# ignored, KILL at 2s, and `timeout` reports the second signal.
+export PODMAN_RC=0 PODMAN_SLEEP=30 PODMAN_IGNORE_TERM=1 FACTORY_SANDBOX_KILL_AFTER=1
+out="$(ws_t 1)"; rc=$?
+rc_is "the code is still passed through" "$rc" 137
+check "it says the session was killed"   "the session was killed after 1s" "$out"
+check "with what it actually ran"        "ran 2s, limit 1s" "$out"
+check "and why 137 and not 124"          "escalated to KILL" "$out"
+check "naming the lever"                 "--timeout is the lever" "$out"
+check "and the question underneath it"   "too big for one" "$out"
+nope  "the OOM reading is not offered"   "memory limit is the first suspect" "$out"
+nope  "and it is not filed as a death"   "What podman saw" "$out"
+
+printf '\n-- but a 137 well inside the limit still is one --\n\n'
+#
+# The other direction, and the reason elapsed is the discriminator rather than
+# the exit code: an OOM kill at four minutes and a wall-clock kill at the hour
+# are both 137, and only one of them ran out of time. Widening the timeout
+# reading to cover every 137 would have buried the real kills instead.
+export PODMAN_RC=137 PODMAN_SLEEP=0
+out="$(ws_t 3600)"; rc=$?
+rc_is "the code is passed through"       "$rc" 137
+nope  "it is not called a timeout"       "the session was killed after" "$out"
+check "the events are shown"             "What podman saw" "$out"
+check "it says 137 is SIGKILL"           "137 is SIGKILL" "$out"
+check "and that this was not the clock"  "it is not the wall clock" "$out"
+check "with the memory limit named"      "memory limit is the first suspect" "$out"
+check "and how to confirm it"            "event=oom" "$out"
+unset PODMAN_SLEEP
+
+printf '\n-- and a plain 124 still says what it always said --\n\n'
+export PODMAN_RC=124
+out="$(ws_t 900)"; rc=$?
+check "the timeout is still reported"    "the session was killed after 900s" "$out"
+nope  "without the 137 explanation"      "escalated to KILL" "$out"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
