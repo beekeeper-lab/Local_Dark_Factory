@@ -144,11 +144,21 @@ jobs:
             # saw it. The toolchain is pinned by digest precisely so a green here
             # and a green there are the same claim; ownership is the other half
             # of that and was not pinned at all.
-            rm -rf /tmp/gate-tree && cp -a "$PWD" /tmp/gate-tree
-            chmod -R a+rwX /tmp/gate-tree
+            #
+            # A FRESH directory per gate, not one reused. chmod alone fixed the
+            # first gate and broke the second: lint then owned `.ruff_cache/` as
+            # uid 1000 with mode 755, and unlinking a file needs write on its
+            # parent, which the runner did not have — so the next iteration's
+            # `rm -rf` failed and took the job down with "cannot remove ...
+            # Permission denied". Reuse was the flaw; a per-gate directory is
+            # what "thrown away after each gate" was always trying to say, and
+            # it cannot be defeated by whatever the container leaves behind.
+            tree="$(mktemp -d /tmp/gate-tree.XXXXXX)"
+            cp -a "$PWD/." "$tree/"
+            chmod -R a+rwX "$tree"
             docker run --rm \
               --network=none \
-              --volume /tmp/gate-tree:/work:rw \
+              --volume "$tree":/work:rw \
               --workdir /work \
               --env PYTHONPATH=/work/src \
               "$IMAGE" "${argv[@]}"
