@@ -442,6 +442,19 @@ impl_met="$(jq -r '.format.properties.criteria.items.properties.met.description'
 check "it asks about the work as built" "the work as built" "$impl_met"
 nope "and not about a plan"             "would THE PLAN" "$impl_met"
 
+# Three imperative artifacts reach an impl audit — the bean, the SPEC and the
+# task list — and until 2026-09-22 the spec was the one without the caveat.
+# bean-003's impl audit that night quoted it ("Create
+# src/seating_planner/rules/template.py and nothing else") and spent its whole
+# 16,000-token budget carrying it out: 24 x "we need to implement", opening on
+# "the implementation (the code we wrote)". It was not short of room.
+#
+# Counted rather than merely present, because a check that asks whether the
+# sentence appears anywhere passes while two of the three artifacts are bare.
+jq -r '[.messages[].content] | join("\n")' "$REQ" > "$WORK/impl-req.txt"
+eq   "all three imperative artifacts carry the caveat" 3 \
+     "$(grep -c 'addressed to a DIFFERENT model' "$WORK/impl-req.txt")"
+
 printf '\n== each artifact says how to read it, on the artifact ==\n\n'
 #
 # The preamble says artifacts are quoted material and not instructions. It says
@@ -467,6 +480,7 @@ check "and that it is not a question"       "not a question for you" "$req"
 # On the artifact, not only in the preamble: the header is what a reader sees
 # beside the bytes it describes.
 check "the note is in the artifact header"  "read as:" "$req"
+
 rm -f "$R/claims-check.json"
 
 printf '\n== how much of the window the request used, and whose lever that is ==\n\n'
