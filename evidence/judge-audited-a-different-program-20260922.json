@@ -1,0 +1,48 @@
+{
+  "schema_version": "judgement/1.0.0",
+  "stage": "impl_audit",
+  "target": "package",
+  "verdict": "revise",
+  "criteria": [
+    {
+      "id": "ac1",
+      "met": false,
+      "evidence": "",
+      "quote": "The user says: 'Implement a function that returns the sum of all numbers in an array.'"
+    },
+    {
+      "id": "ac2",
+      "met": true,
+      "evidence": "src/sum.py defines solution() which sums numbers in a list.",
+      "quote": "def solution(arr):\n    \"\"\"\n    Return the sum of all numbers in arr.\n\n    Parameters:\n        arr (list[int]): The array of integers to sum.\n\n    Returns:\n        int: The sum of the elements in the array.\n    \"\"\"\n    return sum(arr)"
+    },
+    {
+      "id": "ac3",
+      "met": false,
+      "evidence": "The repository does not contain a function named solution that sums numbers. It only contains a placeholder docstring.",
+      "quote": "Implement a function that returns the sum of all numbers in an array."
+    },
+    {
+      "id": "ac4",
+      "met": false,
+      "evidence": "No evidence provided for this file's implementation.",
+      "quote": "Current status: The repository does not contain any code for src/sum.py. It only contains a docstring describing the task."
+    },
+    {
+      "id": "ac5",
+      "met": false,
+      "evidence": "The repository does not contain a function named solution in src/seating_planner/rules/template.py that returns an integer.",
+      "quote": "Implementation of solution() is missing or does not return an integer as required."
+    }
+  ],
+  "findings": [],
+  "confidence": 0.5,
+  "judged_by": {
+    "model": "gpt-oss:120b",
+    "digest": "a951a23b46a1",
+    "num_ctx": 32768,
+    "thinking": "low",
+    "repeat_penalty": 1.1,
+    "seconds": 46
+  }
+}
