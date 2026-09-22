@@ -133,7 +133,19 @@ jobs:
             # coverage data, and a read-only mount would fail the unit gate for a
             # reason that has nothing to do with the change under test. The copy
             # is thrown away after each gate so one cannot leave state for the next.
+            #
+            # `rw` on the mount is not enough, and this is why it passed locally
+            # and failed here for a week. The image runs as uid 1000 (`gate`);
+            # the runner checks out as its own uid, so the copy is owned by
+            # someone the container is not, and `ruff check .` died on
+            # "Failed to initialize cache at /work/.ruff_cache: Permission
+            # denied" — a red required check that says nothing about the change.
+            # On Forge the developer is uid 1000 too, so the local gate never
+            # saw it. The toolchain is pinned by digest precisely so a green here
+            # and a green there are the same claim; ownership is the other half
+            # of that and was not pinned at all.
             rm -rf /tmp/gate-tree && cp -a "$PWD" /tmp/gate-tree
+            chmod -R a+rwX /tmp/gate-tree
             docker run --rm \
               --network=none \
               --volume /tmp/gate-tree:/work:rw \
