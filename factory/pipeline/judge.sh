@@ -145,11 +145,27 @@ DIGEST="$(ollama list 2>/dev/null | awk -v m="$MODEL" '$1 == m {print $2; exit}'
 
 VERDICTS="$RUN_DIR/verdicts"
 mkdir -p "$VERDICTS"
+# An attempt is an attempt whether it ended in a judgement or a refusal, and
+# this counted only judgements until 2026-09-22.
+#
+# The consequence is not a wrong number in a filename. bean-003's impl audit
+# refused twice: attempt 1 spent its whole budget thinking, attempt 2 asked for
+# a tool that does not exist. Because neither wrote a judgement, both were
+# numbered attempt-1 — and the second refusal OVERWROTE the first, taking
+# `budget-spent-thinking` off the disk while the halt summary printed "2 failed
+# attempt(s)" from its own count. A run that refuses every time keeps exactly
+# one refusal, always the last.
+#
+# That is the tally itself. `factory refusals` groups by rule across runs to
+# answer "which check is doing the work?", and STATE-OF-THE-LINE leans on the
+# count of audits that reached no verdict. Silently keeping the last refusal of
+# each target undercounts precisely the runs that failed most.
 if [ -z "$ATTEMPT" ]; then
   ATTEMPT=1
-  for f in "$VERDICTS/$TARGET".attempt-*.judgement.json; do
+  for f in "$VERDICTS/$TARGET".attempt-*.judgement.json "$VERDICTS/$TARGET".attempt-*.refused.json; do
     [ -e "$f" ] || continue
     n="${f##*attempt-}"; n="${n%%.*}"
+    case "$n" in (*[!0-9]*|"") continue ;; esac
     [ "$n" -ge "$ATTEMPT" ] && ATTEMPT=$((n + 1))
   done
 fi
@@ -988,7 +1004,7 @@ if [ -z "$CONTENT" ] && [ "${NTOOLS:-0}" -gt 0 ]; then
     "$([ "$JUDGE_RETRIED" = 1 ] && printf ' — twice, asked again after the first' || true)" >&2
   printf '       There are no tools on this path and the artifacts were in the prompt.\n' >&2
   refuse_j tool-calls-instead-of-answer 1 "the model called tools rather than answering" \
-    "$(jq -nc --argjson n "${NTOOLS:-0}" --argjson names "$(jq -c '[.message.tool_calls[]?.function.name]' <<<"$RESP" 2>/dev/null || echo '[]')" '{calls:$n, names:$names}')"
+    "$(tok_details "$(jq -nc --argjson n "${NTOOLS:-0}" --argjson names "$(jq -c '[.message.tool_calls[]?.function.name]' <<<"$RESP" 2>/dev/null || echo '[]')" '{calls:$n, names:$names}')")"
 fi
 if [ -z "$CONTENT" ] && [ "$DONE_REASON" = "length" ]; then
   # Not a judgement the model failed to reach — one it was not given room to

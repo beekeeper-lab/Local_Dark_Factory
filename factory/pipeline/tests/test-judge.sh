@@ -289,6 +289,30 @@ if [ -x "$FROOT/.venv/bin/python" ] && [ -f "$FROOT/schemas/refusal.schema.json"
     "$FROOT/.venv/bin/python" "$FROOT/bench/validate.py" refusal "$BUDJ"
 fi
 
+# A refusal is an attempt. Until 2026-09-22 the attempt number counted only
+# judgement files, so a target that refused every time wrote every refusal as
+# attempt-1 and each one deleted the one before it. bean-003's impl audit lost
+# its `budget-spent-thinking` record to the `tool-calls-instead-of-answer` that
+# followed, while the halt summary printed "2 failed attempt(s)" from a count of
+# its own. The refusals tally is the whole value of these records, and the runs
+# it undercounted were the ones that failed most.
+printf '\n-- and a second refusal does not overwrite the first --\n\n'
+reply "$(jq -nc '{model:"test-judge:latest", done:true, done_reason:"stop",
+  message:{role:"assistant", content:"", tool_calls:[{function:{name:"repo_browser.print_tree"}}]}}')"
+judge >/dev/null 2>&1
+want "the first refusal is still there"  "spec.attempt-1.refused.json should survive" \
+     test -f "$R/verdicts/spec.attempt-1.refused.json"
+want "and the second is beside it"       "spec.attempt-2.refused.json should exist" \
+     test -f "$R/verdicts/spec.attempt-2.refused.json"
+eq   "each keeping its own rule"         "budget-spent-thinking" \
+     "$(jq -r .rule "$R/verdicts/spec.attempt-1.refused.json")"
+eq   "and the later one its own"         "tool-calls-instead-of-answer" \
+     "$(jq -r .rule "$R/verdicts/spec.attempt-2.refused.json")"
+eq   "numbered by what it is, not by luck" 2 \
+     "$(jq -r .attempt "$R/verdicts/spec.attempt-2.refused.json")"
+want "and the tool call carries the tokens too" "details.prompt_tokens should be a number" \
+     bash -c "jq -e '.details.prompt_tokens | type == \"number\"' '$R/verdicts/spec.attempt-2.refused.json' >/dev/null"
+
 printf '\n-- and an answer the controller can read leaves none --\n\n'
 clean_verdicts
 reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" \

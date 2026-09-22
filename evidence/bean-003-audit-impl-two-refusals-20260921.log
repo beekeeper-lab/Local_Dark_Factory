@@ -1,0 +1,18 @@
+JUDGE  impl  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (6 artifacts, 34585 bytes, one message each)
+JUDGE  impl  tokens: 12303 prompt + 16000 generated = 28303 of 32768 ctx (86%)
+JUDGE  impl: hit the 16000-token cap before finishing
+JUDGE  impl: spent the whole 16000-token budget thinking and wrote no answer.
+       Its reasoning is in verdicts/impl.thinking.txt. Raise JUDGE_NUM_PREDICT.
+NO ANSWER  audit-impl — the judge ran out of room before writing one.
+           Raise JUDGE_NUM_PREDICT and resume; the spec is not what failed.
+HALT  audit-impl after 1 failed attempt(s) — see factory/runs/bean-003-20260918T022947Z/QUESTIONS.md
+
+--- after the spec artifact was given the same caveat the bean and task list carry ---
+
+RESOLVED audit-impl   the run is back at the step its open question named
+JUDGE  impl  model=gpt-oss:120b ctx=32768 thinking=low cap=16000  (6 artifacts, 34585 bytes, one message each)
+JUDGE  impl: the model asked for tools instead of answering (repo_browser.print_tree); asking once more.
+JUDGE  impl  tokens: 12355 prompt + 60 generated = 12415 of 32768 ctx (37%)
+JUDGE  impl: the model tried to call tools instead of answering (1 call(s): repo_browser.print_tree) — twice, asked again after the first.
+NO JUDGEMENT  audit-impl — the judge did not produce one (exit 1).
+HALT  audit-impl after 2 failed attempt(s) — see factory/runs/bean-003-20260918T022947Z/QUESTIONS.md
