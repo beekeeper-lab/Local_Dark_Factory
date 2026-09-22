@@ -558,6 +558,13 @@ prompt="$(jq -r '[.messages[].content] | join("\n")' "$WORK/last-request.json")"
 check "the preamble says there are none" "You have NO tools: no file system, no repo_browser" "$prompt"
 nope  "and the rubric does not say open" "Open the files named below" "$prompt"
 nope  "nor re-read them"                 "Re-read the files" "$prompt"
+# The third one, found 2026-09-21 and the same shape as the first two: the spec
+# rubric said *Check "Current behaviour" against the real files* — files that
+# are not here, in a prompt that says there are none, asking the judge to
+# re-derive a check the controller already ran and handed it as an artifact.
+# Every other bullet in that rubric points at the artifact and says what is left.
+nope  "nor check against real files"     "against the real files" "$prompt"
+check "the claims check is named as measured" "Already measured for you: does the spec describe files that are not there" "$prompt"
 check "it says where the artifacts are"  "already in front of you" "$prompt"
 check "and what writing about an unseen file is" "you are inventing it" "$prompt"
 

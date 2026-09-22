@@ -120,8 +120,18 @@ the part a script cannot do:
   lint that is green on an empty directory is fine, a check that quietly tests the
   task's own setup is not. **That** is your call, and it is the only part of this
   you are being asked for.
-- Does the spec claim the code does something it does not? Check "Current
-  behaviour" against the real files.
+- **Already measured for you: does the spec describe files that are not there?**
+  Every path the "Current behaviour" section claims exists today was checked
+  against the repository, and the result is in front of you as an artifact. A
+  false entry means the spec describes a file the repository does not have. Do
+  not re-derive it — you cannot, there are no files here and no tool to open one
+  with, and the filesystem is better at this than reading is. Four fitness runs
+  measured it: no judge ever caught an invented "Current behaviour" section, and
+  the check catches one every time.
+
+  What is left is what the paths cannot settle: a section that names real files
+  and still describes them wrongly, or one so thin it asserts nothing a reader
+  could be wrong about. **That** is your call.
 - Does anything widen scope beyond the bean — a task doing work the bean's intent
   does not ask for, or a non-goal quietly reintroduced?
 - Does the document teach? Would someone who does not know this stack understand
