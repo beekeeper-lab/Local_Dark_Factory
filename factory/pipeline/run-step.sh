@@ -404,6 +404,35 @@ if [ "$CONTAIN" = 1 ]; then
       "$AGENT_DIR/models.json" > "$AGENT_DIR/models.json.tmp" \
       && mv "$AGENT_DIR/models.json.tmp" "$AGENT_DIR/models.json"
   fi
+  # Turn off pi's HTTP idle timeout, which is five minutes and is wrong here.
+  #
+  # pi configures undici with `headersTimeout` and `bodyTimeout` set from
+  # DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300000, so a gap of five minutes between body
+  # chunks aborts the request. Against a frontier endpoint that gap means a dead
+  # connection. Against a 27B Q8 on this box it means the model is thinking, and
+  # pi's own settings text says so: "Disable for local models that pause longer
+  # than five minutes."
+  #
+  # Measured on bean-004, 2026-09-22. Four consecutive spec turns died, each one
+  # after the model had finished reasoning and announced it was about to write
+  # tasks.yaml. pi recorded stopReason=error, errorMessage="terminated", usage
+  # all zeros. Ollama recorded HTTP 200, truncated = 0, 36.5k-39.5k tokens
+  # against a 65536 window, and then `srv stop: cancel task` AFTER the handler
+  # had returned — the signature of a client that hung up, not a server that
+  # failed. Three of the four ran 5m07s, 5m11s and 5m16s.
+  #
+  # Written here rather than in ~/.pi/agent/settings.json for the same reason
+  # the context window is written above: that file belongs to the user, and this
+  # one is the controller's to write. The contained worker gets no settings.json
+  # at all today, so it takes the default either way.
+  #
+  # Disabling is bounded, and that is what makes it safe rather than hopeful:
+  # worker-sandbox.sh holds a 3600s wall clock over the whole session, so a
+  # request that genuinely hangs still dies — with the step failing on a wall
+  # clock the controller set, instead of on a transport default nobody chose.
+  jq -n '{httpIdleTimeoutMs: 0}' > "$AGENT_DIR/settings.json" \
+    || die "could not write the contained worker's settings.json"
+
   SESS_DIR="$AGENT_DIR/sessions"
   : > "$SNAP"
 
