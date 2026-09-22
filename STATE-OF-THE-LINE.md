@@ -14,13 +14,13 @@ local models.**
 | --- | --- |
 | bean-001 | project scaffold, merged 2026-09-17 |
 | bean-002 | domain models — 336 lines, 5 files, merged 2026-09-18 |
-| bean-003 | gate green 2026-09-21 after the budget went 400 → 450; audits advisory, doc step running |
+| bean-003 | [PR #3](https://github.com/beekeeper-lab/seating-planner-py/pull/3) open 2026-09-22, awaiting a human; halted at `ci` on the GHCR package, not on the change |
 | remaining | 17 of 20 beans |
 
 Eleven stages: preflight → spec → audit-spec → build → gate → audit-impl → doc
 → audit-doc → audit-package → sync → pr → ci. The controller is deterministic
 shell and Python; the models write the spec, the code and the documents; a human
-merges. **2,230 assertions across 40-odd suites, all green.**
+merges. **2,231 assertions across 40-odd suites, all green.**
 
 What the line catches by itself, without asking a model anything: a spec that
 describes files that do not exist, a verify command that already passes before
@@ -131,12 +131,32 @@ this per audit:
 | package | 6 | 18,689 | 0.5× |
 
 Only `doc` is meaningfully larger, and it is larger in the direction that makes
-raising the cap **useless**: at roughly 2.8 bytes per token, 61KB is near 22,000
-prompt tokens, which leaves about 10,900 of a 32,768 window — *less* than the
-16,000 cap it already has. A doc audit that tried to spend its budget would hit
-the context window first. That last figure is an estimate from one sample's
-bytes-per-token and not a measurement; the next doc refusal will carry the real
-numbers, because refusals now record them.
+raising the cap **useless**. Estimated here at 22,000 prompt tokens leaving
+about 10,900 of the window; **measured a few hours later**, when the doc audit
+of this same run refused and the record carried the numbers:
+
+```
+prompt_tokens         19973
+generated_tokens       3155
+num_ctx               32768
+headroom_for_answer   12795     ← less than the 16,000 cap it already has
+context_was_the_limit  false
+done_reason           "stop"
+```
+
+The estimate was 10% high on the prompt and the conclusion is unchanged and now
+measured: **a doc audit cannot spend the cap it has.** Raising
+`JUDGE_NUM_PREDICT` for this target is raising a number the window will not let
+it reach. (The bytes-per-token ratio is not constant across targets — 3.07 for
+doc against 2.80 for impl — which is why the estimate was off and why the record
+is worth more than the arithmetic.)
+
+And note what this particular refusal was. Neither limit bound it: 23,128 tokens
+of a 32,768 window, 71%, with 12,795 of room it did not use. It reasoned for
+3,155 tokens and stopped, `done_reason: stop`. That is the judge failing at the
+task, not the controller giving it too little room — which is the distinction
+these numbers exist to make, and the first time it has been made from a record
+rather than from someone watching a terminal.
 
 **What the trace says the failure actually was.** The 66KB of reasoning is kept
 at `evidence/bean-003-judge-built-the-bean-20260921.txt`. It opens *"We need to
