@@ -357,7 +357,12 @@ reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true
 printf '%s' "$TOOLCALL" > "$WORK/reply-2.json"   # the FIRST answer; reply.json is the second
 out="$(judge)"; rc=$?
 rc_is "the second answer is used"      "$rc" 0
-check "and it says it asked again"     "asking once more" "$out"
+check "and it says it asked again"     "sending the" "$out"
+# What the second chance is, not just that there was one. The body is re-sent
+# byte-identical at temperature 0 and the model is never told its call was
+# refused, so "asking once more" read like a correction when it is a repeat.
+check "and that the request is unchanged" "same request again unchanged" "$out"
+check "and that the model is not told why" "it is not told the call was refused" "$out"
 check "naming what it asked for"       "repo_browser.open_file" "$out"
 want  "and the judgement is on disk"   "a judgement file should exist" \
       test -n "$(ls -1 "$R"/verdicts/spec*.judgement.json 2>/dev/null)"

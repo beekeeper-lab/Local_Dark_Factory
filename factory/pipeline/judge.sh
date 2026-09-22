@@ -906,11 +906,25 @@ RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
 # reasoned for a while and ended without writing anything. One no-judgement
 # became a different no-judgement. The retry costs one request and sometimes
 # works; the honest description is a second chance, not a fix.
+#
+# And say what the second chance IS. `$BODY` is re-sent byte-identical, at
+# temperature 0, with the tool call the model just made nowhere in it — so the
+# model is asked the same question the same way and is not told that its last
+# answer was refused or why. On 2026-09-21 bean-003's impl audit did the same
+# thing on both halves of both attempts: `repo_browser.print_tree`, 60 generated
+# tokens then 49. That is the expected result of asking twice, not a surprise.
+#
+# The obvious next single variable is to append the refused tool call and one
+# corrective line as a turn, so the second request differs from the first.
+# Deliberately NOT done here: the spec artifact's caveat changed on the same day
+# and is not yet measured on more than two attempts, and two judge changes in one
+# commit is a comparison with nothing to compare. `factory reaudit` first.
 JUDGE_RETRIED=0
 if [ -z "$(jq -r '.message.content // empty' <<<"$RESP" 2>/dev/null)" ] \
    && [ "$(jq -r '.message.tool_calls // [] | length' <<<"$RESP" 2>/dev/null)" -gt 0 ]; then
-  printf 'JUDGE  %s: the model asked for tools instead of answering (%s); asking once more.\n' \
+  printf 'JUDGE  %s: the model asked for tools instead of answering (%s); sending the\n' \
     "$TARGET" "$(jq -r '[.message.tool_calls[].function.name] | join(", ")' <<<"$RESP" 2>/dev/null)" >&2
+  printf '       same request again unchanged — it is not told the call was refused.\n' >&2
   JUDGE_RETRIED=1
   RESP="$(curl -sS --max-time 1800 "$HOST/api/chat" -d "$BODY" 2>&1)" || {
     printf 'JUDGE  %s: the second request failed: %s\n' "$TARGET" "${RESP:0:200}" >&2; exit 1; }
