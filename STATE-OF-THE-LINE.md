@@ -1,4 +1,4 @@
-# State of the line — 2026-09-18
+# State of the line — 2026-09-18, judge section updated 2026-09-21
 
 Where this is, what is wrong with it, and what I would do next. Written to be
 picked up cold; `RESUME.md` is the long version with the measurements attached.
@@ -14,13 +14,13 @@ local models.**
 | --- | --- |
 | bean-001 | project scaffold, merged 2026-09-17 |
 | bean-002 | domain models — 336 lines, 5 files, merged 2026-09-18 |
-| bean-003 | halted at the gate, four lines over its size budget |
+| bean-003 | gate green 2026-09-21 after the budget went 400 → 450; audits advisory, doc step running |
 | remaining | 17 of 20 beans |
 
 Eleven stages: preflight → spec → audit-spec → build → gate → audit-impl → doc
 → audit-doc → audit-package → sync → pr → ci. The controller is deterministic
 shell and Python; the models write the spec, the code and the documents; a human
-merges. **2,214 assertions across 40-odd suites, all green.**
+merges. **2,230 assertions across 40-odd suites, all green.**
 
 What the line catches by itself, without asking a model anything: a spec that
 describes files that do not exist, a verify command that already passes before
@@ -85,20 +85,85 @@ Refusal records (added 2026-09-17) made the failure modes countable for the
 first time, and they are **not all the same failure**:
 
 ```
-by stage
+by stage                                          (as of 2026-09-21)
+  impl      3   criterion-quote-too-short, tool-calls-instead-of-answer
   spec      2   budget-spent-thinking, quote-not-on-disk
   doc       1   budget-spent-thinking
-  impl      1   criterion-quote-too-short
   package   1   verdict-without-findings
 
-  5 of 5 audit(s) reached no verdict; 0 were stamped
+  7 of 7 audit(s) reached no verdict; 0 were stamped
 ```
 
+That count was 6 an hour before it was 7, and the difference is a controller
+defect rather than an audit: the attempt number was derived from judgement files
+only, so a target that never produced one wrote every refusal as `attempt-1` and
+each refusal **deleted the one before it**. A run that failed twice kept the
+second. It is fixed, and the arithmetic it was corrupting is the arithmetic this
+section is made of.
+
 Two of five are `budget-spent-thinking` — the model used all 16,000 tokens
-reasoning and wrote nothing. **That is our cap, not its failure**, and the spec
-and doc prompts are two to three times the size of the impl prompt the cap was
-measured against. This is the one configuration lever with fresh evidence and it
-is cheap to test.
+reasoning and wrote nothing. That looked like our cap rather than its failure,
+and it was called the one configuration lever with fresh evidence behind it.
+
+**Measured 2026-09-21, and it was not the lever.** bean-003's impl audit refused
+the same way; the numbers behind it are now in the refusal record rather than in
+terminal scrollback:
+
+```
+prompt_tokens         12355
+generated_tokens         49
+num_ctx               32768
+headroom_for_answer   20413     ← num_ctx − prompt_tokens
+context_was_the_limit  false
+```
+
+There were **20,413 tokens of room** and the cap was 16,000, so it was never
+binding on the window. And the premise underneath the recommendation was wrong:
+the spec prompt is not two to three times the impl prompt, it is the same size.
+Measured across two runs, in bytes sent — `doc.request.json` and friends record
+this per audit:
+
+| target | artifacts | bytes | against impl |
+| --- | --- | --- | --- |
+| doc | 3 | 61,392 | 1.8× |
+| impl | 6 | 34,585 | — |
+| spec | 5 | 34,422 | 1.0× |
+| package | 6 | 18,689 | 0.5× |
+
+Only `doc` is meaningfully larger, and it is larger in the direction that makes
+raising the cap **useless**: at roughly 2.8 bytes per token, 61KB is near 22,000
+prompt tokens, which leaves about 10,900 of a 32,768 window — *less* than the
+16,000 cap it already has. A doc audit that tried to spend its budget would hit
+the context window first. That last figure is an estimate from one sample's
+bytes-per-token and not a measurement; the next doc refusal will carry the real
+numbers, because refusals now record them.
+
+**What the trace says the failure actually was.** The 66KB of reasoning is kept
+at `evidence/bean-003-judge-built-the-bean-20260921.txt`. It opens *"We need to
+determine if the implementation (the code we wrote)"* — the builder's voice, for
+work the preamble tells it it did not see produced — and continues with 24 ×
+"we need to implement", 10 × "Let's open", 23 × "guess", ending mid-sentence
+drafting a test function it invented. It was not short of room. It was carrying
+out the bean.
+
+The first thing it quotes is the fix: *"Create
+src/seating_planner/rules/template.py and nothing else"*, from the spec — the
+one imperative artifact on an impl audit that did not carry the sentence saying
+it is addressed to a different model and is not a task for the judge to carry
+out. The bean and the task list had it. The spec did not, on the impl and doc
+targets where it is context rather than the thing under audit. It does now.
+
+**What that bought, and what it did not.** Two attempts after the change, both
+refused identically: 49 and 60 generated tokens, each asking to call
+`repo_browser.print_tree` — a tool from some other harness, in a prompt that
+says there are no tools — twice, refused as `tool-calls-instead-of-answer`. So
+the change moved a 16,000-token failure to a 50-token one, reproducibly, and
+**still produced no verdict**. It is a cheaper failure and a clearer one. It is
+not a judge.
+
+This does not change the conclusion above; it removes the one lever that looked
+untried. `factory reaudit` is where a real number for it comes from — n is 2
+here, on a model measured as not reproducible on identical input.
 
 ---
 
@@ -165,8 +230,14 @@ seven-category template; 400 was a guess and the work came in at 404.
 **3. Keep moving decidable work to the controller**, and keep the judge
 advisory. That is the best-supported decision in this repository.
 
-**4. Raise `JUDGE_NUM_PREDICT` for the spec and doc targets specifically** and
-measure. One afternoon, and the only judge lever with new evidence behind it.
+**4. ~~Raise `JUDGE_NUM_PREDICT` for the spec and doc targets specifically.~~**
+Measured 2026-09-21 and withdrawn. The impl audit had 20,413 tokens of headroom
+against a 16,000 cap, so the cap was never binding; the spec prompt turns out to
+be the same size as the impl prompt rather than two to three times it; and the
+doc prompt is large enough that its headroom is *below* the cap it already has,
+which makes `num_ctx` the lever there if anything is. The real failure was a
+prompt contradiction, and fixing it moved a 16,000-token failure to a 50-token
+one without producing a verdict. See the judge section above.
 
 **5. Write hidden suites ahead of the line.** bean-003's and bean-004's were
 written before their code existed, which is the only way "write them from the
