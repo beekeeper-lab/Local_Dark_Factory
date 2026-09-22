@@ -71,6 +71,9 @@ What that means concretely:
 | --- | --- | --- |
 | `seating-planner-py/bean-001` | 11 | Behavioural and structural. That bean's criteria are about a project's *shape* — installable, declares its floor, declares ortools without importing it, ships no domain code — and all of it is checkable from the tree without knowing any API. Eleven pass against what the line built; seven of eleven fail against a tree with those properties removed. |
 | `seating-planner-py/bean-002` | 9 | **Deliberately structural, and the file says why.** bean-002 asks for `Event`, `Table`, `Guest` and `Group` but does not fix their API: "a capacity, a shape and an (x, y) position" does not say whether that is `capacity` or `seats`. The spec settles it, and the spec is the worker's own output — so a hidden test that guesses a constructor signature fails for a naming reason, costs a build cycle, and teaches nobody anything. What it asserts is what the bean states literally: four RSVP values by name, three limits by number, three constraints, three non-goals. **Worth revisiting once bean-002's spec is accepted**, when the API is fixed and the tests can be behavioural without being written against the implementation. |
+| `seating-planner-py/bean-003` | 10 | Structural, and the first written **before** its bean's code existed — while the spec step was still running, which is the only way independence is a fact rather than a promise. It asserts what the bean states literally (both hardnesses, both weight bounds, FR-035's measure, the seven template categories by name) and never a constructor signature: the bean references FR-034 by number and fixes no type name. It passed on the first tree it ever saw. |
+| `seating-planner-py/bean-004` | 6 | Written the same evening as bean-003's, also ahead of the line. Half-checked until bean-004 runs. |
+| `seating-planner-py/bean-005` | 9 | Written ahead of the line, while bean-003 was still walking it. bean-005 fixes no API either — it never says whether the entry point is `preflight()` — so the four failures it must detect are matched as the English words its criteria use, with alternatives. Three of the nine ask things nothing visible asks: that the pre-flight does not reach for a solver (the package bean-006 will add, and the search libraries `forbidden_imports` does not name), that it does not enumerate arrangements with `itertools`, and that it **imports** bean-002's domain and bean-003's rules rather than redeclaring `Rule` or `Table` inside itself. The last is the one a green gate cannot see: a pre-flight that builds its own world passes every visible check and measures nothing anyone else shares. |
 
 Both were checked twice before being committed: against a plausible correct
 implementation, where they pass, and against one with the constraints violated,
@@ -140,8 +143,14 @@ checked after the bean has run — a bean with no tree yet reports
 
 | suite | can fail | passes on the real tree |
 | --- | --- | --- |
-| `seating-planner-py/bean-001` | 9 of 11, 2 declared | **yes, 11 of 11** (2026-09-17) |
-| `seating-planner-py/bean-002` | 8 of 9, 1 declared | unknown — bean-002 has not run |
+| `seating-planner-py/bean-001` | 9 of 11, 2 declared | **yes, 11 of 11** (2026-09-18) |
+| `seating-planner-py/bean-002` | 8 of 9, 1 declared | **yes, 9 of 9** (2026-09-18) |
+| `seating-planner-py/bean-003` | 9 of 10, 1 declared | **yes, 10 of 10** (2026-09-21) |
+| `seating-planner-py/bean-004` | 6 of 6, 0 declared | unknown — bean-004 has not run |
+| `seating-planner-py/bean-005` | 8 of 9, 1 declared | unknown — bean-005 has not run |
+
+The table is a convenience. `verified/` is the record, `factory doctor` reads it,
+and a suite EDITED since it was verified is back to unknown however this reads.
 
 ## Which beans have one, and how to tell if it can be trusted
 

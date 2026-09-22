@@ -1,0 +1,24 @@
+# Tests here pass against a tree with NOTHING in it, and are supposed to.
+#
+# Each asserts an absence, and an absence is true of an empty directory. The
+# control run refuses any other test that passes against nothing, because the
+# judge is handed a count and a test that cannot fail inflates it.
+#
+# One name per line. Adding one is a decision: say in a comment why the thing it
+# looks for is absent from an empty tree for the same reason it must be absent
+# from a finished one.
+
+# The solver package belongs to bean-006. Absent from an empty tree for the same
+# reason it must be absent here: nobody has written it. bean-005 exists to be
+# cheaper than a solve, so a solver arriving during this bean is the failure.
+test_no_solver_package_yet
+
+# `test_the_preflight_does_not_reach_for_a_solver`,
+# `test_the_checks_are_structural_rather_than_a_search` and
+# `test_it_reads_the_earlier_beans_rather_than_rebuilding_them` are NOT here,
+# and the first two assert absences. They fail against an empty tree anyway,
+# because the `_source()` helper they read asserts the feasibility package
+# exists before it collects anything — so on nothing they fail for the missing
+# package rather than passing vacuously. That is stronger than a declared
+# absence and needs no declaration. Listing them would have been a small
+# untruth in the file whose whole job is to say which tests cannot fail.
