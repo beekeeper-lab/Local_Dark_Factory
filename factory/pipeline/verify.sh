@@ -187,7 +187,19 @@ case "$KIND" in
   command)
     jq -e '.run | type == "array" and length > 0' >/dev/null 2>&1 <<<"$SPEC_JSON" \
       || refuse "kind: command needs a non-empty 'run' argv array (got: $SPEC_JSON)"
-    mapfile -t ARGV < <(jq -r '.run[]' <<<"$SPEC_JSON")
+    # NUL-delimited, never newline-delimited. An argv element may contain a
+    # newline — `python -c "<script>"` is the commonest verify a spec writes —
+    # and `mapfile -t < <(jq -r '.run[]')` turned each line of the script into
+    # its own argument, so `python -c` ran the first line and nothing else.
+    # bean-004's task-1 verified that way over an AuditLog.entries whose filter
+    # branch is a SQL syntax error. --raw-output0 refuses an element that itself
+    # contains a NUL, which could not be passed to exec anyway.
+    jq -e '.run | all(type == "string")' >/dev/null 2>&1 <<<"$SPEC_JSON" \
+      || refuse "kind: command needs 'run' to be an array of strings (got: $SPEC_JSON)"
+    ARGV=()
+    mapfile -d '' -t ARGV < <(jq --raw-output0 '.run[]' <<<"$SPEC_JSON")
+    [ "${#ARGV[@]}" -eq "$(jq '.run | length' <<<"$SPEC_JSON")" ] \
+      || refuse "kind: command 'run' did not survive being read as argv (an element with a NUL in it?)"
     # Only meaningful when running on the host: what is on this PATH says nothing
     # about what is in the gate image, and the sandbox reports its own failure.
     if [ -z "$SANDBOX_TREE" ]; then
@@ -206,7 +218,8 @@ case "$KIND" in
     # config. Defaulting to pytest is honest for the python-cpsat corpus and
     # wrong everywhere else — which is why the default is recorded in the result.
     PREFIX_JSON="$(cfg_get '.test_command | tojson' '["pytest","-q"]')"
-    mapfile -t ARGV < <(jq -r '.[]' <<<"$PREFIX_JSON" 2>/dev/null)
+    ARGV=()
+    mapfile -d '' -t ARGV < <(jq --raw-output0 '.[]' <<<"$PREFIX_JSON" 2>/dev/null)
     [ "${#ARGV[@]}" -gt 0 ] || refuse "config test_command is not a non-empty argv array"
     ARGV+=( "$TEST_ID" )
     if [ -z "$SANDBOX_TREE" ]; then

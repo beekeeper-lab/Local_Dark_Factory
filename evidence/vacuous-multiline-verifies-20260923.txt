@@ -1,0 +1,24 @@
+Every task verify with a newline inside an argv element, from every run in
+seating-planner-py, re-run on 2026-09-23 with verify.sh reading argv NUL-delimited
+(the fix), in the pinned gate image, against the tree at bean-004's head (e9ec7b0),
+with the build loop's PYTHONPATH=/work/src.
+
+Before the fix each of these ran only its FIRST line -- verify.sh split the
+script into one argv element per line, so `python -c` got line 1 and the rest
+landed in sys.argv. All five were recorded as pass.
+
+run / task                        as recorded   re-run   what the re-run says
+bean-002/task-1                   pass          pass   - (script: 14 lines)
+bean-003/task-1                   pass          fail   TypeError: Rule.__init__() missing 1 required positional argument: 'weight' (script: 29 lines)
+bean-003/task-3                   pass          pass   - (script: 14 lines)
+bean-004/task-1                   pass          fail   sqlite3.OperationalError: near "WHERE": syntax error (script: 31 lines)
+bean-004/task-2                   pass          pass   - (script: 44 lines)
+
+bean-004 task-1: a real defect. AuditLog.entries appends WHERE after ORDER BY, so
+every filtered call is a syntax error. It is in bean-004's pull request, found
+independently by the impl-detail document and worked around by task-4's test.
+
+bean-003 task-1: not a code defect. The task's intent declared `weight: int | None`
+with no default and the code does exactly that; the verify, written in the same
+spec, assumed a default of None. The spec contradicted itself and the vacuous
+verify is why nobody saw it.
