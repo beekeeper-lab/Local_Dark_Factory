@@ -18,10 +18,19 @@ TAG="${TAG:-$(date -u +%Y%m%d)}"
 
 # shellcheck source=versions.env
 source "$HERE/versions.env"
+# The self-check tools come from the GATE's pins, not from a list of their own.
+# Two lists of "which ruff" is one list that disagrees with itself, and the
+# worker's ruff saying clean while the gate's says E501 would be worse than no
+# ruff at all.
+# shellcheck source=../gate-image/versions.env
+source "$HERE/../gate-image/versions.env"
 
 echo "building $IMAGE_NAME:$TAG"
 podman build \
   --build-arg "PI_VERSION=$PI_VERSION" \
+  --build-arg "RUFF_VERSION=$RUFF_VERSION" \
+  --build-arg "MYPY_VERSION=$MYPY_VERSION" \
+  --build-arg "ORTOOLS_VERSION=$ORTOOLS_VERSION" \
   -t "$IMAGE_NAME:$TAG" \
   -f "$HERE/Containerfile" "$HERE"
 
@@ -32,6 +41,15 @@ bad() { printf '  FAIL  %-22s %s\n' "$1" "$2"; fail=1; }
 
 got="$(podman run --rm --network=none --entrypoint pi "$IMAGE_NAME:$TAG" --version 2>&1 | tr -d '\r' | head -1)"
 [ "$got" = "$PI_VERSION" ] && ok "pi" "$got" || bad "pi" "image has ${got:-<none>}, versions.env says $PI_VERSION"
+
+got="$(podman run --rm --network=none --entrypoint ruff "$IMAGE_NAME:$TAG" --version 2>&1 | awk '{print $2}')"
+[ "$got" = "$RUFF_VERSION" ] && ok "ruff" "$got" || bad "ruff" "image has ${got:-<none>}, gate-image/versions.env says $RUFF_VERSION"
+
+got="$(podman run --rm --network=none --entrypoint mypy "$IMAGE_NAME:$TAG" --version 2>&1 | awk '{print $2}')"
+[ "$got" = "$MYPY_VERSION" ] && ok "mypy" "$got" || bad "mypy" "image has ${got:-<none>}, gate-image/versions.env says $MYPY_VERSION"
+
+got="$(podman run --rm --network=none --entrypoint /opt/checks/bin/python "$IMAGE_NAME:$TAG" -c 'import ortools; print(ortools.__version__)' 2>&1 | tail -1)"
+[ "$got" = "$ORTOOLS_VERSION" ] && ok "ortools" "$got" || bad "ortools" "image has ${got:-<none>}, gate-image/versions.env says $ORTOOLS_VERSION"
 
 podman run --rm --network=none --entrypoint sh "$IMAGE_NAME:$TAG" -c 'test -f /usr/local/lib/model-socket.js' \
   && ok "forwarder present" "/usr/local/lib/model-socket.js" \

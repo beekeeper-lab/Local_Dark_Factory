@@ -67,21 +67,22 @@ dependency's work is missing from `/work`, it is missing — that is a real find
 and stopping to say so is right. Say it from the listing, which is evidence, and
 do not qualify it with what you could not check in git.
 
-## the toolchain is not in here either, and that is not a fault to report
+## ruff and mypy are in here, and the rest of the toolchain is not
 
-This container has node, git's binary, and pi. It has no `python3`, no `pytest`,
-no `mypy`, no `ruff`, no venv, and nothing else on PATH that could run a project
-of this kind. Deliberately: the gates and the task `verify` commands run in a
-separate, digest-pinned image, from a clean state, by the controller — so that
+This container has node, git's binary, pi, and `python3` with `ruff`, `mypy` and
+the project's runtime dependency (ortools) — at exactly the versions the gate
+image pins, so that code written here can be checked here. It has no `pytest`
+and no project venv. The gates and the task `verify` commands still run in a
+separate, digest-pinned image, from a clean state, by the controller, so that
 every "it passed" in this repository is a claim about one known toolchain rather
-than about whatever happened to be in the session that wrote the code.
+than about whatever happened in the session that wrote the code.
 
-**So do not go looking for an interpreter.** Real sessions have spent turns
-discovering it is not there and then reporting it as an environment constraint
-they had to work around. Read the `verify` commands as the definition of done,
-write what would satisfy them, and finish. Saying plainly what you could not
-check is right; calling it a defect in your environment is not, and neither is
-softening a conclusion because of it.
+**So run ruff and mypy rather than reasoning about what they would say, and do
+not go looking for anything else.** A clean run of your own is a self-check,
+not a verdict, and not something to report as one. For everything you cannot
+run — `pytest`, the `verify` commands — read them as the definition of done and
+say plainly what you could not check. Calling that a defect in your environment
+is not right, and neither is softening a conclusion because of it.
 
 ## Inputs
 
