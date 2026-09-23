@@ -3,9 +3,82 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
-## Read this first
+## 2026-09-23: bean-004 finished, and what running and reading it found
 
-**Nothing is waiting on you.** Everything that was on this list has been done,
+**Waiting on a human, in order:**
+
+1. **Do not merge seating-planner PR #4 as it stands.** `AuditLog.entries(event_id)`
+   builds `... ORDER BY id WHERE event_id = ?`, a syntax error on every filtered
+   call, and task-4's test was written around it (see its NOTE). The impl-detail
+   document says so in its Deviations. The factory way to fix it is to re-run
+   bean-004's build now that verify actually runs task-1's script (below): task-1
+   would fail and be retried with the real error. Also a spec-level gap, not a
+   coding error: removing a guest writes no audit entry at all, because the task
+   text asked for one entry per *saved* entity. FR-003 says every change.
+2. **Factory PRs #1–#6**, all open, all merged ahead of review into
+   `integration/bean-004-run` (pushed) so bean-004 could run with them. #5 and #6
+   are today's.
+3. `factory read` on bean-004's run, which only a person can do.
+
+**Every multi-line verify ran its first line and nothing else (PR #6).**
+`verify.sh` read a command's argv with `mapfile -t < <(jq -r '.run[]')`, which
+splits on newlines, so `python -c "<script>"` ran line 1 — usually an import —
+and passed. Five such verifies exist across every run; all five were recorded as
+pass. Re-run properly: three pass, bean-004 task-1 fails on the audit filter
+above, bean-003 task-1 fails because its spec's verify contradicted its own
+intent (the code follows the intent). spec-check's precheck had the mirror image:
+`@tsv` re-escaped the script's newlines, Python refused it as a SyntaxError, and
+that was recorded as "this verify can fail". On bean-004 both halves were wrong
+in opposite directions, and each looked like evidence for the other.
+`evidence/vacuous-multiline-verifies-20260923.txt`.
+
+**The worker was graded by ruff and mypy and could run neither (PR #5).** bean-004's
+task-2 took 13 attempts: 8 wall-clock kills from sessions spending ~15 minutes per
+rewrite simulating ruff-format and counting lines by hand ("I can't run
+ruff/python"), and 4 verify failures that either tool reports in under a second.
+The worker image now carries ruff, mypy and ortools at the gate's pins (read from
+`gate-image/versions.env`), measured byte-identical to the gate image on seeded
+defects. A self-check, not a verdict: verify and the gates still run only in the
+gate image. Two of the four verify failures were the task text prescribing code
+the linter rejects (`timezone.utc`, a `list[Rule]` into `list[object]`); the spec
+skill now says to check prescribed snippets, and gives the command.
+
+**Not yet measured:** any of this on a run. The next bean is the measurement.
+
+**The judge: raising its room made it answer more often, and nothing more.**
+`factory reaudit` on bean-004's run, 3 passes × 4 targets per arm, judge.sh identical:
+
+| | 16000 / 32768 (defaults) | 32000 / 65536 |
+| --- | --- | --- |
+| reached a judgement | 4 of 12 | 7 of 12 |
+| stamped | 0 | 0 |
+| no judgement | 8 — window 5, cap 1, tool call 1, stopped 1 | 5 — cap 2, stopped 3 |
+| judgement refused on its quotes | 4 | 7 |
+| spec answered | 0 of 3 | 0 of 3 |
+
+`num_ctx` moved with the cap, deliberately: bean-004's doc refusal was the
+window, not the cap, so the cap alone could not have been tested. Two variables,
+said so. The answers it gained are not usable: every one was refused on evidence,
+quoting things like "the code is correct" as if they were on disk, and impl gave
+`accept`, `revise` and `abstain` across three identical passes. spec never answers
+in either arm; at 32000 it spends the whole budget carrying out the bean instead
+of judging it, the same shape as `bean-003-judge-built-the-bean`. **Defaults
+unchanged.** More room is not the lever. `evidence/reaudit-bean-004-*-20260923.log`.
+
+**And the token counts behind every refusal record are not what they say.** With
+`think` and `format` both set, ollama runs each judge call as two llama-server
+requests: thinking unconstrained, then the answer under the grammar with the
+thinking folded into its prompt. The record's `prompt_tokens` is the second
+prompt, so it includes the thinking — impl pass 3 recorded 33,303 against a real
+prompt of 17,283 — and `num_predict` bounds each phase, not the call (baseline
+spec generated ~19.5k under a 16k cap). So `context_was_the_limit` and
+`budget-spent-thinking` rest on misattributed numbers. judge.sh is unchanged;
+reading the phase split correctly is its own change with its own reaudit.
+`evidence/judge-two-phase-requests-20260923.log`.
+
+## Read this first (as of 2026-09-17)
+
+**As of 2026-09-17, nothing was waiting on you** — superseded by the list above. Everything that was on this list has been done,
 and the one item that needed a settings page has been routed around rather than
 escalated.
 

@@ -13,6 +13,9 @@ rests on it.
 | `bean-001-spec-20260915.md` | The first spec the line produced that passed every controller check: doclint, schema, path containment, criteria coverage, the verify precheck and the current-behaviour claims check. Written by `qwen3.8:27b-mtp-q8_0` in a contained worker with no network. It names risks with notice-ness and back-out, and is honest where it is weak — "coverage floor on a two-line package is a near-vacuous pass. That is accepted: the floor is a backstop". |
 | `bean-001-tasks-20260915.yaml` | Its task list: three tasks, dependency-ordered, every acceptance criterion claimed, every check machine-runnable. |
 | `bean-001-spec-judgement-20260915.json` | The judge's verdict on it — `accept`, 186 seconds. Kept as much for what is wrong with it as what is right: `confidence: 100` against a contract of 0..1 (now refused by audit-check), and two "findings" that are positive observations, one labelled major and one not true in any reading. The verdict was right and the reasoning was noise. |
+| `reaudit-bean-004-np16000-ctx32768-20260923.log` | **The baseline arm**: bean-004's four audits re-run 3 times each at the repo's defaults. 4 of 12 reached a judgement, 0 stamped; 5 of the 8 no-judgements were the context window. |
+| `reaudit-bean-004-np32000-ctx65536-20260923.log` | **The same with twice the cap and twice the window.** 7 of 12 reached a judgement, 0 stamped — every one refused on its quotes. spec answered in neither arm; here it thought to the 32000 cap twice, carrying out the bean. Why the defaults did not change. |
+| `judge-two-phase-requests-20260923.log` | **The llama-server slot log for both arms**, showing each judge call (think + format) as two requests, the second prompted with the first's output. Why every refusal record's `prompt_tokens` includes the judge's own thinking, and why `num_predict` bounds a phase rather than a call. |
 
 ## The run that reached a pull request
 
