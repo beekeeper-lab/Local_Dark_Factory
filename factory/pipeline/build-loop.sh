@@ -70,6 +70,10 @@ usage: build-loop.sh <run_dir> --bean <bean.yaml> [options]
   --max-worker-errors <n>
                       how many times the container may fail to complete before the
                       task is blocked for that instead (default: 3)
+
+Both budgets also read an environment variable -- FACTORY_MAX_ATTEMPTS and
+FACTORY_MAX_WORKER_ERRORS -- because orchestrate.sh passes no flags through and
+`factory run` accepts only --stop-after and --resume.
   --sandbox           force the sandbox on (default: on whenever a gate manifest
                       and podman are both present)
   --no-sandbox        run task verifies on the host — refuses silently to nothing,
@@ -92,7 +96,13 @@ case "${1:-}" in
 esac
 
 # ------------------------------------------------------------------ arguments
-RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; MAX_OVERRIDE=""; DRY_RUN=0
+RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; DRY_RUN=0
+# Both budgets take an environment override, because orchestrate.sh passes no
+# flags through to this script and `factory run` accepts only --stop-after and
+# --resume. Without one, the only way to give a task another attempt after a
+# controller defect has eaten its budget is to edit the task list -- which is
+# the spec step's output, and therefore evidence.
+MAX_OVERRIDE="${FACTORY_MAX_ATTEMPTS:-}"
 MAX_WERRORS="${FACTORY_MAX_WORKER_ERRORS:-3}"
 # Sandboxing the verifies is the default, not an option someone remembers to pass.
 #
