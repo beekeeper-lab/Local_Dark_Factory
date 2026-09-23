@@ -163,6 +163,27 @@ What the controller checks, so you may as well get it right:
   human to be split, which costs a day. Fewer, larger-but-still-verifiable tasks
   beat many trivial ones.
 
+And one thing it does not check, which cost bean-004 thirteen attempts at one
+task: **code you prescribe in an `intent` must be code the gates accept.**
+bean-004's task-2 told its worker to import `timezone` and call
+`datetime.now(timezone.utc)`, which this project's ruff rejects as UP017, and to
+pass a `list[Rule]` where the domain declares `list[object]`, which mypy strict
+rejects as invariant. The worker did as told and failed verify on both, twice
+each. If an intent names an import, an expression or a signature, check it before
+you write it down — you have ruff and mypy, and a snippet can be checked without
+writing a file:
+
+    printf 'from datetime import datetime, timezone\nx = datetime.now(timezone.utc)\n' \
+      | ruff check --stdin-filename snippet.py --extend-ignore I --output-format concise -
+
+(`--extend-ignore I` because a two-line fragment always has an import block
+ruff would sort differently; that finding is about the fragment, not the code.)
+
+Better still, prescribe what the code must do and leave the spelling to the
+worker, who can run the linter against the real file. A line cap tighter than
+the task needs is the same trap: task-2's "at or under 150 lines" is what its
+worker spent its sessions counting.
+
 ## Process
 
 1. Read the bean, the conventions, and the code.
