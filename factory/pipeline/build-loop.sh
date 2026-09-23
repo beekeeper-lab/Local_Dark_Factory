@@ -63,7 +63,13 @@ usage: build-loop.sh <run_dir> --bean <bean.yaml> [options]
                       loop that cannot read them cannot contain anything)
   --tasks <path>      task list (default: <run_dir>/tasks.yaml, then tasks.json)
   --task <id>         run only this task (its dependencies must already be verified)
-  --max-attempts <n>  override every task's max_attempts (default: per task, else 3)
+  --max-attempts <n>  override every task's max_attempts (default: per task, else 3).
+                      Counts only attempts the MODEL failed: a worker_error, where
+                      the session never finished and nothing was verified, is
+                      budgeted separately.
+  --max-worker-errors <n>
+                      how many times the container may fail to complete before the
+                      task is blocked for that instead (default: 3)
   --sandbox           force the sandbox on (default: on whenever a gate manifest
                       and podman are both present)
   --no-sandbox        run task verifies on the host — refuses silently to nothing,
@@ -87,6 +93,7 @@ esac
 
 # ------------------------------------------------------------------ arguments
 RUN_DIR=""; BEAN_FILE=""; TASKS_FILE=""; ONLY_TASK=""; MAX_OVERRIDE=""; DRY_RUN=0
+MAX_WERRORS="${FACTORY_MAX_WORKER_ERRORS:-3}"
 # Sandboxing the verifies is the default, not an option someone remembers to pass.
 #
 # It was a flag, and orchestrate.sh did not pass it, so bean-001's first real
@@ -111,6 +118,7 @@ while [ $# -gt 0 ]; do
     --tasks)       TASKS_FILE="${2:?--tasks needs a path}"; shift 2 ;;
     --task)        ONLY_TASK="${2:?--task needs a task id}"; shift 2 ;;
     --max-attempts) MAX_OVERRIDE="${2:?--max-attempts needs a number}"; shift 2 ;;
+    --max-worker-errors) MAX_WERRORS="${2:?--max-worker-errors needs a number}"; shift 2 ;;
     --dry-run)     DRY_RUN=1; shift ;;
     --sandbox)     SANDBOX=1; shift ;;
     --no-sandbox)  SANDBOX=0; shift ;;
@@ -308,6 +316,33 @@ attempts_so_far() {
   jq -rs --arg i "$1" '[.[] | select(.event == "attempt" and .task == $i)] | length' "$TASKS_LOG" 2>/dev/null || echo 0
 }
 
+# The budget is for the model's failures, not the machine's.
+#
+# bean-004's task-2 spent all three attempts like this: the container hit the
+# 3600s wall clock, twice, and then attempt 3 wrote working code — roundtrip,
+# atomicity and the audit log all verified, mypy clean — and failed `ruff check`
+# on three findings, two of them auto-fixable and one a line 101 characters long.
+# There was no attempt left to act on the feedback it had just been handed, so a
+# task that was one lint pass from done was blocked.
+#
+# A worker_error verifies nothing and teaches nothing. Its feedback says so in as
+# many words: "The session did not complete. Nothing was verified." Counting it
+# against max_attempts spends the task's budget on infrastructure, and the three
+# results that ARE the model's doing — a failed verify, an out-of-scope edit, a
+# touched record — are what the budget is for.
+#
+# Bounded separately rather than not at all: a container that dies every time
+# must still stop, and it stops on its own cap with its own message, which says
+# the machine failed rather than the task being too hard.
+substantive_attempts_so_far() {
+  jq -rs --arg i "$1" '[.[] | select(.event == "attempt" and .task == $i
+    and .result != "worker_error")] | length' "$TASKS_LOG" 2>/dev/null || echo 0
+}
+worker_errors_so_far() {
+  jq -rs --arg i "$1" '[.[] | select(.event == "attempt" and .task == $i
+    and .result == "worker_error")] | length' "$TASKS_LOG" 2>/dev/null || echo 0
+}
+
 # ------------------------------------------------------------- dry run --
 if [ "$DRY_RUN" = 1 ]; then
   printf 'build loop plan — %s (%s)\n\n' "$BEAN_ID" "$(basename "$TASKS_FILE")"
@@ -442,10 +477,34 @@ write_blocked_evidence() {
       printf 'No verify output was recorded for the final attempt; see `%s`.\n' "${last:-$bdir}"
     fi
     printf '\n## Question for a human\n\n'
-    printf 'This task failed %s times. Is the task wrong (badly scoped, missing a path it needs, '  "$(attempts_so_far "$tid")"
-    printf 'or verified by a check that cannot pass), or is the work genuinely harder than one '
-    printf 'session? The first is a spec problem and belongs back at intake; the second is a '
-    printf 'decomposition problem and belongs in the task list.\n'
+    local nsub nwe maxa
+    nsub="$(substantive_attempts_so_far "$tid")"
+    nwe="$(worker_errors_so_far "$tid")"
+    # Recomputed rather than read from the loop's MAXA: this function is also
+    # called from the outcome block, and a budget quoted from a variable that
+    # happened to survive is a number nobody can check.
+    maxa="${MAX_OVERRIDE:-$(jq -r '.max_attempts // 3' <<<"$(task_json "$tid")")}"
+    if [ "$nwe" -ge "$MAX_WERRORS" ] && [ "$nsub" -lt "$maxa" ]; then
+      # The machine, not the task. Asking whether the spec is wrong would send a
+      # reader to read a task list that nothing has yet disagreed with.
+      printf 'The worker session failed to complete %s times and the task was never ' "$nwe"
+      printf 'substantively attempted (%s of %s model attempts used). This is not evidence ' "$nsub" "$maxa"
+      printf 'about the task: nothing was verified, so nothing was learned about whether the '
+      printf 'work is right or the spec is sound.\n\n'
+      printf 'Look at why the container did not finish — the wall clock (`--timeout`, and '
+      printf 'whether a task this size fits an hour), the memory limit, or the model endpoint '
+      printf '— and read `worker.log` in each attempt directory. Raising `--max-attempts` '
+      printf 'would not have helped and will not now.\n'
+    else
+      printf 'This task failed %s times. Is the task wrong (badly scoped, missing a path it needs, '  "$nsub"
+      printf 'or verified by a check that cannot pass), or is the work genuinely harder than one '
+      printf 'session? The first is a spec problem and belongs back at intake; the second is a '
+      printf 'decomposition problem and belongs in the task list.\n'
+      [ "$nwe" -gt 0 ] && {
+        printf '\n%s further attempt(s) never ran at all (worker_error) and are not counted ' "$nwe"
+        printf 'in that number: the session did not finish and nothing was verified.\n'
+      }
+    fi
   } > "$bdir/BLOCKED.md"
 
   jq -c --arg t "$tid" --arg ts "$ts" \
@@ -578,13 +637,53 @@ while IFS= read -r TID <&3; do
 
   MAXA="${MAX_OVERRIDE:-$(jq -r '.max_attempts // 3' <<<"$T")}"
   TASK_PATHS_JSON="$(jq -c '.write_paths' <<<"$T")"
+
+  # Carry the last failure across a resume.
+  #
+  # FEEDBACK is a shell variable, so it lived exactly as long as the process. A
+  # run that halted and was resumed therefore started the next attempt blind: no
+  # code (the tree is reset, or refused for being dirty) and no idea what the
+  # previous attempt got wrong. The loop's whole premise is "the exact failure
+  # output becomes the next prompt", and across a resume it silently was not.
+  #
+  # bean-004's task-2 found it. Attempt 3 failed `ruff check` on three findings,
+  # the run halted, and the resume would have asked for the same work again with
+  # nothing said about the three — against a worker that cannot run ruff itself,
+  # because verify runs in the gate image and not in its sandbox.
+  #
+  # Rebuilt from the record rather than kept in memory, which is the only version
+  # that survives the thing it has to survive.
+  #
+  # The NEWEST attempt that actually verified something, not simply the newest.
+  # The first version of this took `tail -1` and was wrong the first time it
+  # mattered: bean-004's task-2 failed ruff on attempt 3 and then died on the
+  # wall clock on attempt 4, so the newest directory was a worker_error with no
+  # verify-failed.json in it, and attempt 5 started blind again. A worker error
+  # does not spend the budget; it must not consume the lesson either.
   FEEDBACK=""
+  last_adir=""
+  for _a in $(ls -1d "$RUN_DIR/build/$TID"/attempt-* 2>/dev/null | sort -t- -k2 -nr); do
+    [ -f "$_a/verify-failed.json" ] && { last_adir="$_a"; break; }
+  done
+  LAST_VERIFY_FEEDBACK=""
+  if [ -n "$last_adir" ]; then
+    FEEDBACK="$(printf '# Attempt %s failed its verification\n\n%s\n' \
+      "$(basename "$last_adir" | sed 's/^attempt-//')" "$(verify_feedback "$last_adir")")"
+    LAST_VERIFY_FEEDBACK="$FEEDBACK"
+    printf '       carrying forward the failure from %s\n' "$(basename "$last_adir")"
+  fi
   VERIFIED=0
   prior="$(attempts_so_far "$TID")"
+  SUBSTANTIVE="$(substantive_attempts_so_far "$TID")"
+  WERRORS="$(worker_errors_so_far "$TID")"
 
   printf '\nTASK   %-10s %s (max %s attempts, %s already recorded)\n' "$TID" "$TITLE" "$MAXA" "$prior"
+  [ "$WERRORS" -gt 0 ] && printf '       %s of those did not run: worker_error, which does not spend the budget\n' "$WERRORS"
 
-  while [ "$prior" -lt "$MAXA" ]; do
+  # Two budgets. MAXA is the model's; MAX_WERRORS bounds a container that will
+  # not start or will not finish, so "the machine is broken" cannot loop forever
+  # and cannot masquerade as "the task is too hard" either.
+  while [ "$SUBSTANTIVE" -lt "$MAXA" ] && [ "$WERRORS" -lt "$MAX_WERRORS" ]; do
     ATTEMPT=$((prior + 1))
     ADIR="$RUN_DIR/build/$TID/attempt-$ATTEMPT"
     mkdir -p "$ADIR"
@@ -629,11 +728,21 @@ while IFS= read -r TID <&3; do
     elif [ "$rc" -ne 0 ]; then
       result="worker_error"
       detail="The worker session exited non-zero (status $rc) — it did not finish the task."
+      # Added to, not substituted for. A dead container does not answer the
+      # question the last real verify asked, and overwriting the feedback with
+      # "you did not finish" throws away the only thing anyone had learned —
+      # which is how bean-004's task-2 lost three ruff findings twice: once
+      # across the resume, and once to the worker_error that followed it.
       FEEDBACK="$(cat <<EOF
 # Attempt $ATTEMPT failed: the worker session ended with status $rc
 
 The session did not complete. Nothing was verified. Read the task again, make the
 smallest change that satisfies it, and finish the session cleanly.
+${LAST_VERIFY_FEEDBACK:+
+The findings below are still outstanding: they come from the last attempt that
+was verified at all, and nothing since has addressed them.
+
+$LAST_VERIFY_FEEDBACK}
 EOF
 )"
       reset_tree
@@ -738,6 +847,10 @@ Change only what is needed to make that pass, and stay inside:
 $(jq -r '.[] | "  - " + .' <<<"$TASK_PATHS_JSON")
 EOF
 )"
+          # Held separately so a worker_error after this one can carry it rather
+          # than replace it: "the session did not finish" is not an answer to the
+          # check that failed, and it was overwriting the only thing known.
+          LAST_VERIFY_FEEDBACK="$FEEDBACK"
         fi
       fi
     fi
@@ -765,10 +878,19 @@ EOF
         # another go at the same task is not a proportionate answer to it.
         printf 'FAIL   %-10s attempt %s: the run record was altered — not retrying\n' "$TID" "$ATTEMPT"
         break ;;
+      worker_error)
+        printf 'FAIL   %-10s attempt %s: %s\n' "$TID" "$ATTEMPT" "$result"
+        printf '       the session did not finish, so nothing was verified — this\n'
+        printf '       does not spend the budget (worker errors %s/%s)\n' \
+          "$(( $(worker_errors_so_far "$TID") ))" "$MAX_WERRORS" ;;
       *)
         printf 'FAIL   %-10s attempt %s: %s\n' "$TID" "$ATTEMPT" "$result" ;;
     esac
     prior="$ATTEMPT"
+    # Recomputed from the log rather than incremented, so the two budgets cannot
+    # drift from the record that write_blocked_evidence and the next resume read.
+    SUBSTANTIVE="$(substantive_attempts_so_far "$TID")"
+    WERRORS="$(worker_errors_so_far "$TID")"
   done
 
   if [ "$VERIFIED" = 1 ]; then

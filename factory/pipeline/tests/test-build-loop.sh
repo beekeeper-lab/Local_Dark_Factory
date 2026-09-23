@@ -715,5 +715,162 @@ fi
 nope  "no attempt is recorded contained"  "a broken check must not produce a contained record" \
       grep -rq 'contained": true' "$RUN_DIR/build" 2>/dev/null
 
+reset_run
+
+printf '\n== a container that dies does not spend the model'"'"'s budget ==\n\n'
+#
+# bean-004's task-2, 2026-09-22. The container hit the 3600s wall clock twice,
+# and then the third attempt wrote working code — roundtrip, atomicity and the
+# audit log all verified, mypy clean — and failed `ruff check` on three findings,
+# two of them auto-fixable and one a line 101 characters long. There was no
+# attempt left to act on the feedback it had just been handed.
+#
+# attempts_so_far() counted every attempt line regardless of result, so the
+# machine's two failures ate the model's three. A worker_error verifies nothing
+# and teaches nothing — its feedback says so in as many words — and the budget is
+# for the failures a retry can actually address.
+# Two dead containers, then THREE real attempts — the budget the task actually
+# has. Under the old accounting the run stops dead at attempt 3, which is the
+# first one the model ever got to fail on its own terms.
+act task-1.1 <<'SH'
+exit 1
+SH
+act task-1.2 <<'SH'
+exit 1
+SH
+act task-1.3 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+act task-1.4 <<'SH'
+mkdir -p src && printf 'STILL NOPE\n' > src/a.py
+SH
+act task-1.5 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1)"; rc=$?
+want "the task still verifies"         "expected exit 0 after two worker errors" test "$rc" -eq 0
+check "both dead sessions are recorded" "attempt 2: worker_error" "$out"
+check "the loop says they were not spent" "does not spend the budget" "$out"
+check "the model gets its first failure" "attempt 3: verify_failed" "$out"
+check "and its second"                 "attempt 4: verify_failed" "$out"
+check "and its third, which lands"     "verified on attempt 5" "$out"
+
+reset_run
+
+printf '\n-- and the model still gets exactly its own budget --\n\n'
+#
+# The other direction: worker errors must not BUY extra substantive attempts
+# either. One dead container plus three real failures is still three, and the
+# task blocks on the fourth never happening.
+act task-1.1 <<'SH'
+exit 1
+SH
+for n in 2 3 4; do
+  act "task-1.$n" <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+done
+act task-1.5 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop)"; rc=$?
+want "it blocks"                       "expected exit 4" test "$rc" -eq 4
+check "after three real attempts"      "attempt 4: verify_failed" "$out"
+nope  "and never reaches a fifth"      "a worker_error must not buy an extra attempt" \
+      grep -qF "ATTEMPT 5/" <<<"$out"
+
+reset_run
+
+printf '\n-- a container that always dies blocks on its own budget, and says so --\n\n'
+#
+# Bounded separately rather than not at all. And the question it asks a human is
+# a different question: nothing was verified, so nothing was learned about
+# whether the task is right, and "is the spec wrong" would send the reader to
+# read a task list nothing has disagreed with.
+for n in 1 2 3 4; do
+  act "task-1.$n" <<'SH'
+exit 1
+SH
+done
+out="$(run_loop)"; rc=$?
+want "it blocks"                       "expected exit 4" test "$rc" -eq 4
+nope  "without a fourth attempt"       "the worker-error budget is 3" \
+      grep -qF "ATTEMPT 4/" <<<"$out"
+bl="$(cat "$RUN_DIR/build/task-1/BLOCKED.md")"
+check "the record says nothing ran"    "never substantively attempted" "$bl"
+check "and that it is not about the task" "nothing was learned" "$bl"
+check "it points at the container"     "why the container did not finish" "$bl"
+check "naming the wall clock"          "--timeout" "$bl"
+check "and rules out the obvious lever" "would not have helped" "$bl"
+nope  "it does not ask if the spec is wrong" "that question needs a verified failure" \
+      grep -qF "Is the task wrong" "$RUN_DIR/build/task-1/BLOCKED.md"
+
+reset_run
+
+printf '\n== a resumed build remembers what the last attempt got wrong ==\n\n'
+#
+# FEEDBACK was a shell variable, so it lived exactly as long as the process. A
+# run that halted and was resumed started the next attempt blind: the loop's
+# whole premise is "the exact failure output becomes the next prompt", and
+# across a resume it silently was not.
+#
+# bean-004's task-2 found it. Attempt 3 failed `ruff check` on three findings,
+# the run halted, and the resume asked for the same work again with nothing said
+# about any of them — against a worker that cannot run ruff itself, because
+# verify runs in the gate image and not in the worker's sandbox.
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+out="$(run_loop --task task-1 --max-attempts 1)"; rc=$?
+want "the first run blocks"            "expected exit 4" test "$rc" -eq 4
+want "and left a verify-failed record" "expected attempt-1/verify-failed.json" \
+  test -f "$RUN_DIR/build/task-1/attempt-1/verify-failed.json"
+
+# A second process, exactly as a resume is: same run dir, same log, new shell.
+git -C "$REPO" checkout -q -- . 2>/dev/null || true
+git -C "$REPO" clean -fdq -e /ai
+act task-1.2 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1)"; rc=$?
+want "the resume verifies"             "expected exit 0" test "$rc" -eq 0
+check "it says it carried the failure" "carrying forward the failure from attempt-1" "$out"
+want "and attempt 2 was handed it"     "expected attempt-2/feedback.md" \
+  test -f "$RUN_DIR/build/task-1/attempt-2/feedback.md"
+fb="$(cat "$RUN_DIR/build/task-1/attempt-2/feedback.md")"
+check "naming the check that failed"   "The check that failed" "$fb"
+check "with the command itself"        "grep -q GOOD src/a.py" "$fb"
+check "and the real output"            "Its output" "$fb"
+
+printf '\n-- and a dead container in between does not consume the lesson --\n\n'
+#
+# The first version of this took the NEWEST attempt directory, and was wrong the
+# first time it mattered: bean-004's task-2 failed ruff on attempt 3 and then
+# died on the wall clock on attempt 4, so the newest directory was a worker_error
+# with no verify-failed.json in it and attempt 5 started blind again. A worker
+# error does not spend the budget; it must not eat the feedback either.
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+out="$(run_loop --task task-1 --max-attempts 1)"; rc=$?
+want "attempt 1 fails its verify"      "expected exit 4" test "$rc" -eq 4
+git -C "$REPO" checkout -q -- . 2>/dev/null || true
+git -C "$REPO" clean -fdq -e /ai
+act task-1.2 <<'SH'
+exit 1
+SH
+act task-1.3 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1)"; rc=$?
+want "the run still finishes"          "expected exit 0" test "$rc" -eq 0
+check "attempt 2 died as a worker error" "attempt 2: worker_error" "$out"
+check "and the lesson came from attempt 1" "carrying forward the failure from attempt-1" "$out"
+want "attempt 3 was handed it"         "expected attempt-3/feedback.md" \
+  test -f "$RUN_DIR/build/task-1/attempt-3/feedback.md"
+check "with the real command in it"    "grep -q GOOD src/a.py" \
+  "$(cat "$RUN_DIR/build/task-1/attempt-3/feedback.md")"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
