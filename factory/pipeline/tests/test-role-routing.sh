@@ -473,7 +473,7 @@ SK="$(cd "$PIPELINE_DIR/../skills" && pwd)"
 _first=""
 for _s in factory-build-task factory-spec factory-doc; do
   _f="$SK/$_s/SKILL.md"
-  _sec="$(awk '/^## git is not available in here/,/^## the toolchain/' "$_f" | head -n -1)"
+  _sec="$(awk '/^## git is not available in here/,/^## ruff and mypy are in here/' "$_f" | head -n -1)"
   if [ -n "$_sec" ]; then printf '  ok    %s says so\n' "$_s"; PASS=$((PASS+1))
   else printf '  FAIL  %s does not say git is unavailable\n' "$_s"; FAIL=$((FAIL+1)); fi
   if [ -z "$_first" ]; then _first="$_sec"
@@ -485,16 +485,38 @@ done
 # python as an environment constraint they had to work around, and one softened
 # its own conclusion because of it — so the container now says what it is, in the
 # same words, in all three skills. Three copies of one fact is two that go stale.
+#
+# Since 2026-09-23 what it is includes ruff and mypy (bean-004's task-2 spent
+# eight attempts simulating them), so the section now says which tools ARE here
+# as well as which are not, and the test asks both.
 _first=""
 for _s in factory-build-task factory-spec factory-doc; do
   _f="$SK/$_s/SKILL.md"
-  _sec="$(awk '/^## the toolchain is not in here either/,/^## [^t]/' "$_f" | head -n -1)"
-  if [ -n "$_sec" ]; then printf '  ok    %s says the toolchain is absent\n' "$_s"; PASS=$((PASS+1))
-  else printf '  FAIL  %s does not say the toolchain is absent\n' "$_s"; FAIL=$((FAIL+1)); fi
+  _sec="$(awk '/^## ruff and mypy are in here/{on=1; print; next} on && /^## /{exit} on' "$_f")"
+  if [ -n "$_sec" ]; then printf '  ok    %s says what the toolchain is\n' "$_s"; PASS=$((PASS+1))
+  else printf '  FAIL  %s does not say what the toolchain is\n' "$_s"; FAIL=$((FAIL+1)); fi
   if [ -z "$_first" ]; then _first="$_sec"
   elif [ "$_sec" = "$_first" ]; then printf '  ok    %s says it identically\n' "$_s"; PASS=$((PASS+1))
   else printf '  FAIL  %s has drifted from factory-build-task\n' "$_s"; FAIL=$((FAIL+1)); fi
 done
+# It names the tools that are present and the one that is not, because a worker
+# told "no toolchain" simulates ruff and one told "a toolchain" goes hunting for
+# pytest.
+for _w in '`ruff`' '`mypy`' 'no `pytest`' 'not a verdict'; do
+  if grep -qF "$_w" <<<"$_first"; then printf '  ok    the toolchain section says %s\n' "$_w"; PASS=$((PASS+1))
+  else printf '  FAIL  the toolchain section does not say %s\n' "$_w"; FAIL=$((FAIL+1)); fi
+done
+# The build worker is told to RUN them, with the commands, and to format only
+# its own paths — `ruff format .` would reformat files outside write_paths and
+# throw the attempt away.
+_bt_run="$(awk '/^## so run them, and do not simulate them/{on=1; next} on && /^## /{exit} on' "$SK/factory-build-task/SKILL.md")"
+for _w in 'ruff check .' 'ruff format <each path in write_paths>' 'mypy src'; do
+  if grep -qF "$_w" <<<"$_bt_run"; then printf '  ok    build-task says to run: %s\n' "$_w"; PASS=$((PASS+1))
+  else printf '  FAIL  build-task does not say to run: %s\n' "$_w"; FAIL=$((FAIL+1)); fi
+done
+if grep -qE '^ +ruff format \.' <<<"$_bt_run"; then
+  printf '  FAIL  build-task tells the worker to format the whole tree\n'; FAIL=$((FAIL+1))
+else printf '  ok    build-task does not tell the worker to format the whole tree\n'; PASS=$((PASS+1)); fi
 # And it says where they DO run, or "you cannot run them" reads as "they are not run".
 for _w in "digest-pinned image" "by the controller"; do
   if grep -qF "$_w" "$SK/factory-build-task/SKILL.md"; then
