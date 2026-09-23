@@ -805,5 +805,42 @@ check "and rules out the obvious lever" "would not have helped" "$bl"
 nope  "it does not ask if the spec is wrong" "that question needs a verified failure" \
       grep -qF "Is the task wrong" "$RUN_DIR/build/task-1/BLOCKED.md"
 
+reset_run
+
+printf '\n== a resumed build remembers what the last attempt got wrong ==\n\n'
+#
+# FEEDBACK was a shell variable, so it lived exactly as long as the process. A
+# run that halted and was resumed started the next attempt blind: the loop's
+# whole premise is "the exact failure output becomes the next prompt", and
+# across a resume it silently was not.
+#
+# bean-004's task-2 found it. Attempt 3 failed `ruff check` on three findings,
+# the run halted, and the resume asked for the same work again with nothing said
+# about any of them — against a worker that cannot run ruff itself, because
+# verify runs in the gate image and not in the worker's sandbox.
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+out="$(run_loop --task task-1 --max-attempts 1)"; rc=$?
+want "the first run blocks"            "expected exit 4" test "$rc" -eq 4
+want "and left a verify-failed record" "expected attempt-1/verify-failed.json" \
+  test -f "$RUN_DIR/build/task-1/attempt-1/verify-failed.json"
+
+# A second process, exactly as a resume is: same run dir, same log, new shell.
+git -C "$REPO" checkout -q -- . 2>/dev/null || true
+git -C "$REPO" clean -fdq -e /ai
+act task-1.2 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1)"; rc=$?
+want "the resume verifies"             "expected exit 0" test "$rc" -eq 0
+check "it says it carried the failure" "carrying forward the failure from attempt-1" "$out"
+want "and attempt 2 was handed it"     "expected attempt-2/feedback.md" \
+  test -f "$RUN_DIR/build/task-1/attempt-2/feedback.md"
+fb="$(cat "$RUN_DIR/build/task-1/attempt-2/feedback.md")"
+check "naming the check that failed"   "The check that failed" "$fb"
+check "with the command itself"        "grep -q GOOD src/a.py" "$fb"
+check "and the real output"            "Its output" "$fb"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

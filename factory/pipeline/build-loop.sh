@@ -637,7 +637,29 @@ while IFS= read -r TID <&3; do
 
   MAXA="${MAX_OVERRIDE:-$(jq -r '.max_attempts // 3' <<<"$T")}"
   TASK_PATHS_JSON="$(jq -c '.write_paths' <<<"$T")"
+
+  # Carry the last failure across a resume.
+  #
+  # FEEDBACK is a shell variable, so it lived exactly as long as the process. A
+  # run that halted and was resumed therefore started the next attempt blind: no
+  # code (the tree is reset, or refused for being dirty) and no idea what the
+  # previous attempt got wrong. The loop's whole premise is "the exact failure
+  # output becomes the next prompt", and across a resume it silently was not.
+  #
+  # bean-004's task-2 found it. Attempt 3 failed `ruff check` on three findings,
+  # the run halted, and the resume would have asked for the same work again with
+  # nothing said about the three — against a worker that cannot run ruff itself,
+  # because verify runs in the gate image and not in its sandbox.
+  #
+  # Rebuilt from the record rather than kept in memory, which is the only version
+  # that survives the thing it has to survive.
   FEEDBACK=""
+  last_adir="$(ls -1d "$RUN_DIR/build/$TID"/attempt-* 2>/dev/null | sort -t- -k2 -n | tail -1)"
+  if [ -n "$last_adir" ] && [ -f "$last_adir/verify-failed.json" ]; then
+    FEEDBACK="$(printf '# Attempt %s failed its verification\n\n%s\n' \
+      "$(basename "$last_adir" | sed 's/^attempt-//')" "$(verify_feedback "$last_adir")")"
+    printf '       carrying forward the failure from %s\n' "$(basename "$last_adir")"
+  fi
   VERIFIED=0
   prior="$(attempts_so_far "$TID")"
   SUBSTANTIVE="$(substantive_attempts_so_far "$TID")"
