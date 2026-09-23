@@ -7,18 +7,27 @@ the working branch is `main` again, and new work opens small pull requests off i
 
 **Waiting on a human, in order:**
 
-1. **Do not merge seating-planner PR #4 as it stands.** `AuditLog.entries(event_id)`
-   builds `... ORDER BY id WHERE event_id = ?`, a syntax error on every filtered
-   call, and task-4's test was written around it (see its NOTE). The impl-detail
-   document says so in its Deviations. The factory way to fix it is to re-run
-   bean-004's build now that verify actually runs task-1's script (below): task-1
-   would fail and be retried with the real error. Also a spec-level gap, not a
-   coding error: removing a guest writes no audit entry at all, because the task
-   text asked for one entry per *saved* entity. FR-003 says every change.
-2. **Factory PRs #1–#6**, all open, all merged ahead of review into
-   `integration/bean-004-run` (pushed) so bean-004 could run with them. #5 and #6
-   are today's.
-3. `factory read` on bean-004's run, which only a person can do.
+1. **Review seating-planner PR #5**, bean-004 rebuilt. PR #4 had
+   `AuditLog.entries(event_id)` building `... ORDER BY id WHERE event_id = ?`, a
+   syntax error on every filtered call, behind a verified task (see PR #6 below).
+   bean-004 was re-run from build as `bean-004-20260923T195628Z` — the old run's
+   spec, task list and spec audit byte for byte, `run.json` says so under
+   `derived_from` — on a branch reset to `main`, which is what closed #4; the old
+   commits are the local branch `backup/bean-004-run-20260922T142454Z`. Measured:
+   5 build attempts against 18, 88 minutes of worker time against 11+ hours,
+   task-1's verify caught a real SQL error on attempt 1 and it was fixed on attempt
+   2, task-2 passed first time (13 before), gate, hidden tests and CI green, and
+   task-4's test now calls `audit_log("e1")` with no workaround. Audits were
+   advisory, as on the original run, and stamped nothing. Still true of #5 and a
+   decision for whoever reviews it: removing a guest writes no audit entry,
+   because the task text asked for one per *saved* entity. FR-003 says every
+   change. The `factory runs` ELAPSED for the new run (31.8h) is wrong — it counts
+   from the copied spec steps' timestamps.
+2. **Factory PRs #1–#7**, all open, all merged ahead of review into
+   `integration/bean-004-run` (pushed) so bean-004 could run with them. #5–#7
+   are today's. #6 and #7 both add rows to `evidence/README.md`; the second to
+   merge has a one-line conflict, keep both sides.
+3. `factory read` on `bean-004-20260923T195628Z`, which only a person can do.
 
 **Every multi-line verify ran its first line and nothing else (PR #6).**
 `verify.sh` read a command's argv with `mapfile -t < <(jq -r '.run[]')`, which
@@ -43,7 +52,7 @@ gate image. Two of the four verify failures were the task text prescribing code
 the linter rejects (`timezone.utc`, a `list[Rule]` into `list[object]`); the spec
 skill now says to check prescribed snippets, and gives the command.
 
-**Not yet measured:** any of this on a run. The next bean is the measurement.
+**Measured once, on bean-004's rebuild** (item 1). One run is one run; bean-005 is the next measurement.
 
 **The judge: raising its room made it answer more often, and nothing more.**
 `factory reaudit` on bean-004's run, 3 passes × 4 targets per arm, judge.sh identical:
