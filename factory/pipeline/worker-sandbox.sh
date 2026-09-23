@@ -223,11 +223,50 @@ CNAME="factory-worker-$$-$(date +%s)"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 RUN_ARGS+=( --name "$CNAME" )
 
-timeout --signal=TERM --kill-after=30 "$TIMEOUT" \
+STARTED_EPOCH="$(date +%s)"
+# How long a container gets between TERM and KILL. Thirty seconds in production;
+# a variable so the escalation itself can be tested in a second rather than
+# asserted from a comment. It is the escalation that produces 137 instead of 124,
+# and that is the whole subject of the branch below.
+KILL_AFTER="${FACTORY_SANDBOX_KILL_AFTER:-30}"
+timeout --signal=TERM --kill-after="$KILL_AFTER" "$TIMEOUT" \
   podman run "${RUN_ARGS[@]}" "$IMAGE" "${CMD[@]}"
 rc=$?
-[ "$rc" -eq 124 ] && printf 'worker-sandbox: the session was killed after %ss\n' "$TIMEOUT" >&2
-if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+ELAPSED=$(( $(date +%s) - STARTED_EPOCH ))
+
+# The wall clock does not always announce itself as 124.
+#
+# `timeout --kill-after` sends TERM at the deadline and KILL thirty seconds
+# later, and GNU timeout reports the SECOND signal: a container that ignores TERM
+# comes back as 137, not 124. So the line below never fired for the case it was
+# written for, and the operator was shown a bare "the container exited 137" —
+# which reads like the OOM killer, and was read that way.
+#
+# Measured on bean-004's task-2, 2026-09-22. podman's own event log said
+# `start` at 1790101820 and `kill` at 1790105420: 3600 seconds to the second,
+# against a --timeout of 3600. Nothing in the output said so.
+#
+# Elapsed against the limit is what separates the two, because it is the thing
+# that is actually true either way. An OOM kill at four minutes and a wall-clock
+# kill at the hour are both 137 and only one of them ran out of time.
+TIMED_OUT=0
+if [ "$rc" -eq 124 ]; then TIMED_OUT=1
+elif [ "$rc" -eq 137 ] && [ "$ELAPSED" -ge "$TIMEOUT" ]; then TIMED_OUT=1
+fi
+
+if [ "$TIMED_OUT" = 1 ]; then
+  printf 'worker-sandbox: the session was killed after %ss (ran %ss, limit %ss)\n' \
+    "$TIMEOUT" "$ELAPSED" "$TIMEOUT" >&2
+  if [ "$rc" -eq 137 ]; then
+    printf '  137 rather than 124 because it did not stop on TERM and `timeout`\n' >&2
+    printf '  escalated to KILL %ss later. This is the wall clock, not\n' "$KILL_AFTER" >&2
+    printf '  the OOM killer: the run lasted exactly as long as it was allowed to.\n' >&2
+    printf '  --timeout is the lever, and whether the task is too big for one\n' >&2
+    printf '  attempt is the question underneath it.\n' >&2
+  fi
+fi
+
+if [ "$rc" -ne 0 ] && [ "$TIMED_OUT" != 1 ]; then
   printf '\nworker-sandbox: the container exited %s. What podman saw:\n' "$rc" >&2
   # Captured, not redirected in place. `2>/dev/null >&2` sends stdout to the fd
   # that was just pointed at /dev/null — the events came back and went nowhere,
@@ -248,6 +287,17 @@ if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
     printf '  If the image is current, then it did come from outside this process tree,\n' >&2
     printf '  and the first suspect is a pattern kill from a terminal — `pkill -f` has hit\n' >&2
     printf '  this repository five times. See "Never pkill -f" in RESUME.md.\n' >&2
+  fi
+  if [ "$rc" -eq 137 ]; then
+    # 137 that is NOT the wall clock — the branch above already claimed that one.
+    printf '\n  137 is SIGKILL, and it is not the wall clock: this ran %ss of an\n' "$ELAPSED" >&2
+    printf '  allowed %ss. Nothing can catch a KILL, so the container left no\n' "$TIMEOUT" >&2
+    printf '  message of its own and the reason is outside it.\n' >&2
+    printf '  The memory limit is the first suspect — this sandbox runs under\n' >&2
+    printf '  %s, and a pi session holding a long transcript is the thing that\n' "$MEMORY" >&2
+    printf '  grows. `podman events --filter event=oom` says whether it was.\n' >&2
+    printf '  Otherwise it came from outside this process tree: see the pattern-kill\n' >&2
+    printf '  note under 143 above.\n' >&2
   fi
 fi
 exit "$rc"
