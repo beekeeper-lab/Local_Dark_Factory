@@ -872,5 +872,44 @@ want "attempt 3 was handed it"         "expected attempt-3/feedback.md" \
 check "with the real command in it"    "grep -q GOOD src/a.py" \
   "$(cat "$RUN_DIR/build/task-1/attempt-3/feedback.md")"
 
+reset_run
+
+printf '\n-- both budgets can be set from the environment --\n\n'
+#
+# orchestrate.sh passes no flags through to this script, and `factory run`
+# accepts only --stop-after and --resume. So after a controller defect has eaten
+# a task's budget, the only way to give it another attempt was to edit the task
+# list -- which is the spec step's output, and therefore evidence. bean-004's
+# task-2 needed exactly that twice in one night.
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+act task-1.2 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+act task-1.3 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+act task-1.4 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(FACTORY_MAX_ATTEMPTS=4 run_loop --task task-1)"; rc=$?
+want "the raised budget is honoured"   "expected exit 0 with FACTORY_MAX_ATTEMPTS=4" test "$rc" -eq 0
+check "and a fourth attempt happens"   "verified on attempt 4" "$out"
+
+reset_run
+
+printf '\n-- and an explicit flag still beats the environment --\n\n'
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+act task-1.2 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(FACTORY_MAX_ATTEMPTS=9 run_loop --task task-1 --max-attempts 1)"; rc=$?
+want "the flag wins"                   "expected exit 4: --max-attempts 1 overrides the env" test "$rc" -eq 4
+nope  "and no second attempt runs"     "the flag must win over the environment" \
+      grep -qF "ATTEMPT 2/" <<<"$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
