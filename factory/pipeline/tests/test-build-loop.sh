@@ -842,5 +842,35 @@ check "naming the check that failed"   "The check that failed" "$fb"
 check "with the command itself"        "grep -q GOOD src/a.py" "$fb"
 check "and the real output"            "Its output" "$fb"
 
+printf '\n-- and a dead container in between does not consume the lesson --\n\n'
+#
+# The first version of this took the NEWEST attempt directory, and was wrong the
+# first time it mattered: bean-004's task-2 failed ruff on attempt 3 and then
+# died on the wall clock on attempt 4, so the newest directory was a worker_error
+# with no verify-failed.json in it and attempt 5 started blind again. A worker
+# error does not spend the budget; it must not eat the feedback either.
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'NOPE\n' > src/a.py
+SH
+out="$(run_loop --task task-1 --max-attempts 1)"; rc=$?
+want "attempt 1 fails its verify"      "expected exit 4" test "$rc" -eq 4
+git -C "$REPO" checkout -q -- . 2>/dev/null || true
+git -C "$REPO" clean -fdq -e /ai
+act task-1.2 <<'SH'
+exit 1
+SH
+act task-1.3 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+SH
+out="$(run_loop --task task-1)"; rc=$?
+want "the run still finishes"          "expected exit 0" test "$rc" -eq 0
+check "attempt 2 died as a worker error" "attempt 2: worker_error" "$out"
+check "and the lesson came from attempt 1" "carrying forward the failure from attempt-1" "$out"
+want "attempt 3 was handed it"         "expected attempt-3/feedback.md" \
+  test -f "$RUN_DIR/build/task-1/attempt-3/feedback.md"
+check "with the real command in it"    "grep -q GOOD src/a.py" \
+  "$(cat "$RUN_DIR/build/task-1/attempt-3/feedback.md")"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

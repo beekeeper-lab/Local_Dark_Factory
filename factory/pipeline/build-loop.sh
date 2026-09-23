@@ -653,11 +653,23 @@ while IFS= read -r TID <&3; do
   #
   # Rebuilt from the record rather than kept in memory, which is the only version
   # that survives the thing it has to survive.
+  #
+  # The NEWEST attempt that actually verified something, not simply the newest.
+  # The first version of this took `tail -1` and was wrong the first time it
+  # mattered: bean-004's task-2 failed ruff on attempt 3 and then died on the
+  # wall clock on attempt 4, so the newest directory was a worker_error with no
+  # verify-failed.json in it, and attempt 5 started blind again. A worker error
+  # does not spend the budget; it must not consume the lesson either.
   FEEDBACK=""
-  last_adir="$(ls -1d "$RUN_DIR/build/$TID"/attempt-* 2>/dev/null | sort -t- -k2 -n | tail -1)"
-  if [ -n "$last_adir" ] && [ -f "$last_adir/verify-failed.json" ]; then
+  last_adir=""
+  for _a in $(ls -1d "$RUN_DIR/build/$TID"/attempt-* 2>/dev/null | sort -t- -k2 -nr); do
+    [ -f "$_a/verify-failed.json" ] && { last_adir="$_a"; break; }
+  done
+  LAST_VERIFY_FEEDBACK=""
+  if [ -n "$last_adir" ]; then
     FEEDBACK="$(printf '# Attempt %s failed its verification\n\n%s\n' \
       "$(basename "$last_adir" | sed 's/^attempt-//')" "$(verify_feedback "$last_adir")")"
+    LAST_VERIFY_FEEDBACK="$FEEDBACK"
     printf '       carrying forward the failure from %s\n' "$(basename "$last_adir")"
   fi
   VERIFIED=0
@@ -716,11 +728,21 @@ while IFS= read -r TID <&3; do
     elif [ "$rc" -ne 0 ]; then
       result="worker_error"
       detail="The worker session exited non-zero (status $rc) — it did not finish the task."
+      # Added to, not substituted for. A dead container does not answer the
+      # question the last real verify asked, and overwriting the feedback with
+      # "you did not finish" throws away the only thing anyone had learned —
+      # which is how bean-004's task-2 lost three ruff findings twice: once
+      # across the resume, and once to the worker_error that followed it.
       FEEDBACK="$(cat <<EOF
 # Attempt $ATTEMPT failed: the worker session ended with status $rc
 
 The session did not complete. Nothing was verified. Read the task again, make the
 smallest change that satisfies it, and finish the session cleanly.
+${LAST_VERIFY_FEEDBACK:+
+The findings below are still outstanding: they come from the last attempt that
+was verified at all, and nothing since has addressed them.
+
+$LAST_VERIFY_FEEDBACK}
 EOF
 )"
       reset_tree
@@ -825,6 +847,10 @@ Change only what is needed to make that pass, and stay inside:
 $(jq -r '.[] | "  - " + .' <<<"$TASK_PATHS_JSON")
 EOF
 )"
+          # Held separately so a worker_error after this one can carry it rather
+          # than replace it: "the session did not finish" is not an answer to the
+          # check that failed, and it was overwriting the only thing known.
+          LAST_VERIFY_FEEDBACK="$FEEDBACK"
         fi
       fi
     fi
