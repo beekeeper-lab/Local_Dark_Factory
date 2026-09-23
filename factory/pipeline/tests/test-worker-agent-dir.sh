@@ -159,5 +159,68 @@ printf '\n-- and nothing else of the user'"'"'s settings is carried in --\n\n'
 eq "only the timeout is set"      "httpIdleTimeoutMs" \
    "$(jq -r 'keys | join(",")' "$AGENT/settings.json" 2>/dev/null)"
 
+printf '\n== the worker wall clock is the repository'"'"'s to set ==\n\n'
+#
+# worker-sandbox.sh defaults to 3600s and run-step passed no --timeout, so an
+# hour was the limit for every step of every bean -- chosen by a default rather
+# than by anyone, and unreachable from the config, the environment or a flag.
+#
+# bean-004's task-2 hit it six times in eleven attempts, 3630s each, with no
+# compaction involved at num_ctx 131072. The three attempts that DID finish were
+# each within one lint finding of done. An hour is not a property of the work.
+grep -q -- '--timeout' <<<"$(grep -A 4 'worker-sandbox.sh" \\' "$PIPELINE_DIR/run-step.sh")" \
+  && { printf '  ok    run-step passes a wall clock at all\n'; PASS=$((PASS+1)); } \
+  || { printf '  FAIL  run-step still passes no --timeout; the 3600s default is unreachable\n'; FAIL=$((FAIL+1)); }
+
+printf '\n-- and the config sets it, the environment overrides it --\n\n'
+#
+# Config first so it is a per-repository fact recorded in the repository, the
+# same shape as verify_timeout_s. The environment is for a one-off. 3600 when
+# neither says anything, so nothing changes for a repo that does not care.
+cfg="$WORK/pipeline-config.json"
+printf '{"runs_root":"factory/runs","worker_timeout_s":7200}\n' > "$cfg"
+
+ws_timeout() { # ws_timeout <env value or empty> <config path or empty>
+  rm -f "$WORK/sandbox-timeout.txt"
+  ( export STUB_RECORD_TIMEOUT="$WORK/sandbox-timeout.txt"
+    [ -n "$2" ] && export PIPELINE_CONFIG="$2"
+    [ -n "$1" ] && export FACTORY_WORKER_TIMEOUT="$1"
+    HOME="$WORK/home" ROLES_FILE="$WORK/roles.json" \
+    FACTORY_CONTAIN_WORKER=1 FACTORY_ENSURE_LOADED=0 \
+    FACTORY_MODEL_SOCKET_DIR="$WORK/gw" FACTORY_SANDBOX_ROOT="$WORK/sandbox" \
+    FACTORY_SKILLS="$WORK/pipe" \
+    STUB_AGENT_RECORD="$WORK/agent-dir.txt" STUB_TREE="$WORK" STUB_MODEL="$MODEL" \
+    bash "$WORK/pipe/run-step.sh" run spec >/dev/null 2>&1 )
+  cat "$WORK/sandbox-timeout.txt" 2>/dev/null
+}
+
+# Teach the stub sandbox to record the --timeout it was handed.
+python3 - "$WORK/pipe/worker-sandbox.sh" <<'PY2'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace('    --agent-dir) agent="$2"; shift 2 ;;',
+              '    --agent-dir) agent="$2"; shift 2 ;;\n'
+              '    --timeout) [ -n "${STUB_RECORD_TIMEOUT:-}" ] && printf \'%s\\n\' "$2" > "$STUB_RECORD_TIMEOUT"; shift 2 ;;')
+open(p, 'w').write(s)
+PY2
+
+eq "no config, no env: the old default" "3600" "$(ws_timeout '' '')"
+eq "the config sets it"                 "7200" "$(ws_timeout '' "$cfg")"
+eq "and the environment beats it"       "5400" "$(ws_timeout 5400 "$cfg")"
+
+printf '\n-- a wall clock that is not a number is refused --\n\n'
+#
+# Not defaulted past. worker-sandbox would hand it to `timeout`, which would
+# refuse it in a message about a program the operator did not invoke.
+out="$(FACTORY_WORKER_TIMEOUT="soon" HOME="$WORK/home" ROLES_FILE="$WORK/roles.json" \
+  FACTORY_CONTAIN_WORKER=1 FACTORY_ENSURE_LOADED=0 \
+  FACTORY_MODEL_SOCKET_DIR="$WORK/gw" FACTORY_SANDBOX_ROOT="$WORK/sandbox" \
+  FACTORY_SKILLS="$WORK/pipe" STUB_AGENT_RECORD="$WORK/agent-dir.txt" \
+  STUB_TREE="$WORK" STUB_MODEL="$MODEL" \
+  bash "$WORK/pipe/run-step.sh" run spec 2>&1)"
+check "it says what it wanted"          "whole number of seconds" "$out"
+check "and quotes what it got"          "soon" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
