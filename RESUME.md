@@ -3,6 +3,40 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
+
+**Merged:** seating-planner PR #7 (bean-004 with ac5, 12:49Z) and PR #6 (bean-005).
+bean-004's build came in at 549 changed lines with every other gate part green;
+the budget went 450 → 600 *after* the gate (`04da313`), and the manifest says it is
+the budget fitted to output, not an estimate.
+
+**bean-006 run 1 (`bean-006-20260924T133206Z`) halted at gate, 16:19Z.** Lint,
+format, types and unit green, 3 tasks verified, 315 lines. The invariants check
+failed 66 of 66: `factory/invariants/seating.yaml` applies to bean-006 first and
+imports `seating_planner.invariant_api.solve_from_spec`, and **no bean in the set
+could write that module**. bean-001 held `src/seating_planner/**` and its spec
+deferred the seam to "a later bean" that was never named; every later bean is
+confined to its own subtree. The spec session saw it and wrote it up
+(`questions-from-worker/gate-20260924T161948Z.md`) rather than faking it with a
+conftest or `sys.modules` alias; spec-check then forced a retry for missing files,
+and the 4427s second attempt planned only the in-bounds work, carrying the seam as
+Risk 1. The server was rebooted around 16:27Z, after the halt, so nothing was cut
+off.
+
+**Decision (owner):** bean-006 may write `src/seating_planner/invariant_api.py`
+(`a64101a` here, scaffolded to seating-planner `main` as `30ae52b`). Widening paths
+reopens approval; the manifest records the owner's approval. A dedicated seam bean
+was the alternative. The old run's commits are the local branch
+`backup/bean-006-run-20260924T133206Z`.
+
+**Running:** `bean-006-20260924T191742Z`, a fresh run from spec, because the old
+spec deliberately left the seam out and reusing it would fail the same way.
+There are no hidden tests for bean-006.
+
+**Worth a later look:** the invariants seam is a cross-cutting file in a corpus
+where every bean owns a subtree. bean-007, 009 and 013 are also in `applies_to`;
+if they need to change the seam's behaviour, they cannot write it either.
+
 ## 2026-09-24: bean-005 is a PR, and bean-004 goes round again with ac5
 
 **bean-005 is seating-planner PR #6**: 2 tasks, both verified on attempt 1,
