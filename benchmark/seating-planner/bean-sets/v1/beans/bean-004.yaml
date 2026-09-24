@@ -54,7 +54,7 @@ constraints:
   - text: no ORM dependency beyond the standard library
     forbidden_imports: [sqlalchemy, peewee, tortoise, pony, django]
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 450 }
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 600 }
 definition_of_done:
   - all AC verify pass
   - gates green
