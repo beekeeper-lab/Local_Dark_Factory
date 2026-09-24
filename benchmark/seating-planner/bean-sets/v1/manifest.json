@@ -39,6 +39,14 @@
       "reopens_approval": true,
       "rule": "Loosens a limit; the owner approved it directly.",
       "note": "Raised AFTER the gate failed, which is the weaker kind of change: the build came in at 549 lines (store 228+89, tests 141+91) with every other gate part green, against 358 for PR #5's four criteria. The removal logic itself is about ten lines; most of the growth is the same work written longer. This is the budget fitted to output a second time, and it should be read that way — 600 says what one build needed, not what the bean should cost."
+    },
+    {
+      "date": "2026-09-24",
+      "change": "bean-006: allowed_write_paths += src/seating_planner/invariant_api.py",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Widens write paths; the owner approved it directly.",
+      "note": "factory/invariants/seating.yaml names its seam as seating_planner.invariant_api.solve_from_spec and applies to bean-006 first, but no bean in the set could write that module: bean-001 held src/seating_planner/** and deferred the seam to \"a later bean\" that was never named. Run bean-006-20260924T133206Z found it at spec and halted at gate with every other part green. The first bean the invariants bind now ships the seam they call, rather than a dedicated bean ahead of it."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",

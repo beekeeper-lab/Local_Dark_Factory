@@ -32,6 +32,8 @@ context:
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
+  # Added 2026-09-24: the invariants seam. Widens paths, so it re-opened approval.
+  - src/seating_planner/invariant_api.py
 acceptance_criteria:
   - id: ac1
     text: With sufficient capacity and satisfiable rules, every eligible guest is assigned to exactly one table.
