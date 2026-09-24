@@ -43,6 +43,9 @@ acceptance_criteria:
   - id: ac4
     text: The audit log is append-only — an attempt to modify or delete an existing entry is rejected.
     verify: { kind: test, test_id: "tests/store/test_audit.py::test_audit_log_is_append_only" }
+  - id: ac5
+    text: Removing a guest, table, group or rule from a saved event and saving again writes an audit entry for the removed entity, carrying actor, timestamp, entity type and entity id.
+    verify: { kind: test, test_id: "tests/store/test_audit.py::test_removal_writes_audit_entry" }
 constraints:
   - text: SQLite only; no external database service
     # A client library for a service is the service arriving. The ORM half of
@@ -51,7 +54,7 @@ constraints:
   - text: no ORM dependency beyond the standard library
     forbidden_imports: [sqlalchemy, peewee, tortoise, pony, django]
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 450 }
 definition_of_done:
   - all AC verify pass
   - gates green
