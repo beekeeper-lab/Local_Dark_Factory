@@ -107,6 +107,30 @@ pr_for() { # pr_for <bean-id> -> a pr url recorded by ANY run of it, or empty
   done
 }
 
+# pr_closed <url> — did someone close this pull request without merging it?
+#
+# The one question in this file only GitHub can answer. bean-004's PR #5 was
+# closed on 2026-09-24 so the bean could be re-run with a new criterion, and the
+# queue went on calling it `pr_open` — a closed pull request leaves nothing
+# local behind: run.json still records its url, and an unmerged branch looks the
+# same whether its pull request is open or closed. So the queue told a human to
+# merge a pull request that no longer existed, and hid the re-run behind it.
+#
+# Asked only for a pull request that would otherwise be reported `pr_open` —
+# merged ones are settled from git below, before this is reached — once per url,
+# and bounded by a timeout. Anything but an answer of CLOSED keeps `pr_open`:
+# no network, no `gh`, no auth all mean "unknown", and an unknown blocks.
+# QUEUE_GH names the command, so the tests can answer without a network.
+declare -A PR_CLOSED_CACHE=()
+pr_closed() {
+  local url="$1" state
+  if [ -z "${PR_CLOSED_CACHE[$url]+x}" ]; then
+    state="$(timeout 15 "${QUEUE_GH:-gh}" pr view "$url" --json state -q .state 2>/dev/null || true)"
+    PR_CLOSED_CACHE[$url]="$state"
+  fi
+  [ "${PR_CLOSED_CACHE[$url]}" = CLOSED ]
+}
+
 DEFAULT_BRANCH="$([ -f "$ROOT/factory/repo.yaml" ] && "$PIPELINE_DIR/yaml2json.sh" "$ROOT/factory/repo.yaml" 2>/dev/null | jq -r '.default_branch // "main"' || echo main)"
 
 # resolve_branch <recorded-name> -> a sha, or empty.
@@ -168,7 +192,20 @@ merged() { # merged <bean-id> — is this bean's work on the default branch?
   # other answer is a bean built against a tree that does not have its
   # dependencies in it.
   [ -n "$sha" ] || return 1
-  git -C "$ROOT" merge-base --is-ancestor "$sha" "$DEFAULT_BRANCH" 2>/dev/null
+  git -C "$ROOT" merge-base --is-ancestor "$sha" "$DEFAULT_BRANCH" 2>/dev/null || return 1
+  # Being an ancestor is not being merged. A branch cut from the default branch
+  # and not yet committed to is an ancestor too — it IS a commit of main. Found
+  # 2026-09-24 when bean-004 was re-run after its PR #5 was closed: the new
+  # branch sat at main's tip, the queue called bean-004 `done` on the strength of
+  # the closed pull request, and offered bean-017, which depends on it.
+  #
+  # A merge brings the branch in through a merge commit's second parent, so its
+  # tip is off main's first-parent line; the point a branch was cut from is on
+  # it. A fast-forward merge also lands on the line and reads as unmerged here —
+  # the blocking direction, and not how pull requests merge in these repos.
+  # (grep reads it all: -q would stop early, and under pipefail the SIGPIPE
+  # rev-list takes for it would read as "not on the line".)
+  ! git -C "$ROOT" rev-list --first-parent "$DEFAULT_BRANCH" 2>/dev/null | grep -xF "$sha" >/dev/null
 }
 
 # halted_run_for <bean-id> — the newest run of this bean that stopped for a human.
@@ -207,6 +244,13 @@ while IFS= read -r id; do
   else
     pr="$(pr_for "$id")"
     br="$(branch_for "$id")"
+    closed=""
+    if [ -n "$pr" ] && ! merged "$id" && pr_closed "$pr"; then
+      # Closed unmerged: the bean is not built, so it is judged as if no pull
+      # request had been opened — in progress if its branch exists, otherwise
+      # by its dependencies — and the row says why the url is being ignored.
+      closed="$pr"; pr=""
+    fi
     if [ -n "$pr" ] && merged "$id"; then
       state=done; why="merged: $pr"
     elif [ -n "$pr" ]; then
@@ -227,6 +271,8 @@ while IFS= read -r id; do
         if [ -z "$dstate" ]; then blocked="$blocked $dep(unknown)"
         elif [ "$dstate" != approved ]; then blocked="$blocked $dep($dstate)"
         elif [ -z "$(pr_for "$dep")" ]; then blocked="$blocked $dep(not built)"
+        elif ! merged "$dep" && pr_closed "$(pr_for "$dep")"; then
+          blocked="$blocked $dep(pull request closed, not merged)"
         elif ! merged "$dep"; then blocked="$blocked $dep(pull request not merged)"
         fi
       done < <(jq -r '.deps[]?' <<<"$row")
@@ -237,6 +283,8 @@ while IFS= read -r id; do
       fi
     fi
   fi
+  [ -n "${closed:-}" ] && why="${why:+$why; }pull request closed without merging: $closed"
+  closed=""
   halted=""
   case "$state" in
     ready|blocked) halted="$(halted_run_for "$id" || true)" ;;
