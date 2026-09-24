@@ -31,6 +31,14 @@
       "reopens_approval": true,
       "rule": "This loosens a limit, so under the rule above it reopens approval; the owner approved it directly, which is that approval.",
       "note": "With ac5 added, the spec session's full prototype came to 396 changed lines against 400 — the margin bean-003 missed by four. Raised before the build ran, not after the gate failed, for the same reason as bean-003: 400 was an estimate written before the bean was specified, and ac5 added work to it."
+    },
+    {
+      "date": "2026-09-24",
+      "change": "bean-004: size_budget.max_diff_lines 450 → 600",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Loosens a limit; the owner approved it directly.",
+      "note": "Raised AFTER the gate failed, which is the weaker kind of change: the build came in at 549 lines (store 228+89, tests 141+91) with every other gate part green, against 358 for PR #5's four criteria. The removal logic itself is about ten lines; most of the growth is the same work written longer. This is the budget fitted to output a second time, and it should be read that way — 600 says what one build needed, not what the bean should cost."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
