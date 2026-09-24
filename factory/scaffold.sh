@@ -379,7 +379,7 @@ jq -n \
   },
   test_command: ["pytest", "-q"],
   verify_timeout_s: 900,
-  worker_timeout_s: 3600,
+  worker_timeout_s: 5400,
   sandbox_env: {
     PYTHONPATH: "/work/src"
   },
