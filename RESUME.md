@@ -3,6 +3,30 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-24: bean-005 is a PR, and bean-004 goes round again with ac5
+
+**bean-005 is seating-planner PR #6**: 2 tasks, both verified on attempt 1,
+gate, hidden tests and CI green, about 2.4h wall clock (spec 56 min). All four
+audits advisory with no verdict: spec and impl `budget-spent-thinking`, doc hit
+the 32768 window, package answered with no verdict.
+
+**PR #5 closed; bean-004 is being re-run from spec.** Its store audited only
+entities still present after a save, so a removal left no entry — ac2 said
+"every mutation" and nothing visible or hidden tested one. bean-004 gained ac5
+and a 450-line budget (owner-approved; the spec's prototype was 396/400), the
+hidden suite a removal check (factory PR #9). The first re-run's spec was killed
+at 3630s with a finished prototype and nothing written; `worker_timeout_s` is
+now 5400 in the scaffold (PR #4) and in seating-planner's config.
+
+**Found by that re-run, factory PR #8:** the queue called a closed PR `pr_open`,
+and a fresh branch at main's tip `merged` — which marked bean-004 done and
+offered bean-017.
+
+**Left open, on purpose:** PR #5 also wrote an `upsert` entry for every entity
+on every save, changed or not, so its log could not say what changed. FR-003
+attributes *changes*. Not in bean-004 — it would have grown a bean already at
+its budget — and a candidate for a later bean if the rebuild does the same.
+
 ## 2026-09-23: bean-004 finished, and what running and reading it found
 
 **Waiting on a human, in order:**
