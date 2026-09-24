@@ -23,6 +23,14 @@
       "reopens_approval": false,
       "rule": "Adds an independent check and loosens nothing: ac2 already said every mutation, and a removal is one. It makes explicit what PR #5 showed the text left open.",
       "note": "PR #5 audited only entities still present after a save, so removals left no entry and every visible and hidden test passed. The hidden suite gained test_the_audit_log_can_record_a_removal the same day. Not addressed here: PR #5 also logged every unchanged entity as an upsert on each save."
+    },
+    {
+      "date": "2026-09-24",
+      "change": "bean-004: size_budget.max_diff_lines 400 → 450",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "This loosens a limit, so under the rule above it reopens approval; the owner approved it directly, which is that approval.",
+      "note": "With ac5 added, the spec session's full prototype came to 396 changed lines against 400 — the margin bean-003 missed by four. Raised before the build ran, not after the gate failed, for the same reason as bean-003: 400 was an estimate written before the bean was specified, and ac5 added work to it."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
