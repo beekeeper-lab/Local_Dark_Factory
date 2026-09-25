@@ -10,7 +10,18 @@ PR #8 (bean-006) was merged on the owner's instruction. **bean-007 is PR #9**
 CI green, 206 changed lines against 350. There was nothing to amend: the soft
 objective went into `solve_event` with its signature unchanged, so the invariant seam
 exercises soft scoring through the unchanged `invariant_api.py`. Audits were advisory
-and stamped nothing, the same pattern as bean-006. Next ready: bean-017.
+and stamped nothing, the same pattern as bean-006.
+
+PR #9 was merged on the owner's instruction. **bean-008 is PR #10**
+(`bean-008-20260925T042106Z`): 2 tasks, both verified first time, CI green. Gate 1
+failed on size alone, 409 lines against 350; tests are 198 of them. The owner raised
+the budget to 450 after the gate (`986080e`), and gate 2 passed. Audits were advisory
+and stamped nothing.
+
+**Open decision: budgets.** This is the fourth budget raised after a gate (003, 004,
+006, 008). Pre-spec estimates land 15–35% low, and tests are about half of each diff.
+The 12 remaining beans could get one owner-approved re-estimate pass instead of
+stopping one at a time. Next ready: bean-017 and whatever PR #10 unblocks.
 
 ## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
 
