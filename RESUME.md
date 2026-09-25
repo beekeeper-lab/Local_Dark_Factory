@@ -3,6 +3,15 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-25: bean-006 merged; bean-007 is PR #9
+
+PR #8 (bean-006) was merged on the owner's instruction. **bean-007 is PR #9**
+(`bean-007-20260925T015546Z`): 2 tasks, both verified first time, gate first time,
+CI green, 206 changed lines against 350. There was nothing to amend: the soft
+objective went into `solve_event` with its signature unchanged, so the invariant seam
+exercises soft scoring through the unchanged `invariant_api.py`. Audits were advisory
+and stamped nothing, the same pattern as bean-006. Next ready: bean-017.
+
 ## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
 
 **Merged:** seating-planner PR #7 (bean-004 with ac5, 12:49Z) and PR #6 (bean-005).
