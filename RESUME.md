@@ -29,9 +29,23 @@ reopens approval; the manifest records the owner's approval. A dedicated seam be
 was the alternative. The old run's commits are the local branch
 `backup/bean-006-run-20260924T133206Z`.
 
-**Running:** `bean-006-20260924T191742Z`, a fresh run from spec, because the old
-spec deliberately left the seam out and reusing it would fail the same way.
-There are no hidden tests for bean-006.
+**bean-006 is seating-planner PR #8** (run `bean-006-20260924T191742Z`, fresh from
+spec, since the old spec deliberately left the seam out). 4 tasks, all verified;
+task-3 is `invariant_api.py`. The invariants check passes, and so do CI and all five
+ACs. No hidden tests exist for bean-006. On the way:
+- It halted at audit-spec because it was launched without `FACTORY_ADVISORY_AUDITS=1`
+  (operator error), then was resumed with it.
+- Gate 1 failed on size only, 525 lines against 400: the seam is 202, and the solver
+  plus tests are 323. The owner raised the budget to 550 after the gate (`1e23687`,
+  seating-planner `0f64a6f`).
+- Gate 2 failed because the budget commit was first put on the bean branch, so
+  `factory/beans/**` counted as bean output. It was moved to `main` and merged in,
+  as bean-004's was.
+- Both gate records were moved to `failed-attempts/resolved/` with a `gate.NOTE`
+  saying why, and gate 3 passed.
+
+Audits were advisory and stamped nothing: spec and doc gave no judgement, and impl
+and package were refused for `quote-not-on-disk`.
 
 **Worth a later look:** the invariants seam is a cross-cutting file in a corpus
 where every bean owns a subtree. bean-007, 009 and 013 are also in `applies_to`;
