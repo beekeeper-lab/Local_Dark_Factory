@@ -71,6 +71,14 @@
       "reopens_approval": true,
       "rule": "Loosens limits; the owner approved the whole table directly.",
       "note": "Set BEFORE the builds, from the merged beans rather than from any one gate. Beans 002–008 cost 51–110 changed lines per acceptance criterion (median 81); the old budgets sat near the median, so about half tripped. New rule, about the 80th percentile: 4 ACs 450, 5 ACs 550, a new self-contained subtree 450 (002 and 005 came in at 336 and 320), several subtrees or a refactor 600 (a move counts on both sides). Remaining total 4950 → 6300. The size gate is now a runaway guard rather than a tight target."
+    },
+    {
+      "date": "2026-09-25",
+      "change": "bean-010: size_budget.max_diff_lines 450 → 500",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Loosens a limit; the owner approved it directly.",
+      "note": "Raised AFTER the gate failed, at 460 against the re-estimated 450, with every other part green (report.py 138, solver 91, tests 231 for four ACs). 115 lines per AC, just past the 80th-percentile rule; the first bean on the new budgets, and 2% over."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
