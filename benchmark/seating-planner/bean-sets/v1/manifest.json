@@ -55,6 +55,14 @@
       "reopens_approval": true,
       "rule": "Loosens a limit; the owner approved it directly.",
       "note": "Raised AFTER the gate failed, at 525 lines with every other part green, invariants included. The cause is the path amendment above: invariant_api.py is 202 lines (it validates every field of the spec dict), and the solver and its tests came to 323 against the original 400. The 400 was estimated before bean-006 owned the seam; 550 is that estimate plus the seam, fitted to one build."
+    },
+    {
+      "date": "2026-09-25",
+      "change": "bean-008: size_budget.max_diff_lines 350 → 450",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Loosens a limit; the owner approved it directly.",
+      "note": "Raised AFTER the gate failed, at 409 lines with every other part green (result.py 76, solver 135, tests 198 for four ACs). The fourth post-gate raise after bean-003, 004 and 006: pre-spec estimates keep landing 15–35% low, and tests are about half of each diff. A pass over the remaining beans' budgets is open as a separate decision."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
