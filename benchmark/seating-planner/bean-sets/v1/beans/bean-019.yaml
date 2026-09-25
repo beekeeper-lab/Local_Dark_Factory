@@ -55,7 +55,7 @@ constraints:
       - "requirements*.txt"
   - test assertions must not be edited
 suggested_risk_tier: 1
-size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 400 }
+size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 600 }
 definition_of_done:
   - all AC verify pass
   - gates green

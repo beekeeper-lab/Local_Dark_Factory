@@ -47,7 +47,7 @@ acceptance_criteria:
 constraints:
   - determinism is achieved by configuration, not by sorting the output afterwards
 suggested_risk_tier: 2
-size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 300 }
+size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 450 }
 definition_of_done:
   - all AC verify pass
   - gates green

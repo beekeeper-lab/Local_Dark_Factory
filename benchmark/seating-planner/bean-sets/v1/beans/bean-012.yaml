@@ -48,7 +48,7 @@ acceptance_criteria:
 constraints:
   - mode is an explicit argument with no default
 suggested_risk_tier: 1
-size_budget: { max_tasks: 4, max_files: 3, max_diff_lines: 250 }
+size_budget: { max_tasks: 4, max_files: 4, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green

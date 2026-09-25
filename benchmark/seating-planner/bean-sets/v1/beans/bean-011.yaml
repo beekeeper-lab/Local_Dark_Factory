@@ -55,7 +55,7 @@ constraints:
   - locks are persisted domain data, never interface state
   - a lock is a fixed variable in the model, not a post-solve correction
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 600 }
 definition_of_done:
   - all AC verify pass
   - gates green
