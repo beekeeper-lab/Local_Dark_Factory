@@ -47,6 +47,14 @@
       "reopens_approval": true,
       "rule": "Widens write paths; the owner approved it directly.",
       "note": "factory/invariants/seating.yaml names its seam as seating_planner.invariant_api.solve_from_spec and applies to bean-006 first, but no bean in the set could write that module: bean-001 held src/seating_planner/** and deferred the seam to \"a later bean\" that was never named. Run bean-006-20260924T133206Z found it at spec and halted at gate with every other part green. The first bean the invariants bind now ships the seam they call, rather than a dedicated bean ahead of it."
+    },
+    {
+      "date": "2026-09-24",
+      "change": "bean-006: size_budget.max_diff_lines 400 → 550",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Loosens a limit; the owner approved it directly.",
+      "note": "Raised AFTER the gate failed, at 525 lines with every other part green, invariants included. The cause is the path amendment above: invariant_api.py is 202 lines (it validates every field of the spec dict), and the solver and its tests came to 323 against the original 400. The 400 was estimated before bean-006 owned the seam; 550 is that estimate plus the seam, fitted to one build."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
