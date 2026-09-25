@@ -18,10 +18,7 @@ failed on size alone, 409 lines against 350; tests are 198 of them. The owner ra
 the budget to 450 after the gate (`986080e`), and gate 2 passed. Audits were advisory
 and stamped nothing.
 
-**Open decision: budgets.** This is the fourth budget raised after a gate (003, 004,
-006, 008). Pre-spec estimates land 15–35% low, and tests are about half of each diff.
-The 12 remaining beans could get one owner-approved re-estimate pass instead of
-stopping one at a time. Next ready: bean-017 and whatever PR #10 unblocks.
+**Budgets re-estimated before their builds** (`5e2a12c`, seating-planner `22f1a68`), after the fourth post-gate raise. Beans 002–008 cost 51–110 lines per AC; the budgets sat near the median. The rule now: 4 ACs 450, 5 ACs 550, a new self-contained subtree 450, several subtrees or a refactor 600; bean-012 also gets 4 files. The table and its reasoning are in the manifest. bean-009 was already running on a branch cut before this, at 300; if its gate trips on size, merge `main` into the branch and re-gate.
 
 ## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
 
