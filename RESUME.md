@@ -22,6 +22,14 @@ and stamped nothing.
 
 **bean-009 is PR #11** (`bean-009-20260925T125445Z`): 2 tasks, both verified first time, 258 lines against 300, CI green. `solve_event` gained one optional keyword, and the seam is untouched. The sync step merged in `main` (the budget commit) and re-ran gate and audits, which passed. Audits were advisory and stamped nothing.
 
+## 2026-09-26: bean-010 and bean-011 merged; the owner now merges clean PRs as they come
+
+The owner authorised merging each clean PR (gate and CI green) and starting the next bean. Stop only for decisions such as budgets, paths, or a worker-written halt.
+
+- **bean-010, PR #12**: gate 1 was 460 lines against the re-estimated 450; the budget was raised to 500 after the gate (`3fe7f47`), and the bean merged.
+- **bean-011, PR #13**: task-4 blocked after 3 attempts, and the model was not at fault. The bean's own ACs name `tests/domain/test_locks.py` and `tests/solver/test_locks.py`. With no `__init__.py` under `tests/` and pytest's default prepend mode, that is a module collision that fails the whole suite at collection. Task-3 only ran its own file, so it passed. The owner-approved repo fix is `addopts = "--import-mode=importlib"` in `pyproject.toml` (seating-planner `f730d05`, outside any bean). The build was resumed with `FACTORY_MAX_ATTEMPTS=6`; task-4 was verified on attempt 4, and the bean merged. The leftover attempt-3 worktree is at `build/task-4/attempt-3/leftover-worktree.diff` and in `git stash`.
+- **Factory follow-up, not done:** spec-check could refuse test paths whose basenames collide across `tests/` subfolders before a build spends attempts on them.
+
 ## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
 
 **Merged:** seating-planner PR #7 (bean-004 with ac5, 12:49Z) and PR #6 (bean-005).
