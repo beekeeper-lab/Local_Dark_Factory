@@ -87,6 +87,14 @@
       "reopens_approval": true,
       "rule": "Widens write paths; the owner approved it directly.",
       "note": "ac1 and the no-default constraint make mode a required argument of solve_event, and invariant_api.py is its only caller outside the bean's paths: strict mypy src fails on it and solve_from_spec would raise TypeError. Run bean-012-20260926T115738Z found it twice at spec and wrote no spec. The seam passes Planning as a fixed value, which is the solver's existing behaviour; factory/invariants/** is unchanged. The same shape as bean-006's amendment."
+    },
+    {
+      "date": "2026-09-27",
+      "change": "bean-012: size_budget.max_files 4 → 10",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": true,
+      "rule": "Loosens a limit; the owner approved it directly.",
+      "note": "Raised AFTER the gate failed at 10 files with every other part green and 216 lines against 550. A required mode with no default (ac1 and the constraint) means every existing solve_event call site passes it: 6 of the 10 files are 2–20-line call-site edits in existing solver tests. The file budget was set before that consequence was visible; the line budget is unchanged."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
