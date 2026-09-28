@@ -51,7 +51,7 @@ constraints:
   - lexicographic objective, not a weighted sum
   - a disruption is a table change, per the PRD §5 definition
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 4, max_diff_lines: 400 }
+size_budget: { max_tasks: 6, max_files: 4, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green

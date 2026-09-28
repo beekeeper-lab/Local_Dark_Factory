@@ -3,6 +3,81 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-26: bean-010 and bean-011 merged; the owner now merges clean PRs as they come
+
+The owner authorised merging each clean PR (gate and CI green) and starting the next bean. Stop only for decisions such as budgets, paths, or a worker-written halt.
+
+- **bean-010, PR #12**: gate 1 was 460 lines against the re-estimated 450; the budget was raised to 500 after the gate (`3fe7f47`), and the bean merged.
+- **bean-011, PR #13**: task-4 blocked after 3 attempts, and the model was not at fault. The bean's own ACs name `tests/domain/test_locks.py` and `tests/solver/test_locks.py`. With no `__init__.py` under `tests/` and pytest's default prepend mode, that is a module collision that fails the whole suite at collection. Task-3 only ran its own file, so it passed. The owner-approved repo fix is `addopts = "--import-mode=importlib"` in `pyproject.toml` (seating-planner `f730d05`, outside any bean). The build was resumed with `FACTORY_MAX_ATTEMPTS=6`; task-4 was verified on attempt 4, and the bean merged. The leftover attempt-3 worktree is at `build/task-4/attempt-3/leftover-worktree.diff` and in `git stash`.
+- **Factory follow-up, not done:** spec-check could refuse test paths whose basenames collide across `tests/` subfolders before a build spends attempts on them.
+
+## 2026-09-25: bean-006 merged; bean-007 is PR #9
+
+PR #8 (bean-006) was merged on the owner's instruction. **bean-007 is PR #9**
+(`bean-007-20260925T015546Z`): 2 tasks, both verified first time, gate first time,
+CI green, 206 changed lines against 350. There was nothing to amend: the soft
+objective went into `solve_event` with its signature unchanged, so the invariant seam
+exercises soft scoring through the unchanged `invariant_api.py`. Audits were advisory
+and stamped nothing, the same pattern as bean-006.
+
+PR #9 was merged on the owner's instruction. **bean-008 is PR #10**
+(`bean-008-20260925T042106Z`): 2 tasks, both verified first time, CI green. Gate 1
+failed on size alone, 409 lines against 350; tests are 198 of them. The owner raised
+the budget to 450 after the gate (`986080e`), and gate 2 passed. Audits were advisory
+and stamped nothing.
+
+**Budgets re-estimated before their builds** (`5e2a12c`, seating-planner `22f1a68`), after the fourth post-gate raise. Beans 002–008 cost 51–110 lines per AC; the budgets sat near the median. The rule now: 4 ACs 450, 5 ACs 550, a new self-contained subtree 450, several subtrees or a refactor 600; bean-012 also gets 4 files. The table and its reasoning are in the manifest. bean-009 was already running on a branch cut before this, at 300; if its gate trips on size, merge `main` into the branch and re-gate.
+
+**bean-009 is PR #11** (`bean-009-20260925T125445Z`): 2 tasks, both verified first time, 258 lines against 300, CI green. `solve_event` gained one optional keyword, and the seam is untouched. The sync step merged in `main` (the budget commit) and re-ran gate and audits, which passed. Audits were advisory and stamped nothing.
+
+## 2026-09-24 (afternoon): bean-004 and bean-005 merged; bean-006 found an unowned seam
+
+**Merged:** seating-planner PR #7 (bean-004 with ac5, 12:49Z) and PR #6 (bean-005).
+bean-004's build came in at 549 changed lines with every other gate part green;
+the budget went 450 → 600 *after* the gate (`04da313`), and the manifest says it is
+the budget fitted to output, not an estimate.
+
+**bean-006 run 1 (`bean-006-20260924T133206Z`) halted at gate, 16:19Z.** Lint,
+format, types and unit green, 3 tasks verified, 315 lines. The invariants check
+failed 66 of 66: `factory/invariants/seating.yaml` applies to bean-006 first and
+imports `seating_planner.invariant_api.solve_from_spec`, and **no bean in the set
+could write that module**. bean-001 held `src/seating_planner/**` and its spec
+deferred the seam to "a later bean" that was never named; every later bean is
+confined to its own subtree. The spec session saw it and wrote it up
+(`questions-from-worker/gate-20260924T161948Z.md`) rather than faking it with a
+conftest or `sys.modules` alias; spec-check then forced a retry for missing files,
+and the 4427s second attempt planned only the in-bounds work, carrying the seam as
+Risk 1. The server was rebooted around 16:27Z, after the halt, so nothing was cut
+off.
+
+**Decision (owner):** bean-006 may write `src/seating_planner/invariant_api.py`
+(`a64101a` here, scaffolded to seating-planner `main` as `30ae52b`). Widening paths
+reopens approval; the manifest records the owner's approval. A dedicated seam bean
+was the alternative. The old run's commits are the local branch
+`backup/bean-006-run-20260924T133206Z`.
+
+**bean-006 is seating-planner PR #8** (run `bean-006-20260924T191742Z`, fresh from
+spec, since the old spec deliberately left the seam out). 4 tasks, all verified;
+task-3 is `invariant_api.py`. The invariants check passes, and so do CI and all five
+ACs. No hidden tests exist for bean-006. On the way:
+- It halted at audit-spec because it was launched without `FACTORY_ADVISORY_AUDITS=1`
+  (operator error), then was resumed with it.
+- Gate 1 failed on size only, 525 lines against 400: the seam is 202, and the solver
+  plus tests are 323. The owner raised the budget to 550 after the gate (`1e23687`,
+  seating-planner `0f64a6f`).
+- Gate 2 failed because the budget commit was first put on the bean branch, so
+  `factory/beans/**` counted as bean output. It was moved to `main` and merged in,
+  as bean-004's was.
+- Both gate records were moved to `failed-attempts/resolved/` with a `gate.NOTE`
+  saying why, and gate 3 passed.
+
+Audits were advisory and stamped nothing: spec and doc gave no judgement, and impl
+and package were refused for `quote-not-on-disk`.
+
+**Worth a later look:** the invariants seam is a cross-cutting file in a corpus
+where every bean owns a subtree. bean-007, 009 and 013 are also in `applies_to`;
+if they need to change the seam's behaviour, they cannot write it either.
+
 ## 2026-09-24: bean-005 is a PR, and bean-004 goes round again with ac5
 
 **bean-005 is seating-planner PR #6**: 2 tasks, both verified on attempt 1,

@@ -29,6 +29,8 @@ context:
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
+  # Added 2026-09-26: the invariants seam must pass the now-required mode. Widens paths, so it re-opened approval.
+  - src/seating_planner/invariant_api.py
 acceptance_criteria:
   - id: ac1
     text: Optimization requires an explicit mode; omitting it is rejected rather than defaulted.
@@ -48,7 +50,7 @@ acceptance_criteria:
 constraints:
   - mode is an explicit argument with no default
 suggested_risk_tier: 1
-size_budget: { max_tasks: 4, max_files: 3, max_diff_lines: 250 }
+size_budget: { max_tasks: 4, max_files: 10, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green

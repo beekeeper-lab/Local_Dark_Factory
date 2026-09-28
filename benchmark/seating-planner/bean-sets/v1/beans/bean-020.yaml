@@ -59,7 +59,7 @@ constraints:
   - no seat-level layout implementation in this bean
   - a hard rule that cannot be evaluated is never treated as satisfied
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green

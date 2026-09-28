@@ -47,7 +47,7 @@ constraints:
   - the result object is serializable
   - no private guest notes in the result payload
 suggested_risk_tier: 2
-size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 350 }
+size_budget: { max_tasks: 5, max_files: 4, max_diff_lines: 450 }
 definition_of_done:
   - all AC verify pass
   - gates green
