@@ -390,5 +390,36 @@ out="$(bash "$BROKEN_PIPE/spec-check.sh" factory/runs/R --bean factory/beans/bea
 check "it says the check did not run" "the check did not run" "$out"
 nope  "and does not blame the paths"  "outside the bean's allowed paths" "$out"
 
+printf '\n== a task that creates a test file pytest could not collect ==\n\n'
+#
+# preflight catches the test files a bean's criteria pin. A task list can make
+# the same collision on its own; here it is a retry's worth of minutes, where the
+# build that finds it spends attempts on a path no task may fix.
+cp factory/runs/R/tasks.yaml "$WORK/tasks.keep"
+mkdir -p src/domain_tests; : > src/domain_tests/test_locks.py
+git add -A && git commit -q -m "a tracked test file"
+python3 - factory/runs/R/tasks.yaml <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('write_paths: ["src/c.py"]', 'write_paths: ["src/c.py", "src/solver_tests/test_locks.py", "src/**/test_*.py"]')
+open(p, "w").write(s)
+PY
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the collision is caught"        "FAIL  test-basenames" "$out"
+check "naming both files"              "src/domain_tests/test_locks.py and src/solver_tests/test_locks.py" "$out"
+check "and saying whose to rename"     "rename the task's file" "$out"
+check "the spec fails"                 "SPEC CHECK FAIL" "$out"
+
+python3 - factory/runs/R/tasks.yaml <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('"src/solver_tests/test_locks.py", ', '"src/solver_tests/test_modes.py", ')
+open(p, "w").write(s)
+PY
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "a distinct name passes"         "ok    test-basenames" "$out"
+check "and a glob is not counted as a file" "1 test file(s)" "$out"
+cp "$WORK/tasks.keep" factory/runs/R/tasks.yaml
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

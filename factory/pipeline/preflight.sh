@@ -16,7 +16,8 @@ case "${1:-}" in
     echo "$USAGE"
     echo ""
     echo "Checks: clean working tree, on main, main not behind origin/main,"
-    echo "bean status is Approved, and no existing branch for the bean."
+    echo "bean status is Approved, no existing branch for the bean, and no two"
+    echo "test files the bean names that pytest would import as one module."
     exit 0
     ;;
 esac
@@ -141,6 +142,18 @@ if [ -n "$BEAN_YAML" ] && [ -f "$BEAN_YAML" ]; then
       fail "definition-of-done" "names criteria the bean does not declare: $UNKNOWN — a dangling reference in the bean's own definition of done"
     fi
     pass "definition-of-done" "no dangling criterion references"
+
+    # Test files the bean's own criteria pin. bean-011 named two with one
+    # basename, and the suite could not be collected under pytest's default
+    # import mode; no task could fix it, because the paths are the contract.
+    # Before a spec session is spent on it, not after a build is.
+    mapfile -t TB_PATHS < <(jq -r '(.acceptance_criteria // [])[] | .verify.test_id // empty | split("::")[0]' <<<"$BJ" 2>/dev/null)
+    if [ "${#TB_PATHS[@]}" -gt 0 ]; then
+      TB_OUT="$("$PIPELINE_DIR/test-basenames.sh" "$root" "${TB_PATHS[@]}" 2>&1)" \
+        || fail "test-basenames" "the bean's criteria name test files pytest cannot collect together:
+$(sed 's/^test-basenames: /  /' <<<"$TB_OUT")"
+      pass "test-basenames" "$(sed -n '1s/^test-basenames: //p' <<<"$TB_OUT")"
+    fi
   fi
 fi
 
