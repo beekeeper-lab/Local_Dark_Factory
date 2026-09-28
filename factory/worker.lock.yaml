@@ -14,13 +14,19 @@
 # Built by factory/worker-image/build.sh, which refuses to print a digest for an
 # image that does not hold its contract.
 schema_version: worker-manifest/1.0.0
-image: "localhost/factory-worker-pi:20260917@sha256:12bed818969418bdb429ba32def93cb2c1df644281f8c06a9f4963c73f18c928"
+image: "localhost/factory-worker-pi:20260923@sha256:19cd85dff9380baf8545bbed91004ac444c3f009b29983ccca25de75d804954e"
 
 verify_versions_at_startup: true
 
 expect_versions:
   pi: "0.85.1"
   node: "22"
+  # The worker's self-check, at the gate's pins (read from
+  # gate-image/versions.env by build.sh). Not a verdict: verify and the gates
+  # still run in the gate image, and that is the only "it passed" recorded.
+  ruff: "0.16.7"
+  mypy: "2.3.1"
+  ortools: "9.15.6755"
 
 # What the container may do, recorded here so that a run record citing this
 # manifest is citing something specific rather than the word "sandboxed".

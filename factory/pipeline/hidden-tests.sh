@@ -249,7 +249,9 @@ if [ "$FILE_COUNT" -eq 0 ]; then
 fi
 
 [ -n "$TREE" ] || TREE="$ROOT"
-mapfile -t CMD < <(jq -r '.[]' <<<"$CMD_JSON")
+# NUL-delimited: an element with a newline in it is one argument (see verify.sh).
+CMD=()
+mapfile -d '' -t CMD < <(jq --raw-output0 '.[]' <<<"$CMD_JSON")
 CMD+=( "$MOUNT_AT" )
 
 printf 'hidden tests: %s file(s) from %s, mounted read-only at %s\n' \
