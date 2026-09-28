@@ -1,0 +1,67 @@
+schema_version: bean/2.0.0
+id: bean-021
+repo: beekeeper-lab/seating-planner-py
+title: Soft keep-apart rules count only when their guests sit apart
+intent: >
+  A soft different-table rule adds its weight to the optimization objective only in a
+  chart where its guests are at different tables, so a heavier keep-apart preference
+  outweighs a lighter sit-together one.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-09-28T20:30:00Z"
+  order: 21
+source:
+  kind: manual
+  ref: benchmark/seating-planner/bean-sets/v1/beans/bean-007.yaml
+  date: "2026-09-28"
+  excerpt: "bean-007 intent: Among assignments that satisfy every hard constraint, the solver returns the one with the highest weighted total of satisfied soft constraints."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/rules/
+    - tests/solver/
+  background: >
+    A defect found on 2026-09-28 in the code bean-007 shipped. Each soft rule has an
+    indicator in the CP-SAT model that is meant to be true only while the rule is
+    satisfied, and the objective maximizes the weighted sum of those indicators. For
+    same-table rules the indicator is bounded from above, so it can only be true when
+    the guests share a table. For different-table rules it is only bounded from below:
+    it is forced true when the guests are together and left free when they are apart.
+    A maximizer sets it true either way, so every soft keep-apart rule scores as
+    satisfied whatever the chart does, and never influences which chart is returned.
+
+    Measured on the main branch: two guests, two tables of two, a weight-100 soft
+    different-table rule and a weight-1 soft same-table rule between the same pair.
+    The solver seats them together, and the result's own report lists the weight-100
+    rule as violated with a score of 1. bean-007's tests did not see it because its
+    only keep-apart case is one where table capacity forces the separation anyway.
+
+    The result reporting from bean-008 recomputes satisfaction from the chart and is
+    right; the defect is only in what the solver optimizes.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: When a weight-100 soft different-table rule and a weight-1 soft same-table rule name the same two guests and both charts are valid, the guests are seated at different tables.
+    verify: { kind: test, test_id: "tests/solver/test_soft_keep_apart.py::test_heavier_keep_apart_wins" }
+  - id: ac2
+    text: On small events, no valid chart has a higher reported soft score than the chart the solver returns, checked by enumerating every valid chart.
+    verify: { kind: test, test_id: "tests/solver/test_soft_keep_apart.py::test_returned_chart_is_optimal" }
+  - id: ac3
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - the fix is in how soft rules enter the objective; hard constraints and their encoding are unchanged
+  - the solve_event signature and the result shape are unchanged
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no new rule kinds
+  - no change to result reporting or score computation (bean-008)
+dependencies: [bean-007]
