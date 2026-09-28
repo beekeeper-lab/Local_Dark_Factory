@@ -1,0 +1,12 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-018",
+  "suite_sha256": "082700f866c1bcffd490a5305beb5424c11d2c29c0206cc7ed50a6eea24f6fcb",
+  "tests": 5,
+  "outcome": "half_checked",
+  "checked_against": null,
+  "tree_sha": null,
+  "both_directions": false,
+  "verified_at": "2026-09-28T20:29:58Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2"
+}

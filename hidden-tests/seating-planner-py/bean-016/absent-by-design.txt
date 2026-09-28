@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test first requires the store
+# package, and an empty tree has none.

@@ -1,0 +1,8 @@
+# Nothing here passes against an empty tree. Every test reads or imports
+# src/seating_planner/export/ through a helper that asserts it exists first,
+# so the one absence check (no guest serialized wholesale) fails on nothing
+# rather than passing vacuously.
+#
+# test_a_default_export_carries_no_private_field SKIPS (never passes) when no
+# export callable can be driven without guessing its API; on an empty tree it
+# fails before that.
