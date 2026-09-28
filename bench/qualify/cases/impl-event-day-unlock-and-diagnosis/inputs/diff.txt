@@ -1,0 +1,360 @@
+diff --git a/src/seating_planner/solver/hard.py b/src/seating_planner/solver/hard.py
+index 6f7b527..74cc80d 100644
+--- a/src/seating_planner/solver/hard.py
++++ b/src/seating_planner/solver/hard.py
+@@ -6,7 +6,12 @@ hard-feasible charts, the one with the highest weighted total of satisfied
+ soft rules. In the low_disruption mode the chart must additionally move at
+ most the configured number of guests away from their current table — a hard
+ constraint, not an objective term — and among the hard-feasible charts the
+-one with the fewest such moves wins, the tie broken by the soft score.
++one with the fewest such moves wins, the tie broken by the soft score. In the
++event_day mode every guest on the given chart is implicitly locked to their
++table — an explicit lock is not the exception that pins one guest, being on
++the chart is the rule that pins everyone — with only genuinely new guests
++(and any guest explicitly named in the unlocked set) free to seat, and the
++pinned model is always solved, never short-cut to a re-plan.
+ Either way the result carries the full report: the guest counts, the soft
+ score, the state of every enabled rule and one entry per violated soft rule.
+ """
+@@ -40,13 +45,17 @@ from seating_planner.solver.result import (
+ # stubs, which the gate image's mypy (3.11 target) cannot parse.
+ cp_model: Any = import_module("ortools.sat.python.cp_model")
+ 
+-# The two optimization modes this solver implements, each named once so the
++# The three optimization modes this solver implements, each named once so the
+ # signature, the runtime check and the results all refer to the same
+ # spelling.
+ PLANNING: Final[str] = "planning"
+ # Reoptimize every eligible guest, locked ones pinned, while hard constraints
+ # bound how many guests may move away from their current table.
+ LOW_DISRUPTION: Final[str] = "low_disruption"
++# Seat the day in place: every guest on the current chart is implicitly
++# pinned to their table, and only new guests (plus any explicitly unlocked
++# one) are free variables.
++EVENT_DAY: Final[str] = "event_day"
+ 
+ 
+ class SolverTimeout(RuntimeError):
+@@ -56,19 +65,31 @@ class SolverTimeout(RuntimeError):
+ def solve_event(
+     event: Event,
+     *,
+-    mode: Literal["planning", "low_disruption"],
++    mode: Literal["planning", "low_disruption", "event_day"],
+     current: Mapping[str, str] | None = None,
+     movement_limit: int | None = None,
++    unlocked: set[str] | None = None,
+     time_limit_s: float = 10.0,
+     seed: int = 0,
+     num_search_workers: int = 1,
+ ) -> SolveResult:
++    """Solve one event in the named mode and return the full report.
++
++    planning re-solves every eligible guest from scratch (locked guests
++    pinned) and returns the highest-scoring feasible chart; low_disruption
++    does the same against a given chart under a hard cap on how many guests
++    change tables; event_day pins every guest on the given chart to their
++    table — an implicit lock, whether or not event.locks names them — and
++    seats only the new guests plus any guest in the unlocked set, always by
++    solving the pinned model rather than by re-planning.
++    """
+     # Reject, never reinterpret: a mode the solver does not implement is an
+     # error before any configuration, model building or search runs, and
+     # omitting it is a TypeError, not a silent default.
+-    if mode not in (PLANNING, LOW_DISRUPTION):
++    if mode not in (PLANNING, LOW_DISRUPTION, EVENT_DAY):
+         raise ValueError(
+-            f"unknown optimization mode {mode!r}; allowed: {PLANNING!r} or {LOW_DISRUPTION!r}"
++            f"unknown optimization mode {mode!r}; allowed: {PLANNING!r}, "
++            f"{LOW_DISRUPTION!r} or {EVENT_DAY!r}"
+         )
+     # The low-disruption inputs are validated before any configuration, model
+     # building or search: for its mode both must be given, with every chart
+@@ -90,11 +111,39 @@ def solve_event(
+                 # Reject, never guess: a chart naming a guest the event does
+                 # not have cannot mean "a guest not moving".
+                 raise ValueError(f"current names unknown guest {guest_id!r}")
++        if unlocked is not None:
++            raise ValueError("unlocked does not apply to the low_disruption mode")
++    elif mode is EVENT_DAY:
++        # Same refuse-never-reinterpret posture for this mode: the chart must
++        # be given, an argument that does not apply is rejected rather than
++        # ignored, and a pin that cannot mean anything is an error.
++        if current is None:
++            raise ValueError("current is required in the event_day mode")
++        if movement_limit is not None:
++            raise ValueError("movement_limit does not apply to the event_day mode")
++        guest_ids = {guest.id for guest in event.guests}
++        table_ids = {table.id for table in event.tables}
++        for guest_id, table_id in current.items():
++            if guest_id not in guest_ids:
++                # Reject, never guess: a chart naming a guest the event does
++                # not have cannot mean "a guest not moving".
++                raise ValueError(f"current names unknown guest {guest_id!r}")
++            if table_id not in table_ids:
++                # Unlike low_disruption, a pin to a table that no longer exists
++                # has no degraded meaning here: the guest cannot move, so the
++                # chart is unworkable. Refuse it.
++                raise ValueError(f"current pins guest {guest_id!r} to unknown table {table_id!r}")
++        if unlocked is not None:
++            for guest_id in unlocked:
++                if guest_id not in guest_ids:
++                    raise ValueError(f"unlocked names unknown guest {guest_id!r}")
+     else:
+         if current is not None:
+             raise ValueError("current does not apply to the planning mode")
+         if movement_limit is not None:
+             raise ValueError("movement_limit does not apply to the planning mode")
++        if unlocked is not None:
++            raise ValueError("unlocked does not apply to the planning mode")
+     # The requested configuration, validated; on the early exits nothing ran,
+     # so the request is the configuration used.
+     config = SolverConfig(
+@@ -134,6 +183,13 @@ def solve_event(
+         if current is None or movement_limit is None:
+             raise ValueError("low_disruption inputs failed validation")
+         return _solve_low_disruption(event, eligible, current, movement_limit, seed, time_limit_s)
++    if mode is EVENT_DAY:
++        # Re-narrow for mypy: current was validated non-None above, and the
++        # raise is unreachable. An empty chart is admitted: it simply leaves
++        # every new guest free, recorded as event_day.
++        if current is None:
++            raise ValueError("event_day inputs failed validation")
++        return _solve_event_day(event, eligible, current, unlocked or set(), seed, time_limit_s)
+     model, at, _moves = _build_model(event, eligible)
+     _add_soft_objective(model, event, at)
+     return _solve_model(
+@@ -304,6 +360,43 @@ def _solve_low_disruption(
+     raise SolverTimeout(f"event {event.id!r}: solve undecided after {time_limit_s}s")
+ 
+ 
++def _solve_event_day(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    unlocked: set[str],
++    seed: int,
++    time_limit_s: float,
++) -> SolveResult:
++    # The single-phase event-day solve: the base model plus a day-lock pin
++    # per chart guest, then the usual soft objective and hand-off. No
++    # movement indicators — the mode's promise is that no one in the chart
++    # moves, a fixed variable, not a minimized count.
++    model, at, _moves = _build_model(event, eligible)
++    # The day-lock: a chart guest is a fixed variable at their current table,
++    # whether or not event.locks names them — that is the whole point of the
++    # mode. Only an explicit release into unlocked, or a guest without
++    # variables (not eligible), stays free.
++    for guest_id, table_id in current.items():
++        if guest_id in unlocked or guest_id not in at:
++            continue
++        model.Add(at[guest_id][table_id] == 1)
++    _add_soft_objective(model, event, at)
++    # Deliberately no re-planning or re-optimization shortcut for the
++    # fully-pinned case: the mode always solves the pinned model, which by
++    # construction returns the frozen chart plus the new guests' seats.
++    return _solve_model(
++        model,
++        event,
++        eligible,
++        at,
++        mode=EVENT_DAY,
++        seed=seed,
++        time_limit_s=time_limit_s,
++        diagnose=_diagnose_infeasibility,
++    )
++
++
+ def _build_model(
+     event: Event,
+     eligible: list[str],
+diff --git a/tests/solver/test_event_day.py b/tests/solver/test_event_day.py
+new file mode 100644
+index 0000000..83f3656
+--- /dev/null
++++ b/tests/solver/test_event_day.py
+@@ -0,0 +1,184 @@
++"""Event-day acceptance tests (bean-014): in the event_day mode being on the
++current chart is the rule that pins everyone — an implicit lock, whether or
++not an explicit lock was ever set — and the genuinely free variables are the
++new guests (plus any guest explicitly unlocked). The new guest takes the open
++seat, hard rules are honoured, and nobody who is seated moves. Asserts only on
++solve_event result fields, never on solver internals."""
++
++from __future__ import annotations
++
++from seating_planner.domain import Event, Guest, RsvpStatus, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver import solve_event
++from seating_planner.solver.result import SATISFIED, VIOLATED
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(
++    guest_id: str,
++    status: RsvpStatus = RsvpStatus.CONFIRMED,
++    reserved_seat: bool = False,
++) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=status, reserved_seat=reserved_seat)
++
++
++def _event(
++    tables: list[Table],
++    guests: list[Guest],
++    rules: list[object] | None = None,
++    locks: dict[str, str] | None = None,
++) -> Event:
++    return Event(
++        id="e-1",
++        name="Event",
++        tables=tables,
++        guests=guests,
++        groups=[],
++        rules=rules or [],
++        locks=locks or {},
++    )
++
++
++def _soft(
++    rule_id: str,
++    rule_type: RuleType,
++    weight: int,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.SOFT,
++        weight=weight,
++        guest_ids=guest_ids,
++    )
++
++
++def _hard(
++    rule_id: str,
++    rule_type: RuleType,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.HARD,
++        weight=None,
++        guest_ids=guest_ids,
++    )
++
++
++def test_new_guest_takes_open_seat() -> None:
++    # The chart is fully in place: t-1 is at capacity and t-2 has exactly one
++    # seat open. A new confirmed guest arrives; the only feasible placement
++    # is the open seat, and nobody who is already seated may move. The exact
++    # chart and the recorded mode are both asserted.
++    tables = [_table("t-1", capacity=2), _table("t-2", capacity=3)]
++    guests = [_guest("g-0"), _guest("g-1"), _guest("g-2"), _guest("g-3"), _guest("g-4")]
++    event = _event(tables, guests)
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2", "g-3": "t-2"}
++    result = solve_event(event, mode="event_day", current=current)
++    assert result.status == "feasible"
++    assert result.assignments == {
++        "g-0": "t-1",
++        "g-1": "t-1",
++        "g-2": "t-2",
++        "g-3": "t-2",
++        "g-4": "t-2",
++    }
++    assert result.mode == "event_day"
++
++
++def test_existing_assignments_implicitly_locked() -> None:
++    # event.locks is empty: there is no explicit lock anywhere. The soft rule
++    # wants g-0 and g-2 together and t-2 has a seat open, so a score-maximiser
++    # would move g-0 over and bank the full weight. The event_day mode must
++    # not: every chart guest is implicitly locked, the chart comes back
++    # unchanged, the rule comes back violated and the score stays zero.
++    tables = [_table("t-1", capacity=1), _table("t-2", capacity=2)]
++    guests = [_guest("g-0"), _guest("g-2")]
++    rules = [_soft("r-same", RuleType.SAME_TABLE, 50, ("g-0", "g-2"))]
++    event = _event(tables, guests, rules=rules)
++    assert event.locks == {}
++    current = {"g-0": "t-1", "g-2": "t-2"}
++    result = solve_event(event, mode="event_day", current=current)
++    assert result.status == "feasible"
++    assert result.assignments == current
++    assert result.rule_states["r-same"] == VIOLATED
++    assert result.score == 0
++
++
++def test_new_guest_respects_hard_rules() -> None:
++    # Both tables have room, so capacity cannot decide the new guest's table:
++    # a hard different_table rule between the new guest g-3 and the pinned
++    # g-0 does, and the rule wins. The new guest took the only table it
++    # allows, and nobody else moved.
++    tables = [_table("t-1", capacity=3), _table("t-2", capacity=1)]
++    guests = [_guest("g-0"), _guest("g-1"), _guest("g-3")]
++    rules = [_hard("r-split", RuleType.DIFFERENT_TABLE, ("g-0", "g-3"))]
++    event = _event(tables, guests, rules=rules)
++    current = {"g-0": "t-1", "g-1": "t-1"}
++    result = solve_event(event, mode="event_day", current=current)
++    assert result.status == "feasible"
++    assert result.assignments == {"g-0": "t-1", "g-1": "t-1", "g-3": "t-2"}
++
++
++# The cancellation trap and its mirror image, built on one shared scenario so
++# the two tests differ only by the argument that the contract says decides
++# whether an existing guest may move: t-1 (capacity 3) holds g-0 and g-1, t-2
++# (capacity 1) holds g-2, and a high-weight soft same_table rule between g-0
++# and g-2 banks its full weight if g-2 takes the open seat at t-1.
++
++
++def _trap_tables() -> list[Table]:
++    return [_table("t-1", capacity=3), _table("t-2", capacity=1)]
++
++
++def _trap_rules() -> list[Rule]:
++    return [_soft("r-same", RuleType.SAME_TABLE, 100, ("g-0", "g-2"))]
++
++
++def test_cancellation_moves_nobody() -> None:
++    # g-1 cancels: the event carries them with RsvpStatus.CANCELLED and the
++    # current chart no longer contains them, so their t-1 seat frees up. The
++    # soft rule then wants g-2 moved into that open seat for its full weight, a
++    # score-maximiser would take the improvement — and the mode must decline
++    # it. Both remaining guests keep their current tables exactly, the rule is
++    # reported violated and the score stays zero: nobody moved.
++    tables = _trap_tables()
++    guests = [_guest("g-0"), _guest("g-1", status=RsvpStatus.CANCELLED), _guest("g-2")]
++    event = _event(tables, guests, rules=_trap_rules())
++    current = {"g-0": "t-1", "g-2": "t-2"}
++    result = solve_event(event, mode="event_day", current=current)
++    assert result.status == "feasible"
++    assert result.mode == "event_day"
++    assert result.assignments == {"g-0": "t-1", "g-2": "t-2"}
++    assert result.rule_states["r-same"] == VIOLATED
++    assert result.score == 0
++
++
++def test_explicit_unlock_permits_move() -> None:
++    # The mirror image: the full chart of all three, all confirmed, solved
++    # the same way, with exactly one difference — g-2 is named in the unlocked
++    # argument, the only release the mode knows. The open seat at t-1 is now
++    # open for business: g-2 moves into it, the rule is satisfied and the
++    # score picks up its full weight.
++    tables = _trap_tables()
++    guests = [_guest("g-0"), _guest("g-1"), _guest("g-2")]
++    event = _event(tables, guests, rules=_trap_rules())
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"}
++    result = solve_event(event, mode="event_day", current=current, unlocked={"g-2"})
++    assert result.status == "feasible"
++    assert result.mode == "event_day"
++    assert result.assignments == {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}
++    assert result.rule_states["r-same"] == SATISFIED
++    assert result.score == 100

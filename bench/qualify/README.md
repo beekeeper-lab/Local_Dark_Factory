@@ -5,7 +5,7 @@ Can a local judge catch what this line actually ships?
 `bench/judge-fitness.sh` measures a judge against defects planted in one
 bean-001 spec. This suite measures it against **real audits whose right answer is
 known**. On 2026-09-28, independent Claude reviews of five merged beans found a
-real defect in every one of them. All five had passed tests, gate, CI and an
+real defect in every one of them, and the first pre-merge review (bean-014) found three more. All five had passed tests, gate, CI and an
 advisory audit. Those defects are the cases here, alongside repaired twins that
 differ from a defect case only in the defect.
 
@@ -59,6 +59,7 @@ stricter: audit-check has checked every quote in that judgement against the disk
 | `impl-worker-count-ignored` | impl | reject | hard | bean-009-20260925T125445Z (PR #11) |
 | `impl-mode-identity-comparison` | impl | reject | medium | bean-013-20260928T134342Z (PR #15) |
 | `impl-group-size-counts-ineligible` | impl | reject (contested) | medium | bean-005-20260924T001254Z (PR #6) |
+| `impl-event-day-unlock-and-diagnosis` | impl | reject | medium | bean-014-20260928T162157Z (PR #16), from its pre-merge review |
 | `spec-verify-contradicts-intent` | spec | reject | medium | bean-003-20260918T022947Z |
 | `spec-verify-consistent` | spec | accept | - | twin of `spec-verify-contradicts-intent` |
 | `spec-keyword-and-hardcode-both-asked` | spec | reject | medium | bean-009-20260925T125445Z |
