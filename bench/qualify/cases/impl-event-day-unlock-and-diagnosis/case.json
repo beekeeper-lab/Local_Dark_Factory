@@ -1,0 +1,56 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-event-day-unlock-and-diagnosis",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-014-20260928T162157Z",
+    "pr": 16,
+    "candidate_sha": "87f39db35e6987ed222805c9d4bd0d54901c3ab2",
+    "bean_at": "954346149b75f072dcf0c233688502a753b72d16",
+    "bean_path": "factory/beans/bean-014-event-day-mode-seats-new-guests-without-/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "Three defects: `unlocked` releases only the day-lock pin while every event.locks entry is still pinned, so an explicitly locked and unlocked guest cannot move (ac4); `elif mode is EVENT_DAY:` dispatches by identity; and an event-day infeasibility is diagnosed with probe models that lack the day-lock pins, so unrelated hard rules are named.",
+  "answer_key": {
+    "why": "Found by bean-014's pre-merge review, each demonstrated in the gate image (evidence/reviews/bean-014-20260928T162157Z.md). The first breaks ac4 ('An explicitly unlocked guest may be moved in Event-day mode') whenever the guest also has an explicit lock; the ac4 test uses empty locks. The second repeats bean-013's identity dispatch for the new mode. The third was declared as an open limit in the spec but produces a recommendation to relax a rule that would not help. Naming any of the three is a catch. Repaired by bean-025 (1 and 3) and bean-023 (2).",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "if guest_id in unlocked or guest_id not in at:"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "elif mode is EVENT_DAY:"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "diagnose=_diagnose_infeasibility,"
+      }
+    ]
+  },
+  "anchors": [
+    "unlocked",
+    "explicit lock",
+    "_apply_locks",
+    "event.locks",
+    "mode is",
+    "identity",
+    "diagnos",
+    "unrelated rule",
+    "not carry the pins",
+    "pins"
+  ],
+  "key_by": "Claude Opus 5.5 pre-merge reviewer; each defect demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "medium"
+}

@@ -127,6 +127,14 @@
       "reopens_approval": false,
       "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
       "note": "Found by an independent review of bean-009 (seating-planner PR #11). num_search_workers is validated and stored, but every CP-SAT solver sets num_search_workers = 1; bean-009's spec asked for both. Recorded configuration stays honest because it is read back from the solver, so this is an ignored argument rather than a false record."
+    },
+    {
+      "date": "2026-09-28",
+      "change": "bean-025 added: event-day unlock releases explicit locks, and a missing seat is not blamed on unrelated rules (repairs bean-014)",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": false,
+      "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
+      "note": "bean-014 (seating-planner PR #16) was the first bean through the pre-merge review, which found three demonstrated defects (evidence/reviews/bean-014-20260928T162157Z.md). The owner merged it with this bean as the repair for two of them; the third, identity dispatch on the new mode, is bean-023's, whose criteria cover every mode the solver has when it runs."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",

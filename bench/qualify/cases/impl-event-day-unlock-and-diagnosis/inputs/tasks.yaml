@@ -1,0 +1,102 @@
+schema_version: tasks/1.0.0
+bean_id: bean-014
+tasks:
+  - id: task-1
+    title: "Add the event_day mode: implicit pins for the current chart, plus the new-guest and hard-rule acceptance tests"
+    intent: >
+      Implement the "event_day" optimization mode of solve_event in
+      src/seating_planner/solver/hard.py. Add an EVENT_DAY module constant
+      alongside PLANNING and LOW_DISRUPTION, widen the mode Literal to the
+      three spelled modes, and update the module docstring, the solve_event
+      docstring, and the unknown-mode error message. In event_day mode:
+      current (the guest_id to table_id chart) is required, and its guest ids
+      are validated as in the low_disruption branch, except that an
+      assignment to a table not in event.tables is rejected with a ValueError
+      (an existing guest cannot be pinned to a table that no longer exists);
+      the new keyword argument unlocked — a set of guest_ids, defaulting to
+      empty, meaning no one is unlocked — is accepted only in event_day mode
+      and every id it names must be a known guest; low_disruption's reseating
+      cap is rejected when passed to this mode.
+      Add a _solve_event_day helper that builds the model with
+      _build_model(event, eligible) (no movement indicators), pins every
+      current guest who is not in unlocked and who has variables to their
+      assigned table with model.Add(at[guest_id][table_id] == 1), then applies
+      _add_soft_objective and hands off to _solve_model under mode=EVENT_DAY
+      with diagnose=_diagnose_infeasibility. The pins apply even when
+      event.locks is empty — that is the whole point of the mode — and there
+      is no re-planning or re-optimization shortcut for the fully-pinned case:
+      the mode always solves the pinned model. Create
+      tests/solver/test_event_day.py following the helper conventions of
+      tests/solver/test_low_disruption.py, with the three acceptance tests.
+      test_new_guest_takes_open_seat (ac1): two tables, the current chart
+      completely fills one and leaves exactly one seat open at the other, and
+      a new eligible confirmed guest is added to the event; assert the
+      assignment is exact — the new guest takes the open seat, nobody else
+      moves, and the result records mode "event_day".
+      test_existing_assignments_implicitly_locked (ac2): event.locks is empty,
+      every guest is in the current chart, and a high-weight soft same_table
+      rule sits between two guests at different tables while one table has a
+      seat open — moving one of them would bank the full weight; assert the
+      result equals the current chart, the rule is reported violated and the
+      score is 0. test_new_guest_respects_hard_rules (ac5): a hard
+      different_table rule between the new guest and a pinned guest, with
+      capacity available at both tables so the rule, not capacity, decides;
+      assert the new guest took the only table the rule allows.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+      - tests/solver/test_event_day.py
+    depends_on: []
+    satisfies: [ac1, ac2, ac5]
+    verify:
+      - { kind: command, run: ["python", "-m", "pytest", "tests/solver/test_event_day.py::test_new_guest_takes_open_seat"] }
+      - { kind: command, run: ["python", "-m", "pytest", "tests/solver/test_event_day.py::test_existing_assignments_implicitly_locked"] }
+      - { kind: command, run: ["python", "-m", "pytest", "tests/solver/test_event_day.py::test_new_guest_respects_hard_rules"] }
+      - { kind: command, run: ["mypy", "src"] }
+    max_attempts: 3
+    teaching_note: >
+      Event-day inverts the solver's default: instead of an explicit lock
+      being the exception that pins one guest, being on the current chart is
+      the rule that pins everyone, and the genuinely free variable is the new
+      guest. The mode reuses the existing single-phase mechanics (base model,
+      soft objective, _solve_model) plus a pin loop, so no second solver
+      architecture was invented.
+  - id: task-2
+    title: Event-day cancellation moves nobody; the explicit unlock is the only release
+    intent: >
+      Add the two remaining acceptance tests to the existing
+      tests/solver/test_event_day.py, built on one shared scenario: table t-1
+      with capacity 3 and table t-2 with capacity 1; the current chart has
+      g-0 and g-1 at t-1 and g-2 at t-2; a high-weight soft same_table rule
+      between g-0 and g-2 means moving g-2 into the open seat at t-1 banks the
+      full weight. test_cancellation_moves_nobody (ac3): g-1 is cancelled —
+      the event carries g-1 with RsvpStatus.CANCELLED and the current chart no
+      longer contains them — and event_day is solved over the remainder;
+      assert both remaining guests keep their current tables exactly, the soft
+      rule is reported violated and the score is 0, i.e. the freed seat is
+      never an excuse to re-plan the chart.
+      test_explicit_unlock_permits_move (ac4): the full chart of all three is
+      solved in event_day mode with g-2 named in the unlocked argument; assert
+      g-2 moves to t-1, the rule is satisfied and the score picks up its
+      weight — naming a guest in unlocked is the only way an existing guest
+      may move. Read the task-1 event_day implementation in
+      src/seating_planner/solver/hard.py before finalizing these tests: if it
+      re-plans when no guest is free — for example by delegating the
+      fully-pinned case to a planning solve — fix the implementation so the
+      implicit pins apply unconditionally; the cancellation test must pass
+      against the real implementation, never against a weakened assertion.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+      - tests/solver/test_event_day.py
+    depends_on: [task-1]
+    satisfies: [ac3, ac4]
+    verify:
+      - { kind: command, run: ["python", "-m", "pytest", "tests/solver/test_event_day.py::test_cancellation_moves_nobody"] }
+      - { kind: command, run: ["python", "-m", "pytest", "tests/solver/test_event_day.py::test_explicit_unlock_permits_move"] }
+      - { kind: command, run: ["mypy", "src"] }
+    max_attempts: 3
+    teaching_note: >
+      The bean's own trap: a cancellation frees a seat, which is an
+      opportunity to improve the chart, and the system must decline it. The
+      two tests are written as mirror images — same chart, same rules, the
+      unlocked argument the only difference — so together they pin down that
+      in this mode people are frozen, not merely counted.
