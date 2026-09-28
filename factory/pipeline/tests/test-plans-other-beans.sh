@@ -236,5 +236,25 @@ else
   printf '  SKIP  no corpus\n'
 fi
 
+printf '\n== a code identifier is a reference, not a topic ==\n\n'
+#
+# bean-014's task-1 said "movement_limit is rejected" in event-day mode, and was
+# refused as doing bean-013's work, "Low-disruption mode with a movement limit as a
+# hard constraint". The word pattern splits `movement_limit` at the underscore, and
+# movement and limit are that title's adjacent pair. A task naming an argument
+# another bean added is using that bean's work, not planning it.
+mkbean bean-013 "Low-disruption mode with a movement limit as a hard constraint"
+tasks "In event_day mode current is required and movement_limit is rejected with a ValueError."
+out="$(pob)"; rc=$?
+rc_is "a snake_case identifier does not make a topic" "$rc" 0
+tasks "In event-day mode the \`movement limit\` argument is rejected."
+out="$(pob)"; rc=$?
+rc_is "nor does a backticked span"     "$rc" 0
+tasks "Enforce a movement limit on how many guests may change tables."
+out="$(pob)"; rc=$?
+rc_is "the same words in prose still name the topic" "$rc" 1
+check "and say whose it is"            "bean-013" "$out"
+rm -f "$BEANS/bean-013.yaml"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
