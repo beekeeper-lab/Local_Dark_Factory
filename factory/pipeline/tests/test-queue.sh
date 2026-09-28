@@ -68,6 +68,19 @@ printf 'x\n' > "$REPO/keep.txt"
 printf 'factory/runs/\n' > "$REPO/.gitignore"
 git -C "$REPO" add -A && git -C "$REPO" commit -q -m init
 
+# A stand-in for `gh pr view <url> --json state -q .state`, so no assertion here
+# depends on a network. It answers whatever $WORK/pr-state says — OPEN unless a
+# test says otherwise — and FAIL makes it fail the way gh does offline.
+printf 'OPEN\n' > "$WORK/pr-state"
+cat > "$WORK/gh" <<GH
+#!/usr/bin/env bash
+s="\$(cat "$WORK/pr-state")"
+[ "\$s" = FAIL ] && { echo "error connecting to api.github.com" >&2; exit 1; }
+printf '%s\n' "\$s"
+GH
+chmod +x "$WORK/gh"
+export QUEUE_GH="$WORK/gh"
+
 q()  { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" "$@" 2>&1 ); }
 qj() { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" --json 2>/dev/null ); }
 fac(){ ( cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" "$FACTORY" "$@" 2>&1 ); }
@@ -227,6 +240,55 @@ eq "it is in progress"            "in_progress" \
 eq "and nothing is ready"         "" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 check "with the branch named"     "branch bean/bean-002-x already exists" "$(q --all)"
 git -C "$REPO" branch -qD "bean/bean-002-x"
+
+printf '\n-- a pull request closed without merging is not pr_open --\n\n'
+#
+# Found on the real line, 2026-09-24: bean-004's PR #5 was closed so the bean
+# could be re-run with a new criterion, and the queue went on saying `pr_open` —
+# asking a human to merge a pull request that no longer existed, and hiding the
+# re-run behind it. Nothing local changes when a pull request is closed, so this
+# is the one answer the queue has to ask GitHub for.
+state_of() { jq -r --arg i "$1" '.beans[] | select(.id==$i) | .state' <<<"$(qj)"; }
+why_of()   { jq -r --arg i "$1" '.beans[] | select(.id==$i) | .why'   <<<"$(qj)"; }
+pr_opened bean-002
+eq "an open pull request is pr_open"       "pr_open" "$(state_of bean-002)"
+printf 'CLOSED\n' > "$WORK/pr-state"
+eq "closed, with its branch still here, it is in progress" "in_progress" "$(state_of bean-002)"
+check "and the row says the url is being ignored" \
+      "pull request closed without merging: https://github.com/x/y/pull/9" "$(why_of bean-002)"
+check "a bean that depends on it says why it waits" \
+      "bean-002(pull request closed, not merged)" "$(why_of bean-003)"
+nope  "and nobody is asked to merge it" "waiting on a human to merge: bean-002" "$(q --all)"
+git -C "$REPO" branch -qD "bean/bean-002-x"
+eq "with the branch gone too, it is ready to run again" "ready" "$(state_of bean-002)"
+eq "and it is the ready one"               "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+
+printf '\n-- and a re-run just started from main is not a merge --\n\n'
+#
+# The same morning, the other half: the re-run cut a new branch at main's tip,
+# and a branch with no commits of its own is an ancestor of main. The queue
+# called bean-004 `done` on the closed pull request's url and offered bean-017,
+# which depends on it.
+git -C "$REPO" branch -q "bean/bean-002-x" main
+eq "a fresh branch at main's tip is in progress, not done" "in_progress" "$(state_of bean-002)"
+nope "and what depends on it is not offered"  "bean-003" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
+printf 'OPEN\n' > "$WORK/pr-state"
+eq "nor is it done while the pull request is open" "pr_open" "$(state_of bean-002)"
+printf 'CLOSED\n' > "$WORK/pr-state"
+git -C "$REPO" branch -qD "bean/bean-002-x"
+
+printf '\n-- and a GitHub that cannot be asked leaves it pr_open --\n\n'
+#
+# No network, no gh, no auth: all unknown, and an unknown blocks. The cost is a
+# bean that waits for a human who can look; the other answer re-runs a bean
+# whose pull request may be open and waiting.
+printf 'FAIL\n' > "$WORK/pr-state"
+eq "an unanswerable question is not a closed pull request" "pr_open" "$(state_of bean-002)"
+printf 'MERGED\n' > "$WORK/pr-state"
+eq "and GitHub saying merged does not override git"       "pr_open" "$(state_of bean-002)"
+printf 'OPEN\n' > "$WORK/pr-state"
+rm -rf "$REPO/factory/runs/bean-002-20260101T000000Z"
+eq "the fixture is back where it was" "bean-002" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 
 # --------------------------------------------------------------------------
 printf '\n== factory go ==\n\n'
