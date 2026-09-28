@@ -95,6 +95,14 @@
       "reopens_approval": true,
       "rule": "Loosens a limit; the owner approved it directly.",
       "note": "Raised AFTER the gate failed at 10 files with every other part green and 216 lines against 550. A required mode with no default (ac1 and the constraint) means every existing solve_event call site passes it: 6 of the 10 files are 2–20-line call-site edits in existing solver tests. The file budget was set before that consequence was visible; the line budget is unchanged."
+    },
+    {
+      "date": "2026-09-28",
+      "change": "bean-021 added: Soft keep-apart rules count only when their guests sit apart (a repair bean, depends on bean-007)",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": false,
+      "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
+      "note": "Found while choosing clean controls for the judge qualification suite. bean-007 (seating-planner PR #9, merged) encodes a soft different-table rule's indicator as var_a + var_b - sat <= 1, a lower bound only, so the maximizer sets it true whatever the chart and soft keep-apart rules never influence the result. Measured on main: a weight-100 keep-apart loses to a weight-1 sit-together. bean-007's tests used only a keep-apart case that capacity forces anyway; it had no hidden tests; its impl audit ran advisory and stamped nothing. Hidden tests for bean-021 and for bean-007 (so the next run of this corpus catches it at bean-007) were added at the same time and verified both ways in the gate image. The corpus now has 21 beans; approval order stays bean id order, and bean-021's only dependency is bean-007."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
