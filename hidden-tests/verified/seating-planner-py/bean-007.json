@@ -4,10 +4,9 @@
   "suite_sha256": "19ad771515956e7143d335d5f71d26b4046d4ec113375c55d14ab4e66d0e9f85",
   "tests": 3,
   "outcome": "ok",
-  "checked_against": "seating-planner-py 043e705 (bean-007's merged head, PR #9) with the one-line bean-021 fix applied: var_a + var_b + sat <= 2",
-  "tree_sha": "043e7053ba8c3af25ea6bb0afc28fdae7e8e49d8",
+  "checked_against": "/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/f2802e04-4dd2-4ae0-8517-4a7479e1099a/scratchpad/tree-b7",
+  "tree_sha": null,
   "both_directions": true,
-  "verified_at": "2026-09-28T17:22:18Z",
-  "ran_in": "the pinned gate image (host has no ortools); record written by hand because the image has no jq",
-  "also": "fails 3 of 3 against the same tree without the fix"
+  "verified_at": "2026-09-28T20:25:10Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2"
 }

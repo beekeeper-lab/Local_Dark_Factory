@@ -31,17 +31,25 @@ usage: verify.sh <repo>/<bean> --tree <dir>
   --tree <dir>    a tree the suite must pass against
   --branch <ref>  export this ref from --repo into a temp tree and use that
   --repo <dir>    the git repository --branch lives in
+  --image <ref>   run pytest in this container image (the repo's pinned gate
+                  image, from factory/gates.lock.yaml) instead of on the host.
+                  Needed for any suite whose tree imports what the host lacks:
+                  the host has no ortools, so every solver bean's suite fails
+                  there for a reason that is not the suite's. Also
+                  HIDDEN_VERIFY_IMAGE. The record is still written here, where
+                  jq is.
 
 Exit: 0 both directions hold · 1 one of them does not · 2 could not check
 EOF
 }
 
-SUITE=""; TREE=""; BRANCH=""; REPO=""
+SUITE=""; TREE=""; BRANCH=""; REPO=""; IMAGE="${HIDDEN_VERIFY_IMAGE:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --tree)   TREE="${2:?--tree needs a directory}"; shift 2 ;;
     --branch) BRANCH="${2:?--branch needs a ref}"; shift 2 ;;
     --repo)   REPO="${2:?--repo needs a directory}"; shift 2 ;;
+    --image)  IMAGE="${2:?--image needs an image reference}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) usage >&2; printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
     *)  [ -z "$SUITE" ] && SUITE="$1" || { usage >&2; exit 2; }; shift ;;
@@ -67,14 +75,24 @@ HALF=0
 if [ -z "$TREE" ]; then HALF=1
 elif [ ! -d "$TREE" ]; then printf 'verify: no such tree: %s\n' "$TREE" >&2; exit 2; fi
 
-command -v pytest >/dev/null 2>&1 || { printf 'verify: no pytest on PATH\n' >&2; exit 2; }
+if [ -n "$IMAGE" ]; then
+  command -v podman >/dev/null 2>&1 || { printf 'verify: --image needs podman\n' >&2; exit 2; }
+else
+  command -v pytest >/dev/null 2>&1 || { printf 'verify: no pytest on PATH\n' >&2; exit 2; }
+fi
 
 # The names that are supposed to pass against nothing, declared next to the tests.
 DECLARED="$(sed 's/#.*//; s/[[:space:]]//g' "$DIR/absent-by-design.txt" 2>/dev/null | sed '/^$/d' | sort -u)"
 
 passes_in() { # passes_in <tree> -> the test names that PASSED, one per line
   local t="$1" log; log="$(mktemp)"
-  ( cd "$t" && HIDDEN_TREE="$t" PYTHONPATH="$t/src" pytest -q -p no:cacheprovider -rA "$DIR" ) > "$log" 2>&1
+  if [ -n "$IMAGE" ]; then
+    podman run --rm --network=none -v "$t:/work:ro,Z" -v "$DIR:/hidden:ro,Z" -w /work \
+      -e HIDDEN_TREE=/work -e PYTHONPATH=/work/src -e PYTHONDONTWRITEBYTECODE=1 \
+      "$IMAGE" pytest -q -p no:cacheprovider -rA /hidden > "$log" 2>&1
+  else
+    ( cd "$t" && HIDDEN_TREE="$t" PYTHONPATH="$t/src" pytest -q -p no:cacheprovider -rA "$DIR" ) > "$log" 2>&1
+  fi
   { grep -oE '^PASSED[[:space:]]+[^[:space:]]+::test_[A-Za-z0-9_]+' "$log" | sed 's/.*:://'
     grep -oE '::test_[A-Za-z0-9_]+[[:space:]]+PASSED' "$log" | sed 's/^:://; s/[[:space:]]*PASSED$//'
   } | sort -u
@@ -145,12 +163,13 @@ TREE_SHA=""
 [ -n "$BRANCH" ] && [ -n "$REPO" ] && TREE_SHA="$(git -C "$REPO" rev-parse "$BRANCH" 2>/dev/null || true)"
 jq -n --arg suite "$SUITE" --arg sha "$SUITE_SHA" --arg ref "$TREE_REF" \
       --arg tsha "$TREE_SHA" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      --argjson rc "$rc" --argjson half "$HALF" --argjson n "$N_ALL" \
+      --argjson rc "$rc" --argjson half "$HALF" --argjson n "$N_ALL" --arg img "$IMAGE" \
   '{schema:"hidden-verify/1.0.0", suite:$suite, suite_sha256:$sha, tests:$n,
     outcome:(if $rc != 0 then "not_verified" elif $half == 1 then "half_checked" else "ok" end),
     checked_against:(if $ref == "" then null else $ref end),
     tree_sha:(if $tsha == "" then null else $tsha end),
-    both_directions:($rc == 0 and $half == 0), verified_at:$at}' \
+    both_directions:($rc == 0 and $half == 0), verified_at:$at,
+    ran_in:(if $img == "" then "host" else $img end)}' \
   > "$VERIFIED_DIR/$SUITE.json" 2>/dev/null || true
 
 printf '\n'
