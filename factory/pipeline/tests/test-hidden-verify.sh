@@ -150,5 +150,31 @@ want  "an edited suite hashes differently" "the hash must move when the suite do
 git -C "$(cd "$(dirname "$V")/.." && pwd)" checkout -- "hidden-tests/seating-planner-py/bean-002/test_hidden_domain.py" 2>/dev/null || true
 bash "$V" seating-planner-py/bean-002 >/dev/null 2>&1 || true
 
+printf '\n== --image runs the suite where its imports exist ==\n\n'
+#
+# The host has no ortools, so every solver bean's suite failed verification on the
+# host for a reason that was not the suite's, and bean-007 and bean-021 to bean-025
+# were verified by hand in the gate image. Needs podman and the pinned image, so it
+# skips cleanly without either.
+IMG="$(grep -m1 -oE 'ghcr.io[^" ]+' "$ROOT/factory/scaffold/factory/gates.lock.yaml" 2>/dev/null || true)"
+if command -v podman >/dev/null 2>&1 && [ -n "$IMG" ] && podman image exists "$IMG" 2>/dev/null; then
+  mkdir -p "$ROOT/hidden-tests/_test-fixture/bean-y"
+  printf 'import ortools\n\ndef test_ortools_is_importable():\n    assert ortools\n' \
+    > "$ROOT/hidden-tests/_test-fixture/bean-y/test_needs_ortools.py"
+  if ! python3 -c 'import ortools' 2>/dev/null; then
+    out="$(bash "$V" _test-fixture/bean-y --tree "$GOOD" 2>&1)"; rc=$?
+    rc_is "on the host it cannot pass"   "$rc" 1
+  fi
+  out="$(bash "$V" _test-fixture/bean-y --tree "$GOOD" --image "$IMG" 2>&1)"; rc=$?
+  rc_is "in the gate image it verifies"   "$rc" 0
+  REC_Y="$HIDDEN_VERIFIED_DIR/_test-fixture/bean-y.json"
+  want  "the record says where it ran"    "ran_in should name the image" \
+        test "$(jq -r .ran_in "$REC_Y")" = "$IMG"
+  want  "and it is a full verification"   "both_directions should be true" \
+        test "$(jq -r .both_directions "$REC_Y")" = true
+else
+  printf '  SKIP  no podman or no pinned gate image here\n'
+fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
