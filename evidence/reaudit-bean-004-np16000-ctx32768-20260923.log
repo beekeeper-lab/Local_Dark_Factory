@@ -1,0 +1,54 @@
+# factory reaudit, bean-004-20260922T142454Z, 3 passes x 4 targets, gpt-oss:120b thinking=low.
+# Arm: repo defaults, JUDGE_NUM_PREDICT 16000, num_ctx 32768.
+# Pipeline: integration/bean-004-run; judge.sh identical in both arms. 2026-09-23.
+# Scratch paths replaced with <scratch>.
+
+pipeline snapshot: /tmp/factory-reaudit-snap.IbUw6u/factory/pipeline
+reaudit: factory/runs/bean-004-20260922T142454Z
+  bean:  factory/beans/bean-004-persistence-with-an-append-only-audit-re/bean.yaml
+  keep:  <scratch>/reaudit-np16000-ctx32768
+  judge: low thinking
+
+TARGET    PASS  JUDGE-RC  VERDICT    STAMPED   NOTE
+spec      1     8         -          no        spec: that is the CONTEXT WINDOW, not the token cap.
+impl      1     8         -          no        impl: that is the CONTEXT WINDOW, not the token cap.
+doc       1     8         -          no        doc: that is the CONTEXT WINDOW, not the token cap.
+package   1     0         revise     no        0 finding(s), 4 criteria, conf 0
+spec      2     1         -          no        spec: the model asked for tools instead of answering (repo_browser.pri
+impl      2     8         -          no        impl: that is the CONTEXT WINDOW, not the token cap.
+doc       2     0         revise     no        1 finding(s), 4 criteria, conf 0.5
+package   2     0         revise     no        1 finding(s), 4 criteria, conf 0.9
+spec      3     8         -          no        spec: hit the 16000-token cap before finishing
+impl      3     1         -          no        impl: it reasoned for 2369 characters and then ended its turn (done_re
+doc       3     8         -          no        doc: that is the CONTEXT WINDOW, not the token cap.
+package   3     0         accept     no        1 finding(s), 4 criteria, conf 1
+
+0 of 12 audit run(s) produced a verdict the controller stamped.
+
+why the rest were refused:
+  8  no judgement at all
+  3  quoted text that is on disk nowhere
+  1  no quote long enough to prove anything
+
+Why each of the rest was refused:
+  1-spec  the judge wrote no judgement file.
+  1-impl  the judge wrote no judgement file.
+  1-doc  the judge wrote no judgement file.
+  1-package  the judgement quotes text that is not on disk anywhere.
+  2-spec  the judge wrote no judgement file.
+  2-impl  the judge wrote no judgement file.
+  2-doc  the judgement quotes text that is not on disk anywhere.
+  2-package  no quote long enough to prove anything (all under 12 characters).
+  3-spec  the judge wrote no judgement file.
+  3-impl  the judge wrote no judgement file.
+  3-doc  the judge wrote no judgement file.
+  3-package  the judgement quotes text that is not on disk anywhere.
+
+What it put in `criteria`, when it answered:
+  1-package  ac1, ac2, ac3, ac4
+  2-doc  ac1, ac2, ac3, ac4
+  2-package  ac1, ac2, ac3, ac4
+  3-package  ac1, ac2, ac3, ac4
+
+logs and copies: <scratch>/reaudit-np16000-ctx32768
+<scratch>/reaudit-np16000-ctx32768.json
