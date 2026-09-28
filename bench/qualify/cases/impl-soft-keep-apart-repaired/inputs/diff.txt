@@ -1,0 +1,266 @@
+diff --git a/src/seating_planner/solver/__init__.py b/src/seating_planner/solver/__init__.py
+index db525b5..d65ae23 100644
+--- a/src/seating_planner/solver/__init__.py
++++ b/src/seating_planner/solver/__init__.py
+@@ -1,7 +1,8 @@
+ """Hard-constraint solver for table assignment, built on OR-Tools CP-SAT.
+ 
+-The solver answers one question: does any valid chart exist, and if so, here
+-is one. Soft scoring is not part of this package (bean-007).
++The solver answers one question: what is the best valid chart, among all the
++charts that satisfy every hard constraint, maximizing the weighted total of
++satisfied soft rules the table model can express.
+ """
+ 
+ from __future__ import annotations
+diff --git a/src/seating_planner/solver/hard.py b/src/seating_planner/solver/hard.py
+index 01356e0..cd7fd1e 100644
+--- a/src/seating_planner/solver/hard.py
++++ b/src/seating_planner/solver/hard.py
+@@ -1,5 +1,7 @@
+ """Core CP-SAT model: every eligible guest at exactly one table, no table over
+-capacity, and every expressible hard rule honoured as a constraint.
++capacity, and every expressible hard rule honoured as a constraint, with the
++best valid chart returned: among the hard-feasible charts, the one with the
++highest weighted total of satisfied soft rules.
+ """
+ 
+ from __future__ import annotations
+@@ -67,21 +69,28 @@ def _build_model(event: Event, eligible: list[str]) -> tuple[Any, dict[str, dict
+     for table in event.tables:
+         model.Add(sum(at[guest_id][table.id] for guest_id in eligible) <= table.capacity)
+     _add_rule_constraints(model, event, at)
++    _add_soft_objective(model, event, at)
+     return model, at
+ 
+ 
+ def _hard_rules(event: Event) -> list[Rule]:
+     # Event.rules is list[object]; read it the way the pre-flight does.
++    return _rules_with(event, Hardness.HARD)
++
++
++def _soft_rules(event: Event) -> list[Rule]:
++    return _rules_with(event, Hardness.SOFT)
++
++
++def _rules_with(event: Event, hardness: Hardness) -> list[Rule]:
+     return [
+         rule
+         for rule in event.rules
+-        if isinstance(rule, Rule) and rule.enabled and rule.hardness is Hardness.HARD
++        if isinstance(rule, Rule) and rule.enabled and rule.hardness is hardness
+     ]
+ 
+ 
+ def _add_rule_constraints(model: Any, event: Event, at: dict[str, dict[str, Any]]) -> None:
+-    guests = {guest.id for guest in event.guests}
+-    groups = {group.id: group for group in event.groups}
+     for rule in _hard_rules(event):
+         # Reject, never skip: a silent "feasible" beside an unexpressed hard
+         # rule is the failure this solver must not produce.
+@@ -90,18 +99,9 @@ def _add_rule_constraints(model: Any, event: Event, at: dict[str, dict[str, Any]
+                 f"hard rule {rule.id!r} of kind {rule.rule_type.value!r} has "
+                 "no table-level interpretation"
+             )
+-        member_ids = list(rule.guest_ids)
+-        for group_id in rule.group_ids:
+-            group = groups.get(group_id)
+-            if group is None:
+-                raise ValueError(f"hard rule {rule.id!r} names unknown group {group_id!r}")
+-            member_ids.extend(group.member_ids)
+-        for member_id in member_ids:
+-            if member_id not in guests:
+-                raise ValueError(f"hard rule {rule.id!r} names unknown guest {member_id!r}")
+         # Targets are the members with variables; deduplication handles ids
+         # reached via both guest_ids and a group.
+-        targets = sorted({member_id for member_id in member_ids if member_id in at})
++        targets = _resolve_targets(rule, event, at, "hard rule")
+         for first, second in combinations(targets, 2):
+             for table_id, var_a in at[first].items():
+                 var_b = at[second][table_id]
+@@ -111,6 +111,54 @@ def _add_rule_constraints(model: Any, event: Event, at: dict[str, dict[str, Any]
+                     model.Add(var_a + var_b <= 1)
+ 
+ 
++def _resolve_targets(
++    rule: Rule, event: Event, at: dict[str, dict[str, Any]], label: str
++) -> list[str]:
++    guests = {guest.id for guest in event.guests}
++    groups = {group.id: group for group in event.groups}
++    member_ids = list(rule.guest_ids)
++    for group_id in rule.group_ids:
++        group = groups.get(group_id)
++        if group is None:
++            raise ValueError(f"{label} {rule.id!r} names unknown group {group_id!r}")
++        member_ids.extend(group.member_ids)
++    for member_id in member_ids:
++        if member_id not in guests:
++            raise ValueError(f"{label} {rule.id!r} names unknown guest {member_id!r}")
++    return sorted({member_id for member_id in member_ids if member_id in at})
++
++
++def _add_soft_objective(model: Any, event: Event, at: dict[str, dict[str, Any]]) -> None:
++    # Each expressible enabled soft rule gets one indicator, true only while the
++    # rule is satisfied, and the model maximizes the weighted sum of them.
++    terms: list[Any] = []
++    for rule in _soft_rules(event):
++        # A soft rule the model cannot express simply does not count.
++        if rule.rule_type not in (RuleType.SAME_TABLE, RuleType.DIFFERENT_TABLE):
++            continue
++        targets = _resolve_targets(rule, event, at, "soft rule")
++        # Fewer than two targets makes the rule vacuous: a constant cannot
++        # change which chart wins.
++        if len(targets) < 2:
++            continue
++        weight = rule.weight
++        # Soft rules always carry an int weight; narrow for mypy strict.
++        if weight is None:
++            continue
++        sat = model.NewBoolVar(f"sat_{rule.id}")
++        for first, second in combinations(targets, 2):
++            for table_id, var_a in at[first].items():
++                var_b = at[second][table_id]
++                if rule.rule_type is RuleType.SAME_TABLE:
++                    model.Add(sat + var_a - var_b <= 1)
++                    model.Add(sat + var_b - var_a <= 1)
++                else:
++                    model.Add(var_a + var_b + sat <= 2)
++        terms.append(weight * sat)
++    if terms:
++        model.Maximize(sum(terms))
++
++
+ def _read_assignments(solver: Any, at: dict[str, dict[str, Any]]) -> dict[str, str]:
+     return {
+         guest_id: table_id
+diff --git a/tests/solver/test_objective.py b/tests/solver/test_objective.py
+new file mode 100644
+index 0000000..b5100d9
+--- /dev/null
++++ b/tests/solver/test_objective.py
+@@ -0,0 +1,125 @@
++"""Soft-objective acceptance tests (bean-007, ac1-ac3): one test per claim —
++maximization picks the higher-scoring chart, a weight can never beat a hard
++rule, and weights decide between conflicting soft rules. Asserts only on
++solve_event result fields, never on solver internals."""
++
++from __future__ import annotations
++
++from seating_planner.domain import Event, Guest, RsvpStatus, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver import solve_event
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(guest_id: str) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=RsvpStatus.CONFIRMED)
++
++
++def _event(tables: list[Table], guests: list[Guest], rules: list[Rule]) -> Event:
++    return Event(id="e-1", name="Event", tables=tables, guests=guests, groups=[], rules=rules)
++
++
++def _soft(
++    rule_id: str,
++    rule_type: RuleType,
++    weight: int,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.SOFT,
++        weight=weight,
++        guest_ids=guest_ids,
++    )
++
++
++def _hard(
++    rule_id: str,
++    rule_type: RuleType,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.HARD,
++        weight=None,
++        guest_ids=guest_ids,
++    )
++
++
++def test_higher_score_preferred() -> None:
++    # Two 2-seat tables, four guests: a chart exists that satisfies both soft
++    # rules (pair g-0/g-1 together, g-2 elsewhere) for a total of 100, so a
++    # maximizing solve must return one: the weight-90 rule held beats any
++    # chart that trades it away for the weight-10 rule at best.
++    tables = [_table("t-1", capacity=2), _table("t-2", capacity=2)]
++    guests = [_guest(f"g-{i}") for i in range(4)]
++    event = _event(
++        tables,
++        guests,
++        rules=[
++            _soft("r-same", RuleType.SAME_TABLE, 90, ("g-0", "g-1")),
++            _soft("r-diff", RuleType.DIFFERENT_TABLE, 10, ("g-0", "g-2")),
++        ],
++    )
++    result = solve_event(event)
++    assert result.status == "feasible"
++    assignments = result.assignments
++    # The higher-weighted total won: both rules hold in the returned chart.
++    assert assignments["g-0"] == assignments["g-1"]  # weight-90 same_table
++    assert assignments["g-0"] != assignments["g-2"]  # weight-10 different_table
++
++
++def test_soft_never_overrides_hard() -> None:
++    # Tables fill exactly with the four guests, so placing g-0 and g-1
++    # together is an ordinary achievable choice — a naive search has every
++    # reason to take the weight-100 preference — yet the hard different_table
++    # keeps them apart. A soft rule modelled as a constraint would make the
++    # event infeasible; a weight that beats constraints would break the
++    # separation. Either way this test fails.
++    tables = [_table("t-1", capacity=2), _table("t-2", capacity=2)]
++    guests = [_guest(f"g-{i}") for i in range(4)]
++    event = _event(
++        tables,
++        guests,
++        rules=[
++            _hard("r-diff", RuleType.DIFFERENT_TABLE, ("g-0", "g-1")),
++            _soft("r-same", RuleType.SAME_TABLE, 100, ("g-0", "g-1")),
++        ],
++    )
++    result = solve_event(event)
++    assert result.status == "feasible"  # a preference never buys infeasibility
++    # The constraint still holds, whatever the weight.
++    assert result.assignments["g-0"] != result.assignments["g-1"]
++
++
++def test_conflicting_soft_rules_follow_weight() -> None:
++    # Three guests, one 2-seat table and one 1-seat table: g-0 can share the
++    # big table with only one of the others, so the two soft same_table rules
++    # conflict and only the heavier (weight 80) can be honoured. Every optimal
++    # chart satisfies the weight-80 rule and not the weight-40 one.
++    tables = [_table("t-1", capacity=2), _table("t-2", capacity=1)]
++    guests = [_guest(f"g-{i}") for i in range(3)]
++    event = _event(
++        tables,
++        guests,
++        rules=[
++            _soft("r-heavy", RuleType.SAME_TABLE, 80, ("g-0", "g-1")),
++            _soft("r-light", RuleType.SAME_TABLE, 40, ("g-0", "g-2")),
++        ],
++    )
++    result = solve_event(event)
++    assert result.status == "feasible"
++    assignments = result.assignments
++    assert assignments["g-0"] == assignments["g-1"]  # weight-80 rule holds
++    assert assignments["g-0"] != assignments["g-2"]  # weight-40 rule does not

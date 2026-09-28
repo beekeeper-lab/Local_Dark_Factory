@@ -1,0 +1,66 @@
+schema_version: bean/2.0.0
+id: bean-004
+repo: beekeeper-lab/seating-planner-py
+title: Persistence with an append-only audit record
+intent: >
+  Events, guests, rules and assignments survive a process restart, and every change to
+  them is attributable to a user and a time.
+status: approved
+approval:
+  approved_by: "Gregg Reed (bulk approval, delegated)"
+  approved_at: "2026-09-14T18:38:56Z"
+  order: 4
+source:
+  kind: manual
+  ref: benchmark/seating-planner/requirements/REQUIREMENTS.md
+  date: "2026-09-14"
+  excerpt: "FR-003: The system SHALL record the identity and timestamp of each user who changes a guest, rule, table, assignment, or saved version. NFR-013: A failed, interrupted, or cancelled write SHALL leave either the previously committed state or the fully committed new state."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/rules/
+  background: >
+    A repository (in the storage sense) is the seam between domain objects and where
+    they are stored: the rest of the code asks it to load and save, and does not know
+    whether the answer came from memory or SQLite. NFR-013 is the demanding part — a
+    write that fails partway must leave the previous state intact rather than a
+    half-updated chart, which means each save is one transaction. Concurrent editing is
+    last-write-wins for v1 (see the recorded assumption for PRD §18.1); the audit record
+    is what makes that reconstructable afterward.
+allowed_write_paths:
+  - src/seating_planner/store/**
+  - tests/store/**
+acceptance_criteria:
+  - id: ac1
+    text: An event with guests, tables and rules saves and loads back equal to what was saved.
+    verify: { kind: test, test_id: "tests/store/test_repository.py::test_event_roundtrip" }
+  - id: ac2
+    text: Every mutation writes an audit entry carrying actor, timestamp, entity type and entity id.
+    verify: { kind: test, test_id: "tests/store/test_audit.py::test_mutation_writes_audit_entry" }
+  - id: ac3
+    text: A write that raises partway leaves the previously committed state readable and unchanged.
+    verify: { kind: test, test_id: "tests/store/test_repository.py::test_failed_write_is_atomic" }
+  - id: ac4
+    text: The audit log is append-only — an attempt to modify or delete an existing entry is rejected.
+    verify: { kind: test, test_id: "tests/store/test_audit.py::test_audit_log_is_append_only" }
+constraints:
+  - text: SQLite only; no external database service
+    # A client library for a service is the service arriving. The ORM half of
+    # this is the next constraint.
+    forbidden_imports: [psycopg, psycopg2, pymysql, MySQLdb, pymongo, redis]
+  - text: no ORM dependency beyond the standard library
+    forbidden_imports: [sqlalchemy, peewee, tortoise, pony, django]
+suggested_risk_tier: 2
+size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - text: no migrations framework
+    forbidden_imports: [alembic, yoyo]
+  - no multi-user conflict resolution (last write wins; see PRD §18.1 assumption)
+  - text: no encryption at rest (deployment concern, excluded from the corpus)
+    # Excluded from the corpus means it must not appear, not that it is optional.
+    forbidden_imports: [cryptography, nacl, pysqlcipher3]
+dependencies: [bean-003]

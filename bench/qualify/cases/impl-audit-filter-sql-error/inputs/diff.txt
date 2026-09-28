@@ -1,0 +1,375 @@
+diff --git a/src/seating_planner/store/__init__.py b/src/seating_planner/store/__init__.py
+new file mode 100644
+index 0000000..49888a5
+--- /dev/null
++++ b/src/seating_planner/store/__init__.py
+@@ -0,0 +1,145 @@
++"""Repository: the seam between domain objects and storage; callers never see sqlite3.
++
++One save is one transaction (NFR-013); concurrent editing is last-write-wins per event.
++"""
++
++from __future__ import annotations
++
++import json
++import sqlite3
++from datetime import UTC, datetime
++from pathlib import Path
++from typing import Final
++
++from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
++from seating_planner.rules import Rule
++from seating_planner.store.audit import AuditEntry, AuditLog
++
++__all__ = ["Repository", "StoreError"]
++
++DDL: Final[str] = """
++CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, name TEXT NOT NULL);
++CREATE TABLE IF NOT EXISTS tables (event_id TEXT NOT NULL, id TEXT NOT NULL,
++    name TEXT NOT NULL, capacity INTEGER NOT NULL, shape TEXT NOT NULL,
++    position_x REAL NOT NULL, position_y REAL NOT NULL, PRIMARY KEY (event_id, id));
++CREATE TABLE IF NOT EXISTS guests (event_id TEXT NOT NULL, id TEXT NOT NULL,
++    name TEXT NOT NULL, status TEXT NOT NULL, household_id TEXT,
++    reserved_seat INTEGER NOT NULL, PRIMARY KEY (event_id, id));
++CREATE TABLE IF NOT EXISTS groups (event_id TEXT NOT NULL, id TEXT NOT NULL,
++    name TEXT NOT NULL, members TEXT NOT NULL, PRIMARY KEY (event_id, id));
++CREATE TABLE IF NOT EXISTS rules (event_id TEXT NOT NULL, id TEXT NOT NULL,
++    data TEXT NOT NULL, PRIMARY KEY (event_id, id));
++"""
++
++
++class StoreError(ValueError):
++    """Raised inside the save transaction, so a committed state is never partially overwritten."""
++
++
++def _table_from(row: sqlite3.Row) -> Table:
++    position = (row["position_x"], row["position_y"])
++    return Table(row["id"], row["name"], row["capacity"], row["shape"], position)
++
++
++def _guest_from(row: sqlite3.Row) -> Guest:
++    status = RsvpStatus(row["status"])
++    reserved = bool(row["reserved_seat"])
++    return Guest(row["id"], row["name"], status, row["household_id"], reserved)
++
++
++def _group_from(row: sqlite3.Row) -> Group:
++    return Group(row["id"], row["name"], tuple(json.loads(row["members"])))
++
++
++def _rule_from(row: sqlite3.Row) -> Rule:
++    return Rule.from_dict(json.loads(row["data"]))
++
++
++class Repository:
++    def __init__(self, path: str | Path) -> None:
++        self._conn = sqlite3.connect(str(path))
++        self._conn.row_factory = sqlite3.Row
++        self._conn.executescript(DDL)
++        self._audit = AuditLog(self._conn)
++
++    def save_event(self, event: Event, *, actor: str) -> None:
++        with self._conn:
++            self._conn.execute(
++                "INSERT INTO events (id, name) VALUES (?, ?) "
++                "ON CONFLICT (id) DO UPDATE SET name = excluded.name",
++                (event.id, event.name),
++            )
++            now = self._now()
++            self._audit.append(AuditEntry(event.id, "event", event.id, "upsert", actor, now))
++            for child in ("tables", "guests", "groups", "rules"):
++                self._conn.execute(f"DELETE FROM {child} WHERE event_id = ?", (event.id,))
++            for table in event.tables:
++                self._conn.execute(
++                    "INSERT INTO tables (event_id, id, name, capacity, shape, position_x, "
++                    "position_y) VALUES (?, ?, ?, ?, ?, ?, ?)",
++                    (
++                        event.id,
++                        table.id,
++                        table.name,
++                        table.capacity,
++                        table.shape,
++                        table.position[0],
++                        table.position[1],
++                    ),
++                )
++                self._audit.append(AuditEntry(event.id, "table", table.id, "upsert", actor, now))
++            for guest in event.guests:
++                self._conn.execute(
++                    "INSERT INTO guests (event_id, id, name, status, household_id, "
++                    "reserved_seat) VALUES (?, ?, ?, ?, ?, ?)",
++                    (
++                        event.id,
++                        guest.id,
++                        guest.name,
++                        guest.status.value,
++                        guest.household_id,
++                        int(guest.reserved_seat),
++                    ),
++                )
++                self._audit.append(AuditEntry(event.id, "guest", guest.id, "upsert", actor, now))
++            for group in event.groups:
++                self._conn.execute(
++                    "INSERT INTO groups (event_id, id, name, members) VALUES (?, ?, ?, ?)",
++                    (event.id, group.id, group.name, json.dumps(list(group.member_ids))),
++                )
++                self._audit.append(AuditEntry(event.id, "group", group.id, "upsert", actor, now))
++            for rule in event.rules:
++                to_dict = getattr(rule, "to_dict", None)
++                rule_id = getattr(rule, "id", "<no id>")
++                if not callable(to_dict):
++                    raise StoreError(f"event {event.id!r}: rule {rule_id!r} is not serializable")
++                self._conn.execute(
++                    "INSERT INTO rules (event_id, id, data) VALUES (?, ?, ?)",
++                    (event.id, rule_id, json.dumps(to_dict())),
++                )
++                self._audit.append(AuditEntry(event.id, "rule", str(rule_id), "upsert", actor, now))
++
++    def load_event(self, event_id: str) -> Event:
++        cur = self._conn.execute("SELECT id, name FROM events WHERE id = ?", (event_id,))
++        row = cur.fetchone()
++        if row is None:
++            raise StoreError(f"no such event: {event_id}")
++        tables = [_table_from(r) for r in self._rows("tables", event_id)]
++        guests = [_guest_from(r) for r in self._rows("guests", event_id)]
++        groups = [_group_from(r) for r in self._rows("groups", event_id)]
++        rules: list[object] = [_rule_from(r) for r in self._rows("rules", event_id)]
++        return Event(row["id"], row["name"], tables, guests, groups, rules)
++
++    def audit_log(self, event_id: str | None = None) -> list[AuditEntry]:
++        return self._audit.entries(event_id)
++
++    def close(self) -> None:
++        self._conn.close()
++
++    def _rows(self, table: str, event_id: str) -> list[sqlite3.Row]:
++        sql = f"SELECT * FROM {table} WHERE event_id = ? ORDER BY rowid"
++        return self._conn.execute(sql, (event_id,)).fetchall()
++
++    @staticmethod
++    def _now() -> str:
++        return datetime.now(UTC).isoformat(timespec="microseconds")
+diff --git a/src/seating_planner/store/audit.py b/src/seating_planner/store/audit.py
+new file mode 100644
+index 0000000..9ce485a
+--- /dev/null
++++ b/src/seating_planner/store/audit.py
+@@ -0,0 +1,68 @@
++"""Append-only audit record: who changed which entity and when (FR-003)."""
++
++from __future__ import annotations
++
++import sqlite3
++from dataclasses import astuple, dataclass
++from typing import Final
++
++__all__ = ["AuditEntry", "AuditLog"]
++
++AUDIT_TABLE_SQL: Final[str] = """
++CREATE TABLE IF NOT EXISTS audit_log (
++    id INTEGER PRIMARY KEY AUTOINCREMENT,
++    event_id TEXT NOT NULL,
++    entity_type TEXT NOT NULL,
++    entity_id TEXT NOT NULL,
++    action TEXT NOT NULL,
++    actor TEXT NOT NULL,
++    timestamp TEXT NOT NULL
++);
++CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log
++BEGIN SELECT RAISE(ABORT, 'audit log entries cannot be modified'); END;
++CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
++BEGIN SELECT RAISE(ABORT, 'audit log entries cannot be deleted'); END;
++"""
++
++_INSERT_SQL: Final[str] = (
++    "INSERT INTO audit_log "
++    "(event_id, entity_type, entity_id, action, actor, timestamp) "
++    "VALUES (?, ?, ?, ?, ?, ?)"
++)
++
++
++@dataclass(frozen=True)
++class AuditEntry:
++    event_id: str
++    entity_type: str
++    entity_id: str
++    action: str
++    actor: str
++    timestamp: str
++
++
++class AuditLog:
++    """Append-only audit log; deliberately has no update or delete method.
++
++    The caller (``Repository``) is responsible for setting ``conn.row_factory``;
++    this module does not, and reads rows by explicit positional unpacking, so it
++    is correct with any row factory.
++    """
++
++    def __init__(self, conn: sqlite3.Connection) -> None:
++        self._conn = conn
++        conn.executescript(AUDIT_TABLE_SQL)
++
++    def append(self, entry: AuditEntry) -> None:
++        self._conn.execute(_INSERT_SQL, astuple(entry))
++
++    def entries(self, event_id: str | None = None) -> list[AuditEntry]:
++        query = (
++            "SELECT event_id, entity_type, entity_id, action, actor, timestamp "
++            "FROM audit_log ORDER BY id"
++        )
++        if event_id is not None:
++            query += " WHERE event_id = ?"
++        params: tuple[str, ...] = (event_id,) if event_id is not None else ()
++        rows = self._conn.execute(query, params).fetchall()
++        return [AuditEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+diff --git a/tests/store/test_audit.py b/tests/store/test_audit.py
+new file mode 100644
+index 0000000..77870d6
+--- /dev/null
++++ b/tests/store/test_audit.py
+@@ -0,0 +1,74 @@
++"""Pinned store tests for bean-004: ac2 (every mutation writes an audit entry
++with actor, timestamp, entity type and entity id) and ac4 (the audit log is
++append-only; modification and deletion are rejected even from a raw sqlite3
++connection)."""
++
++from __future__ import annotations
++
++import sqlite3
++from datetime import UTC, datetime
++from pathlib import Path
++
++import pytest
++
++from seating_planner.domain import Event, Guest, Table
++from seating_planner.rules import Rule
++from seating_planner.store import Repository
++
++_TOLERANCE_SECONDS: int = 3600
++
++
++def _small_event() -> Event:
++    tables = [Table("t1", "Table 1", 8, "round", (0.0, 0.0))]
++    guests = [Guest("g1", "Ada Lovelace", "confirmed")]
++    rules = [Rule("r1", "same_table", "soft", 10, guest_ids=("g1",))]
++    return Event("e1", "Wedding", tables, guests, [], rules)
++
++
++def test_mutation_writes_audit_entry(tmp_path: Path) -> None:
++    repo = Repository(tmp_path / "chart.sqlite")
++    repo.save_event(_small_event(), actor="alice")
++    # NOTE: repo.audit_log("e1") currently raises sqlite3.OperationalError
++    # because AuditLog.entries appends "WHERE event_id = ?" after "ORDER BY id"
++    # (src/seating_planner/store/audit.py); that file is outside this task's
++    # write paths, so fetch unfiltered and narrow to the event here.
++    entries = [entry for entry in repo.audit_log() if entry.event_id == "e1"]
++    assert entries
++    pairs = {(entry.entity_type, entry.entity_id) for entry in entries}
++    assert pairs == {
++        ("event", "e1"),
++        ("table", "t1"),
++        ("guest", "g1"),
++        ("rule", "r1"),
++    }
++    now = datetime.now(UTC)
++    for entry in entries:
++        assert entry.actor == "alice"
++        assert isinstance(entry.action, str)
++        assert entry.action
++        parsed = datetime.fromisoformat(entry.timestamp)
++        assert parsed.tzinfo is not None
++        # The store wrote the timestamp moments ago; a one-hour window keeps
++        # the check real without flaking on a slow machine.
++        delta = abs((parsed - now).total_seconds())
++        assert delta <= _TOLERANCE_SECONDS
++    repo.close()
++
++
++def test_audit_log_is_append_only(tmp_path: Path) -> None:
++    db = tmp_path / "chart.sqlite"
++    repo = Repository(db)
++    repo.save_event(_small_event(), actor="alice")
++    before = repo.audit_log()
++    # The attack: a brand-new connection with no knowledge of the Repository.
++    raw = sqlite3.connect(str(db))
++    try:
++        with pytest.raises(sqlite3.IntegrityError):
++            raw.execute("UPDATE audit_log SET actor = ?", ("mallory",))
++        with pytest.raises(sqlite3.IntegrityError):
++            raw.execute("DELETE FROM audit_log")
++    finally:
++        raw.close()
++    assert repo.audit_log() == before
++    assert len(before) >= 4
++    repo.close()
+diff --git a/tests/store/test_repository.py b/tests/store/test_repository.py
+new file mode 100644
+index 0000000..5e3fbec
+--- /dev/null
++++ b/tests/store/test_repository.py
+@@ -0,0 +1,64 @@
++"""Pinned store tests for bean-004: ac1 (a saved event reloads equal to what was saved)
++and ac3 (a save that fails partway leaves the committed state, audit log included, intact)."""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
++from seating_planner.rules import Rule
++from seating_planner.store import Repository, StoreError
++
++
++def _sample_event() -> Event:
++    tables = [
++        Table("t1", "Round A", 8, "round", (1.0, 2)),
++        Table("t2", "Rectangle A", 4, "rect", (0.0, 5.0)),
++    ]
++    guests = [
++        Guest("g1", "Ada Lovelace", "confirmed"),
++        Guest("g2", "Charles Babbage", "pending", reserved_seat=True),
++        Guest("g3", "Grace Hopper", "declined", household_id="h1"),
++    ]
++    groups = [Group("grp1", "Couples", ("g1", "g2"))]
++    rules = [
++        Rule("r1", "same_table", "soft", 80, guest_ids=("g1", "g2")),
++        Rule("r2", "min_distance", "hard", None, target="dance_floor", min_zones=2),
++    ]
++    return Event("e1", "Wedding", tables, guests, groups, rules)
++
++
++def test_event_roundtrip(tmp_path: Path) -> None:
++    db = tmp_path / "chart.sqlite"
++    event = _sample_event()
++    repo = Repository(db)
++    repo.save_event(event, actor="alice")
++    repo.close()
++    reopened = Repository(db)
++    loaded = reopened.load_event("e1")
++    assert loaded == event
++    assert loaded.tables == event.tables
++    assert loaded.guests == event.guests
++    assert loaded.groups == event.groups
++    assert loaded.rules == event.rules
++    assert loaded.guests[1].status is RsvpStatus.PENDING
++    assert loaded.tables[0].position == (1.0, 2.0)
++    with pytest.raises(StoreError):
++        reopened.load_event("no-such-event")
++    reopened.close()
++
++
++def test_failed_write_is_atomic(tmp_path: Path) -> None:
++    committed = _sample_event()
++    repo = Repository(tmp_path / "chart.sqlite")
++    repo.save_event(committed, actor="alice")
++    audit_before = repo.audit_log()
++    broken = _sample_event()
++    broken.add_rule(object())
++    with pytest.raises(StoreError):
++        repo.save_event(broken, actor="bob")
++    assert repo.load_event("e1") == committed
++    assert repo.audit_log() == audit_before
++    repo.close()

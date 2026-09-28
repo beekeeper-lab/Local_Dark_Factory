@@ -1,0 +1,577 @@
+diff --git a/src/seating_planner/solver/hard.py b/src/seating_planner/solver/hard.py
+index f595483..6f7b527 100644
+--- a/src/seating_planner/solver/hard.py
++++ b/src/seating_planner/solver/hard.py
+@@ -1,14 +1,19 @@
+ """Core CP-SAT model: every eligible guest at exactly one table, no table over
+-capacity, and every expressible hard rule honoured as a constraint, with the
+-best valid chart returned: among the hard-feasible charts, the one with the
+-highest weighted total of satisfied soft rules, carrying the full report in
+-its result: the guest counts, the soft score, the state of every enabled rule
+-and one entry per violated soft rule.
++capacity, and every expressible hard rule honoured as a constraint.
++
++In the planning mode the best valid chart is returned: among the
++hard-feasible charts, the one with the highest weighted total of satisfied
++soft rules. In the low_disruption mode the chart must additionally move at
++most the configured number of guests away from their current table — a hard
++constraint, not an objective term — and among the hard-feasible charts the
++one with the fewest such moves wins, the tie broken by the soft score.
++Either way the result carries the full report: the guest counts, the soft
++score, the state of every enabled rule and one entry per violated soft rule.
+ """
+ 
+ from __future__ import annotations
+ 
+-from collections.abc import Mapping
++from collections.abc import Callable, Mapping
+ from importlib import import_module
+ from itertools import combinations
+ from typing import Any, Final, Literal
+@@ -17,6 +22,7 @@ from seating_planner.domain import Event
+ from seating_planner.rules import Hardness, Rule, RuleType
+ from seating_planner.solver.config import SolverConfig
+ from seating_planner.solver.report import (
++    KIND_MOVEMENT_LIMIT,
+     KIND_UNLOCK,
+     InfeasibilityReport,
+     Recommendation,
+@@ -34,10 +40,13 @@ from seating_planner.solver.result import (
+ # stubs, which the gate image's mypy (3.11 target) cannot parse.
+ cp_model: Any = import_module("ortools.sat.python.cp_model")
+ 
+-# The one optimization mode this solver implements: reoptimize every eligible
+-# guest, locked ones pinned. It is named once here so the signature, the
+-# runtime check and the results all refer to the same spelling.
++# The two optimization modes this solver implements, each named once so the
++# signature, the runtime check and the results all refer to the same
++# spelling.
+ PLANNING: Final[str] = "planning"
++# Reoptimize every eligible guest, locked ones pinned, while hard constraints
++# bound how many guests may move away from their current table.
++LOW_DISRUPTION: Final[str] = "low_disruption"
+ 
+ 
+ class SolverTimeout(RuntimeError):
+@@ -47,7 +56,9 @@ class SolverTimeout(RuntimeError):
+ def solve_event(
+     event: Event,
+     *,
+-    mode: Literal["planning"],
++    mode: Literal["planning", "low_disruption"],
++    current: Mapping[str, str] | None = None,
++    movement_limit: int | None = None,
+     time_limit_s: float = 10.0,
+     seed: int = 0,
+     num_search_workers: int = 1,
+@@ -55,8 +66,35 @@ def solve_event(
+     # Reject, never reinterpret: a mode the solver does not implement is an
+     # error before any configuration, model building or search runs, and
+     # omitting it is a TypeError, not a silent default.
+-    if mode != PLANNING:
+-        raise ValueError(f"unknown optimization mode {mode!r}; allowed: {PLANNING!r}")
++    if mode not in (PLANNING, LOW_DISRUPTION):
++        raise ValueError(
++            f"unknown optimization mode {mode!r}; allowed: {PLANNING!r} or {LOW_DISRUPTION!r}"
++        )
++    # The low-disruption inputs are validated before any configuration, model
++    # building or search: for its mode both must be given, with every chart
++    # guest known, and an argument that does not apply to its mode is
++    # rejected, never reinterpreted.
++    if mode is LOW_DISRUPTION:
++        if current is None:
++            raise ValueError("current is required in the low_disruption mode")
++        if movement_limit is None:
++            raise ValueError("movement_limit is required in the low_disruption mode")
++        # Refuse bools like every other integer in the seam: True is not 0.
++        if isinstance(movement_limit, bool) or not isinstance(movement_limit, int):
++            raise ValueError(f"movement_limit must be an int, got {movement_limit!r}")
++        if movement_limit < 0:
++            raise ValueError(f"movement_limit must be at least 0, got {movement_limit!r}")
++        guest_ids = {guest.id for guest in event.guests}
++        for guest_id in current:
++            if guest_id not in guest_ids:
++                # Reject, never guess: a chart naming a guest the event does
++                # not have cannot mean "a guest not moving".
++                raise ValueError(f"current names unknown guest {guest_id!r}")
++    else:
++        if current is not None:
++            raise ValueError("current does not apply to the planning mode")
++        if movement_limit is not None:
++            raise ValueError("movement_limit does not apply to the planning mode")
+     # The requested configuration, validated; on the early exits nothing ran,
+     # so the request is the configuration used.
+     config = SolverConfig(
+@@ -90,7 +128,39 @@ def solve_event(
+             mode,
+             report,
+         )
+-    model, at = _build_model(event, eligible)
++    if mode is LOW_DISRUPTION:
++        # Re-narrow for mypy: both inputs were validated non-None above, and
++        # the raise is unreachable.
++        if current is None or movement_limit is None:
++            raise ValueError("low_disruption inputs failed validation")
++        return _solve_low_disruption(event, eligible, current, movement_limit, seed, time_limit_s)
++    model, at, _moves = _build_model(event, eligible)
++    _add_soft_objective(model, event, at)
++    return _solve_model(
++        model,
++        event,
++        eligible,
++        at,
++        mode=mode,
++        seed=seed,
++        time_limit_s=time_limit_s,
++        diagnose=_diagnose_infeasibility,
++    )
++
++
++def _solve_model(
++    model: Any,
++    event: Event,
++    eligible: list[str],
++    at: dict[str, dict[str, Any]],
++    *,
++    mode: str,
++    seed: int,
++    time_limit_s: float,
++    diagnose: Callable[[Event, list[str], int, float], InfeasibilityReport],
++) -> SolveResult:
++    """Solve one finished single-model problem: the objective is already set,
++    and the infeasibility report is whatever diagnose() names."""
+     solver: Any = cp_model.CpSolver()
+     # One worker plus the caller's seed: the reproducible invariant needs both.
+     solver.parameters.num_search_workers = 1
+@@ -123,7 +193,7 @@ def solve_event(
+         )
+     if status == cp_model.INFEASIBLE:  # equality: Solve returns non-identical status instances
+         # A total infeasibility: no chart, every enabled rule unevaluable,
+-        # and the diagnosis names the rules whose removal restores it.
++        # and the diagnosis names what is to blame.
+         return SolveResult(
+             "infeasible",
+             {},
+@@ -134,16 +204,114 @@ def solve_event(
+             (),
+             used,
+             mode,
+-            _diagnose_infeasibility(event, eligible, seed, time_limit_s),
++            diagnose(event, eligible, seed, time_limit_s),
+         )
+     raise SolverTimeout(f"event {event.id!r}: solve undecided after {time_limit_s}s")
+ 
+ 
++def _solve_low_disruption(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    movement_limit: int,
++    seed: int,
++    time_limit_s: float,
++) -> SolveResult:
++    # The lexicographic objective as two sequential solves of one model shape,
++    # never a weighted sum: first the fewest moves among the hard-feasible
++    # charts (with the limit as a first-class constraint), then the highest
++    # soft score among the charts that tie on that move count.
++    model, at, moves = _build_model(event, eligible, current=current, movement_limit=movement_limit)
++    if not moves:
++        # No eligible guest is in the existing chart: the movement terms are
++        # vacuous and the mode degenerates to the planning solve, one phase.
++        _add_soft_objective(model, event, at)
++        return _solve_model(
++            model,
++            event,
++            eligible,
++            at,
++            mode=LOW_DISRUPTION,
++            seed=seed,
++            time_limit_s=time_limit_s,
++            diagnose=_diagnose_infeasibility,
++        )
++    model.Minimize(sum(moves, 0))
++    solver: Any = cp_model.CpSolver()
++    solver.parameters.num_search_workers = 1
++    solver.parameters.random_seed = seed
++    solver.parameters.max_time_in_seconds = time_limit_s
++    status = solver.Solve(model)
++    # The recorded configuration is read back from the phase-1 solver, as for
++    # a planning run.
++    used = SolverConfig(
++        seed=solver.parameters.random_seed,
++        num_search_workers=solver.parameters.num_search_workers,
++        time_limit_s=solver.parameters.max_time_in_seconds,
++    )
++    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
++        # A sum of booleans is an exact integer; phase 2 pins to it.
++        fewest = int(solver.ObjectiveValue())
++    elif status == cp_model.INFEASIBLE:
++        # No chart honours every hard constraint within the limit; the
++        # diagnosis decides whether the limit itself is the cause.
++        return SolveResult(
++            "infeasible",
++            {},
++            0,
++            len(eligible),
++            0,
++            _unevaluable_states(event),
++            (),
++            used,
++            LOW_DISRUPTION,
++            _diagnose_low_disruption(event, eligible, current, movement_limit, seed, time_limit_s),
++        )
++    else:
++        raise SolverTimeout(f"event {event.id!r}: solve undecided after {time_limit_s}s")
++    # Phase 2: rebuild the identical model from scratch — CP-SAT refuses a
++    # second objective on a model that already had one — pin the change count
++    # to the phase-1 optimum and take the highest soft score among the ties.
++    model2, at2, moves2 = _build_model(
++        event, eligible, current=current, movement_limit=movement_limit
++    )
++    model2.Add(sum(moves2, 0) == fewest)
++    _add_soft_objective(model2, event, at2)
++    solver2: Any = cp_model.CpSolver()
++    solver2.parameters.num_search_workers = 1
++    solver2.parameters.random_seed = seed
++    solver2.parameters.max_time_in_seconds = time_limit_s
++    status2 = solver2.Solve(model2)
++    if status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
++        assignment = _read_assignments(solver2, at2)
++        states, violations, score = _build_report(event, assignment, at2)
++        return SolveResult(
++            "feasible",
++            assignment,
++            len(assignment),
++            len(eligible) - len(assignment),
++            score,
++            states,
++            violations,
++            used,
++            LOW_DISRUPTION,
++        )
++    if status2 == cp_model.INFEASIBLE:
++        # Phase 1 found a chart at exactly this many moves and that chart
++        # satisfies the pin, so phase 2 cannot be infeasible; refuse rather
++        # than guess if the solver ever says so anyway.
++        raise RuntimeError(f"event {event.id!r}: phase-2 solve unexpectedly infeasible")
++    raise SolverTimeout(f"event {event.id!r}: solve undecided after {time_limit_s}s")
++
++
+ def _build_model(
+     event: Event,
+     eligible: list[str],
+     skip_rule_id: str | None = None,
+-) -> tuple[Any, dict[str, dict[str, Any]]]:
++    *,
++    current: Mapping[str, str] | None = None,
++    movement_limit: int | None = None,
++) -> tuple[Any, dict[str, dict[str, Any]], list[Any]]:
+     model: Any = cp_model.CpModel()
+     # at[guest][table] is the "guest sits at table" boolean; ineligible guests
+     # get no variables, which excludes them from every result by construction.
+@@ -156,12 +324,31 @@ def _build_model(
+         model.AddExactlyOne(at[guest_id].values())
+     for table in event.tables:
+         model.Add(sum(at[guest_id][table.id] for guest_id in eligible) <= table.capacity)
+-    # Locks are fixed before the rule constraints and the soft objective: a
+-    # hard fix the optimizer can never trade away.
++    # With an existing chart, each eligible guest in it gets one movement
++    # indicator — a disruption is a table change — forced true whenever the
++    # guest is seated anywhere other than their current table; a table that
++    # no longer exists differs from every remaining one, so the move is
++    # forced, and a guest absent from the chart gets no indicator at all.
++    moves: list[Any] = []
++    if current is not None:
++        for guest_id in eligible:
++            before = current.get(guest_id)
++            if before is None:
++                continue
++            move = model.NewBoolVar(f"move_{guest_id}")
++            for table_id, var in at[guest_id].items():
++                if table_id != before:
++                    model.Add(var <= move)
++            moves.append(move)
++    # Only with at least one indicator: with an empty list the comparison
++    # would evaluate to a Python bool, a vacuous non-constraint.
++    if movement_limit is not None and moves:
++        model.Add(sum(moves, 0) <= movement_limit)
++    # Locks are fixed before the rule constraints: a hard fix the optimizer
++    # can never trade away.
+     _apply_locks(model, event, at, skip_guest_id=None)
+     _add_rule_constraints(model, event, at, skip_rule_id)
+-    _add_soft_objective(model, event, at)
+-    return model, at
++    return model, at, moves
+ 
+ 
+ def _apply_locks(
+@@ -302,6 +489,43 @@ def _add_rule_constraints(
+                     model.Add(var_a + var_b <= 1)
+ 
+ 
++def _diagnose_low_disruption(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    movement_limit: int,
++    seed: int,
++    time_limit_s: float,
++) -> InfeasibilityReport:
++    # The limit is named as the cause only when the model built without it
++    # comes back satisfiable — then, and only then, does raising the limit
++    # restore feasibility, an exact property probed under the same seed,
++    # worker and time-limit pins as every other diagnosis.
++    if _probe_satisfiable(
++        _build_model(event, eligible, current=current, movement_limit=None)[0],
++        seed=seed,
++        time_limit_s=time_limit_s,
++    ):
++        shortfall = max(0, len(eligible) - sum(t.capacity for t in event.tables))
++        return InfeasibilityReport(
++            (),
++            shortfall,
++            (
++                Recommendation(
++                    KIND_MOVEMENT_LIMIT,
++                    f"No arrangement seats every guest while moving at most "
++                    f"{movement_limit} guests from their current table; the "
++                    "cause is the movement limit, not capacity — raise the "
++                    "limit to free the chart.",
++                ),
++            ),
++        )
++    # The limit-free model is not satisfiable (or undecided, and an undecided
++    # probe names nothing): the cause is a rule, a lock or capacity, and the
++    # existing diagnosis already names those.
++    return _diagnose_infeasibility(event, eligible, seed, time_limit_s)
++
++
+ def _probe_satisfiable(model: Any, *, seed: int, time_limit_s: float) -> bool:
+     # The same three deterministic pins as the main solve, so the diagnosis
+     # is reproducible the way the solve itself is.
+diff --git a/src/seating_planner/solver/report.py b/src/seating_planner/solver/report.py
+index 0df968d..facd392 100644
+--- a/src/seating_planner/solver/report.py
++++ b/src/seating_planner/solver/report.py
+@@ -5,7 +5,9 @@ diagnosis: which enabled hard rule ids are involved in the conflict, how many
+ seats are missing, and a deterministic list of corrective actions drawn from
+ the bean's four-category vocabulary: adding capacity (``add_capacity``),
+ adding a table (``add_table``), changing a hard rule (``change_hard_rule``),
+-or unlocking a guest's lock (``unlock``).
++or unlocking a guest's lock (``unlock``). ``KIND_MOVEMENT_LIMIT`` names the
++one cause only the low-disruption mode can hit and the other four kinds do
++not: a movement limit too small to admit any valid arrangement.
+ 
+ ``KIND_UNLOCK`` is exported as the fourth category on purpose, but no code in
+ this bean emits it: the guest-lock feature that such "unlock that" advice
+@@ -25,6 +27,7 @@ __all__ = [
+     "KIND_ADD_CAPACITY",
+     "KIND_ADD_TABLE",
+     "KIND_CHANGE_HARD_RULE",
++    "KIND_MOVEMENT_LIMIT",
+     "KIND_UNLOCK",
+     "InfeasibilityReport",
+     "Recommendation",
+@@ -36,6 +39,9 @@ KIND_ADD_TABLE: Final[str] = "add_table"
+ KIND_CHANGE_HARD_RULE: Final[str] = "change_hard_rule"
+ # Reserved: the guest-lock feature it would remedy does not exist in this tree.
+ KIND_UNLOCK: Final[str] = "unlock"
++# The low-disruption cause: the configured movement limit rules out every
++# valid arrangement, a cause the four planning categories do not name.
++KIND_MOVEMENT_LIMIT: Final[str] = "raise_movement_limit"
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/tests/solver/test_low_disruption.py b/tests/solver/test_low_disruption.py
+new file mode 100644
+index 0000000..dea7cb5
+--- /dev/null
++++ b/tests/solver/test_low_disruption.py
+@@ -0,0 +1,187 @@
++"""Low-disruption acceptance tests (bean-013): in the low_disruption mode the
++movement limit is a hard wall — the solver changes as few tables as possible
++subject to the limit, and only among equally-moving charts does the soft score
++decide. Zero limit is a frozen chart, and infeasibility caused by the limit
++names the limit, not the capacity. Asserts only on solve_event result fields,
++never on solver internals."""
++
++from __future__ import annotations
++
++import pytest
++
++from seating_planner.domain import Event, Guest, RsvpStatus, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver import solve_event
++from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_MOVEMENT_LIMIT
++from seating_planner.solver.result import VIOLATED
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(
++    guest_id: str,
++    status: RsvpStatus = RsvpStatus.CONFIRMED,
++    reserved_seat: bool = False,
++) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=status, reserved_seat=reserved_seat)
++
++
++def _event(
++    tables: list[Table],
++    guests: list[Guest],
++    rules: list[object] | None = None,
++    locks: dict[str, str] | None = None,
++) -> Event:
++    return Event(
++        id="e-1",
++        name="Event",
++        tables=tables,
++        guests=guests,
++        groups=[],
++        rules=rules or [],
++        locks=locks or {},
++    )
++
++
++def _soft(
++    rule_id: str,
++    rule_type: RuleType,
++    weight: int,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.SOFT,
++        weight=weight,
++        guest_ids=guest_ids,
++    )
++
++
++def test_movement_limit_respected() -> None:
++    # Three confirmed guests are currently all sitting at the capacity-1
++    # table t-1: the chart violates the capacity, that is the drift. The
++    # movement limit allows two guests to change tables, and the soft rule
++    # wants g-0 and g-1 together — which only a two-move chart can provide,
++    # so the limit is exactly tight, and the optimum is unique: g-2 stays.
++    tables = [_table("t-1", capacity=1), _table("t-2", capacity=2)]
++    guests = [_guest(f"g-{i}") for i in range(3)]
++    rules = [_soft("r-same", RuleType.SAME_TABLE, 20, ("g-0", "g-1"))]
++    event = _event(tables, guests, rules=rules)
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}
++    result = solve_event(event, mode="low_disruption", current=current, movement_limit=2)
++    assert result.status == "feasible"
++    moved = sum(
++        1 for guest_id, table_id in result.assignments.items() if current[guest_id] != table_id
++    )
++    assert moved <= 2
++    assert result.assignments == {"g-0": "t-2", "g-1": "t-2", "g-2": "t-1"}
++    assert result.rule_states["r-same"] == "satisfied"
++    assert result.score == 20
++
++
++def test_fewer_moves_beats_higher_score() -> None:
++    # The bean's central property. g-0 is locked to t-2 while the current chart
++    # sits at t-1, so g-0 must move: one move is spent on the lock. Moving g-1
++    # over to t-2 would spend the second move and score the weight-50 soft
++    # rule; leaving g-1 at t-1 scores 0. A weighted sum of score and changes
++    # would take the extra move for +50 — the low_disruption mode must not:
++    # one move at score 0 beats two moves at score 50.
++    tables = [_table("t-1", capacity=3), _table("t-2", capacity=3)]
++    guests = [_guest("g-0"), _guest("g-1")]
++    rules = [_soft("r-same", RuleType.SAME_TABLE, 50, ("g-0", "g-1"))]
++    event = _event(tables, guests, rules=rules, locks={"g-0": "t-2"})
++    current = {"g-0": "t-1", "g-1": "t-1"}
++    result = solve_event(event, mode="low_disruption", current=current, movement_limit=2)
++    assert result.status == "feasible"
++    assert result.assignments == {"g-0": "t-2", "g-1": "t-1"}
++    assert result.rule_states["r-same"] == VIOLATED
++    assert result.score == 0
++
++
++def test_score_breaks_tie_on_moves() -> None:
++    # Three guests at a capacity-1 table: the drift. Any feasible chart seats
++    # exactly one guest at t-1, so every valid chart moves exactly two guests
++    # and the limit of five is never the decider. The three stayer choices
++    # score 50 (g-2 stays: the g-0/g-1 rule fires), 0 (g-1 stays) and 10
++    # (g-0 stays: only the g-1/g-2 rule fires) — the equally-moving chart
++    # with the higher score wins.
++    tables = [_table("t-1", capacity=1), _table("t-2", capacity=3)]
++    guests = [_guest(f"g-{i}") for i in range(3)]
++    rules = [
++        _soft("r-01", RuleType.SAME_TABLE, 50, ("g-0", "g-1")),
++        _soft("r-12", RuleType.SAME_TABLE, 10, ("g-1", "g-2")),
++    ]
++    event = _event(tables, guests, rules=rules)
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}
++    result = solve_event(event, mode="low_disruption", current=current, movement_limit=5)
++    assert result.status == "feasible"
++    moved = sum(
++        1 for guest_id, table_id in result.assignments.items() if current[guest_id] != table_id
++    )
++    assert moved == 2
++    assert result.assignments == {"g-0": "t-2", "g-1": "t-2", "g-2": "t-1"}
++    assert result.score == 50
++
++
++def test_limit_infeasibility_names_its_cause() -> None:
++    # The exact event of test_fewer_moves_beats_higher_score with the limit
++    # set to zero: the lock forces g-0's table to change, so no chart exists
++    # within the limit even though the capacities are ample. The infeasibility
++    # must name the limit, distinct from capacity.
++    tables = [_table("t-1", capacity=3), _table("t-2", capacity=3)]
++    guests = [_guest("g-0"), _guest("g-1")]
++    rules = [_soft("r-same", RuleType.SAME_TABLE, 50, ("g-0", "g-1"))]
++    event = _event(tables, guests, rules=rules, locks={"g-0": "t-2"})
++    current = {"g-0": "t-1", "g-1": "t-1"}
++    result = solve_event(event, mode="low_disruption", current=current, movement_limit=0)
++    assert result.status == "infeasible"
++    assert dict(result.assignments) == {}
++    report = result.infeasibility_report
++    assert report is not None
++    assert report.capacity_shortfall == 0
++    kinds = [rec.kind for rec in report.recommendations]
++    assert KIND_MOVEMENT_LIMIT in kinds
++    assert KIND_ADD_CAPACITY not in kinds
++
++
++def test_zero_limit_changes_nothing() -> None:
++    # The current chart is valid: both guests fit at t-1 and nothing is
++    # violated hard-wise. The soft different_table rule is violated, so a
++    # pure score-maximizer would split the pair and gain 50 — but the zero
++    # limit is a hard wall, not a preference: the chart must come back
++    # untouched, with the rule still violated and the score still zero.
++    tables = [_table("t-1", capacity=3), _table("t-2", capacity=3)]
++    guests = [_guest("g-0"), _guest("g-1")]
++    rules = [_soft("r-diff", RuleType.DIFFERENT_TABLE, 50, ("g-0", "g-1"))]
++    event = _event(tables, guests, rules=rules)
++    current = {"g-0": "t-1", "g-1": "t-1"}
++    result = solve_event(event, mode="low_disruption", current=current, movement_limit=0)
++    assert result.status == "feasible"
++    assert result.assignments == current
++    assert result.rule_states["r-diff"] == VIOLATED
++    assert result.score == 0
++
++
++def test_low_disruption_requires_current_and_limit() -> None:
++    # A minimal valid event; each call omits one required input or passes one
++    # that does not apply, and each is rejected before any search runs.
++    event = _event([_table("t-1", capacity=2)], [_guest("g-0")])
++    current = {"g-0": "t-1"}
++
++    with pytest.raises(ValueError):
++        solve_event(event, mode="low_disruption")
++    with pytest.raises(ValueError):
++        solve_event(event, mode="low_disruption", current=current)
++    with pytest.raises(ValueError):
++        solve_event(event, mode="planning", current=current)
++    with pytest.raises(ValueError):
++        solve_event(event, mode="low_disruption", current=current, movement_limit=-1)

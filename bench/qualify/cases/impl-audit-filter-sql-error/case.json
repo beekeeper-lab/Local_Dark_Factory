@@ -1,0 +1,51 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-audit-filter-sql-error",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-004-20260922T142454Z",
+    "pr": 4,
+    "candidate_sha": "e9ec7b04699453a99c17752e64f9204ae5298654",
+    "bean_at": "adcd49ac9336bb9e18c2a0d9dda71269857ccc88",
+    "bean_path": "factory/beans/bean-004-persistence-with-an-append-only-audit-re/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "AuditLog.entries builds 'SELECT ... FROM audit_log ORDER BY id' and then appends ' WHERE event_id = ?', a SQL syntax error on every filtered call; the diff's own test works around it in a comment.",
+  "answer_key": {
+    "why": "Criterion ac2 (every mutation writes an audit entry carrying actor, timestamp, entity type and entity id) is not usable per event: the only per-event read path raises sqlite3.OperationalError. The test for ac2 fetches the unfiltered log and filters in Python, and says why in a NOTE. A correct implementation audit rejects: the defect is in the shipped code, visible in the diff, and acknowledged by the code's own test.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "\"FROM audit_log ORDER BY id\""
+      },
+      {
+        "file": "diff.txt",
+        "quote": "query += \" WHERE event_id = ?\""
+      },
+      {
+        "file": "diff.txt",
+        "quote": "# because AuditLog.entries appends \"WHERE event_id = ?\" after \"ORDER BY id\""
+      }
+    ]
+  },
+  "anchors": [
+    "order by",
+    "where event_id",
+    "syntax error",
+    "operationalerror",
+    "entries("
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; bean-007's defect also demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "easy"
+}

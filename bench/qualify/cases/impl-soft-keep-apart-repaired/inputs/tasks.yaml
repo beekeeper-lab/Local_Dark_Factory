@@ -1,0 +1,123 @@
+# bean-007 task list — soft-constraint scoring and the optimization objective.
+# Two dependency-ordered tasks: the objective in the model bean-006 built, then
+# the three acceptance tests. Every write path is a subset of the bean's
+# allowed_write_paths (src/seating_planner/solver/**, tests/solver/**).
+# Combined diff budget is the bean's size_budget.max_diff_lines (350 lines).
+schema_version: tasks/1.0.0
+bean_id: bean-007
+tasks:
+  - id: task-1
+    title: Add the weighted soft-constraint objective to the solver model
+    intent: >
+      Modify the model built by _build_model in
+      src/seating_planner/solver/hard.py so that, among all charts that satisfy
+      every hard constraint, the solver returns the one with the highest weighted
+      total of satisfied soft constraints. Hard constraints are untouched:
+      they remain model constraints and are never re-expressed as weights. For
+      each enabled soft rule whose rule_type is SAME_TABLE or DIFFERENT_TABLE:
+      create one boolean indicator in the model (model.NewBoolVar, with a name
+      derived from the rule id) that may be true only when the rule is
+      satisfied. Resolve the rule's members exactly the way the hard path
+      does (guest_ids plus member_ids of every referenced group, deduped,
+      restricted to guests that have variables in `at`; raise ValueError for
+      an unknown group or an unknown guest, mirroring the hard path). For
+      every pair of resolved target guests and every table: a soft SAME_TABLE
+      rule is satisfied only if both guests are at that table, which is the
+      linear form sat + at[a][t] - at[b][t] <= 1 together with
+      sat + at[b][t] - at[a][t] <= 1; a soft DIFFERENT_TABLE rule only if they
+      are not both at that table, the linear form at[a][t] + at[b][t] - sat
+      <= 1. Then call model.Maximize with the sum, over all soft rules, of
+      rule.weight times the rule's indicator; only add the objective if at
+      least one indicator was created, and skip a rule with fewer than two
+      resolved target guests (it would contribute a constant, which cannot
+      change which chart wins). One mypy-strict detail: Rule.weight is typed
+      int | None, so narrow it before the multiplication (soft rules always
+      carry an int weight per the rules model, so a plain
+      `if weight is None: continue` guard is correct and needs no comment
+      beyond one short line). Soft rules of other kinds (MIN_DISTANCE,
+      ADJACENT_SEAT) keep their current treatment: ignored, no indicator, no
+      error — a soft rule the model cannot express simply does not count.
+      Also update the two docstrings that currently say soft scoring does not
+      exist yet: the module docstring of src/seating_planner/solver/__init__.py
+      (which names bean-007 as a future) and the hard.py module docstring, so
+      they describe the solver as returning the best valid chart, not merely
+      a valid one. The public signature of solve_event, the shape of
+      SolveResult, the status handling (OPTIMAL and FEASIBLE both read back
+      as a feasible chart, INFEASIBLE as total infeasibility, anything else
+      still raises SolverTimeout) and the solver parameters (one worker, the
+      caller's seed, the caller's time limit) are all unchanged — the bean's
+      constraints bind these, and the invariant_api seam must keep working
+      without edits. The file must pass ruff (E, F, I, UP, B, 100 columns,
+      ruff format) and gate mypy --strict.
+    write_paths: [src/seating_planner/solver/**]
+    depends_on: []
+    satisfies: [ac2, ac3, ac4]
+    verify:
+      - { kind: command, run: ["ruff", "check", "src/seating_planner/solver"] }
+      - { kind: command, run: ["ruff", "format", "--check", "src/seating_planner/solver"] }
+      - { kind: command, run: ["mypy", "src"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_hard_constraints.py"] }
+      - { kind: command, run: ["pytest", "-q", "--no-header", "factory/invariants/test_seating_invariants.py"] }
+      - kind: command
+        run:
+          [sh, "-c", "grep -q Maximize src/seating_planner/solver/hard.py"]
+    max_attempts: 3
+    teaching_note: >
+      The whole change is one idea: satisfaction of each expressible soft rule
+      becomes a boolean the model may pay weight to, and the objective is the
+      weighted sum of those booleans. Placing the indicators inside the
+      existing model builder (rather than a second solver path) is forced by
+      the bean: it must modify the model bean-006 built so that a weight-100
+      soft rule can never buy its way past a hard rule — that ordering is a
+      property of the model itself, not of any check added
+      afterwards.
+  - id: task-2
+    title: Write the soft-objective acceptance tests
+    intent: >
+      Create tests/solver/test_objective.py holding exactly the three
+      acceptance tests named by the bean, following the style of
+      tests/solver/test_hard_constraints.py (small private builders for
+      Table, Guest, Event and Rule; assert only on solve_event result fields —
+      status and assignments — never on solver internals).
+      (1) test_higher_score_preferred: an event with two tables of capacity 2
+      and four eligible guests, one soft SAME_TABLE rule of weight 90 over two
+      guests and one soft DIFFERENT_TABLE rule of weight 10 over one of the
+      same guests and a third guest, where a chart exists that satisfies both.
+      Assert status feasible and that the returned chart satisfies both rules,
+      i.e. the arrangement with the higher weighted total won.
+      (2) test_soft_never_overrides_hard: an event where a soft SAME_TABLE
+      rule of weight 100 wants two guests together while a hard
+      DIFFERENT_TABLE rule keeps them apart (fill the tables enough that a
+      naive solver would have reason to obey the heavier rule). Assert status
+      feasible — a weight-100 preference must not push the event into
+      infeasibility — and that the returned chart keeps the hard rule
+      satisfied. This test fails in both the wrong-mapping direction: if the
+      soft rule were modelled as a constraint the event is infeasible, and if
+      a weight could beat a constraint the hard rule would be broken.
+      (3) test_conflicting_soft_rules_follow_weight: three eligible guests,
+      one table of capacity 2 plus one of capacity 1, a soft SAME_TABLE rule
+      of weight 80 binding the host guest to one of the others and a soft
+      SAME_TABLE rule of weight 40 binding the same guest to the last one —
+      the two soft rules conflict and only the heavier one can be satisfied.
+      Assert status feasible and that the returned chart satisfies the
+      weight-80 rule, not the weight-40 rule. Do not assert which guest ends
+      up alone at the spare table beyond what follows: a tie between charts
+      of equal total is search-dependent, and the tests must hold for every
+      optimal chart. The file must pass ruff (E, F, I, UP, B, 100 columns,
+      ruff format).
+    write_paths: [tests/solver/**]
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3]
+    verify:
+      - { kind: command, run: ["ruff", "check", "tests/solver"] }
+      - { kind: command, run: ["ruff", "format", "--check", "tests/solver"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_objective.py"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_hard_constraints.py"] }
+    max_attempts: 3
+    teaching_note: >
+      The three tests pin the three claims of the bean separately:
+      maximization chooses the better chart (ac1), a maximum weight can never
+      violate a constraint (ac2), and between conflicting preferences the
+      higher weight decides (ac3). Keeping each claim in its own event makes
+      a future regression say which promise broke, instead of "the objective
+      is wrong".

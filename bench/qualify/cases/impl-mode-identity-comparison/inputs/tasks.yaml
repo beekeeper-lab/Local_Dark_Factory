@@ -1,0 +1,226 @@
+schema_version: tasks/1.0.0
+bean_id: bean-013
+tasks:
+  - id: task-1
+    title: "Implement the low_disruption mode: movement indicators, hard limit, two-phase lexicographic solve, limit-caused infeasibility"
+    intent: >
+      Add the "low_disruption" optimization mode to the solver, beside the
+      existing planning mode. Two files change:
+      src/seating_planner/solver/hard.py and
+      src/seating_planner/solver/report.py.
+
+      In hard.py:
+      (1) Add LOW_DISRUPTION: Final[str] = "low_disruption" next to the existing
+      PLANNING constant, widen the mode parameter of solve_event to
+      Literal["planning", "low_disruption"], and update the unknown-mode
+      ValueError to name both allowed values (keep naming the rejected value in
+      the message: tests/solver/test_modes.py matches on it). Update the module
+      docstring and the comment beside PLANNING, which currently call planning
+      the only mode.
+      (2) Add two keyword-only parameters to solve_event, after mode and before
+      time_limit_s: current: Mapping[str, str] | None = None (the existing
+      chart, guest id to table id) and movement_limit: int | None = None.
+      Validate at the top of solve_event, before any configuration or model
+      work: for mode "low_disruption", both must be non-None and movement_limit
+      must be an int that is not a bool (refuse bools, the seam's existing
+      convention for integers) and at least 0, each refusal a ValueError that
+      names the argument; every key of current must be an id of a guest of the
+      event, else ValueError naming the offending guest. For mode "planning",
+      both must be None, else ValueError naming the non-applicable argument.
+      (3) In _build_model, accept current and movement_limit (keyword defaults
+      None), and when current is given, add one movement indicator per eligible
+      guest whose id is in current: a BoolVar that must be true whenever the
+      guest is seated at any table other than their current one, enforced with
+      model.Add(at[guest][table] <= move) for each table id that differs from
+      current[guest] (if current[guest] names a table not in the event, every
+      remaining table differs and the move is forced). Guests absent from
+      current get no indicator. Collect the indicator list; when it is
+      non-empty and movement_limit is not None, add
+      model.Add(sum(moves, 0) <= movement_limit). CRITICAL: do not add that
+      constraint when the list is empty — with an empty list the comparison
+      evaluates to a Python bool, not a CP-SAT expression, and the constraint is
+      vacuous either way. _build_model returns a three-tuple (model, at, moves);
+      every existing call site reads element [0] and keeps working. The
+      planning path (current is None) must build exactly the same model it
+      builds today: same variables, same constraints, same objective, in the
+      same order.
+      (4) In solve_event, for mode "low_disruption" with at least one movement
+      indicator, the objective is lexicographic via two sequential solves, never
+      a weighted sum: phase 1 builds the full model (including the movement
+      limit) and minimizes sum of the indicators, using a fresh solver with the
+      existing determinism pins (num_search_workers forced to 1, the caller's
+      random_seed, max_time_in_seconds = time_limit_s). If phase 1 is
+      INFEASIBLE, return the infeasible SolveResult as the existing code does,
+      with the report from clause (5). Phase 2 rebuilds the same model from
+      scratch (never reuse a model object that already had an objective: CP-SAT
+      refuses a second one), adds
+      model.Add(sum(moves, 0) == <phase-1 objective value>) and maximizes the
+      soft score by calling the existing _add_soft_objective unchanged, and
+      solves with a second fresh solver under the same pins. Read the
+      assignments and build the result exactly as the feasible planning path
+      does (states, violations, score re-derived from the chart by the existing
+      _build_report; the recorded SolverConfig read back from the phase-1
+      solver). If any solve comes back undecided, raise SolverTimeout as today.
+      If mode is "low_disruption" but current produced no indicators (current
+      empty, or no eligible guest in it), the movement terms are vacuous and
+      the mode degenerates to the planning solve: one phase, maximize the soft
+      score.
+      (5) New private _diagnose_low_disruption(event, eligible, current,
+      movement_limit, seed, time_limit_s) -> InfeasibilityReport, called when
+      phase 1 is INFEASIBLE. It probes the model built WITHOUT the movement
+      limit (same build, movement_limit=None) with the existing
+      _probe_satisfiable (same seed, worker, time-limit pins). If the probe is
+      satisfiable, the limit is the cause: return InfeasibilityReport with
+      conflict_rule_ids an empty tuple, capacity_shortfall the honestly
+      computed max(0, len(eligible) - sum of table capacities), and
+      recommendations a one-tuple of Recommendation(KIND_MOVEMENT_LIMIT, ...)
+      whose message states, naming the configured limit, that no arrangement
+      exists that seats every guest while moving at most that many guests
+      from their current table — the cause is the movement limit, not
+      capacity. If the probe is not satisfiable (including undecided), fall
+      through to the existing _diagnose_infeasibility(event, eligible, seed,
+      time_limit_s) and return its report: the cause is then a rule, a lock or
+      capacity, and the existing machinery already names those.
+      (6) No changes to SolveResult, solver/config.py, solver/__init__.py,
+      invariant_api.py or any behaviour of the planning mode. A
+      low_disruption result records mode "low_disruption" through the existing
+      mode field; its wire shape is unchanged.
+
+      In report.py: add KIND_MOVEMENT_LIMIT: Final[str] = "raise_movement_limit"
+      beside the existing four kind constants, export it in __all__, and extend
+      the module docstring's description of the vocabulary with the new
+      additive kind (a low-disruption run can be infeasible because its
+      movement limit is too small, a cause the other four kinds do not name).
+
+      When done, run `ruff check .`, `ruff format --check .` and `mypy src` and
+      make all three clean, and `pytest -q tests` must stay green — the whole
+      existing suite passes without any edit, which is the proof that the
+      planning path is untouched; if an existing test fails, that is a finding
+      about this task, do not edit tests/solver/test_modes.py or any other
+      existing test to make it pass.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+      - src/seating_planner/solver/report.py
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4, ac5]
+    verify:
+      - { kind: command, run: ["sh", "-c", "grep -q 'low_disruption' src/seating_planner/solver/hard.py && grep -q 'raise_movement_limit' src/seating_planner/solver/report.py"] }
+      - { kind: command, run: ["sh", "-c", "pytest -q tests"] }
+      - { kind: command, run: ["sh", "-c", "ruff check . && ruff format --check . && mypy src"] }
+    max_attempts: 4
+    teaching_note: >
+      The bean's constraint is the mechanism: a lexicographic objective cannot
+      be one CP-SAT objective, so it is two sequential solves of one model
+      shape — minimize table changes under all hard constraints (which makes
+      FR-065's limit a first-class feasibility question, not an objective term),
+      then maximize the soft score among the charts that tie on the change
+      count. The indicators plus one <=-limit constraint is the whole of
+      "a disruption is a table change" per the PRD §5 definition, and the
+      limit-free satisfiability probe is what lets an infeasibility say its
+      cause is the limit and nothing else — mirroring the one-removal
+      diagnosis the solver already runs for rules and locks.
+
+  - id: task-2
+    title: "Add the low-disruption acceptance tests"
+    intent: >
+      Create tests/solver/test_low_disruption.py, in the helper style of
+      tests/solver/test_locks.py (same _table, _guest, _event and _soft
+      helpers, module docstring stating the tests assert only on solve_event
+      result fields). Six tests; the first five carry the exact test ids the
+      bean's acceptance criteria verify against. Each scenario below is
+      constructed so the optimum is unique, so its assertion is a
+      consequence of the constraints, not of a solver seed; keep capacities,
+      weights and limits exactly as written.
+
+      test_movement_limit_respected (ac1). Tables t-1 capacity 1 and t-2
+      capacity 2; guests g-0, g-1, g-2 all confirmed; no locks, no hard
+      rules; one soft rule same_table(g-0, g-1) weight 20; current chart all
+      three guests at t-1 (it violates t-1's capacity: the drift); movement
+      limit 2; mode "low_disruption". Solve and assert: status "feasible";
+      the count of guests whose result table differs from their current table
+      is no greater than 2; the result is exactly g-0 at t-2, g-1 at t-2,
+      g-2 at t-1 (the only 2-move chart that satisfies the soft rule), with
+      score 20.
+
+      test_fewer_moves_beats_higher_score (ac2). Tables t-1 and t-2, each
+      capacity 3; guests g-0, g-1; g-0 locked to t-2; one soft rule
+      same_table(g-0, g-1) weight 50; current chart g-0 at t-1, g-1 at t-1;
+      movement limit 2. The lock forces g-0 to move (1 move), and the
+      two-move chart that seats g-1 at t-2 scores the 50. Assert: status
+      "feasible"; result exactly g-0 at t-2, g-1 at t-1 — one move total;
+      rule state VIOLATED; score 0. This is the bean's central property:
+      fewer changes win even at strictly lower score, which no weighted sum
+      of score and changes can produce on these numbers.
+
+      test_score_breaks_tie_on_moves (ac3). Tables t-1 capacity 1 and t-2
+      capacity 3; guests g-0, g-1, g-2 all at t-1 in the current chart
+      (three guests on a one-seat table: the drift); no locks, no hard
+      rules; soft rules same_table(g-0, g-1) weight 50 and same_table(g-1,
+      g-2) weight 10; movement limit 5. Feasible charts seat exactly one
+      guest at t-1, so every valid chart moves exactly two guests and the
+      limit is not the decider; each choice of stayer scores 50 (g-2
+      stays), 0 (g-1 stays) or 10 (g-0 stays). Assert: status "feasible";
+      result exactly g-0 at t-2, g-1 at t-2, g-2 at t-1; the moved count
+      relative to the current chart is exactly 2; score 50 — the higher
+      score won among equally-moving charts, not the limit.
+
+      test_limit_infeasibility_names_its_cause (ac4). The exact event of
+      ac2 (tables capacity 3 each, g-0 locked to t-2, the weight-50 soft
+      same_table rule, current chart g-0 at t-1 and g-1 at t-1) with
+      movement limit 0: the lock forces one table change, so no chart
+      exists within the limit, while capacity is ample. Assert: status
+      "infeasible"; assignments empty; and the infeasibility report names
+      the limit, distinct from capacity — capacity_shortfall is 0, at least
+      one recommendation has kind "raise_movement_limit" (import the kind
+      constant from seating_planner.solver.report, do not hardcode a second
+      spelling), and no recommendation has kind "add_capacity".
+
+      test_zero_limit_changes_nothing (ac5). Tables t-1 and t-2, each
+      capacity 3; guests g-0, g-1; no locks, no hard rules; one soft rule
+      different_table(g-0, g-1) weight 50 — which the chart below violates,
+      so a pure score-maximizer would split the pair and gain 50; current
+      chart g-0 at t-1, g-1 at t-1 (a valid chart: capacities and no hard
+      rules are satisfied); movement limit 0. Assert: status "feasible";
+      result exactly g-0 at t-1, g-1 at t-1, i.e. no table changes at all
+      relative to the current chart; rule state VIOLATED; score 0. Zero
+      limit is a hard wall, not a preference.
+
+      test_low_disruption_requires_current_and_limit. A minimal valid event
+      (one table capacity 2, one confirmed guest) and, in one test:
+      solve_event(event, mode="low_disruption") raises ValueError;
+      solve_event(event, mode="low_disruption", current={...}) for a single
+      valid current entry raises ValueError; solve_event(event,
+      mode="planning", current={...}) raises ValueError; and
+      solve_event(event, mode="low_disruption", current={...},
+      movement_limit=-1) raises ValueError. Assert with pytest.raises.
+
+      Use the same module-level helper names and shapes as
+      tests/solver/test_locks.py; import the recommendation kind constant
+      from seating_planner.solver.report as test_locks.py imports KIND_UNLOCK.
+      When done, run `pytest -q tests/solver/test_low_disruption.py` until
+      green, then `pytest -q tests` green, then `ruff check .`,
+      `ruff format --check .` and `mypy src` clean. Do not modify any file
+      outside tests/solver/test_low_disruption.py: if a test cannot pass
+      against task-1's implementation, that is a finding about task-1, report
+      it, do not bend the test.
+    write_paths:
+      - tests/solver/test_low_disruption.py
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4, ac5]
+    verify:
+      - { kind: command, run: ["sh", "-c", "pytest -q tests/solver/test_low_disruption.py"] }
+      - { kind: command, run: ["sh", "-c", "pytest -q tests"] }
+      - { kind: command, run: ["sh", "-c", "ruff check . && ruff format --check . && mypy src"] }
+    max_attempts: 3
+    teaching_note: >
+      One test per acceptance criterion, and every scenario is a small event
+      with a unique optimum, so a pass is a proof and a fail is a
+            misdescription rather than a seed argument.
+      The pair ac2/ac5 is the
+      pair the bean exists for: in ac2 the current chart is drifted and the
+      soft score actively rewards an extra disruption the result must refuse;
+      in ac5 the chart is valid at zero limit and the same soft score actively
+      rewards a change the limit forbids. ac4's report
+      assertions are written against report vocabulary (a kind, a shortfall
+      of 0) because the bean requires the cause to be named and distinct from
+      capacity, not merely reported.

@@ -1,0 +1,261 @@
+schema_version: tasks/1.0.0
+bean_id: bean-003
+tasks:
+  - id: task-1
+    title: "Create the rules model: Hardness, RuleType, Rule with validation and serialization"
+    intent: >-
+      Create the new package file src/seating_planner/rules/__init__.py and
+      nothing else. Include a docstring stating this is the structured
+      rule model of seating_planner (rules are data: type, hardness, weight,
+      subjects, parameters) with no evaluation or scoring logic (that is
+      bean-005/bean-007) and no solver imports. Add `from __future__ import
+      annotations`, a final `__all__` list naming exactly "Hardness",
+      "RuleType", "Rule", and two file-level Final int constants
+      MIN_WEIGHT = 1 and MAX_WEIGHT = 100. Hardness is a (str, Enum) with
+      exactly two members: HARD = "hard", SOFT = "soft". RuleType is a
+      (str, Enum) with exactly four members: SAME_TABLE = "same_table",
+      DIFFERENT_TABLE = "different_table", MIN_DISTANCE = "min_distance",
+      ADJACENT_SEAT = "adjacent_seat" — the kinds the requirements name
+      (FR-034), where "far apart" only becomes a rule through MIN_DISTANCE
+      carrying a number (FR-035). Rule is a dataclass with fields: id: str,
+      rule_type: RuleType, hardness: Hardness, weight: int | None,
+      guest_ids: tuple[str, ...] = (), group_ids: tuple[str, ...] = (),
+      table_ids: tuple[str, ...] = (), target: str | None = None,
+      distance_m: float | None = None, min_zones: int | None = None,
+      enabled: bool = True. Its __post_init__ normalises rule_type and
+      hardness through private helpers _as_rule_type and _as_hardness
+      (accept the enum member itself or its lowercase word in any case,
+      raise ValueError naming the allowed words for anything else),
+      normalises an int distance_m to a float, and enforces: (1) id must be
+      a non-empty str; (2) if hardness is HARD and weight is not None, raise
+      ValueError ("hard rules carry no weight"); (3) if hardness is SOFT,
+      weight must be an int (bools rejected — note that bool is a subclass
+      of int, so check isinstance(weight, bool) first) in 1..100 inclusive,
+      else raise ValueError naming the bounds; (4) if rule_type is
+      MIN_DISTANCE, it must carry a numeric measure: distance_m an int/float
+      (not bool, not None) strictly greater than 0, or min_zones an int (not
+      bool) of at least 1; neither present (or both present but invalid)
+      raises ValueError stating that a minimum-distance rule must carry a
+      numeric distance or a zone count (FR-035). No other rule type
+      constrains weight, subjects or the distance fields. Add two round-
+      trip methods. to_dict(self) returns a plain dict with exactly the keys
+      "id", "kind" (rule_type.value), "hardness" (hardness.value), "guests"
+      (list of guest_ids), "enabled", plus, only when set: "weight",
+      "groups", "tables", "target", "distance_m", "min_zones". classmethod
+      from_dict(cls, data: dict) requires the keys "id", "kind", "guests";
+      "hardness" required; optional keys defaulting to weight=None, group
+      ids=(), table ids=(), target=None, distance_m=None, min_zones=None,
+      enabled=True; it parses "kind"/"hardness" through the same enum
+      helpers (ValueError on an unknown word) and builds each rule through
+      the Rule(...) call, so the same checks run whether a rule is
+      written by hand or read back from a dict. Import
+      only from the standard library (dataclasses, enum, typing) — no
+      ortools, no other third-party import. Keep the whole file well under
+      150 lines. Must be ruff-clean (rules E, F, I, UP, B), ruff-format-
+      clean, and pass mypy strict.
+    write_paths: [src/seating_planner/rules/__init__.py]
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4]
+    verify:
+      # Fails first: the module does not exist, so the import raises
+      # ModuleNotFoundError.
+      - kind: command
+        run:
+          - python
+          - -c
+          - "from seating_planner.rules import Hardness, Rule, RuleType\nr = Rule(id='r1', rule_type='same_table', hardness='soft', weight=80, guest_ids=('g1','g2'))\nassert r.rule_type is RuleType.SAME_TABLE and r.hardness is Hardness.SOFT and r.weight == 80\nassert Rule(id='r2', rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD, guest_ids=('g1','g2')).weight is None\nfor bad in (0, 101, -1, 3.5, '50', None, True):\n    try:\n        Rule(id='rx', rule_type='same_table', hardness='soft', weight=bad, guest_ids=('g1','g2'))\n    except ValueError:\n        pass\n    else:\n        raise SystemExit(f'soft weight {bad!r} was accepted')\ntry:\n    Rule(id='rx', rule_type='same_table', hardness='hard', weight=50, guest_ids=('g1','g2'))\nexcept ValueError:\n    pass\nelse:\n    raise SystemExit('hard rule with weight was accepted')\nfor kw in ({'distance_m': 3.0}, {'min_zones': 2}):\n    Rule(id='rx', rule_type='min_distance', hardness='hard', **kw)\nfor kw in ({}, {'distance_m': 0.0}, {'distance_m': -1}, {'min_zones': 0}, {'distance_m': 'far apart'}):\n    try:\n        Rule(id='rx', rule_type='min_distance', hardness='hard', **kw)\n    except ValueError:\n        pass\n    else:\n        raise SystemExit(f'min_distance with {kw!r} was accepted')\nt = Rule.from_dict(r.to_dict())\nassert t == r\nassert Rule.from_dict(r.to_dict()).to_dict() == r.to_dict()"
+      # FR constraint 'no solver imports': ortools must not appear anywhere
+      # in the rules package.
+      - kind: command
+        run: ["sh", "-c", "! grep -rn ortools src/seating_planner/rules/"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      The rule model is where 'rules are explicit' (Product Principle 1)
+      becomes a type: a rule exists as inspectable structured data with an
+      explicit type, hardness and weight, never as prose. The two validation
+      edges are the bean's whole point — a soft rule cannot exist without a
+      1..100 integer weight, a hard rule cannot carry one at all, and
+      MIN_DISTANCE without a number is the exact thing FR-035 forbids, so
+      the phrase 'far apart' is rejected at the door rather than later
+      enforced by a solver pretending to understand it. Serialising under
+      the seam's spelling ("kind", "hardness" values "same_table"/"hard")
+      keeps this data shape-compatible with the independent invariants'
+      spec shape without importing anything from the solver.
+  - id: task-2
+    title: Write test_rule_model.py with the four AC-pinned round-trip and weight tests
+    intent: >-
+      Create tests/rules/test_rule_model.py and nothing else — do not touch
+      the model file. Module docstring naming what is covered (ac1-ac4 of
+      bean-003) plus, after `from __future__ import annotations`, `import
+      pytest` and `from seating_planner.rules import Hardness, Rule,
+      RuleType`, exactly the four test functions the bean names, each
+      annotated -> None, and nothing else (no helper modules, no fixtures).
+      test_all_rule_types_roundtrip builds at least one representative
+      Rule for every RuleType member — SAME_TABLE soft with two guest ids
+      and a weight, DIFFERENT_TABLE hard with two guest ids, MIN_DISTANCE
+      hard with target and min_zones, ADJACENT_SEAT soft with a weight —
+      and for each asserts Rule.from_dict(rule.to_dict()) == rule (dataclass
+      equality) and that to_dict is stable (to_dict of the round-tripped
+      rule equals the original to_dict); it also asserts the serialised
+      values are plain JSON-able data (the "kind" value is the enum's
+      string value, not an enum member). test_soft_weight_bounds asserts
+      Rule accepts soft weights 1 and 100 (both stored exactly) and raises
+      ValueError — checked with pytest.raises for each — for 0, 101, -1,
+      3.5, the string "50", None and True. test_hard_rule_has_no_weight
+      asserts a hard SAME_TABLE rule stores weight None, and that
+      constructing a hard rule with weight=50 raises ValueError, as does
+      Rule.from_dict of a dict carrying hardness "hard" alongside a
+      weight. test_min_distance_requires_measure asserts MIN_DISTANCE rules
+      accepted with distance_m=3.0 alone, with min_zones=2 alone (and that
+      the 3 is stored as float 3.0), and that ValueError is raised with
+      neither measure, with distance_m=0.0, with distance_m=-2.5, with
+      min_zones=0, and with the word 'far apart' passed as distance_m.
+      Ruff-clean and ruff-format-clean.
+    write_paths: [tests/rules/test_rule_model.py]
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4]
+    verify:
+      # Fails first: the test file does not exist, so each pytest run
+      # collects nothing and its test id is not found.
+      - kind: command
+        run: ["pytest", "-q", "tests/rules/test_rule_model.py::test_all_rule_types_roundtrip"]
+      - kind: command
+        run: ["pytest", "-q", "tests/rules/test_rule_model.py::test_soft_weight_bounds"]
+      - kind: command
+        run: ["pytest", "-q", "tests/rules/test_rule_model.py::test_hard_rule_has_no_weight"]
+      - kind: command
+        run: ["pytest", "-q", "tests/rules/test_rule_model.py::test_min_distance_requires_measure"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      Four acceptance criteria, four named test functions, one file: the
+      test ids are pinned by the bean's verify commands, so the functions
+      exist exactly as named. Each test walks its boundary — the round-
+      trip test across all four types, the weight test across every
+      rejected spelling including the bool-trap since bool is an int
+      subclass in Python — so 'outside the bounds' is measured rather
+      than assumed.
+  - id: task-3
+    title: Create the default wedding rule template
+    intent: >-
+      Create src/seating_planner/rules/template.py and nothing else. Module
+      docstring stating this is the editable default rule template a new
+      wedding event starts with (FR-028/029): seven pre-built rules —
+      one per covered category — that a user enables, disables, edits or
+      deletes per event; still data only, no evaluation. After `from
+      __future__ import annotations`, `from typing import Final` and
+      `from seating_planner.rules import Hardness, Rule, RuleType`, a
+      final `__all__` = ["TEMPLATE_CATEGORIES", "default_wedding_rules"]
+      and a Final tuple/dict constant TEMPLATE_CATEGORIES mapping the seven
+      category slugs to human labels: "couples" -> "Couples",
+      "households" -> "Households", "immediate_family" -> "Immediate
+      family", "wedding_party" -> "Wedding party", "children" ->
+      "Children", "vendors" -> "Vendors", "accessible_seating" ->
+      "Accessible seating". Then def default_wedding_rules() ->
+      list[Rule] returning a fresh list of exactly seven fresh Rule
+      objects (never shared module-level instances — the function
+      re-creates every rule on each call), one per category in that
+      order, each built through the Rule constructor with id
+      f"template-{slug}", group_ids = (slug,) as the editable attachment
+      point, enabled left at its True default, and these type/hardness/
+      weight parameters: couples SAME_TABLE SOFT weight 80; households
+      SAME_TABLE SOFT weight 50; immediate_family SAME_TABLE SOFT weight
+      90; wedding_party SAME_TABLE SOFT weight 70; children SAME_TABLE
+      SOFT weight 60; vendors DIFFERENT_TABLE SOFT weight 40
+      (vendors not intermingled with the guest tables); accessible_seating
+      MIN_DISTANCE HARD with target "dance_floor" and min_zones 2 (no
+      weight — it is hard). Import no ortools or other third-party
+      module. Keep the file under 70 lines. Ruff-clean, ruff-format-clean,
+      mypy strict clean.
+    write_paths: [src/seating_planner/rules/template.py]
+    depends_on: [task-1]
+    satisfies: [ac5]
+    verify:
+      # Fails first: the module does not exist, so the import raises
+      # ModuleNotFoundError.
+      - kind: command
+        run:
+          - python
+          - -c
+          - "from seating_planner.rules import Rule\nfrom seating_planner.rules.template import TEMPLATE_CATEGORIES, default_wedding_rules\nrules = default_wedding_rules()\nassert len(rules) == 7, len(rules)\nassert all(isinstance(r, Rule) for r in rules)\nassert [r.group_ids for r in rules] == [tuple((slug,)) for slug in TEMPLATE_CATEGORIES]\nassert {r.id for r in rules} == {f'template-{slug}' for slug in TEMPLATE_CATEGORIES}\nassert all(r.enabled is True for r in rules)\nassert rules[5].rule_type.value == 'different_table' and rules[6].rule_type.value == 'min_distance'\nassert rules[6].hardness.value == 'hard' and rules[6].weight is None and rules[6].min_zones == 2\nrules[0].enabled = False\nassert sum(r.enabled for r in rules) == 6\nsecond = default_wedding_rules()\nassert second is not rules and all(r.enabled is True for r in second) and second[0] is not rules[0]"
+      - kind: command
+        run: ["sh", "-c", "! grep -rn ortools src/seating_planner/rules/"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      FR-028/029 give a new wedding a working starting point instead of an
+      empty rule list: seven rules, one per category, each independently
+      enable-able. Independence is structural — a fresh list of fresh
+      Rule objects per call, with an enabled flag per rule — so disabling
+      'couples' can never silently disable 'children'. The category-to-
+      rule-type mapping (together-rules for the people groups, apart for
+      vendors, a hard distance for accessible seating) is sensible default
+      data, not policy: it is editable precisely because rules are data.
+  - id: task-4
+    title: Write test_template.py with the AC-pinned wedding template test
+    intent: >-
+      Create tests/rules/test_template.py and nothing else — do not touch
+      any other file. Module docstring naming the coverage (ac5 of
+      bean-003) plus, after `from __future__ import annotations`,
+      `from seating_planner.rules import Rule, RuleType` and `from
+      seating_planner.rules.template import TEMPLATE_CATEGORIES,
+      default_wedding_rules`, exactly one test function named
+      test_default_wedding_template, annotated -> None, and nothing else.
+      It must assert: the template returns exactly seven rules; every rule
+      is a seating_planner.rules.Rule (imported RuleType is used to
+      confirm rule types are enum members); the seven rules cover exactly
+      the seven template categories, i.e. {r.group_ids for r in rules}
+      equals the set of one-element tuples of the slugs in
+      TEMPLATE_CATEGORIES, and TEMPLATE_CATEGORIES carries exactly the
+      slugs couples, households, immediate_family, wedding_party,
+      children, vendors, accessible_seating; every rule is a real
+      rule — re-serialisable, Rule.from_dict(r.to_dict()) == r for each;
+      every rule starts enabled; and the rules are independently
+      enable-able: toggling rules[0].enabled flips only that rule
+      (sum of enabled across the list drops by exactly one, the other
+      six remain enabled), and a second call to default_wedding_rules()
+      returns fresh objects that are all enabled again, proving no
+      shared state survives across events. Ruff-clean, ruff-format-clean.
+    write_paths: [tests/rules/test_template.py]
+    depends_on: [task-2, task-3]
+    satisfies: [ac5]
+    verify:
+      # Fails first: the test file does not exist, so pytest collects
+      # nothing.
+      - kind: command
+        run: ["pytest", "-q", "tests/rules/test_template.py::test_default_wedding_template"]
+      # The real unit gate (factory/gates.lock.yaml): the whole suite —
+      # scaffold, domain, rules — against the 60% coverage floor on src.
+      - kind: command
+        run: ["pytest", "-q", "--cov=src", "--cov-report=term-missing", "--cov-fail-under=60"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      The template test is where ac5's 'each independently enable-able'
+      gets its shape: enabling is a per-rule flag on per-call objects, so
+      the test mutates one rule, counts the others, and rebuilds a second
+      template to prove the first event's edits cannot leak into the
+      second. Finishing on the full-suite run with the coverage floor
+      makes this task the last gate-shaped check before the run's own
+      gates see the code.

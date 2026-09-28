@@ -1,0 +1,142 @@
+# bean-005 task list — pre-flight feasibility checks.
+# Two tasks, dependency-ordered: the module first (verified on its own by a
+# behavioural smoke check), then the five acceptance-criterion tests.
+# All write paths are within the bean's allowed_write_paths.
+schema_version: tasks/1.0.0
+bean_id: bean-005
+tasks:
+  - id: task-1
+    title: Add the preflight feasibility module
+    intent: >
+      Create the seating_planner.feasibility package, containing exactly two
+      files: __init__.py (re-exports Finding and run_preflight) and
+      preflight.py, which implements the four structural checks specified in
+      factory/runs/bean-005-20260924T001254Z/spec.md, section "Proposed
+      change". The public contract is fixed by that section and must be
+      spelled exactly this way: a frozen dataclass Finding with fields
+      code: str and message: str; and
+      run_preflight(event: Event, zone_ids: frozenset[str] | None = None)
+      -> list[Finding], returning findings in the fixed order contradiction,
+      oversized group, capacity, missing table, missing zone, with the exact
+      message templates from the spec (later tests assert on substrings of
+      them). Only enabled rules count. Event.rules is list[object] in the
+      domain layer, so filter with isinstance before touching rule fields.
+      No ortools or any other solver import, no search: pure inspection of the
+      Event. The module must be mypy-strict clean and ruff clean
+      (E, F, I, UP, B; 100-char lines; ruff format).
+    write_paths: [src/seating_planner/feasibility/**]
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4, ac5]
+    verify:
+      - { kind: command, run: ["ruff", "check", "src/seating_planner/feasibility"] }
+      - { kind: command, run: ["ruff", "format", "--check", "src/seating_planner/feasibility"] }
+      - { kind: command, run: ["mypy", "src"] }
+      - kind: command
+        run:
+          - sh
+          - -c
+          - |
+            python -c "
+            from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
+            from seating_planner.rules import Hardness, Rule, RuleType
+            from seating_planner.feasibility import run_preflight
+            t0 = Table(id=\"t0\", name=\"T0\", capacity=3, shape=\"round\", position=(0.0, 0.0))
+            t1 = Table(id=\"t1\", name=\"T1\", capacity=3, shape=\"round\", position=(0.0, 1.0))
+            def guest(i):
+                return Guest(id=f\"g{i}\", name=f\"G{i}\", status=RsvpStatus.CONFIRMED)
+            ev = Event(
+                id=\"e\", name=\"e\", tables=[t0, t1], guests=[guest(0), guest(1)],
+                rules=[
+                    Rule(id=\"r-same\", rule_type=RuleType.SAME_TABLE,
+                         hardness=Hardness.HARD, weight=None, guest_ids=(\"g0\", \"g1\")),
+                    Rule(id=\"r-diff\", rule_type=RuleType.DIFFERENT_TABLE,
+                         hardness=Hardness.HARD, weight=None, guest_ids=(\"g1\", \"g0\")),
+                ],
+            )
+            findings = run_preflight(ev)
+            assert [f.code for f in findings] == [\"contradictory_hard_rules\"], findings
+            assert \"r-same\" in findings[0].message and \"r-diff\" in findings[0].message
+            over = Event(id=\"e\", name=\"e\", tables=[t0], guests=[guest(i) for i in range(4)], rules=[])
+            findings = run_preflight(over)
+            assert [f.code for f in findings] == [\"insufficient_capacity\"], findings
+            assert \"4\" in findings[0].message and \"3\" in findings[0].message
+            big_groups = Event(
+                id=\"e\", name=\"e\", tables=[t0], guests=[guest(i) for i in range(5)],
+                groups=[Group(
+                    id=\"grp\", name=\"G\", member_ids=tuple(f\"g{i}\" for i in range(5)))],
+                rules=[Rule(id=\"r-together\", rule_type=RuleType.SAME_TABLE,
+                            hardness=Hardness.HARD, weight=None, group_ids=(\"grp\",))],
+            )
+            findings = run_preflight(big_groups)
+            assert [f.code for f in findings] == [\"group_larger_than_all_tables\", \"insufficient_capacity\"], findings
+            clean = Event(
+                id=\"e\", name=\"e\", tables=[t0, t1], guests=[guest(0), guest(1)],
+                rules=[
+                    Rule(id=\"r-diff\", rule_type=RuleType.DIFFERENT_TABLE,
+                         hardness=Hardness.HARD, weight=None, guest_ids=(\"g0\", \"g1\")),
+                    Rule(id=\"r-dist\", rule_type=RuleType.MIN_DISTANCE,
+                         hardness=Hardness.HARD, weight=None,
+                         target=\"dance_floor\", min_zones=2),
+                ],
+            )
+            assert run_preflight(clean, zone_ids=frozenset({\"dance_floor\"})) == []
+            dangling = Event(
+                id=\"e\", name=\"e\", tables=[t0], guests=[],
+                rules=[
+                    Rule(id=\"r-adj\", rule_type=RuleType.ADJACENT_SEAT,
+                         hardness=Hardness.SOFT, weight=5, table_ids=(\"ghost\",)),
+                    Rule(id=\"r-zone\", rule_type=RuleType.MIN_DISTANCE,
+                         hardness=Hardness.HARD, weight=None,
+                         target=\"dance_floor\", min_zones=2),
+                ],
+            )
+            findings = run_preflight(dangling, zone_ids=frozenset())
+            assert \"rule_missing_table\" in [f.code for f in findings], findings
+            assert \"rule_missing_zone\" in [f.code for f in findings], findings
+            print(\"preflight smoke ok\")
+            "
+    max_attempts: 3
+    teaching_note: >
+      This step exists so that structurally impossible problems are named
+      before the solver runs: four checks that cost a pass over the Event and
+      nothing more. It is the first module that reads both prior beans'
+      artifacts (the domain Event and the rules model) without modifying
+      either, and its API contract (Finding, run_preflight, the five finding
+      codes, the message templates) is the seam task-2's tests assert on.
+
+  - id: task-2
+    title: Write the preflight acceptance tests
+    intent: >
+      Create tests/feasibility/test_preflight.py (no __init__.py; the other
+      test directories have none) containing exactly the five test function
+      names the acceptance criteria use: test_contradictory_hard_rules,
+      test_group_larger_than_any_table, test_insufficient_capacity,
+      test_rule_references_missing_target, test_feasible_problem_is_clean.
+      Build small Events from the domain and rules modules (helpers are
+      welcome: a _table / _guest / _hard factory per test-file convention in
+      tests/domain and tests/rules). Each test asserts on Finding.code values
+      in order AND on the message substrings the spec pins (both rule ids in
+      the contradiction, the group id/size and the largest capacity, both
+      counts, the rule id and the missing id). test_rule_references_missing_target
+      covers both branches: a dangling table id reported with no zone_ids
+      argument, and a dangling dance floor style zone target reported when
+      zone_ids is supplied. test_feasible_problem_is_clean assembles a
+      satisfiable Event with a mix of rule types (soft same_table, hard
+      different_table, hard same_table on a small group, hard min_distance
+      with a zone target) and asserts run_preflight returns [] when called
+      with the matching zone_ids. No solver imports. The file must be
+      ruff clean and ruff format clean, including line length 100.
+    write_paths: [tests/feasibility/**]
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4, ac5]
+    verify:
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/feasibility/test_preflight.py"] }
+      - { kind: command, run: ["ruff", "check", "tests/feasibility"] }
+      - { kind: command, run: ["ruff", "format", "--check", "tests/feasibility"] }
+    max_attempts: 3
+    teaching_note: >
+      The tests are the acceptance criteria made executable: one test per
+      AC, named so the criterion's verify test_id resolves. They pin the
+      finding vocabulary and message content, which is also what FR-050's
+      later conflict report will consume, so they lock the contract rather
+      than just the happy path.

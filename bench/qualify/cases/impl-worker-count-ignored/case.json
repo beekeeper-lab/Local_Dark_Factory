@@ -1,0 +1,53 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-worker-count-ignored",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-009-20260925T125445Z",
+    "pr": 11,
+    "candidate_sha": "7a784b7bb4880557aed485ad4738183bc0f92550",
+    "bean_at": "22f1a68f616b2f863227e27aa3f907ce31e33773",
+    "bean_path": "factory/beans/bean-009-reproducible-optimization-via-persisted-/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "solve_event gains a num_search_workers argument that is validated and recorded on early returns but never applied: every CP-SAT solver still runs with one worker.",
+  "answer_key": {
+    "why": "The diff adds 'num_search_workers: int = 1' and builds a SolverConfig from it only on the paths that return before solving. The solve path records what it reads back from the solver, and nothing in the diff ever assigns the argument to solver.parameters. The unchanged context line '# One worker plus the caller's seed' marks where the solver is pinned to one. The hard-coded line itself falls between two hunks, so a judge has to notice that the argument is never used rather than read the bad line. Demonstrated: asking for 4 workers gives SolverConfig(num_search_workers=1). Repaired by bean-024.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+    num_search_workers: int = 1,"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "# One worker plus the caller's seed: the reproducible invariant needs both."
+      },
+      {
+        "file": "diff.txt",
+        "quote": "num_search_workers=solver.parameters.num_search_workers,"
+      }
+    ]
+  },
+  "anchors": [
+    "num_search_workers",
+    "worker count",
+    "workers",
+    "ignored",
+    "never used",
+    "hard-coded",
+    "hardcoded"
+  ],
+  "key_by": "Claude Opus 5.5 with an independent Claude reviewer; each defect demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "hard"
+}

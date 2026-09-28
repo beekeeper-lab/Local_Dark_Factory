@@ -1,0 +1,162 @@
+{
+  "schema": "verify-precheck/1.0.0",
+  "note": "Every verify was run against the tree before any task touched it. A verify that passes here passes on the code as it already is, so it cannot show the task was done. One such verify among several is often legitimate — a lint that is green on an empty directory, or a refactor whose check is that existing tests still pass. A task where every verify passes is not: there is nothing about it that running its checks could demonstrate.",
+  "tasks": [
+    {
+      "task": "task-1",
+      "verifies": [
+        {
+          "task": "task-1",
+          "verify_index": 0,
+          "passes_before_the_work": false,
+          "command": "python -c 'from seating_planner.rules import Hardness, Rule, RuleType\\nr = Rule(id='\\''r1'\\'', rule_type='\\''same_table'\\'', hardness='\\''soft'\\'', weight=80, guest_ids=('\\''g1'\\'','\\''g2'\\''))\\nassert r.rule_type is RuleType.SAME_TABLE and r.hardness is Hardness.SOFT and r.weight == 80\\nassert Rule(id='\\''r2'\\'', rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD, guest_ids=('\\''g1'\\'','\\''g2'\\'')).weight is None\\nfor bad in (0, 101, -1, 3.5, '\\''50'\\'', None, True):\\n    try:\\n        Rule(id='\\''rx'\\'', rule_type='\\''same_table'\\'', hardness='\\''soft'\\'', weight=bad, guest_ids=('\\''g1'\\'','\\''g2'\\''))\\n    except ValueError:\\n        pass\\n    else:\\n        raise SystemExit(f'\\''soft weight {bad!r} was accepted'\\'')\\ntry:\\n    Rule(id='\\''rx'\\'', rule_type='\\''same_table'\\'', hardness='\\''hard'\\'', weight=50, guest_ids=('\\''g1'\\'','\\''g2'\\''))\\nexcept ValueError:\\n    pass\\nelse:\\n    raise SystemExit('\\''hard rule with weight was accepted'\\'')\\nfor kw in ({'\\''distance_m'\\'': 3.0}, {'\\''min_zones'\\'': 2}):\\n    Rule(id='\\''rx'\\'', rule_type='\\''min_distance'\\'', hardness='\\''hard'\\'', **kw)\\nfor kw in ({}, {'\\''distance_m'\\'': 0.0}, {'\\''distance_m'\\'': -1}, {'\\''min_zones'\\'': 0}, {'\\''distance_m'\\'': '\\''far apart'\\''}):\\n    try:\\n        Rule(id='\\''rx'\\'', rule_type='\\''min_distance'\\'', hardness='\\''hard'\\'', **kw)\\n    except ValueError:\\n        pass\\n    else:\\n        raise SystemExit(f'\\''min_distance with {kw!r} was accepted'\\'')\\nt = Rule.from_dict(r.to_dict())\\nassert t == r\\nassert Rule.from_dict(r.to_dict()).to_dict() == r.to_dict()'"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 1,
+          "passes_before_the_work": true,
+          "command": "sh -c '! grep -rn ortools src/seating_planner/rules/'"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 2,
+          "passes_before_the_work": true,
+          "command": "mypy src"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 3,
+          "passes_before_the_work": true,
+          "command": "ruff check ."
+        },
+        {
+          "task": "task-1",
+          "verify_index": 4,
+          "passes_before_the_work": true,
+          "command": "ruff format --check ."
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    },
+    {
+      "task": "task-2",
+      "verifies": [
+        {
+          "task": "task-2",
+          "verify_index": 0,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/rules/test_rule_model.py::test_all_rule_types_roundtrip"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 1,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/rules/test_rule_model.py::test_soft_weight_bounds"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 2,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/rules/test_rule_model.py::test_hard_rule_has_no_weight"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 3,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/rules/test_rule_model.py::test_min_distance_requires_measure"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 4,
+          "passes_before_the_work": true,
+          "command": "mypy src"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 5,
+          "passes_before_the_work": true,
+          "command": "ruff check ."
+        },
+        {
+          "task": "task-2",
+          "verify_index": 6,
+          "passes_before_the_work": true,
+          "command": "ruff format --check ."
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    },
+    {
+      "task": "task-3",
+      "verifies": [
+        {
+          "task": "task-3",
+          "verify_index": 0,
+          "passes_before_the_work": false,
+          "command": "python -c 'from seating_planner.rules import Rule\\nfrom seating_planner.rules.template import TEMPLATE_CATEGORIES, default_wedding_rules\\nrules = default_wedding_rules()\\nassert len(rules) == 7, len(rules)\\nassert all(isinstance(r, Rule) for r in rules)\\nassert [r.group_ids for r in rules] == [tuple((slug,)) for slug in TEMPLATE_CATEGORIES]\\nassert {r.id for r in rules} == {f'\\''template-{slug}'\\'' for slug in TEMPLATE_CATEGORIES}\\nassert all(r.enabled is True for r in rules)\\nassert rules[5].rule_type.value == '\\''different_table'\\'' and rules[6].rule_type.value == '\\''min_distance'\\''\\nassert rules[6].hardness.value == '\\''hard'\\'' and rules[6].weight is None and rules[6].min_zones == 2\\nrules[0].enabled = False\\nassert sum(r.enabled for r in rules) == 6\\nsecond = default_wedding_rules()\\nassert second is not rules and all(r.enabled is True for r in second) and second[0] is not rules[0]'"
+        },
+        {
+          "task": "task-3",
+          "verify_index": 1,
+          "passes_before_the_work": true,
+          "command": "sh -c '! grep -rn ortools src/seating_planner/rules/'"
+        },
+        {
+          "task": "task-3",
+          "verify_index": 2,
+          "passes_before_the_work": true,
+          "command": "mypy src"
+        },
+        {
+          "task": "task-3",
+          "verify_index": 3,
+          "passes_before_the_work": true,
+          "command": "ruff check ."
+        },
+        {
+          "task": "task-3",
+          "verify_index": 4,
+          "passes_before_the_work": true,
+          "command": "ruff format --check ."
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    },
+    {
+      "task": "task-4",
+      "verifies": [
+        {
+          "task": "task-4",
+          "verify_index": 0,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/rules/test_template.py::test_default_wedding_template"
+        },
+        {
+          "task": "task-4",
+          "verify_index": 1,
+          "passes_before_the_work": true,
+          "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60"
+        },
+        {
+          "task": "task-4",
+          "verify_index": 2,
+          "passes_before_the_work": true,
+          "command": "mypy src"
+        },
+        {
+          "task": "task-4",
+          "verify_index": 3,
+          "passes_before_the_work": true,
+          "command": "ruff check ."
+        },
+        {
+          "task": "task-4",
+          "verify_index": 4,
+          "passes_before_the_work": true,
+          "command": "ruff format --check ."
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    }
+  ]
+}

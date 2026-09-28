@@ -1,0 +1,55 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-soft-keep-apart-never-honoured",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-007-20260925T015546Z",
+    "pr": 9,
+    "candidate_sha": "043e7053ba8c3af25ea6bb0afc28fdae7e8e49d8",
+    "bean_at": "e5a912975572741df539fd589fdaadbbb1f15b06",
+    "bean_path": "factory/beans/bean-007-soft-constraint-scoring-and-the-optimiza/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "A soft different-table rule's satisfaction indicator is bounded only from below (var_a + var_b - sat <= 1), so the maximizer sets it true in every chart and soft keep-apart rules never influence the result.",
+  "answer_key": {
+    "why": "The bean's intent is the chart with the highest weighted total of satisfied soft constraints. For same-table rules the indicator is capped (sat + var_a - var_b <= 1), so it can only be true when the rule holds. The different-table branch forces sat true when the guests are together and never forces it false when they are, so Maximize sets it true regardless. Measured on main: a weight-100 keep-apart loses to a weight-1 sit-together. The ac1 test cannot see it because capacity forces the separation. Repaired by bean-021.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "model.Add(var_a + var_b - sat <= 1)"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "model.Add(sat + var_a - var_b <= 1)"
+      },
+      {
+        "file": "bean/bean.yaml",
+        "quote": "the one with\n  the highest weighted total of satisfied soft constraints"
+      }
+    ]
+  },
+  "anchors": [
+    "different_table",
+    "different-table",
+    "keep apart",
+    "keep-apart",
+    "var_a + var_b - sat",
+    "lower bound",
+    "never honoured",
+    "always satisfied",
+    "always true"
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; bean-007's defect also demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "hard"
+}

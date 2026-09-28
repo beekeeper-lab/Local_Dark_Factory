@@ -1,0 +1,48 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-audit-filter-repaired",
+  "target": "impl",
+  "expect": "accept",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-004-20260922T142454Z",
+    "pr": 4,
+    "candidate_sha": "e9ec7b04699453a99c17752e64f9204ae5298654",
+    "bean_at": "adcd49ac9336bb9e18c2a0d9dda71269857ccc88",
+    "bean_path": "factory/beans/bean-004-persistence-with-an-append-only-audit-re/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "",
+  "answer_key": {
+    "why": "Identical to impl-audit-filter-sql-error except that its defect is repaired (the WHERE clause precedes ORDER BY, and the test reads the per-event log directly instead of working around it); nothing else was changed. The judge should not report the repaired defect. The same run's removal gap (see impl-removal-writes-no-audit's key) is NOT in this run's bean-004 criteria as strictly as ac5 later made it, but ac2's 'every mutation' still covers it, so a judge that raises removals here is right and is not scored as a false alarm on the repaired defect.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "where = \" WHERE event_id = ?\" if event_id is not None else \"\""
+      }
+    ]
+  },
+  "anchors": [
+    "order by",
+    "where event_id",
+    "syntax error",
+    "operationalerror",
+    "entries("
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; bean-007's defect also demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "twin_of": "impl-audit-filter-sql-error",
+  "repair": {
+    "synthetic": true,
+    "file": "diff.txt",
+    "description": "the WHERE clause precedes ORDER BY, and the test reads the per-event log directly instead of working around it"
+  }
+}
