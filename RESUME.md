@@ -3,6 +3,70 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-28: every merged bean that was reviewed had a real defect, so a review now gates the merge
+
+**Read this first.** A green gate plus a green CI has not been a review. Independent Claude
+reviews of five merged seating-planner beans found a real defect in every one. Each was
+demonstrated in the gate image, and each had passed its own tests, the gate, CI and an
+advisory audit:
+
+| bean | defect | repair |
+| --- | --- | --- |
+| bean-007 (PR #9) | The soft different-table indicator is bounded only from below, so keep-apart rules never count. A weight-100 keep-apart loses to a weight-1 sit-together. | bean-021 |
+| bean-005 (PR #6) | The group-size pre-flight counts ineligible guests, and ac2's own test asserts the false positive. Contested: the code follows its spec. | bean-022 |
+| bean-013 (PR #15) | `mode is LOW_DISRUPTION` compares identity, so a mode read from JSON is misrouted. | bean-023 |
+| bean-009 (PR #11) | `num_search_workers` is accepted, then hard-coded to 1. The spec asked for both. | bean-024 |
+| bean-014 (PR #16) | An explicit lock survives an explicit unlock; `mode is EVENT_DAY`; an event-day infeasibility is blamed on unrelated rules. | bean-025, plus bean-023 |
+
+The tests are written by the model that writes the code. The audits have never stamped a
+verdict. Most beans had no hidden tests.
+
+**What changed:**
+- **Pre-merge review** (`factory/review/PRE-MERGE-REVIEW.md`, owner-adopted). Before a bean
+  PR merges, a fresh Claude subagent reviews it and must demonstrate any defect in the gate
+  image. A demonstrated defect stops the merge and goes to the owner. Records are kept in
+  `evidence/reviews/`. bean-014 was the first; it found three defects, and the owner merged
+  it with repairs.
+- **Repair beans 021–025**, each approved by the owner directly and each with hidden tests
+  verified both ways in the gate image. There are also bean-007 hidden tests, so the next
+  corpus run catches its defect at the bean that introduced it.
+- **Judge qualification** (`bench/judge-qualify.sh`, `bench/qualify/`). This measures a
+  judge against 12 real audit cases with a Claude-checked answer key: 9 real defects,
+  one of them contested, and 3 repaired twins. The headline figure is pairs told apart; a
+  judge that rejects everything and one that accepts everything both score zero. It
+  replaced the typed-question judge idea, because per-criterion judging was measured dead
+  on 2026-09-16. **Not yet run on gpt-oss:120b**: it needs the GPU while the line is idle,
+  and the owner chose to keep the line running.
+- **Spec-step fixes:**
+  - A spec session that stops with questions now halts and is not retried
+    (bean-006 and bean-012 lost a build and a retry to that).
+  - Colliding test basenames are refused, in preflight and in spec-check.
+  - `plans-other-beans` no longer reads a snake_case identifier as another bean's topic.
+    `movement_limit` halted bean-014.
+- **The factory is back on `main`.** `integration/bean-004-run` was landed (factory PRs
+  #1–#10) and deleted. Factory PRs #11–#16 followed.
+- **Budgets for 009–020 were re-estimated before their builds**, about 105 lines per AC
+  (manifest). `worker_timeout_s` is 7200: bean-013's spec was killed at 90 minutes.
+
+**Operator traps found today:**
+- Launch with `FACTORY_ADVISORY_AUDITS=1`.
+- Bean amendments go on seating-planner `main`, then `main` is merged into the bean branch.
+- After pushing `main` from a worktree while a run holds the checkout, run
+  `git branch -f main origin/main`. The gate diffs against the local `main`, and a stale
+  one counted the repair beans' files as bean-014's.
+- `hidden-tests/verify.sh` runs pytest on the host, which has no ortools. Solver suites
+  were verified in the gate image and their records written by hand, because the image
+  has no jq. It needs a small fix.
+
+**Queue:** bean-021 is running. Next are 022–025, then 015–020, each reviewed before it
+merges. Hidden tests for 015–020 are being written ahead of their builds.
+
+**Open, for the owner:**
+- Add a `mode` field to `factory/invariants/seating.yaml`. The invariants never exercise
+  low-disruption or event-day modes.
+- `factory read` on the completed runs.
+- The qualification run.
+
 ## 2026-09-26: bean-010 and bean-011 merged; the owner now merges clean PRs as they come
 
 The owner authorised merging each clean PR (gate and CI green) and starting the next bean. Stop only for decisions such as budgets, paths, or a worker-written halt.
