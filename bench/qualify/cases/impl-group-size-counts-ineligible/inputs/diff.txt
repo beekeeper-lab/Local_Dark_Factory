@@ -1,0 +1,338 @@
+diff --git a/src/seating_planner/feasibility/__init__.py b/src/seating_planner/feasibility/__init__.py
+new file mode 100644
+index 0000000..d0a204f
+--- /dev/null
++++ b/src/seating_planner/feasibility/__init__.py
+@@ -0,0 +1,6 @@
++"""Pre-flight feasibility checks: structural impossibilities found by
++inspection, before any solver run (bean-005). No solver imports, ever."""
++
++from seating_planner.feasibility.preflight import Finding, run_preflight
++
++__all__ = ["Finding", "run_preflight"]
+diff --git a/src/seating_planner/feasibility/preflight.py b/src/seating_planner/feasibility/preflight.py
+new file mode 100644
+index 0000000..6d995d8
+--- /dev/null
++++ b/src/seating_planner/feasibility/preflight.py
+@@ -0,0 +1,166 @@
++"""run_preflight: the five structural checks of bean-005.
++
++Pure inspection of the Event — no search, no solver — so that structurally
++impossible problems are named before any solve is attempted. Emits at most one
++Finding per impossibility, in a fixed order, with the message templates pinned
++by factory/runs/bean-005-20260924T001254Z/spec.md.
++"""
++
++from __future__ import annotations
++
++from collections.abc import Mapping
++from dataclasses import dataclass
++
++from seating_planner.domain import Event, Group, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++
++_CODE_CONTRADICTION = "contradictory_hard_rules"
++_CODE_OVERSIZED_GROUP = "group_larger_than_all_tables"
++_CODE_CAPACITY = "insufficient_capacity"
++_CODE_MISSING_TABLE = "rule_missing_table"
++_CODE_MISSING_ZONE = "rule_missing_zone"
++
++
++@dataclass(frozen=True)
++class Finding:
++    """One pre-flight impossibility. code is a stable literal; message names
++    every entity the acceptance criteria require it to name."""
++
++    code: str
++    message: str
++
++
++def run_preflight(event: Event, zone_ids: frozenset[str] | None = None) -> list[Finding]:
++    """Return the structural findings for event, in a fixed order, or []."""
++    tables = {table.id: table for table in event.tables}
++    groups = {group.id: group for group in event.groups}
++    rules = _enabled_rules(event.rules)
++    checks = (
++        _contradictions(rules),
++        _oversized_groups(rules, groups, tables),
++        _capacity(event),
++        _missing_tables(rules, tables),
++        _missing_zones(rules, zone_ids),
++    )
++    findings: list[Finding] = []
++    for check in checks:
++        findings.extend(check)
++    return findings
++
++
++def _enabled_rules(event_rules: list[object]) -> list[Rule]:
++    # Event.rules is deliberately list[object]: the domain layer does not know
++    # the rules model, so filter with isinstance before touching rule fields.
++    # Disabled rules cannot be unsatisfiable, so they participate in no check.
++    return sorted(
++        (rule for rule in event_rules if isinstance(rule, Rule) and rule.enabled),
++        key=lambda rule: rule.id,
++    )
++
++
++def _contradictions(rules: list[Rule]) -> list[Finding]:
++    # One representative rule per (pair, kind); sorted rule ids keep the
++    # output deterministic whatever order the rules arrive in.
++    same: dict[frozenset[str], Rule] = {}
++    different: dict[frozenset[str], Rule] = {}
++    for rule in rules:
++        if (
++            rule.hardness is not Hardness.HARD
++            or rule.rule_type not in (RuleType.SAME_TABLE, RuleType.DIFFERENT_TABLE)
++            or len(rule.guest_ids) != 2
++        ):
++            continue
++        (same if rule.rule_type is RuleType.SAME_TABLE else different).setdefault(
++            frozenset(rule.guest_ids), rule
++        )
++    findings: list[Finding] = []
++    for pair in sorted(same.keys() & different.keys(), key=lambda p: sorted(p)):
++        same_rule, diff_rule = same[pair], different[pair]
++        who = ", ".join(sorted(pair))
++        findings.append(
++            Finding(
++                _CODE_CONTRADICTION,
++                f"hard rules {same_rule.id!r} (same_table) and "
++                f"{diff_rule.id!r} (different_table) contradict for guests {who}",
++            )
++        )
++    return findings
++
++
++def _oversized_groups(
++    rules: list[Rule],
++    groups: dict[str, Group],
++    tables: dict[str, Table],
++) -> list[Finding]:
++    # A group only "must stay together" via an enabled hard SAME_TABLE rule;
++    # it is counted as distinct member ids because member_ids is a bag. An
++    # event with no tables has largest capacity 0, so any such non-empty
++    # group is reported.
++    largest = max((table.capacity for table in tables.values()), default=0)
++    findings: list[Finding] = []
++    reported: set[str] = set()
++    for rule in rules:
++        if rule.hardness is not Hardness.HARD or rule.rule_type is not RuleType.SAME_TABLE:
++            continue
++        for group_id in rule.group_ids:
++            group = groups.get(group_id)
++            if group is None or group_id in reported:
++                continue
++            size = len(set(group.member_ids))
++            if size > largest:
++                reported.add(group_id)
++                findings.append(
++                    Finding(
++                        _CODE_OVERSIZED_GROUP,
++                        f"group {group.id!r} ({group.name}) must stay together "
++                        f"at {size}, but the largest table seats {largest}",
++                    )
++                )
++    return findings
++
++
++def _capacity(event: Event) -> list[Finding]:
++    # Eligibility is derived, never stored: count via guest.eligible.
++    eligible = sum(1 for guest in event.guests if guest.eligible)
++    total = sum(table.capacity for table in event.tables)
++    if eligible > total:
++        return [Finding(_CODE_CAPACITY, f"{eligible} eligible guests exceed {total} total seats")]
++    return []
++
++
++def _missing_tables(rules: list[Rule], tables: Mapping[str, object]) -> list[Finding]:
++    findings: list[Finding] = []
++    for rule in rules:
++        seen: set[str] = set()
++        for table_id in rule.table_ids:
++            if table_id not in tables and table_id not in seen:
++                seen.add(table_id)
++                findings.append(
++                    Finding(
++                        _CODE_MISSING_TABLE,
++                        f"rule {rule.id!r} references table {table_id!r}, which does not exist",
++                    )
++                )
++    return findings
++
++
++def _missing_zones(rules: list[Rule], zone_ids: frozenset[str] | None) -> list[Finding]:
++    # Skipped rather than guessed when no zone data is supplied: Rule.target
++    # is a free string and the Event carries no zone registry.
++    if zone_ids is None:
++        return []
++    findings: list[Finding] = []
++    for rule in rules:
++        if rule.rule_type not in (RuleType.MIN_DISTANCE, RuleType.ADJACENT_SEAT):
++            continue
++        if rule.target is None and rule.min_zones is None:
++            continue
++        if rule.target is not None and rule.target in zone_ids:
++            continue
++        findings.append(
++            Finding(
++                _CODE_MISSING_ZONE,
++                f"rule {rule.id!r} references zone {rule.target!r}, which does not exist",
++            )
++        )
++    return findings
+diff --git a/tests/feasibility/test_preflight.py b/tests/feasibility/test_preflight.py
+new file mode 100644
+index 0000000..e81c419
+--- /dev/null
++++ b/tests/feasibility/test_preflight.py
+@@ -0,0 +1,148 @@
++"""Acceptance tests for run_preflight (bean-005, ac1-ac5): one test per
++criterion, pinning both the Finding.code values (in order) and the message
++content the spec fixes, which FR-050's later conflict report will consume."""
++
++from __future__ import annotations
++
++from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
++from seating_planner.feasibility import run_preflight
++from seating_planner.rules import Hardness, Rule, RuleType
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(guest_id: str, status: RsvpStatus = RsvpStatus.CONFIRMED) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=status)
++
++
++def _hard(
++    rule_id: str,
++    rule_type: RuleType,
++    guest_ids: tuple[str, ...] = (),
++    group_ids: tuple[str, ...] = (),
++    table_ids: tuple[str, ...] = (),
++    target: str | None = None,
++    distance_m: float | None = None,
++    min_zones: int | None = None,
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.HARD,
++        weight=None,
++        guest_ids=guest_ids,
++        group_ids=group_ids,
++        table_ids=table_ids,
++        target=target,
++        distance_m=distance_m,
++        min_zones=min_zones,
++    )
++
++
++def test_contradictory_hard_rules() -> None:
++    event = Event(
++        id="e-1",
++        name="Wedding",
++        tables=[_table("t-1")],
++        guests=[_guest("g-0"), _guest("g-1")],
++        rules=[
++            _hard("r-same", RuleType.SAME_TABLE, guest_ids=("g-0", "g-1")),
++            _hard("r-diff", RuleType.DIFFERENT_TABLE, guest_ids=("g-1", "g-0")),
++        ],
++    )
++    findings = run_preflight(event)
++    assert [f.code for f in findings] == ["contradictory_hard_rules"]
++    assert "r-same" in findings[0].message
++    assert "r-diff" in findings[0].message
++
++
++def test_group_larger_than_any_table() -> None:
++    # Ten distinct members, all pending with no reserved seat so that neither
++    # the capacity check nor any guest-driven check fires alongside.
++    members = tuple(f"bride-{n}" for n in range(1, 11))
++    event = Event(
++        id="e-2",
++        name="Wedding",
++        tables=[_table("t-1", capacity=5), _table("t-2", capacity=8)],
++        guests=[_guest(member_id, status=RsvpStatus.PENDING) for member_id in members],
++        groups=[Group(id="grp-bride", name="Bridal party", member_ids=members)],
++        rules=[_hard("r-keep", RuleType.SAME_TABLE, group_ids=("grp-bride",))],
++    )
++    findings = run_preflight(event)
++    assert [f.code for f in findings] == ["group_larger_than_all_tables"]
++    assert "grp-bride" in findings[0].message
++    assert "10" in findings[0].message
++    assert "8" in findings[0].message
++
++
++def test_insufficient_capacity() -> None:
++    event = Event(
++        id="e-3",
++        name="Wedding",
++        tables=[_table("t-1", capacity=3)],
++        guests=[_guest(f"g-{n}") for n in range(4)],
++    )
++    findings = run_preflight(event)
++    assert [f.code for f in findings] == ["insufficient_capacity"]
++    assert "4" in findings[0].message
++    assert "3" in findings[0].message
++
++
++def test_rule_references_missing_target() -> None:
++    # Table branch: a dangling table id is reported without any zone data.
++    event = Event(
++        id="e-4",
++        name="Wedding",
++        tables=[_table("t-1", capacity=2)],
++        guests=[_guest("g-0")],
++        rules=[_hard("r-table", RuleType.SAME_TABLE, table_ids=("t-ghost",))],
++    )
++    findings = run_preflight(event)
++    assert [f.code for f in findings] == ["rule_missing_table"]
++    assert "r-table" in findings[0].message
++    assert "t-ghost" in findings[0].message
++
++    # Zone branch: a dangling dance-floor-style target, checked against the
++    # zone ids the caller supplies.
++    event = Event(
++        id="e-5",
++        name="Wedding",
++        tables=[_table("t-1", capacity=2)],
++        guests=[_guest("g-0")],
++        rules=[_hard("r-zone", RuleType.MIN_DISTANCE, target="band_stand", min_zones=1)],
++    )
++    findings = run_preflight(event, zone_ids=frozenset({"dance_floor"}))
++    assert [f.code for f in findings] == ["rule_missing_zone"]
++    assert "r-zone" in findings[0].message
++    assert "band_stand" in findings[0].message
++
++
++def test_feasible_problem_is_clean() -> None:
++    event = Event(
++        id="e-6",
++        name="Wedding",
++        tables=[_table("t-1", capacity=4), _table("t-2", capacity=6)],
++        guests=[_guest(f"g-{n}") for n in range(4)],
++        groups=[Group(id="grp-siblings", name="Siblings", member_ids=("g-1", "g-2", "g-3"))],
++        rules=[
++            Rule(
++                id="r-soft-same",
++                rule_type=RuleType.SAME_TABLE,
++                hardness=Hardness.SOFT,
++                weight=50,
++                guest_ids=("g-1", "g-2"),
++            ),
++            _hard("r-diff", RuleType.DIFFERENT_TABLE, guest_ids=("g-1", "g-4")),
++            _hard("r-together", RuleType.SAME_TABLE, group_ids=("grp-siblings",)),
++            _hard("r-dance", RuleType.MIN_DISTANCE, target="dance_floor", distance_m=5.0),
++        ],
++    )
++    assert run_preflight(event, zone_ids=frozenset({"dance_floor"})) == []

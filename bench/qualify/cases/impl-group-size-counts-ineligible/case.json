@@ -1,0 +1,49 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-group-size-counts-ineligible",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-005-20260924T001254Z",
+    "pr": 6,
+    "candidate_sha": "a5fb2e800824c2930bdbc78d216ceb329682f022",
+    "bean_at": "adcd49ac9336bb9e18c2a0d9dda71269857ccc88",
+    "bean_path": "factory/beans/bean-005-pre-flight-feasibility-checks-before-opt/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The oversized-group check counts every distinct member id, including declined and unreserved pending guests who will never be seated, so feasible events are reported impossible; the ac2 test builds its group entirely from ineligible guests and asserts the finding.",
+  "answer_key": {
+    "why": "bean-005's intent is 'structurally impossible seating problems', and the solver seats only eligible guests; a group of 6 seated members is not impossible at a table of 8 because 4 declined. The same module's capacity check counts only eligible guests, so the two checks disagree. CONTESTED: the run's own spec pinned 'distinct member_ids', so the code matches its spec; a judge that sides with the spec over the bean's intent has a defensible reading. Scored separately from the uncontested cases. Repaired by bean-022.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+            size = len(set(group.member_ids))"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "guests=[_guest(member_id, status=RsvpStatus.PENDING) for member_id in members],"
+      }
+    ]
+  },
+  "anchors": [
+    "eligible",
+    "ineligible",
+    "declined",
+    "pending",
+    "not seated",
+    "false positive"
+  ],
+  "key_by": "Claude Opus 5.5 with an independent Claude reviewer; each defect demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "medium",
+  "contested": true
+}

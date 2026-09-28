@@ -1,0 +1,27 @@
+{
+  "schema": "claims-check/1.0.0",
+  "current_behaviour": {
+    "section": "Current behaviour",
+    "checked": true,
+    "paths_said_to_exist": [
+      "tests/",
+      "tests/domain/",
+      "tests/test_scaffold.py"
+    ],
+    "paths_only_mentioned": [],
+    "missing_paths": [],
+    "paths_said_to_be_absent": [
+      "src/seating_planner/domain/__init__.py"
+    ],
+    "said_absent_but_present": [
+      "src/seating_planner/domain/__init__.py"
+    ],
+    "said_absent_but_present_is_not_a_failure": "Recorded, never failed. Deciding which noun a negation attaches to is not something this can do reliably, and it was wrong twice on the first real spec it met. Suppressing a check on a maybe is cheap; firing one is not.",
+    "named_symbols": [
+      "Event",
+      "rules"
+    ],
+    "absent_symbols": [],
+    "note": "A path this section SAYS EXISTS — 'already contains', 'currently', 'is present' — is a claim about the filesystem, and if the file is not there the section is describing something that is not. A path merely mentioned, including one the change is about to create, claims nothing and is required of nothing. A path it says is ABSENT is also a claim, checked the other way. Sentences are read for negation so that 'There is no `src/a.py`' — a true and useful thing for this section to say — is not reported as a false claim. A symbol is weaker evidence, since it may be prose or a name the change introduces, so its absence is reported and never fails."
+  }
+}

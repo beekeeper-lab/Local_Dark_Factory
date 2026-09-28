@@ -1,0 +1,180 @@
+# bean-009 task list — reproducible optimization via persisted solver
+# configuration. Two dependency-ordered tasks: (1) the configuration becomes
+# explicit and every result carries it; (2) the four named acceptance tests.
+# Every write path is a subset of the bean's allowed_write_paths
+# (src/seating_planner/solver/**, tests/solver/**); four files total, inside
+# the 5-task / 4-file / 300-line diff budget.
+schema_version: tasks/1.0.0
+bean_id: bean-009
+tasks:
+  - id: task-1
+    title: Make the solver configuration explicit and carry it in every result
+    intent: >
+      Create a new module src/seating_planner/solver/config.py (it must import
+      nothing from seating_planner — no result or hard imports, in either
+      direction except result.py importing from it) holding one frozen
+      dataclass SolverConfig with fields, in this order: seed (int),
+      num_search_workers (int), time_limit_s (float). Its __post_init__ raises
+      a ValueError naming the field when num_search_workers is below 1 or
+      time_limit_s is not positive: the determinism guarantee (FR-048)
+      requires a fixed, explicitly stated worker count, and 0 is an
+      unspecified default that OR-Tools may interpret machine-dependently, so
+      the module refuses it rather than the solver silently reinterpreting it.
+      to_dict() returns those three keys as JSON-safe primitives, with key
+      names equal to the field names (a test replays the stored dict into
+      SolverConfig(**payload["solver_config"])). Add a module-level
+      DEFAULT_SOLVER_CONFIG constant — SolverConfig(seed=0,
+      num_search_workers=1, time_limit_s=10.0), written over two lines to stay
+      under 100 columns — documenting that it matches the solver's existing
+      defaults and that this bean deliberately keeps them (the workers vs
+      NFR-001 wall-clock tension is an open owner decision; making the
+      configuration explicit is this bean, resolving it is not).
+
+      In src/seating_planner/solver/result.py import SolverConfig from
+      seating_planner.solver.config and add one final field to SolveResult,
+      solver_config: SolverConfig, after violations, with a comment saying the
+      result carries the configuration that actually produced it so a later
+      run can be replayed. Extend to_dict() with the "solver_config" key
+      producing self.solver_config.to_dict(), and update the class docstring
+      to say the result carries the solver configuration that produced it.
+
+      In src/seating_planner/solver/hard.py change solve_event's signature to
+      solve_event(event, time_limit_s: float = 10.0, seed: int = 0,
+      num_search_workers: int = 1) — keyword-only as today. The existing
+      keyword names time_limit_s and seed MUST keep working exactly as now:
+      seating_planner/invariant_api.py calls solve_event with them, that file
+      is outside this bean's write paths, and it must keep working without
+      edits. Do not change any default value. Build the requested
+      SolverConfig once at the top of solve_event and attach it to the two
+      early returns (no eligible guests, no tables) — there the requested
+      values are the configuration used. On the path that reaches
+      solver.Solve(model), do not echo the request into the result: after the
+      Solve call, read the values back out of solver.parameters
+      (random_seed, num_search_workers, max_time_in_seconds) into a second
+      SolverConfig and attach THAT to both the feasible (OPTIMAL/FEASIBLE) and
+      the INFEASIBLE results — the recorded configuration is the one actually
+      used, and reading it back is the mechanism that makes FR-048 an
+      observable claim rather than an assumed one. Keep untouched: the three
+      solver.parameters setup lines, the status handling and SolverTimeout,
+      model building, constraints, the soft objective and the report helpers,
+      and src/seating_planner/solver/__init__.py — task-2's tests import
+      SolverConfig directly from seating_planner.solver.config, and a
+      re-export would be a fifth file, over the 4-file budget. The changed
+      modules must pass ruff (E, F, I, UP, B, 100 columns, ruff format) and
+      mypy --strict; mypy runs on src only and hard.py's importlib trick
+      already keeps ortools out of the type check.
+    write_paths:
+      - src/seating_planner/solver/**
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4]
+    verify:
+      - { kind: command, run: ["ruff", "check", "src/seating_planner/solver"] }
+      - { kind: command, run: ["ruff", "format", "--check", "src/seating_planner/solver"] }
+      - { kind: command, run: ["mypy", "src"] }
+      - kind: command
+        run:
+          [sh, "-c", "grep -q 'class SolverConfig' src/seating_planner/solver/config.py"]
+      - kind: command
+        run:
+          [sh, "-c", "grep -q '\"solver_config\"' src/seating_planner/solver/result.py"]
+      - { kind: command, run: ["pytest", "-q", "tests/solver"] }
+      - { kind: command, run: ["pytest", "-q", "--no-header", "factory/invariants/test_seating_invariants.py"] }
+    max_attempts: 3
+    teaching_note: >
+      Determinism here is a property of configuration, and the configuration
+      was already in place: bean-006 pinned one worker plus the caller's
+      seed, and the invariants' inv-reproducible runs green through the seam
+      (66/66 in the bean-007 gate run). What was missing was visibility —
+      the result did not record how it was made, so nothing outside the call
+      could replay it or attribute a difference. Reading the parameters back
+      from solver.parameters after Solve, instead of echoing the request, is
+      the whole honesty of "actually used": the recorded configuration is the
+      one that ran, no matter what OR-Tools does to a request internally.
+  - id: task-2
+    title: Write the four determinism acceptance tests
+    intent: >
+      Create tests/solver/test_determinism.py containing exactly the four
+      acceptance test functions the bean names — names exactly:
+      test_repeat_run_is_identical, test_result_records_configuration,
+      test_stored_config_reproduces_result, test_seed_change_is_visible — in
+      the style of tests/solver/test_result.py: small private builders for
+      Table, Guest, Rule and Event at the top, plus one private solve helper
+      that takes (seed, time_limit_s, num_search_workers) and passes them to
+      solve_event as explicit keyword arguments, so every solve in the file is
+      a configuration the reader can see. Assert only on solve_event result
+      fields, result.solver_config and to_dict() output; never on solver
+      internals. Keep the file lean — the bean's diff-line budget is 300 for
+      all four files, so stay at or under roughly 180 lines.
+
+      (1) test_repeat_run_is_identical (ac1): one event with several
+      comfortable tables, at least four eligible guests and a couple of soft
+      same_table/different_table rules of different weights so the solver
+      has a real choice to make. Solve it twice with the identical explicit
+      config (for instance seed 7, num_search_workers 1, time_limit_s
+      5.0). Assert status is feasible and that
+      json.dumps(first.to_dict(), sort_keys=True) equals
+      json.dumps(second.to_dict(), sort_keys=True): byte-identical serialized
+      results, which subsumes byte-identical assignments and checks that the
+      newly recorded configuration is itself stable across runs.
+
+      (2) test_result_records_configuration (ac2): solve a feasible event
+      with a distinctive config (for instance seed 42, num_search_workers 1,
+      time_limit_s 2.5). Assert result.solver_config equals
+      SolverConfig(seed=42, num_search_workers=1, time_limit_s=2.5) and that
+      result.to_dict()["solver_config"] equals the matching three-key dict.
+      Then solve an infeasible event (eligible guests, no tables) with the
+      same distinctive values and assert its result.solver_config carries
+      them too: the configuration rides on every result, not just the
+      feasible ones.
+
+      (3) test_stored_config_reproduces_result (ac3): solve the event once
+      with a distinctive config; take only the serialized payload —
+      payload = result.to_dict() — rebuild the configuration from the stored
+      dict as SolverConfig(**payload["solver_config"]) (the field names equal
+      the dict keys by construction, which is the contract to_dict has);
+      solve the identical event again with exactly the stored values. Assert
+      the two statuses agree and the two to_dict() payloads are equal
+      (assignment included): replaying what the result stored reproduces
+      the stored assignment.
+
+      (4) test_seed_change_is_visible (ac4): pick two distinct seeds A and B;
+      solve the event twice with seed A and once with seed B, identical
+      num_search_workers (1) and time limit each time. Assert the two seed-A
+      runs are byte-identical to each other (same-seed determinism), that the
+      seed-A results' solver_config and to_dict() records name seed A and the
+      seed-B result names seed B — each result faithfully reports the seed
+      that produced it — and that, if the seed-A assignment differs from the
+      seed-B assignment, then the only key whose value differs between the
+      two recorded solver_config dicts is "seed": a different chart is
+      attributable to the visible recorded change, not hidden. Do NOT
+      assert that changing the seed must change the assignment: with one
+      worker, small instances frequently yield the same chart under several
+      seeds (CP-SAT's seed mainly matters once search does stochastic
+      work), and a test that forces a difference would be brittle across gate
+      images. The "reported rather than hidden" half of ac4 is a property
+      of the record — say exactly that in the test's docstring.
+
+      The file must pass ruff (E, F, I, UP, B, 100 columns, ruff format).
+    write_paths:
+      - tests/solver/**
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4]
+    verify:
+      - { kind: command, run: ["ruff", "check", "tests/solver"] }
+      - { kind: command, run: ["ruff", "format", "--check", "tests/solver"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_determinism.py::test_repeat_run_is_identical"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_determinism.py::test_result_records_configuration"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_determinism.py::test_stored_config_reproduces_result"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_determinism.py::test_seed_change_is_visible"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver"] }
+    max_attempts: 3
+    teaching_note: >
+      One test per criterion, each recomputing its expectation from the
+      recorded configuration or the serialized payload rather than taking the
+      result's claim on faith: the determinism the bean promises is checked
+      against what the result itself stores, so a result that stopped
+      recording the truth fails on its own record. The seed test deliberately
+      pins the *reporting* mechanism instead of forcing a chart difference —
+      with sequential search there are no instances small enough to
+      guarantee one — and the test's docstring says so, so the coverage
+      choice is visible in the code, not buried in a review.

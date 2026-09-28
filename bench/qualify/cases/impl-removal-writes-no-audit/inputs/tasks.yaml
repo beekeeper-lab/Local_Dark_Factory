@@ -1,0 +1,321 @@
+schema_version: tasks/1.0.0
+bean_id: bean-004
+tasks:
+  - id: task-1
+    title: "Create the store package and the append-only audit log"
+    intent: >-
+      Create exactly two files and nothing else. (1)
+      src/seating_planner/store/__init__.py as a package anchor for now: a
+      one-line module docstring
+      ('SQLite persistence for seating_planner events; the audit record in
+      store.audit is append-only.') and nothing else. (2)
+      src/seating_planner/store/audit.py: the append-only audit record of who
+      changed which entity and when (FR-003). After
+      `from __future__ import annotations`, import sqlite3,
+      dataclasses.dataclass, and typing.Final. A final `__all__`
+      = ["AuditEntry", "AuditLog"]. AuditEntry is a frozen dataclass with
+      fields in this order: event_id: str, entity_type: str, entity_id: str,
+      action: str, actor: str, timestamp: str — the five attribution facts
+      the bean's ac2 names (actor, timestamp, entity type, entity id, plus
+      the event they belong to). A module-level Final[str] DDL constant, e.g.
+      AUDIT_TABLE_SQL, containing: CREATE TABLE IF NOT EXISTS audit_log
+      (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, action TEXT NOT
+      NULL, actor TEXT NOT NULL, timestamp TEXT NOT NULL); and TWO triggers
+      — CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON
+      audit_log BEGIN SELECT RAISE(ABORT, 'audit log entries cannot be
+      modified'); END; and audit_no_delete BEFORE DELETE ON audit_log with
+      RAISE(ABORT, 'audit log entries cannot be deleted'); — so append-only
+      is enforced by the database itself, not by the API's good manners, and
+      holds even for a raw sqlite3 connection. class AuditLog:
+      __init__(self, conn: sqlite3.Connection) -> None stores the connection
+      and runs conn.executescript(AUDIT_TABLE_SQL) (idempotent).
+      append(self, entry: AuditEntry) -> None executes the INSERT with all
+      six fields bound with ? placeholders.
+      entries(self, event_id: str | None = None) -> list[AuditEntry] returns
+      all rows ORDER BY id, filtered by event_id when given, each rebuilt
+      into an AuditEntry via the sqlite3.Row factory
+      (set nothing here — document that the caller, Repository, sets
+      row_factory; if the row factory is unset, access columns by explicit
+      positional unpacking so this module stays correct either way). The
+      class deliberately has no update or delete method. No sqlite3 DML any
+      other than the INSERT. Import only the standard library. Keep the
+      file at or under 70 lines. Ruff-clean (rules E, F, I, UP, B),
+      ruff-format-clean, mypy strict clean.
+    write_paths:
+      - src/seating_planner/store/__init__.py
+      - src/seating_planner/store/audit.py
+    depends_on: []
+    satisfies: [ac2, ac4]
+    verify:
+      # Fails first: the module does not exist, so the import raises
+      # ModuleNotFoundError. Exercises append, read-back, and both trigger
+      # rejections on a raw connection.
+      - kind: command
+        run:
+          - python
+          - -c
+          - "import sqlite3, tempfile\nfrom pathlib import Path\nfrom seating_planner.store.audit import AuditEntry, AuditLog\ndb = str(Path(tempfile.mkdtemp()) / 'audit.sqlite')\nconn = sqlite3.connect(db)\nconn.row_factory = sqlite3.Row\nlog = AuditLog(conn)\nlog.append(AuditEntry('e1', 'guest', 'g1', 'upsert', 'alice', '2026-09-22T00:00:00+00:00'))\nconn.commit()\ngot = log.entries(event_id='e1')\nassert len(got) == 1, got\nassert (got[0].actor, got[0].entity_type, got[0].entity_id) == ('alice', 'guest', 'g1')\nraw = sqlite3.connect(db)\ntry:\n    raw.execute('UPDATE audit_log SET actor = ? WHERE entity_id = ?', ('mallory', 'g1'))\n    raw.commit()\nexcept sqlite3.IntegrityError:\n    pass\nelse:\n    raise SystemExit('UPDATE on audit_log was accepted')\ntry:\n    raw.execute('DELETE FROM audit_log WHERE entity_id = ?', ('g1',))\n    raw.commit()\nexcept sqlite3.IntegrityError:\n    pass\nelse:\n    raise SystemExit('DELETE from audit_log was accepted')\nassert len(log.entries()) == 1 and log.entries()[0].actor == 'alice'\nraw.close()\nconn.close()\n"
+      # The bean's constraint checks: no service driver, no ORM, no
+      # migrations framework, no at-rest encryption may be imported.
+      - kind: command
+        run:
+          - sh
+          - -c
+          - "! grep -rnE '^[[:space:]]*(import|from)[[:space:]]+(sqlalchemy|peewee|tortoise|pony|django|psycopg2?|pymysql|MySQLdb|pymongo|redis|alembic|yoyo|cryptography|nacl|pysqlcipher3)([[:space:](,.$]|$)' src/seating_planner/store/ tests/store/"
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      FR-003 asks that every change be attributable to a user and a time;
+      NFR-013's auditability half is this table. The two BEFORE triggers are
+      the whole design: an audit log whose append-only-ness depends on the
+      API never offering a delete is only as good as the next raw
+      connection, so the rejection lives in SQLite where a test can reach
+      it with plain SQL. Append and entry shape are trivially testable
+      standalone, which is why this task lands before the repository.
+  - id: task-2
+    title: "Create the Repository: atomic event save and load over SQLite"
+    intent: >-
+      Rewrite src/seating_planner/store/__init__.py (currently a one-line
+      docstring placeholder) into the repository module; do not touch
+      store/audit.py or any other file. Module docstring: this is the seam
+      between domain objects and storage — the rest of the code asks the
+      Repository to save and load an Event and never sees sqlite3; each
+      save is one transaction, so a write that fails partway leaves the
+      previously committed state (NFR-013); concurrent editing is
+      last-write-wins per event (PRD 18.1 assumption). After its first line
+      (`from __future__ import annotations`), the module takes
+      json, sqlite3, datetime (datetime, timezone), pathlib.Path and
+      typing.Final from the standard library, then Event, Group, Guest,
+      RsvpStatus and Table from seating_planner.domain, Rule from
+      seating_planner.rules, and AuditEntry and AuditLog from
+      seating_planner.store.audit. A final
+      `__all__` = ["Repository", "StoreError"]. class StoreError(ValueError)
+      with a one-line docstring: raised inside the save transaction, so a
+      committed state is never partially overwritten. A module-level
+      Final[str] DDL constant with CREATE TABLE IF NOT EXISTS for: events
+      (id TEXT PRIMARY KEY, name TEXT NOT NULL); tables (event_id TEXT NOT
+      NULL, id TEXT NOT NULL, name TEXT NOT NULL, capacity INTEGER NOT
+      NULL, shape TEXT NOT NULL, position_x REAL NOT NULL,
+      position_y REAL NOT NULL, PRIMARY KEY (event_id, id)); guests (same
+      keying, plus name TEXT NOT NULL, status TEXT NOT NULL, household_id
+      TEXT, reserved_seat INTEGER NOT NULL); groups (same keying, name TEXT
+      NOT NULL, members TEXT NOT NULL — a JSON list of guest ids); rules
+      (same keying, data TEXT NOT NULL — JSON from Rule.to_dict). class
+      Repository: __init__(self, path: str | Path) -> None converts to a
+      string, opens sqlite3.connect, sets conn.row_factory = sqlite3.Row,
+      runs the DDL via executescript, and constructs self._audit =
+      AuditLog(self._conn) (whose idempotent DDL adds the audit table and
+      triggers in the same file). save_event(self, event: Event, *,
+      actor: str) -> None runs ONE transaction using `with self._conn:`
+      (commit on clean exit, rollback on any exception): first upsert the
+      events row with INSERT INTO events (id, name) VALUES (?, ?) ON
+      CONFLICT (id) DO UPDATE SET name = excluded.name; then for each of
+      tables, guests, groups, rules: DELETE FROM <table> WHERE event_id = ?
+      and re-INSERT the event's rows in list order so rowid order is the
+      saved order (last-write-wins per event). Guests store
+      status.value and int(reserved_seat); groups store
+      json.dumps(list(member_ids)); rules call rule.to_dict() — take it via
+      getattr(rule, "to_dict", None) and, if it is not callable, raise
+      StoreError naming the event id and the rule's id, because the domain
+      deliberately allows any object in Event.rules and the store will not
+      persist what it cannot serialize. Finally append six-plus audit
+      entries for this save under one timestamp: one per saved entity with
+      entity_type in {"event", "table", "guest", "group", "rule"} and
+      entity_id the entity's id, action "upsert", actor as given, timestamp
+      a fresh UTC ISO-8601 string from a private helper
+      datetime.now(timezone.utc).isoformat(timespec="microseconds") taken
+      ONCE for the whole save (one transaction, one moment). load_event
+      (self, event_id: str) -> Event raises StoreError("no such event: ...")
+      when the events row is missing; otherwise fetches each child table
+      ORDER BY rowid and rebuilds: Table(id, name, capacity, shape,
+      (position_x, position_y)); Guest(id, name, RsvpStatus(status),
+      household_id, bool(reserved_seat)); Group(id, name,
+      tuple(json.loads(members))); Rule.from_dict(json.loads(data)); then
+      constructs Event(id, name, tables, guests, groups, rules) in one call
+      so the domain's construction-time checks re-run on load. audit_log
+      (self, event_id: str | None = None) -> list[AuditEntry] delegates to
+      self._audit.entries. close(self) -> None closes the connection.
+      Import only the standard library and seating_planner modules. Keep
+      the file at or under 150 lines. Ruff-clean, ruff-format-clean, mypy
+      strict clean.
+    write_paths:
+      - src/seating_planner/store/__init__.py
+    depends_on: [task-1]
+    satisfies: [ac1, ac3]
+    verify:
+      # Fails first: Repository does not exist yet, so the import raises
+      # ImportError. Exercises the round-trip (ac1) and the atomic
+      # failed-write (ac3) straight from the public API.
+      - kind: command
+        run:
+          - python
+          - -c
+          - "import tempfile\nfrom pathlib import Path\nfrom seating_planner.domain import Event, Group, Guest, RsvpStatus, Table\nfrom seating_planner.rules import Rule\nfrom seating_planner.store import Repository, StoreError\ndb = str(Path(tempfile.mkdtemp()) / 'event.sqlite')\ndef build():\n    ev = Event(id='e1', name='Wedding')\n    ev.add_table(Table(id='t1', name='Table 1', capacity=8, shape='round', position=(1.0, 2)))\n    ev.add_table(Table(id='t2', name='Table 2', capacity=4, shape='rect', position=(3, 4.5)))\n    ev.add_guest(Guest(id='g1', name='Ann', status='confirmed'))\n    ev.add_guest(Guest(id='g2', name='Ben', status='pending', reserved_seat=True))\n    ev.add_guest(Guest(id='g3', name='Cy', status='declined', household_id='h1'))\n    ev.add_group(Group(id='grp1', name='Couples', member_ids=('g1', 'g2')))\n    ev.add_rule(Rule(id='r1', rule_type='same_table', hardness='soft', weight=80, guest_ids=('g1', 'g2')))\n    ev.add_rule(Rule(id='r2', rule_type='min_distance', hardness='hard', weight=None, guest_ids=('g3',), target='dance_floor', min_zones=2))\n    return ev\nev = build()\nrepo = Repository(db)\nrepo.save_event(ev, actor='alice')\ngot = repo.load_event('e1')\nassert got == ev, (got, ev)\nassert got.guests[1].status is RsvpStatus.PENDING and got.guests[1].reserved_seat is True\nassert got.tables[0].position == (1.0, 2.0) and got.tables[1].position == (3.0, 4.5)\nassert [type(r) for r in got.rules] == [Rule, Rule]\ntry:\n    repo.load_event('no-such-event')\nexcept StoreError:\n    pass\nelse:\n    raise SystemExit('unknown event id was accepted by load_event')\nn_before = len(repo.audit_log())\nbad = build()\nbad.add_rule(object())\ntry:\n    repo.save_event(bad, actor='bob')\nexcept StoreError:\n    pass\nelse:\n    raise SystemExit('non-serializable rule was accepted')\nassert repo.load_event('e1') == ev\nassert len(repo.audit_log()) == n_before\nrepo.close()\n"
+      - kind: command
+        run:
+          - sh
+          - -c
+          - "! grep -rnE '^[[:space:]]*(import|from)[[:space:]]+(sqlalchemy|peewee|tortoise|pony|django|psycopg2?|pymysql|MySQLdb|pymongo|redis|alembic|yoyo|cryptography|nacl|pysqlcipher3)([[:space:](,.$]|$)' src/seating_planner/store/ tests/store/"
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      The repository is the seam the bean's background names: callers ask it
+      to load and save and are ignorant of SQLite. The whole of NFR-013
+      rides on `with self._conn:` in save_event — upsert, child
+      replacement and every audit append happen inside one transaction, so
+      the non-serializable-rule StoreError takes down the save and the
+      rollback restores the previous event down to the last audit line.
+      Full-event replacement is the last-write-wins v1 the bean records
+      (PRD 18.1); the audit record is what makes that reconstructable
+      afterward.
+  - id: task-3
+    title: "Write test_repository.py with the ac1 round-trip and ac3 atomicity tests"
+    intent: >-
+      Create tests/store/test_repository.py and nothing else — do not touch
+      any src/ file. (pytest finds tests without an __init__.py here;
+      none is needed.) Module docstring naming the coverage (ac1 and ac3 of
+      bean-004), then `from __future__ import annotations`, and imports:
+      pathlib.Path, pytest, and exactly
+      Event, Group, Guest, RsvpStatus, Table from
+      seating_planner.domain, Rule from seating_planner.rules, and
+      Repository, StoreError from seating_planner.store — no unused
+      imports. A private _sample_event() -> Event helper building the full shape: Event(id="e1", name="Wedding") with two
+      tables (t1 round capacity 8 position (1.0, 2), t2 rect capacity 4),
+      three guests spanning the status spellings "confirmed",
+      "pending" with reserved_seat True, and "declined" with a
+      household_id, one group grp1 "Couples" over members ("g1", "g2"), and
+      two rules (r1 soft same_table weight 80 over both guests; r2 hard
+      min_distance weight None target "dance_floor" min_zones 2).
+      test_event_roundtrip(tmp_path: Path) -> None: db = tmp_path /
+      "chart.sqlite"; event = _sample_event(); repo = Repository(db);
+      repo.save_event(event, actor="alice"); repo.close(); reopened =
+      Repository(db) — a second connection on the same file, the restart;
+      loaded = reopened.load_event("e1"); assert loaded == event and the
+      four collections compare equal one by one
+      (loaded.tables/guests/groups/rules against event's); assert the
+      round-tripped details hold — loaded.guests[1].status is
+      RsvpStatus.PENDING, loaded.tables[0].position == (1.0, 2.0) (int 2 in,
+      float pair out); with pytest.raises(StoreError): reopened.load_event
+      ("no-such-event"); reopened.close().
+      test_failed_write_is_atomic(tmp_path: Path) -> None: committed =
+      _sample_event(); save it with actor "alice" and keep
+      audit_before = repo.audit_log(); broken = _sample_event() then
+      broken.add_rule(object()) — the domain allows any object in
+      Event.rules and the store is where it must be refused so the whole
+      save fails mid-transaction; with pytest.raises(StoreError):
+      repo.save_event(broken, actor="bob"); after the failure,
+      repo.load_event("e1") == committed and repo.audit_log() ==
+      audit_before (the failed save's own audit appends rolled back too);
+      repo.close(). Both tests annotated -> None. Ruff-clean,
+      ruff-format-clean.
+    write_paths:
+      - tests/store/test_repository.py
+    depends_on: [task-2]
+    satisfies: [ac1, ac3]
+    verify:
+      # Fails first: the file does not exist, so neither test id is found.
+      - kind: command
+        run: ["pytest", "-q", "tests/store/test_repository.py::test_event_roundtrip"]
+      - kind: command
+        run: ["pytest", "-q", "tests/store/test_repository.py::test_failed_write_is_atomic"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      The two tests are the two halves of the persistence promise:
+      round-trip proves the store is transparent (a saved event IS the
+      loaded event, enums and float positions included — a string status or
+      an (x, y) tuple coming back as a list would fail dataclass equality),
+      and the atomicity test proves the failure path: the one input that
+      passes the domain's deliberately loose Event.rules typing but cannot
+      be serialized must sink the entire save, leaving both the chart and
+      the audit log exactly where they were.
+  - id: task-4
+    title: "Write test_audit.py with the ac2 attribution and ac4 append-only tests"
+    intent: >-
+      Create tests/store/test_audit.py and nothing else — do not touch any
+      src/ file. Module docstring naming the coverage (ac2 and ac4 of
+      bean-004), then `from __future__ import annotations`, and imports:
+      sqlite3, datetime (datetime, timezone), pathlib.Path, pytest, Event /
+      Guest / Table from seating_planner.domain, Rule from
+      seating_planner.rules, Repository from seating_planner.store — no
+      unused imports. A private _small_event() -> Event: Event(id="e1",
+      name="Wedding") with one table (t1, round, capacity 8, position
+      (0.0, 0.0)), one guest (g1, "confirmed") and one soft same_table rule
+      (r1, weight 10). test_mutation_writes_audit_entry(tmp_path: Path) ->
+      None: repo = Repository(tmp_path / "chart.sqlite");
+      repo.save_event(_small_event(), actor="alice"); entries =
+      repo.audit_log("e1"); assert entries is non-empty; build the set of
+      (entity_type, entity_id) pairs and assert it contains
+      ("event", "e1"), ("table", "t1"), ("guest", "g1") and ("rule", "r1")
+      — one audit entry per saved entity; then for EVERY entry assert
+      entry.actor == "alice", entry.action is a non-empty string, and
+      entry.timestamp parses with datetime.fromisoformat into an aware
+      datetime (tzinfo is not None) within a generous window of
+      datetime.now(timezone.utc) (the store wrote it moments ago; use,
+      e.g., 3600 seconds either way as tolerance so the test cannot flake
+      on a slow machine). repo.close(). test_audit_log_is_append_only
+      (tmp_path: Path) -> None: db = tmp_path / "chart.sqlite";
+      repo = Repository(db); repo.save_event(_small_event(), actor="alice");
+      before = repo.audit_log(); then the attack: raw = sqlite3.connect(str(db))
+      — a brand-new connection with no knowledge of the Repository; with
+      pytest.raises(sqlite3.IntegrityError): raw.execute("UPDATE audit_log
+      SET actor = ?", ("mallory",)); with pytest.raises
+      (sqlite3.IntegrityError): raw.execute("DELETE FROM audit_log");
+      raw close (or a contextlib/finally); then assert repo.audit_log() ==
+      before and len(before) >= 4, proving nothing was modified, deleted,
+      or lost; repo.close(). Both tests annotated -> None. Ruff-clean,
+      ruff-format-clean.
+    write_paths:
+      - tests/store/test_audit.py
+    depends_on: [task-2]
+    satisfies: [ac2, ac4]
+    verify:
+      # Fails first: the file does not exist, so neither test id is found.
+      - kind: command
+        run: ["pytest", "-q", "tests/store/test_audit.py::test_mutation_writes_audit_entry"]
+      - kind: command
+        run: ["pytest", "-q", "tests/store/test_audit.py::test_audit_log_is_append_only"]
+      # The bean's constraint checks over the completed store package and
+      # its tests.
+      - kind: command
+        run:
+          - sh
+          - -c
+          - "! grep -rnE '^[[:space:]]*(import|from)[[:space:]]+(sqlalchemy|peewee|tortoise|pony|django|psycopg2?|pymysql|MySQLdb|pymongo|redis|alembic|yoyo|cryptography|nacl|pysqlcipher3)([[:space:](,.$]|$)' src/seating_planner/store/ tests/store/"
+      # The real unit gate (factory/gates.lock.yaml): whole suite, coverage
+      # floor on src — the store module only reaches it through real tests.
+      - kind: command
+        run: ["pytest", "-q", "--cov=src", "--cov-report=term-missing", "--cov-fail-under=60"]
+      - kind: command
+        run: ["mypy", "src"]
+      - kind: command
+        run: ["ruff", "check", "."]
+      - kind: command
+        run: ["ruff", "format", "--check", "."]
+    max_attempts: 3
+    teaching_note: >-
+      ac2 is attribution, not annotation: the assertion walks every entry
+      the save produced and checks actor, action, an aware parseable
+      timestamp, and the (entity_type, entity_id) coverage across all four
+      entity kinds plus the event itself. ac4 is where the two triggers
+      earn their keep — the test attacks the database with a raw
+      connection the Repository never made, and the BEFORE triggers refuse
+      the UPDATE and DELETE with IntegrityError, after which the entries
+      compare equal. Append-only-ness that only the API guarantees is not
+      append-only.

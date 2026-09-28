@@ -1,0 +1,48 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-mode-identity-comparison",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-013-20260928T134342Z",
+    "pr": 15,
+    "candidate_sha": "275a919e94900adc76d906c8c2a2948a76581f4e",
+    "bean_at": "7f9dfc11bc15654aa0ec568070faebd571b9d901",
+    "bean_path": "factory/beans/bean-013-low-disruption-mode-with-a-movement-limi/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "solve_event validates the mode by equality ('mode not in (PLANNING, LOW_DISRUPTION)') and dispatches by identity ('if mode is LOW_DISRUPTION:'), so a mode string that is equal but not the same object is misrouted.",
+  "answer_key": {
+    "why": "Identity of equal strings is an interpreter detail: literals are interned, strings from JSON or a join are not. Demonstrated: a mode from json.loads is refused with 'current does not apply to the planning mode'; a joined string with no chart and no limit runs a planning solve labelled low_disruption. The tests pass the literal and cannot see it. Repaired by bean-023.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+    if mode not in (PLANNING, LOW_DISRUPTION):"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "+    if mode is LOW_DISRUPTION:"
+      }
+    ]
+  },
+  "anchors": [
+    "mode is",
+    "identity",
+    "is low_disruption",
+    "interned",
+    "==",
+    "equality"
+  ],
+  "key_by": "Claude Opus 5.5 with an independent Claude reviewer; each defect demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "medium"
+}

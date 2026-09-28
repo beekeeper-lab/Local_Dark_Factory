@@ -1,0 +1,52 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-soft-keep-apart-repaired",
+  "target": "impl",
+  "expect": "accept",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-007-20260925T015546Z",
+    "pr": 9,
+    "candidate_sha": "043e7053ba8c3af25ea6bb0afc28fdae7e8e49d8",
+    "bean_at": "e5a912975572741df539fd589fdaadbbb1f15b06",
+    "bean_path": "factory/beans/bean-007-soft-constraint-scoring-and-the-optimiza/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "",
+  "answer_key": {
+    "why": "Identical to impl-soft-keep-apart-never-honoured except that its defect is repaired (the different-table indicator is bounded from above: var_a + var_b + sat <= 2); nothing else was changed. The judge should not report the repaired defect. A strict auditor may still object, legitimately, that the ac1 test does not force a choice between charts (capacity already separates g-0 and g-2); that is a weakness of the test, not a defect in the objective.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "model.Add(var_a + var_b + sat <= 2)"
+      }
+    ]
+  },
+  "anchors": [
+    "different_table",
+    "different-table",
+    "keep apart",
+    "keep-apart",
+    "var_a + var_b - sat",
+    "lower bound",
+    "never honoured",
+    "always satisfied",
+    "always true"
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; bean-007's defect also demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "twin_of": "impl-soft-keep-apart-never-honoured",
+  "repair": {
+    "synthetic": true,
+    "file": "diff.txt",
+    "description": "the different-table indicator is bounded from above: var_a + var_b + sat <= 2"
+  }
+}

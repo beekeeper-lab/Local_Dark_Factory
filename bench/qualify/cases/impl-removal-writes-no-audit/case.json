@@ -1,0 +1,51 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-removal-writes-no-audit",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-004-20260923T195628Z",
+    "pr": 5,
+    "candidate_sha": "06d4f9f29e5075c03a20dd712d45fb3b9fef3b58",
+    "bean_at": "adcd49ac9336bb9e18c2a0d9dda71269857ccc88",
+    "bean_path": "factory/beans/bean-004-persistence-with-an-append-only-audit-re/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "save_event deletes and re-inserts every row, and writes audit entries only for the entities still present, so removing a guest, table, group or rule writes no audit entry.",
+  "answer_key": {
+    "why": "ac2 says every mutation writes an audit entry. A removal is a mutation. _replace_rows runs 'DELETE FROM {table} WHERE event_id = ?' for every entity type, and the audit list is built from event.tables, event.guests, event.groups and rule_rows: the entities after the save, never the ones removed by it. No visible test saves an event, removes an entity and saves again. The bean here is the one this run was built against (4 criteria, before ac5 spelled removals out).",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "self._conn.execute(f\"DELETE FROM {table} WHERE event_id = ?\", (event.id,))"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "entries += [(\"guest\", g.id) for g in event.guests]"
+      },
+      {
+        "file": "bean/bean.yaml",
+        "quote": "Every mutation writes an audit entry"
+      }
+    ]
+  },
+  "anchors": [
+    "remov",
+    "deleted entit",
+    "no audit entry",
+    "not audited",
+    "every mutation"
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; bean-007's defect also demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "medium"
+}

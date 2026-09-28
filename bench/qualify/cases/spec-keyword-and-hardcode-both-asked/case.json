@@ -1,0 +1,49 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "spec-keyword-and-hardcode-both-asked",
+  "target": "spec",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-009-20260925T125445Z",
+    "pr": null,
+    "candidate_sha": "22f1a68f616b2f863227e27aa3f907ce31e33773",
+    "bean_at": "22f1a68f616b2f863227e27aa3f907ce31e33773",
+    "bean_path": "factory/beans/bean-009-reproducible-optimization-via-persisted-/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "claims-check.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "verify-precheck.json"
+  ],
+  "defect": "task-1 adds a num_search_workers keyword to solve_event and, in the same intent, keeps untouched the solver.parameters setup lines, one of which pins the worker count to one, so the plan guarantees an argument that does nothing.",
+  "answer_key": {
+    "why": "Carried out exactly as written, the plan produces a caller-facing knob that is accepted and ignored: the built code did precisely that. It also presents reading the parameters back as proof the configuration was 'actually used' while ensuring the requested worker count never is. A spec audit should reject a plan whose own instructions defeat the feature it adds.",
+    "evidence": [
+      {
+        "file": "tasks.yaml",
+        "quote": "Keep untouched: the three"
+      },
+      {
+        "file": "tasks.yaml",
+        "quote": "num_search_workers: int = 1) \u2014 keyword-only as today."
+      }
+    ]
+  },
+  "anchors": [
+    "num_search_workers",
+    "worker",
+    "keep untouched",
+    "ignored",
+    "never used",
+    "hard-coded",
+    "hardcoded",
+    "contradict"
+  ],
+  "key_by": "Claude Opus 5.5 with an independent Claude reviewer; each defect demonstrated in the gate image",
+  "key_checked_at": "2026-09-28",
+  "difficulty": "medium"
+}

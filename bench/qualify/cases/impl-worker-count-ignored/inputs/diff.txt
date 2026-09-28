@@ -1,0 +1,342 @@
+diff --git a/src/seating_planner/solver/config.py b/src/seating_planner/solver/config.py
+new file mode 100644
+index 0000000..6b186a3
+--- /dev/null
++++ b/src/seating_planner/solver/config.py
+@@ -0,0 +1,49 @@
++"""The solver's runtime configuration, made explicit.
++
++The determinism guarantee (FR-048) needs every knob the run depends on to
++be stated, recorded on the result, and replayable. This module holds that
++configuration and nothing else: it imports from nowhere inside
++seating_planner, and refuses values the solver would silently reinterpret.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Final
++
++__all__ = ["DEFAULT_SOLVER_CONFIG", "SolverConfig"]
++
++
++@dataclass(frozen=True)
++class SolverConfig:
++    """What a solve runs with: seed, worker count and time limit."""
++
++    seed: int
++    num_search_workers: int
++    time_limit_s: float
++
++    def __post_init__(self) -> None:
++        # 0 workers is an unspecified default OR-Tools may interpret
++        # machine-dependently: refuse it here rather than let the solver
++        # silently reinterpret it.
++        if self.num_search_workers < 1:
++            raise ValueError("num_search_workers must be at least 1")
++        if self.time_limit_s <= 0:
++            raise ValueError("time_limit_s must be positive")
++
++    def to_dict(self) -> dict[str, object]:
++        # JSON-safe primitives under the field names, so a stored payload
++        # replays straight back in: SolverConfig(**payload["solver_config"]).
++        return {
++            "seed": self.seed,
++            "num_search_workers": self.num_search_workers,
++            "time_limit_s": self.time_limit_s,
++        }
++
++
++# Matches the solver's existing defaults. This bean deliberately keeps them:
++# the workers-versus-NFR-001 wall-clock tension is an open owner decision.
++# Making the configuration explicit is this bean; resolving it is not.
++DEFAULT_SOLVER_CONFIG: Final[SolverConfig] = SolverConfig(
++    seed=0, num_search_workers=1, time_limit_s=10.0
++)
+diff --git a/src/seating_planner/solver/hard.py b/src/seating_planner/solver/hard.py
+index 61cf3be..44f3e86 100644
+--- a/src/seating_planner/solver/hard.py
++++ b/src/seating_planner/solver/hard.py
+@@ -15,6 +15,7 @@ from typing import Any
+ 
+ from seating_planner.domain import Event
+ from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver.config import SolverConfig
+ from seating_planner.solver.result import (
+     SATISFIED,
+     UNEVALUABLE,
+@@ -32,16 +33,29 @@ class SolverTimeout(RuntimeError):
+     """A timed-out solve is refused, never guessed: we don't know the answer."""
+ 
+ 
+-def solve_event(event: Event, *, time_limit_s: float = 10.0, seed: int = 0) -> SolveResult:
++def solve_event(
++    event: Event,
++    *,
++    time_limit_s: float = 10.0,
++    seed: int = 0,
++    num_search_workers: int = 1,
++) -> SolveResult:
++    # The requested configuration, validated; on the early exits nothing ran,
++    # so the request is the configuration used.
++    config = SolverConfig(
++        seed=seed, num_search_workers=num_search_workers, time_limit_s=time_limit_s
++    )
+     # Eligibility is derived, never stored: read the property, never a status.
+     eligible = [guest.id for guest in event.guests if guest.eligible]
+     if not eligible:
+         # Nothing to seat satisfies every constraint vacuously, and no chart
+         # exists to evaluate the rules from.
+-        return SolveResult("feasible", {}, 0, 0, 0, _unevaluable_states(event), ())
++        return SolveResult("feasible", {}, 0, 0, 0, _unevaluable_states(event), (), config)
+     if not event.tables:
+         # Infeasible, and no chart exists to evaluate the rules from.
+-        return SolveResult("infeasible", {}, 0, len(eligible), 0, _unevaluable_states(event), ())
++        return SolveResult(
++            "infeasible", {}, 0, len(eligible), 0, _unevaluable_states(event), (), config
++        )
+     model, at = _build_model(event, eligible)
+     solver: Any = cp_model.CpSolver()
+     # One worker plus the caller's seed: the reproducible invariant needs both.
+@@ -49,6 +63,13 @@ def solve_event(event: Event, *, time_limit_s: float = 10.0, seed: int = 0) -> S
+     solver.parameters.random_seed = seed
+     solver.parameters.max_time_in_seconds = time_limit_s
+     status = solver.Solve(model)
++    # The recorded configuration is what actually ran, not what was requested:
++    # read the parameters back so FR-048 is an observable claim.
++    used = SolverConfig(
++        seed=solver.parameters.random_seed,
++        num_search_workers=solver.parameters.num_search_workers,
++        time_limit_s=solver.parameters.max_time_in_seconds,
++    )
+     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+         # The report is built from the returned chart, not from the model's
+         # soft-rule indicators — see _build_report. The invariant_api seam
+@@ -63,10 +84,13 @@ def solve_event(event: Event, *, time_limit_s: float = 10.0, seed: int = 0) -> S
+             score,
+             states,
+             violations,
++            used,
+         )
+     if status == cp_model.INFEASIBLE:  # equality: Solve returns non-identical status instances
+         # A total infeasibility: no chart, every enabled rule unevaluable.
+-        return SolveResult("infeasible", {}, 0, len(eligible), 0, _unevaluable_states(event), ())
++        return SolveResult(
++            "infeasible", {}, 0, len(eligible), 0, _unevaluable_states(event), (), used
++        )
+     raise SolverTimeout(f"event {event.id!r}: solve undecided after {time_limit_s}s")
+ 
+ 
+diff --git a/src/seating_planner/solver/result.py b/src/seating_planner/solver/result.py
+index 5f94c3a..aff2197 100644
+--- a/src/seating_planner/solver/result.py
++++ b/src/seating_planner/solver/result.py
+@@ -12,6 +12,8 @@ from collections.abc import Mapping
+ from dataclasses import dataclass
+ from typing import Final, Literal
+ 
++from seating_planner.solver.config import SolverConfig
++
+ __all__ = ["SATISFIED", "SolveResult", "UNEVALUABLE", "VIOLATED", "Violation"]
+ 
+ SATISFIED: Final[str] = "satisfied"
+@@ -48,7 +50,8 @@ class SolveResult:
+ 
+     The report answers what the chart itself cannot: how many eligible guests
+     were assigned and how many were not, the total soft score, the state of
+-    every enabled rule, and one entry per violated soft rule.
++    every enabled rule, and one entry per violated soft rule. The result
++    also carries the solver configuration that produced it.
+     """
+ 
+     status: Literal["feasible", "infeasible"]
+@@ -62,6 +65,9 @@ class SolveResult:
+     # UNEVALUABLE; disabled rules appear in no state and no count.
+     rule_states: Mapping[str, str]
+     violations: tuple[Violation, ...]
++    # The configuration that actually produced this result, so a later run
++    # can be replayed against it.
++    solver_config: SolverConfig
+ 
+     def to_dict(self) -> dict[str, object]:
+         # JSON-safe primitives under the same keys as the fields.
+@@ -73,4 +79,5 @@ class SolveResult:
+             "score": self.score,
+             "rule_states": dict(self.rule_states),
+             "violations": [violation.to_dict() for violation in self.violations],
++            "solver_config": self.solver_config.to_dict(),
+         }
+diff --git a/tests/solver/test_determinism.py b/tests/solver/test_determinism.py
+new file mode 100644
+index 0000000..70a0c65
+--- /dev/null
++++ b/tests/solver/test_determinism.py
+@@ -0,0 +1,168 @@
++"""Determinism acceptance tests (bean-009, ac1-ac4): one test per claim — two
++runs over identical inputs and configuration produce byte-identical
++serialized results, the result carries the solver configuration actually
++used (on every result, not just the feasible ones), replaying the stored
++configuration reproduces the stored assignment, and a seed change is
++reported by the record rather than hidden. Every solve passes an explicit
++seed, worker count and time limit, so every configuration is visible in the
++test itself. Asserts only on solve_event result fields and to_dict()
++output, never on solver internals."""
++
++from __future__ import annotations
++
++import json
++
++from seating_planner.domain import Event, Guest, RsvpStatus, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver import solve_event
++from seating_planner.solver.config import SolverConfig
++from seating_planner.solver.result import SolveResult
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(guest_id: str) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=RsvpStatus.CONFIRMED)
++
++
++def _soft(rule_id: str, rule_type: RuleType, weight: int, guest_ids: tuple[str, ...]) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.SOFT,
++        weight=weight,
++        guest_ids=guest_ids,
++    )
++
++
++def _event(tables: list[Table], guests: list[Guest], rules: list[Rule]) -> Event:
++    return Event(id="e-1", name="Event", tables=tables, guests=guests, groups=[], rules=rules)
++
++
++def _soft_rule_event() -> Event:
++    # Room to spare, and two soft rules of different weights in tension:
++    # g-1 wants to join g-0 but to leave g-2 — the solver has a real
++    # choice, which is what makes the determinism claim meaningful.
++    tables = [_table("t-1"), _table("t-2")]
++    guests = [_guest(f"g-{i}") for i in range(4)]
++    rules = [
++        _soft("r-same", RuleType.SAME_TABLE, 50, ("g-0", "g-1")),
++        _soft("r-diff", RuleType.DIFFERENT_TABLE, 30, ("g-1", "g-2")),
++    ]
++    return _event(tables, guests, rules)
++
++
++def _solve(
++    event: Event,
++    *,
++    seed: int,
++    time_limit_s: float,
++    num_search_workers: int,
++) -> SolveResult:
++    # Every configuration spelled out at the call site, never defaulted.
++    return solve_event(
++        event,
++        seed=seed,
++        num_search_workers=num_search_workers,
++        time_limit_s=time_limit_s,
++    )
++
++
++def _payload(result: SolveResult) -> str:
++    return json.dumps(result.to_dict(), sort_keys=True)
++
++
++def test_repeat_run_is_identical() -> None:
++    # Same inputs, same stated configuration, twice: the serialized results
++    # must be byte-identical, which subsumes byte-identical assignments and
++    # checks that the recorded configuration is itself stable across runs.
++    event = _soft_rule_event()
++    first = _solve(event, seed=7, num_search_workers=1, time_limit_s=5.0)
++    second = _solve(event, seed=7, num_search_workers=1, time_limit_s=5.0)
++    assert first.status == "feasible"
++    assert second.status == "feasible"
++    assert _payload(first) == _payload(second)
++
++
++def test_result_records_configuration() -> None:
++    # A distinctive config must ride on the result — solver_config and the
++    # serialized solver_config the same way — and it must ride on an
++    # infeasible result too, since the configuration is what produced the
++    # result, not a privilege of the feasible ones.
++    distinct = SolverConfig(seed=42, num_search_workers=1, time_limit_s=2.5)
++    feasible = _solve(_soft_rule_event(), seed=42, num_search_workers=1, time_limit_s=2.5)
++    assert feasible.status == "feasible"
++    assert feasible.solver_config == distinct
++    assert feasible.to_dict()["solver_config"] == {
++        "seed": 42,
++        "num_search_workers": 1,
++        "time_limit_s": 2.5,
++    }
++    # Eligible guests, no tables: the same values must survive the early exit.
++    event = _event([], [_guest("g-0")], [])
++    infeasible = _solve(event, seed=42, num_search_workers=1, time_limit_s=2.5)
++    assert infeasible.status == "infeasible"
++    assert infeasible.solver_config == distinct
++
++
++def test_stored_config_reproduces_result() -> None:
++    # Replay through the serialized payload only: the configuration is read
++    # back out of to_dict(), never off the in-memory result, so what is
++    # demonstrated is the persistence contract itself.
++    event = _soft_rule_event()
++    first = _solve(event, seed=3, num_search_workers=1, time_limit_s=2.0)
++    payload = first.to_dict()
++    stored = SolverConfig(**payload["solver_config"])
++    second = solve_event(
++        event,
++        seed=stored.seed,
++        num_search_workers=stored.num_search_workers,
++        time_limit_s=stored.time_limit_s,
++    )
++    assert second.status == first.status
++    assert json.dumps(second.to_dict(), sort_keys=True) == json.dumps(payload, sort_keys=True)
++
++
++def test_seed_change_is_visible() -> None:
++    # The "reported rather than hidden" half of ac4 is a property of the
++    # record: each result names the seed that produced it, same-seed runs
++    # are byte-identical, and if two seeds yield different charts, the
++    # recorded configurations differ only in "seed". The test deliberately
++    # does NOT force the seeds to yield different charts: with one worker
++    # on small instances CP-SAT returns the same chart under several seeds,
++    # and a test demanding a difference would be brittle across gate images.
++    seed_a, seed_b = 11, 29
++    event = _soft_rule_event()
++    run_a1 = _solve(event, seed=seed_a, num_search_workers=1, time_limit_s=4.0)
++    run_a2 = _solve(event, seed=seed_a, num_search_workers=1, time_limit_s=4.0)
++    run_b = _solve(event, seed=seed_b, num_search_workers=1, time_limit_s=4.0)
++    # Same-seed determinism: the two seed-A runs agree, byte for byte.
++    assert _payload(run_a1) == _payload(run_a2)
++    # Each result faithfully reports the seed that produced it.
++    assert run_a1.solver_config == SolverConfig(seed=seed_a, num_search_workers=1, time_limit_s=4.0)
++    assert run_a2.to_dict()["solver_config"] == {
++        "seed": seed_a,
++        "num_search_workers": 1,
++        "time_limit_s": 4.0,
++    }
++    assert run_b.to_dict()["solver_config"] == {
++        "seed": seed_b,
++        "num_search_workers": 1,
++        "time_limit_s": 4.0,
++    }
++    # If the charts differ, the difference is attributable to the one
++    # visible recorded change — the seed — and to nothing else.
++    dict_a = run_a1.to_dict()
++    dict_b = run_b.to_dict()
++    if dict_a["assignments"] != dict_b["assignments"]:
++        config_a = dict_a["solver_config"]
++        config_b = dict_b["solver_config"]
++        assert {key for key in config_a if config_a[key] != config_b[key]} == {"seed"}

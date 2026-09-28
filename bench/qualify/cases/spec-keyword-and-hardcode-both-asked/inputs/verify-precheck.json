@@ -1,0 +1,102 @@
+{
+  "schema": "verify-precheck/1.0.0",
+  "note": "Every verify was run against the tree before any task touched it. A verify that passes here passes on the code as it already is, so it cannot show the task was done. One such verify among several is often legitimate — a lint that is green on an empty directory, or a refactor whose check is that existing tests still pass. A task where every verify passes is not: there is nothing about it that running its checks could demonstrate.",
+  "tasks": [
+    {
+      "task": "task-1",
+      "verifies": [
+        {
+          "task": "task-1",
+          "verify_index": 0,
+          "passes_before_the_work": true,
+          "command": "ruff check src/seating_planner/solver"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 1,
+          "passes_before_the_work": true,
+          "command": "ruff format --check src/seating_planner/solver"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 2,
+          "passes_before_the_work": true,
+          "command": "mypy src"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 3,
+          "passes_before_the_work": false,
+          "command": "sh -c 'grep -q '\\''class SolverConfig'\\'' src/seating_planner/solver/config.py'"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 4,
+          "passes_before_the_work": false,
+          "command": "sh -c 'grep -q '\\''\"solver_config\"'\\'' src/seating_planner/solver/result.py'"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 5,
+          "passes_before_the_work": true,
+          "command": "pytest -q tests/solver"
+        },
+        {
+          "task": "task-1",
+          "verify_index": 6,
+          "passes_before_the_work": true,
+          "command": "pytest -q --no-header factory/invariants/test_seating_invariants.py"
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    },
+    {
+      "task": "task-2",
+      "verifies": [
+        {
+          "task": "task-2",
+          "verify_index": 0,
+          "passes_before_the_work": true,
+          "command": "ruff check tests/solver"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 1,
+          "passes_before_the_work": true,
+          "command": "ruff format --check tests/solver"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 2,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/solver/test_determinism.py::test_repeat_run_is_identical"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 3,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/solver/test_determinism.py::test_result_records_configuration"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 4,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/solver/test_determinism.py::test_stored_config_reproduces_result"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 5,
+          "passes_before_the_work": false,
+          "command": "pytest -q tests/solver/test_determinism.py::test_seed_change_is_visible"
+        },
+        {
+          "task": "task-2",
+          "verify_index": 6,
+          "passes_before_the_work": true,
+          "command": "pytest -q tests/solver"
+        }
+      ],
+      "every_verify_passes_before_the_work": false
+    }
+  ]
+}
