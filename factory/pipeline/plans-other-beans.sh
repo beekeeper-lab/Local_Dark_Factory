@@ -172,9 +172,17 @@ for o in others:
     for w in words(o["title"]):
         df[w] += 1
 
+# Code is a reference, not a topic. bean-014's task-1 said "movement_limit is
+# rejected" in event-day mode and was refused as bean-013's work, "Low-disruption
+# mode with a movement limit": WORD stops at the underscore, so the identifier
+# became that title's adjacent pair. Naming an argument another bean added is
+# using its work, not planning it. Backticked spans and snake_case identifiers go
+# before the words are read; the same words in prose still count.
+CODE = re.compile(r"`[^`]*`|\b[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\b")
+
 def ordered(text):
-    """The words of a title or intent, in order, stoplist removed."""
-    return [w for w in WORD.findall((text or "").lower()) if w not in STOP]
+    """The words of a title or intent, in order, stoplist and code removed."""
+    return [w for w in WORD.findall(CODE.sub(" ", text or "").lower()) if w not in STOP]
 
 
 # Adjacency, and it is the whole difference between this check and a coincidence.
