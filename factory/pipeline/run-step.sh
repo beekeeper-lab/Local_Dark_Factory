@@ -448,9 +448,31 @@ if [ "$CONTAIN" = 1 ]; then
   # own only knows the repo it was called from, which for every target except
   # this one is the wrong place — and it refuses rather than guessing, so the
   # first real run halted on the manifest it had just been told about.
+  # The worker's wall clock, which until now nothing could set.
+  #
+  # worker-sandbox.sh defaults to 3600s and this call passed no --timeout, so an
+  # hour was the limit for every step of every bean, chosen by a default rather
+  # than by anyone. bean-004's task-2 hit it six times in eleven attempts --
+  # 3630s each, no compaction involved at 131072 -- while the three attempts that
+  # DID finish were each within one lint finding of done. An hour is not a
+  # property of the work; it was a property of this line having no way to say
+  # otherwise.
+  #
+  # Config first so it is a per-repository fact recorded in the repository, the
+  # same shape as verify_timeout_s; the environment for a one-off; 3600 when
+  # neither says anything, so nothing changes for a repo that does not care.
+  WORKER_TIMEOUT_S="${FACTORY_WORKER_TIMEOUT:-}"
+  if [ -z "$WORKER_TIMEOUT_S" ] && [ -n "${PIPELINE_CONFIG:-}" ] && [ -f "$PIPELINE_CONFIG" ]; then
+    WORKER_TIMEOUT_S="$(jq -r '.worker_timeout_s // empty' "$PIPELINE_CONFIG" 2>/dev/null || true)"
+  fi
+  [ -n "$WORKER_TIMEOUT_S" ] || WORKER_TIMEOUT_S=3600
+  case "$WORKER_TIMEOUT_S" in
+    ''|*[!0-9]*) die "worker_timeout_s must be a whole number of seconds, got '$WORKER_TIMEOUT_S'" ;;
+  esac
+
   "$PIPELINE_DIR/worker-sandbox.sh" \
     --tree "$ROOT" --agent-dir "$AGENT_DIR" --socket-dir "$GW_DIR" \
-    --skills "$FACTORY_SKILLS" --lock "$WORKER_LOCK" \
+    --skills "$FACTORY_SKILLS" --lock "$WORKER_LOCK" --timeout "$WORKER_TIMEOUT_S" \
     -- "${CARGS[@]}" -p "$CPROMPT" </dev/null
   RC=$?
   [ "$GW_STARTED" = 1 ] && "$PIPELINE_DIR/model-gateway.sh" stop --dir "$GW_DIR" >/dev/null 2>&1
