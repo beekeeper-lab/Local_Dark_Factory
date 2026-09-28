@@ -209,6 +209,23 @@ case "$pob_rc" in
   *) bad "plans-other-beans" "could not be checked — $(printf '%s' "$POB_OUT" | head -1)" ;;
 esac
 
+# ------------------------ 3d. test files pytest could not collect together --
+#
+# preflight checks the test files the bean's criteria pin. The task list adds the
+# ones a task will create, named literally in its write_paths; a glob names no
+# file, so it is not counted. bean-011's pair was pinned by its criteria, but a
+# spec can make the same collision on its own, and a retry here costs minutes
+# where the build that finds it costs attempts.
+mapfile -t TB_PATHS < <(jq -r '.tasks[].write_paths[]? | select(test("[*?\\[]") | not)' <<<"$TASKS_JSON")
+mapfile -t -O "${#TB_PATHS[@]}" TB_PATHS < <(jq -r '(.acceptance_criteria // [])[] | .verify.test_id // empty | split("::")[0]' <<<"$BEAN_JSON")
+tb_rc=0
+TB_OUT="$("$PIPELINE_DIR/test-basenames.sh" "$ROOT" "${TB_PATHS[@]}" 2>&1)" || tb_rc=$?
+case "$tb_rc" in
+  0) ok "test-basenames" "$(sed -n '1s/^test-basenames: //p' <<<"$TB_OUT")" ;;
+  1) bad "test-basenames" "$(grep -v 'rename one' <<<"$TB_OUT" | sed 's/^test-basenames: //' | paste -sd';' -) — rename the task's file; the criteria's own paths are the bean's to change" ;;
+  *) bad "test-basenames" "could not be checked — $(head -1 <<<"$TB_OUT")" ;;
+esac
+
 # ------------------------------------------- 4. every acceptance criterion claimed --
 CLAIMED="$(jq -c '[.tasks[].satisfies // []] | flatten | unique' <<<"$TASKS_JSON")"
 UNCLAIMED="$(jq -r --argjson c "$CLAIMED" '[(.acceptance_criteria // [])[].id] - $c | join(", ")' <<<"$BEAN_JSON")"

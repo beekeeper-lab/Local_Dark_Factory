@@ -322,5 +322,32 @@ out="$(pfc bean-001)"; rc=$?
 rc_is "and a bean with none still passes" "$rc" 0
 check "saying which bean has none"     "none for bean-001" "$out"
 
+printf '\n-- test files the criteria pin, which pytest could not collect together --\n\n'
+#
+# bean-011's criteria named tests/domain/test_locks.py and tests/solver/test_locks.py.
+# No task could fix that — the paths are the contract — so the cheapest place to
+# refuse it is here, before a spec session is spent on the bean.
+python3 - "$REPO/factory/beans/bean-001-a-thing/bean.yaml" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace("    text: it works\n", "    text: it works\n    verify: { kind: test, test_id: \"tests/solver/test_locks.py::test_holds\" }\n")
+s = s.replace("    text: it keeps working\n", "    text: it keeps working\n    verify: { kind: test, test_id: \"tests/solver/test_modes.py::test_named\" }\n")
+open(p, "w").write(s)
+PY
+mkdir -p "$REPO/tests/domain"; : > "$REPO/tests/domain/test_locks.py"
+git -C "$REPO" add -A && git -C "$REPO" commit -qm "a criterion pinning a colliding test file"
+out="$(pfc bean-001)"; rc=$?
+rc_is "a criterion's test file that collides is refused" "$rc" 1
+check "named as its own check"         "FAIL  test-basenames" "$out"
+check "with both files"                "tests/domain/test_locks.py and tests/solver/test_locks.py" "$out"
+
+printf '[tool.pytest.ini_options]\naddopts = "--import-mode=importlib"\n' > "$REPO/pyproject.toml"
+git -C "$REPO" add -A && git -C "$REPO" commit -qm "importlib mode"
+out="$(pfc bean-001)"; rc=$?
+rc_is "and passes once pytest imports by path" "$rc" 0
+check "saying it did not check, not that all is well" "PASS  test-basenames" "$out"
+check "and why"                        "not checked — pyproject.toml sets --import-mode=importlib" "$out"
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
