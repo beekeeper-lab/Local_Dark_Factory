@@ -27,8 +27,40 @@ FROM docker.io/library/node:22-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712
 # deliberately NOT needed — there is nothing to verify a certificate against on a
 # container with no routes.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git \
+ && apt-get install -y --no-install-recommends git python3 python3-venv \
  && rm -rf /var/lib/apt/lists/*
+
+# ruff and mypy, at the gate's versions, so the worker can check its own work.
+#
+# Until 2026-09-23 this image had no Python at all, and the worker was asked for
+# files that are "ruff-clean, ruff-format-clean, mypy strict clean" without any
+# way to find out whether they were. bean-004's task-2 is what that cost: eight
+# of thirteen attempts killed at the wall clock by sessions that spent fifteen
+# minutes a rewrite simulating ruff-format's line splitting in their reasoning
+# and counting lines with awk, and four of the other five failed on findings
+# (UP017, E501, list invariance) either tool reports in under a second.
+#
+# A self-check, NOT a verdict. The controller still runs `verify` and the gates
+# in the gate image from a clean state, and that is still the only "it passed"
+# this line records. The versions are read from gate-image/versions.env by
+# build.sh so the two images cannot disagree about what ruff says.
+#
+# Debian's python3 (3.11) rather than the gate's 3.12: the project pins mypy's
+# `python_version` and ruff's `target-version` to 3.11, so the interpreter
+# does not change either tool's answer, and a 3.12 built for a different glibc
+# would not run here. ortools is included only because the project imports it,
+# and mypy strict without it would report import errors the gate does not.
+ARG RUFF_VERSION
+ARG MYPY_VERSION
+ARG ORTOOLS_VERSION
+RUN test -n "$RUFF_VERSION" && test -n "$MYPY_VERSION" && test -n "$ORTOOLS_VERSION" \
+      || { echo "RUFF_VERSION, MYPY_VERSION and ORTOOLS_VERSION build args are required — build with worker-image/build.sh" >&2; exit 1; }
+RUN python3 -m venv /opt/checks \
+ && /opt/checks/bin/pip install --no-cache-dir \
+      ruff=="${RUFF_VERSION}" \
+      mypy=="${MYPY_VERSION}" \
+      ortools=="${ORTOOLS_VERSION}" \
+ && ln -s /opt/checks/bin/ruff /opt/checks/bin/mypy /usr/local/bin/
 
 ARG PI_VERSION
 RUN test -n "$PI_VERSION" || { echo "PI_VERSION build arg is required — an unpinned agent is not a pinned image" >&2; exit 1; }
@@ -40,9 +72,16 @@ RUN npm install -g "@earendil-works/pi-coding-agent@${PI_VERSION}" \
 # HOME must be somewhere writable that is NOT the work tree: pi keeps its
 # sessions and config under it, and a worker whose agent state landed in the
 # repository would show up as a containment violation it did not commit.
+#
+# The caches go to /tmp for the same reason. A `.mypy_cache/` or `.ruff_cache/`
+# in /work is ignored by the scaffold's .gitignore, but a repository without
+# that line would see it as a path the worker wrote outside its task.
 ENV HOME=/home/worker \
     PI_CODING_AGENT=true \
-    NODE_OPTIONS=--max-old-space-size=2048
+    NODE_OPTIONS=--max-old-space-size=2048 \
+    RUFF_CACHE_DIR=/tmp/ruff-cache \
+    MYPY_CACHE_DIR=/tmp/mypy-cache \
+    PYTHONDONTWRITEBYTECODE=1
 RUN mkdir -p /home/worker && chmod 0777 /home/worker
 
 COPY model-socket.js /usr/local/lib/model-socket.js

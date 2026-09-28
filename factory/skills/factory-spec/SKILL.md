@@ -67,21 +67,22 @@ dependency's work is missing from `/work`, it is missing — that is a real find
 and stopping to say so is right. Say it from the listing, which is evidence, and
 do not qualify it with what you could not check in git.
 
-## the toolchain is not in here either, and that is not a fault to report
+## ruff and mypy are in here, and the rest of the toolchain is not
 
-This container has node, git's binary, and pi. It has no `python3`, no `pytest`,
-no `mypy`, no `ruff`, no venv, and nothing else on PATH that could run a project
-of this kind. Deliberately: the gates and the task `verify` commands run in a
-separate, digest-pinned image, from a clean state, by the controller — so that
+This container has node, git's binary, pi, and `python3` with `ruff`, `mypy` and
+the project's runtime dependency (ortools) — at exactly the versions the gate
+image pins, so that code written here can be checked here. It has no `pytest`
+and no project venv. The gates and the task `verify` commands still run in a
+separate, digest-pinned image, from a clean state, by the controller, so that
 every "it passed" in this repository is a claim about one known toolchain rather
-than about whatever happened to be in the session that wrote the code.
+than about whatever happened in the session that wrote the code.
 
-**So do not go looking for an interpreter.** Real sessions have spent turns
-discovering it is not there and then reporting it as an environment constraint
-they had to work around. Read the `verify` commands as the definition of done,
-write what would satisfy them, and finish. Saying plainly what you could not
-check is right; calling it a defect in your environment is not, and neither is
-softening a conclusion because of it.
+**So run ruff and mypy rather than reasoning about what they would say, and do
+not go looking for anything else.** A clean run of your own is a self-check,
+not a verdict, and not something to report as one. For everything you cannot
+run — `pytest`, the `verify` commands — read them as the definition of done and
+say plainly what you could not check. Calling that a defect in your environment
+is not right, and neither is softening a conclusion because of it.
 
 ## Inputs
 
@@ -161,6 +162,27 @@ What the controller checks, so you may as well get it right:
 - **Stay inside `size_budget`.** Over `max_tasks` and the bean goes back to a
   human to be split, which costs a day. Fewer, larger-but-still-verifiable tasks
   beat many trivial ones.
+
+And one thing it does not check, which cost bean-004 thirteen attempts at one
+task: **code you prescribe in an `intent` must be code the gates accept.**
+bean-004's task-2 told its worker to import `timezone` and call
+`datetime.now(timezone.utc)`, which this project's ruff rejects as UP017, and to
+pass a `list[Rule]` where the domain declares `list[object]`, which mypy strict
+rejects as invariant. The worker did as told and failed verify on both, twice
+each. If an intent names an import, an expression or a signature, check it before
+you write it down — you have ruff and mypy, and a snippet can be checked without
+writing a file:
+
+    printf 'from datetime import datetime, timezone\nx = datetime.now(timezone.utc)\n' \
+      | ruff check --stdin-filename snippet.py --extend-ignore I --output-format concise -
+
+(`--extend-ignore I` because a two-line fragment always has an import block
+ruff would sort differently; that finding is about the fragment, not the code.)
+
+Better still, prescribe what the code must do and leave the spelling to the
+worker, who can run the linter against the real file. A line cap tighter than
+the task needs is the same trap: task-2's "at or under 150 lines" is what its
+worker spent its sessions counting.
 
 ## Process
 
