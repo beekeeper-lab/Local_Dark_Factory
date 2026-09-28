@@ -66,7 +66,7 @@ rules:
   # Agent control. This is the line editing the rules that bind the line: the
   # prompts it runs on, the gates it must pass, the paths it may write, the
   # tiers themselves. Tier 3 is never auto-merged in any merge mode.
-  - match: "{factory/repo.yaml,factory/risk-policy.yaml,factory/gates.lock.yaml,factory/templates/**,factory/prompts/**,factory/invariants/**}"
+  - match: "{factory/repo.yaml,factory/risk-policy.yaml,factory/gates.lock.yaml,factory/templates/**,factory/prompts/**,factory/invariants/**,factory/tools/**}"
     min_tier: 3
     reason: agent-control — the rules that bind the line
 

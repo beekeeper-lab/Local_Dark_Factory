@@ -421,5 +421,25 @@ check "a distinct name passes"         "ok    test-basenames" "$out"
 check "and a glob is not counted as a file" "1 test file(s)" "$out"
 cp "$WORK/tasks.keep" factory/runs/R/tasks.yaml
 
+printf '\n== a red test verified by negating pytest is refused ==\n\n'
+#
+# bean-021's task-1 did exactly this and a test that failed in its own setup was
+# verified as red. The helper is the only accepted way to say "these must fail".
+cp factory/runs/R/tasks.yaml "$WORK/tasks.keep2"
+python3 - factory/runs/R/tasks.yaml <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('{ kind: command, run: ["test", "-f", "src/c.py"] }',
+                           '{ kind: command, run: ["sh", "-c", "! pytest -q tests/test_c.py"] }')
+open(p, "w").write(s)
+PY
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "the negation is caught"         "FAIL  red-test" "$out"
+check "naming the task"                "task-3" "$out"
+check "and the helper to use instead"  "factory/tools/red-test.py" "$out"
+cp "$WORK/tasks.keep2" factory/runs/R/tasks.yaml
+out="$(SPEC_CHECK_RUN_VERIFIES=0 sc)"
+check "a task list without one passes" "ok    red-test" "$out"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

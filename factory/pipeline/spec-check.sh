@@ -247,6 +247,22 @@ else
   ok "verify" "$(jq '[.tasks[].verify[]] | length' <<<"$TASKS_JSON") check(s), all machine-runnable"
 fi
 
+# ------------------------------------ 5b. a red test verified by negation --
+#
+# `! pytest <file>` passes on ANY failure. bean-021's red test failed in its own
+# setup, a soft weight of 120 outside the rules model's 1..100, and was verified as
+# red; the task that fixed the solver could not edit the test and spent three
+# attempts against it. factory/tools/red-test.py passes only when tests fail by
+# assertion or by the defect raising inside the paths the fix may change.
+NEGATED="$(jq -r '[.tasks[] | .id as $i | .verify[] | select(.kind == "command") | (.run // []) | join(" ")
+                   | select(test("(^|[;&|(]\\s*|\\s)!\\s*(python3?\\s+-m\\s+)?pytest\\b"))
+                   | "\($i)"] | unique | join(", ")' <<<"$TASKS_JSON")"
+if [ -n "$NEGATED" ]; then
+  bad "red-test" "a negated pytest passes on any failure, a broken test included: $NEGATED — verify red tests with python factory/tools/red-test.py --fixes <paths the fix changes> <test file>"
+else
+  ok "red-test" "no red test is verified by negating pytest"
+fi
+
 # ------------------------------------------------------------ 6. dependencies --
 DEP_ERR="$("$PY" - "$TASKS_JSON" <<'PY' 2>&1
 import json, sys
