@@ -1006,6 +1006,56 @@ nope  "so the run does not halt"        "HALT  spec" "$retry_out"
 # phase-1 audit reported pr(FAIL) for a run that had never been meant to open one.
 # This block now runs last and leaves the repository however it likes.
 
+printf '\n== a spec session that stops with questions halts; it is not sent back ==\n\n'
+#
+# The skill tells a spec worker that finds the bean contradicting the code to
+# stop, write QUESTIONS.md and write no spec. bean-006 and bean-012 both did,
+# correctly. spec-check then saw no spec.md, called it a thin spec, and sent the
+# model back with "do not argue with them". bean-012 halted again twelve minutes
+# later; bean-006 planned around the conflict and spent a build and a gate
+# finding it a second time. A stop is a question for the owner, not a defect a
+# retry can fix.
+cat > "$WORK/bin/pi-stops" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null 2>&1 || true
+prompt=""
+while [ $# -gt 0 ]; do case "$1" in -p) prompt="$2"; shift 2 ;; *) shift ;; esac; done
+sess="${PI_SESSIONS_DIR:-.}/stub-$(date +%s%N).jsonl"
+mkdir -p "$(dirname "$sess")"
+printf '{"type":"session","version":"stub","id":"stub","cwd":"%s"}\n' "$PWD" > "$sess"
+case "$prompt" in
+  *factory-spec*)
+    run_dir="${prompt##* }"
+    [ -n "${STUB_STOP_COUNT:-}" ] && printf 'x\n' >> "$STUB_STOP_COUNT"
+    printf '# bean-001 cannot be specified inside its paths\n\nWho owns the seam?\n' > "$run_dir/QUESTIONS.md" ;;
+esac
+exit 0
+STUB
+chmod +x "$WORK/bin/pi-stops"
+
+rm -rf "$REPO/factory/runs"
+git -C "$REPO" checkout -q main 2>/dev/null
+git -C "$REPO" branch -D bean/bean-001-scaffold >/dev/null 2>&1
+git -C "$REPO" clean -fdq
+cp "$WORK/bin/pi" "$WORK/bin/pi-before-stops"
+cp "$WORK/bin/pi-stops" "$WORK/bin/pi"
+STOPS="$WORK/spec-sessions"; rm -f "$STOPS"
+STUB_STOP_COUNT="$STOPS" run_line > "$WORK/o-stops" 2>&1 || true
+cp "$WORK/bin/pi-before-stops" "$WORK/bin/pi"
+stops_out="$(cat "$WORK/o-stops")"
+SR="$(ls -d "$REPO"/factory/runs/*/ 2>/dev/null | tail -1)"
+
+check "the run halts at spec"            "HALT  spec" "$stops_out"
+check "and says the model stopped"       "the spec session stopped with questions" "$stops_out"
+nope  "it is not handed back"            "re-entering \`spec\` with the findings" "$stops_out"
+want  "one spec session, not two"        "a stop is not retried" \
+      test "$(wc -l < "$STOPS" 2>/dev/null)" = 1
+want  "the model's questions are kept"   "questions-from-worker/ should hold them" \
+      bash -c "grep -q 'Who owns the seam' '${SR}'questions-from-worker/spec-*.md"
+check "and QUESTIONS.md points at them"  "The model stopped and wrote its own questions first" "$(cat "${SR}QUESTIONS.md" 2>/dev/null)"
+want  "one failure recorded, not two"   "two would hit the retry cap and block the --resume after an answer" \
+      test "$(ls "${SR}"failed-attempts/spec.* 2>/dev/null | wc -l)" = 1
+
 printf '\n== an audit that halts the run says the advisory option exists ==\n\n'
 #
 # FACTORY_ADVISORY_AUDITS defaults to 0 and stays that way: a default that quietly

@@ -808,6 +808,21 @@ FINDINGS
         "$PIPELINE_DIR/run-step.sh" "$RUN_DIR" "$step" || rc=$?
       fi
       [ "$rc" -eq 0 ] || return "$rc"
+      # A session that wrote QUESTIONS.md and no spec has stopped, as the skill
+      # tells it to when the bean contradicts the code. That is a question for the
+      # owner, not a thin spec: handing it to spec-check turned "no spec.md" into
+      # findings, and the retry below told the model "do not argue with them".
+      # bean-012 stopped again twelve minutes later; bean-006 planned around the
+      # conflict and spent a build and a gate finding it a second time. halt()
+      # keeps the model's file under questions-from-worker/.
+      if [ ! -e "$RUN_DIR/spec.md" ] && [ -s "$RUN_DIR/QUESTIONS.md" ] \
+         && ! head -1 "$RUN_DIR/QUESTIONS.md" | grep -q 'pipeline halted'; then
+        printf '\nSTOPPED  the spec session stopped with questions and wrote no spec — not retried\n'
+        # One failure record, written by handle_other_failure: two would hit the
+        # retry cap, and the --resume after the owner answers would refuse to run.
+        mark_step_failed spec "worker-stopped"
+        return 1
+      fi
       # The controller half: sections, schema, claimed criteria, paths, budget,
       # and the rendering. A judge should spend its attention on whether the plan
       # is right, not on whether it is a plan.
