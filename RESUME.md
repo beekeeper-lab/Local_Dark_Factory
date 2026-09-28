@@ -3,6 +3,24 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-28 (late): red tests must be red for the right reason; seven more merged beans reviewed
+
+- **bean-021 run 1 halted in build.** task-1's red test built a soft weight of 120
+  (the rules model allows 1..100) and failed in its own setup. `! pytest` verified it
+  as red anyway, and task-2 could not repair a test outside its paths. Fixed in
+  factory PR #20: `factory/tools/red-test.py` (tier 3, installed by the scaffold)
+  passes only on assertion failures or a defect raising inside `--fixes`, and
+  spec-check now refuses `! pytest` verifies. bean-021 was restarted from spec as
+  `bean-021-20260928T233744Z`. The old branch is `backup/bean-021-run-20260928T200048Z`.
+- **Hidden tests for 015–020** were written before those beans build (factory PR #19).
+  `verify.sh --image` now verifies solver suites in the gate image (PR #18).
+- **Retroactive reviews of 002, 003, 006, 008, 010, 011 and 012 found real defects in
+  all seven** (`evidence/reviews/retroactive-20260928.md`). That makes 12 of 12 merged
+  beans reviewed closely with defects. **Waiting on the owner:** repair beans 026–029,
+  to run after bean-025 and before bean-015. 026 is the wedding template, which makes
+  every template event unsolvable, and the owner must choose disabled, soft or warn.
+  027 is reporting, 028 is diagnosis, and 029 is validation on use.
+
 ## 2026-09-28: every merged bean that was reviewed had a real defect, so a review now gates the merge
 
 **Read this first.** A green gate plus a green CI has not been a review. Independent Claude
