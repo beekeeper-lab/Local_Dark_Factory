@@ -1,0 +1,57 @@
+schema_version: bean/2.0.0
+id: bean-024
+repo: beekeeper-lab/seating-planner-py
+title: The worker count a caller asks for is the one the solver runs with
+intent: >
+  A num_search_workers value passed to solve_event is applied to every CP-SAT solve it runs and recorded on the result, rather than accepted, validated and replaced by one.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-09-28T21:30:00Z"
+  order: 24
+source:
+  kind: manual
+  ref: benchmark/seating-planner/bean-sets/v1/beans/bean-009.yaml
+  date: "2026-09-28"
+  excerpt: "bean-009 ac2: The result carries the solver seed, worker count and time limit actually used."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    A defect found on 2026-09-28 in the code bean-009 shipped. solve_event
+    takes num_search_workers, checks that it is at least 1 and stores it on the
+    early-return paths, but every CP-SAT solver it builds sets
+    `solver.parameters.num_search_workers = 1`. The recorded configuration is read back
+    from the solver, so it is honest about the 1; the caller who asked for 4 is simply
+    ignored, and two results for the same request can record different worker counts
+    depending on which path returned. bean-009's spec asked for both the keyword and
+    the hard-coded line, so the build did what it was told.
+
+    Determinism across runs still holds for any fixed worker count, which is what
+    bean-009's replay guarantee needs: the configuration recorded is the one to replay.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: A feasible solve asked for two workers records two workers in its solver configuration.
+    verify: { kind: test, test_id: "tests/solver/test_worker_count.py::test_requested_workers_are_used" }
+  - id: ac2
+    text: Every result, whichever path produced it, records the worker count that was requested.
+    verify: { kind: test, test_id: "tests/solver/test_worker_count.py::test_every_path_records_the_request" }
+  - id: ac3
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - the default stays one worker
+  - the solve_event signature is unchanged
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no claim that a multi-worker solve is reproducible across worker counts
+dependencies: [bean-009]

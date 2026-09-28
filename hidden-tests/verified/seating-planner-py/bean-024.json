@@ -1,0 +1,13 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-024",
+  "suite_sha256": "013070c08e15a4bc58f30087573e86f0f03c0a8a7e9388d04dc3a7c41de96447",
+  "tests": 4,
+  "outcome": "ok",
+  "checked_against": "seating-planner-py origin/main f56af23 with a scratch fix for bean-024's defect (bean-024 has not run yet)",
+  "tree_sha": "f56af2393db8305d89a4b1754690063513f5d4fd",
+  "both_directions": true,
+  "verified_at": "2026-09-28T17:54:46Z",
+  "ran_in": "the pinned gate image (host has no ortools); record written by hand because the image has no jq",
+  "also": "the defect tests fail against the same tree without the fix"
+}

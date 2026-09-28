@@ -103,6 +103,30 @@
       "reopens_approval": false,
       "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
       "note": "Found while choosing clean controls for the judge qualification suite. bean-007 (seating-planner PR #9, merged) encodes a soft different-table rule's indicator as var_a + var_b - sat <= 1, a lower bound only, so the maximizer sets it true whatever the chart and soft keep-apart rules never influence the result. Measured on main: a weight-100 keep-apart loses to a weight-1 sit-together. bean-007's tests used only a keep-apart case that capacity forces anyway; it had no hidden tests; its impl audit ran advisory and stamped nothing. Hidden tests for bean-021 and for bean-007 (so the next run of this corpus catches it at bean-007) were added at the same time and verified both ways in the gate image. The corpus now has 21 beans; approval order stays bean id order, and bean-021's only dependency is bean-007."
+    },
+    {
+      "date": "2026-09-28",
+      "change": "bean-022 added: a group's pre-flight size counts only guests who will be seated (repairs bean-005)",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": false,
+      "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
+      "note": "Found by an independent review of bean-005 (seating-planner PR #6) as a candidate clean control. preflight.py counts every distinct member of a group kept together by a hard same-table rule, including declined and unreserved pending guests, so feasible events are reported impossible; bean-005's own ac2 test asserts the false positive with ten pending guests. Contestable, because bean-005's spec pinned 'distinct member_ids'; the bean's intent says structurally impossible, which a 6-person group at an 8-seat table is not."
+    },
+    {
+      "date": "2026-09-28",
+      "change": "bean-023 added: an optimization mode is chosen by its value (repairs bean-013)",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": false,
+      "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
+      "note": "Found by an independent review of bean-013 (seating-planner PR #15). solve_event validates the mode by equality and dispatches with `mode is LOW_DISRUPTION`; a mode string decoded from JSON or joined at run time passes validation and then either raises or runs a planning solve labelled low_disruption with no movement limit. The tests pass only because identical literals are interned."
+    },
+    {
+      "date": "2026-09-28",
+      "change": "bean-024 added: the worker count a caller asks for is the one the solver runs with (repairs bean-009)",
+      "by": "Gregg Reed (owner), on Claude Opus 5.5's recommendation",
+      "reopens_approval": false,
+      "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
+      "note": "Found by an independent review of bean-009 (seating-planner PR #11). num_search_workers is validated and stored, but every CP-SAT solver sets num_search_workers = 1; bean-009's spec asked for both. Recorded configuration stays honest because it is read back from the solver, so this is an ignored argument rather than a false record."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
