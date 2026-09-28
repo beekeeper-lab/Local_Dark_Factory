@@ -144,6 +144,12 @@ done
 for f in "$SRC"/templates/*.html; do
   copy "$f" "factory/templates/$(basename "$f")"
 done
+# Tools the task verifies call from inside the sandbox, where /work/factory is the
+# only factory code there is. Tier 3 like everything else here: a bean that could
+# edit the checker could make its own red test pass.
+for f in "$SRC"/tools/*.py; do
+  [ -f "$f" ] && copy "$f" "factory/tools/$(basename "$f")"
+done
 
 # The workflow that makes `required_checks` true.
 #

@@ -157,6 +157,20 @@ What the controller checks, so you may as well get it right:
   creates proves the task ran, not that it worked. Prefer a check of behaviour.
   `kind: manual` and `kind: judge` are refused in a task list — the controller
   cannot run them, and a criterion it cannot run is not a criterion.
+- **A task that writes tests before the fix verifies them with the red-test
+  helper, never with `! pytest`.** A negated pytest passes on ANY failure, and
+  bean-021's red test failed in its own setup (a weight of 120, outside the rules
+  model's 1..100) — verified as red, and the fixing task could not repair it.
+  Write it as
+
+      { kind: command, run: ["python", "factory/tools/red-test.py",
+                             "--fixes", "src/<package>/<what the fix changes>/**",
+                             "tests/<the red test file>"] }
+
+  It passes only when the tests fail by assertion, or by the defect raising
+  inside `--fixes`. Name in `--fixes` the paths the LATER task will change —
+  the bean's source paths, not the test file. spec-check refuses a `! pytest`
+  verify.
 - **`depends_on` is real.** Tasks run in dependency order; a task that silently
   needs an earlier one's output but does not say so will run first and fail.
 - **Stay inside `size_budget`.** Over `max_tasks` and the bean goes back to a
