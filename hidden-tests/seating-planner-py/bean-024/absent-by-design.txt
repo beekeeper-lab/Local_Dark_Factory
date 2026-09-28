@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test imports seating_planner
+# and runs it, and an empty tree has nothing to import.

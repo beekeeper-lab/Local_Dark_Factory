@@ -1,0 +1,61 @@
+schema_version: bean/2.0.0
+id: bean-022
+repo: beekeeper-lab/seating-planner-py
+title: A group's size in the pre-flight check counts only guests who will be seated
+intent: >
+  The oversized-group pre-flight finding compares a table's capacity with the number of the group's members who are eligible to be seated, so declined and unreserved pending guests do not make a feasible event look impossible.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-09-28T21:30:00Z"
+  order: 22
+source:
+  kind: manual
+  ref: benchmark/seating-planner/bean-sets/v1/beans/bean-005.yaml
+  date: "2026-09-28"
+  excerpt: "bean-005 intent: Structurally impossible seating problems are identified and explained before the solver is ever invoked, rather than surfacing as an opaque failure."
+context:
+  read_paths:
+    - src/seating_planner/feasibility/
+    - src/seating_planner/domain/
+    - tests/feasibility/
+  background: >
+    A defect found on 2026-09-28 in the code bean-005 shipped. The oversized-group
+    check counts every distinct member id of a group that a hard same-table rule keeps
+    together, including guests who will never be seated: declined guests, and pending
+    guests with no reserved seat. The solver seats only eligible guests
+    (Guest.eligible), so the check reports events the solver could solve.
+
+    Measured on the main branch: a family group of 10 with 6 confirmed and 4
+    declined, one table of 8, and a hard same-table rule on the group is reported as
+    "must stay together at 10, but the largest table seats 8". Six seats are needed.
+    bean-005's own ac2 test builds its group from ten pending guests, none of them
+    eligible, so the test asserts the false positive.
+
+    The capacity check in the same module already counts only eligible guests; this
+    bean makes the group check agree with it.
+allowed_write_paths:
+  - src/seating_planner/feasibility/**
+  - tests/feasibility/**
+acceptance_criteria:
+  - id: ac1
+    text: A group kept together by a hard same-table rule whose eligible members fit the largest table produces no oversized-group finding, however many ineligible members it has.
+    verify: { kind: test, test_id: "tests/feasibility/test_group_eligibility.py::test_ineligible_members_do_not_count" }
+  - id: ac2
+    text: A group whose eligible members exceed the largest table is still reported, and the reported size is the number of eligible members.
+    verify: { kind: test, test_id: "tests/feasibility/test_group_eligibility.py::test_eligible_members_are_the_size" }
+  - id: ac3
+    text: Every pre-flight test passes, with the group test's fixture made of guests who would be seated.
+    verify: { kind: command, run: ["pytest", "-q", "tests/feasibility"] }
+constraints:
+  - eligibility comes from Guest.eligible, never from a status list copied here
+  - no solver imports, as in bean-005
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no change to the contradiction, capacity or missing-target checks
+dependencies: [bean-005]

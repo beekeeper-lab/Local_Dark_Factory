@@ -1,0 +1,60 @@
+schema_version: bean/2.0.0
+id: bean-023
+repo: beekeeper-lab/seating-planner-py
+title: An optimization mode is chosen by its value, not by which string object names it
+intent: >
+  solve_event dispatches on the mode's value, so a mode string read from a file, a request or a join behaves exactly as the same literal does.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-09-28T21:30:00Z"
+  order: 23
+source:
+  kind: manual
+  ref: benchmark/seating-planner/bean-sets/v1/beans/bean-013.yaml
+  date: "2026-09-28"
+  excerpt: "bean-013 intent: Recalculation shortly before the event improves the chart while moving no more guests between tables than the organizer permits."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - tests/solver/
+  background: >
+    A defect found on 2026-09-28 in the code bean-013 shipped. solve_event
+    validates the mode with `mode not in (PLANNING, LOW_DISRUPTION)`, which compares by
+    equality, and then dispatches with `if mode is LOW_DISRUPTION:`, which compares
+    object identity. Python happens to share one object for identical string literals
+    in source, so every test passes; a mode string that arrives any other way (read
+    from JSON, joined, taken from a request) is equal but not identical.
+
+    Measured on the main branch: `json.loads('"low_disruption"')` as the mode raises
+    "current does not apply to the planning mode", and `"".join(["low_", "disruption"])`
+    with no current chart and no movement limit is accepted and runs a planning solve
+    labelled low_disruption, with no movement limit at all.
+
+    Every comparison of a mode, in every mode the solver has when this bean runs,
+    compares by value.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: A low-disruption solve given its mode as a string built at run time respects the movement limit exactly as the literal does.
+    verify: { kind: test, test_id: "tests/solver/test_mode_values.py::test_runtime_mode_string_is_the_same_mode" }
+  - id: ac2
+    text: A mode string built at run time that needs a current chart is refused without one, exactly as the literal is.
+    verify: { kind: test, test_id: "tests/solver/test_mode_values.py::test_runtime_mode_string_is_validated_the_same" }
+  - id: ac3
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - the solve_event signature and the set of accepted modes are unchanged
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no new modes
+  - no change to what any mode optimizes
+dependencies: [bean-013]
