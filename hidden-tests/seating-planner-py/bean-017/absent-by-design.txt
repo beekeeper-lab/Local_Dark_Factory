@@ -1,0 +1,7 @@
+# Nothing here passes against an empty tree. Every test reads or imports
+# src/seating_planner/importer/ through a helper that asserts it exists first,
+# so even the absence checks (no sqlite3, no BEGIN) fail on nothing rather than
+# passing vacuously, and the behavioural probe imports the store.
+#
+# test_a_preview_writes_nothing SKIPS (never passes) when no preview callable can
+# be driven without guessing its API; on an empty tree it fails before that.

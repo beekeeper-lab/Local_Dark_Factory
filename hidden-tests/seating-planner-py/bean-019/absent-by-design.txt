@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test imports the solver and
+# solves an event, or reads the solver package, and an empty tree has neither.
