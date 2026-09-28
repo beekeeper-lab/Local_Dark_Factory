@@ -192,6 +192,43 @@ check "task-3's vacuous check is still recorded" \
       '"passes_before_the_work":true' "$(jq -c '.tasks[] | select(.task=="task-3") | .verifies[0]' "$P")"
 check "the note explains the legitimate case" "a lint that is green on an empty directory" "$(cat "$P")"
 
+printf '\n== the precheck runs the verify the spec wrote, not an escaped copy of it ==\n\n'
+# bean-004's task-1 verify was a 31-line `python -c` script. The precheck passed
+# each verify through `@tsv`, which escapes the backslash in JSON's `\n`, so the
+# verify arrived with a literal backslash-n in it, Python refused it as a
+# SyntaxError, and that failure was recorded as "this verify can fail". It could
+# — but not for any reason to do with the task. The stub records exactly what it
+# was handed; the script must arrive with real newlines in it.
+cp factory/runs/R/tasks.yaml "$WORK/tasks.yaml.saved"
+cat > factory/runs/R/tasks.yaml <<'YAML'
+schema_version: tasks/1.0.0
+bean_id: bean-001
+tasks:
+  - id: task-1
+    title: write the module
+    intent: Create src/a.py so the package has something in it.
+    write_paths: ["src/a.py"]
+    satisfies: ["ac1"]
+    verify:
+      - { kind: command, run: ["python", "-c", "import sys\nsys.exit(0 if 'a\tb' else 1)"] }
+YAML
+cat > "$WORK/pipeline/verify.sh" <<STUB
+#!/usr/bin/env bash
+printf '%s' "\$1" > "$WORK/received.json"
+printf '{"kind":"command","status":"fail","exit_code":1,"command":"python"}\n'; exit 1
+STUB
+PATH="$WORK/stub:$PATH" bash "$WORK/pipeline/spec-check.sh" factory/runs/R --bean factory/beans/bean.yaml >/dev/null 2>&1
+want "the verify arrived as JSON" "received: $(cat "$WORK/received.json" 2>/dev/null)" \
+  jq -e . "$WORK/received.json"
+check "with the script's real newline in it" \
+  'true' "$(jq -c '.run[2] | test("\n")' "$WORK/received.json" 2>&1)"
+check "and its real tab" \
+  'true' "$(jq -c '.run[2] | test("\t")' "$WORK/received.json" 2>&1)"
+check "and no backslash that the spec did not write" \
+  'false' "$(jq -c '.run[2] | test("\\\\")' "$WORK/received.json" 2>&1)"
+cp "$WORK/tasks.yaml.saved" factory/runs/R/tasks.yaml
+cp "$WORK/stub/verify.sh" "$WORK/pipeline/verify.sh"
+
 printf '\n== a spec that describes files which are not there ==\n\n'
 #
 # The seeded defect from bench/judge-fitness.sh, which four judge runs never

@@ -398,6 +398,21 @@ want "undefined gate exits non-zero"   "an undefined gate must not pass" test "$
 out="$(bash "$PIPELINE_DIR/verify.sh" '{"kind":"nonsense"}' 2>&1)"
 check "an unknown kind is refused"     "unknown verify kind" "$out"
 
+printf '\n== an argv element with a newline in it is ONE element ==\n\n'
+# bean-004's task-1 verify was `python -c "<31-line script>"`. verify.sh read the
+# argv with `mapfile -t < <(jq -r '.run[]')`, which splits on newlines, so it ran
+# `python -c 'import sqlite3, tempfile'` with the other thirty lines as sys.argv
+# — and passed. The script's second assertion called the one branch of
+# AuditLog.entries that is a SQL syntax error, and the bug shipped with a
+# verified task in front of it. A multi-line `python -c` is the commonest verify
+# a spec writes, so the whole script has to arrive, and a failure on its LAST
+# line has to be a failure.
+out="$(bash "$PIPELINE_DIR/verify.sh" '{"kind":"command","run":["python3","-c","import sys\nsys.exit(3)"]}' 2>&1)"; rc=$?
+want "a multi-line script's last line runs" "exit 3 on line 2 must fail the verify (rc=$rc)" test "$rc" -ne 0
+check "and it is reported as a failure" '"status":"fail"' "$(tr -d ' ' <<<"$out")"
+out="$(bash "$PIPELINE_DIR/verify.sh" '{"kind":"command","run":["python3","-c","import sys\nassert sys.argv[1:] == [\"a\\nb\", \"\"], sys.argv","a\nb",""]}' 2>&1)"; rc=$?
+want "newlines and empty elements survive into argv" "argv was not passed through intact: $out" test "$rc" -eq 0
+
 printf '\n== with --sandbox, the verify runs in the gate container ==\n\n'
 if command -v podman >/dev/null 2>&1 && podman image exists localhost/factory-gate-python:20260914 2>/dev/null; then
   reset_run

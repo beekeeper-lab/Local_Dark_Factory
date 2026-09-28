@@ -380,7 +380,13 @@ if [ "$PRECHECK_RAN" = 1 ]; then
       --arg c "$(jq -r '.command // .reason // ""' <<<"$res" 2>/dev/null)" \
       '. + [{task:$t, verify_index:$i, passes_before_the_work:$p, command:$c}]' <<<"$PRECHECK")"
     [ "$passed" = true ] && VACUOUS="$VACUOUS $tid[$idx]"
-  done < <(jq -r '.tasks[] | .id as $t | (.verify | to_entries[]) | [$t, (.key|tostring), (.value|tojson)] | @tsv' <<<"$TASKS_JSON")
+  # `join("\t")`, not `@tsv`. @tsv escapes backslashes, and `tojson` has already
+  # written every newline in a verify as the two characters `\n` — so @tsv made
+  # it `\\n`, which decodes to a literal backslash-n. bean-004's 31-line
+  # `python -c` verify reached verify.sh as one line of Python full of
+  # backslashes, died as a SyntaxError, and was recorded as "this verify can
+  # fail". tojson never emits a raw tab or newline, so a plain join is exact.
+  done < <(jq -r '.tasks[] | .id as $t | (.verify | to_entries[]) | [$t, (.key|tostring), (.value|tojson)] | join("\t")' <<<"$TASKS_JSON")
 
   # The unit that matters is the TASK, not the individual check. The first real
   # spec this ran against made the distinction for us: task-3's `ruff check .`
