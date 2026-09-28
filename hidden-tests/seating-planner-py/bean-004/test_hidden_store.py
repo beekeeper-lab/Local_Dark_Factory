@@ -10,7 +10,7 @@ costs a run and adds nothing, which is the mistake bean-001's suite made with
 `test_no_ci_workflow_files`: it duplicated a `bean-forbids` non-goal at the wrong
 resolution and then failed on a file the factory's own scaffold had installed.
 
-What is left is the interesting half — four things the bean states that no other
+What is left is the interesting half — five things the bean states that no other
 check in the line asks about:
 
   * SQLite is USED, not merely un-avoided. The forbidden-import list rules out
@@ -22,6 +22,7 @@ check in the line asks about:
     DELETE aimed at it, which is what append-only MEANS in SQL and is not what a
     single rejection test proves.
   * the four fields ac2 names actually appear.
+  * a removal has a name in the audit vocabulary (ac5, added 2026-09-24).
 
 Nothing here guesses an API. The bean fixes the package path and says nothing
 about whether the seam is a class, a module or a set of functions, so this reads
@@ -127,7 +128,34 @@ def test_the_audit_entry_names_all_four_fields() -> None:
     )
 
 
-# --- the four test ids the bean pins ---------------------------------------
+# --- ac5: a removal is a change, and is audited -----------------------------
+
+
+def test_the_audit_log_can_record_a_removal() -> None:
+    # Added 2026-09-24 with ac5. PR #5 replaced rows wholesale on every save
+    # and audited only what was still present, so a removed guest vanished
+    # without an entry, and every test — visible and hidden — was green.
+    #
+    # The bean fixes no API and no action vocabulary, so this asks only that
+    # the store has a word for a removal that is not SQL: a string constant
+    # such as "delete", "removed" or "remove". `DELETE FROM ...` does not
+    # count; that is the store deleting rows, not saying it did.
+    words = re.compile(r"^(delete|deleted|remove|removed|removal)$")
+    found = [
+        node.value
+        for path in _store_files()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and words.match(node.value.strip().lower())
+    ]
+    assert found, (
+        "ac5: nothing in the store names a removal as an audit action, so a "
+        "removed entity can leave no entry"
+    )
+
+
+# --- the test ids the bean pins --------------------------------------------
 
 
 def test_the_pinned_tests_exist_and_assert_something() -> None:
@@ -139,6 +167,7 @@ def test_the_pinned_tests_exist_and_assert_something() -> None:
         "tests/store/test_audit.py": [
             "test_mutation_writes_audit_entry",
             "test_audit_log_is_append_only",
+            "test_removal_writes_audit_entry",
         ],
     }
     problems = []
