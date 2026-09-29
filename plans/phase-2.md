@@ -1,6 +1,6 @@
 # Phase 2 — The controller drives it; the developer cannot commit
 
-**Status:** active since 2026-09-29, when Phase 1 closed. Almost all of it is built.
+**Status:** **complete 2026-09-29.** Tag `phase-2-complete`, audit `audits/PHASE-2-AUDIT-20260929.md`, 13 ok and 0 findings.
 **Goal:** one bean runs unattended from lease to PR. Every fault in the list is injected
 and handled correctly, and a human merges.
 
@@ -19,17 +19,29 @@ and handled correctly, and a human merges.
 
 ## Tasks
 
-- [ ] **1. Re-run `bench/phase2-audit.sh`** on the current tree and record the result.
-- [ ] **2. Make one real CI failure.** On a throwaway bean run in `seating-planner-py`,
+- [x] **1. Re-run `bench/phase2-audit.sh`** on the current tree and record the result.
+      2026-09-29: 13 ok. `remote_ci_failure_tests` read `pass` only because the image is now
+      published, which made a real run possible but was not one. The audit now requires a
+      recorded real failure under `evidence/`.
+- [x] **2. Make one real CI failure.** On a throwaway bean run in `seating-planner-py`,
       push a candidate whose required check fails on GitHub but not locally, for example an
       environment-only failure the gate cannot see. Confirm `ci.sh` rewinds to `build` and
       reopens the right tasks. *Limit: 2 attempts at building the fixture. If it cannot be
       made to fail only remotely, record it as `pass_in_tests` with the reason. That is an
       amendment, not a new plan.*
-- [ ] **3. Record `human_merge_required: verified`.** Cite the `merge_mode: human_required`
+      **Done 2026-09-29, first attempt.** Throwaway PR seating-planner-py#18 reverted bean-021's
+      fix. The required `gates` check went red on GitHub, and `ci.sh` exited 9 with
+      `rewind.json` set to `to: build` and reopened task-1 and task-2. The PR was then closed
+      and its branch deleted. Evidence: `evidence/phase2-real-ci-failure-20260929/`.
+- [x] **3. Record `human_merge_required: verified`.** Cite the `merge_mode: human_required`
       refusal tests and the merged PRs. Note that under the 2026-09-29 authorisation, merges
       are made by Claude on the owner's authority after a pre-merge review.
-- [ ] **4. Closing ritual**, then `PHASE-2-COMPLETE`, the design document update, and a demo.
+- [x] **3a. Fix the hidden-test false alarm** (added at plan start from the parking lot, on the
+      owner's go-ahead). `verify.sh` now makes its temp trees world-readable. It also revealed
+      that the "fails against an empty tree" half had never been tested in the image. All 17
+      image-verified suites were re-checked, and every one fails against an empty tree. The
+      suite's own fixture only passed because of the bug, and it was repaired.
+- [x] **4. Closing ritual**, then `PHASE-2-COMPLETE`, the design document update, and a demo.
 
 ## Exit
 
@@ -42,4 +54,4 @@ Judge accuracy (Phase 5). Queue, leases and scheduling (Phase 4).
 
 ## Amendments
 
-_None._
+- **2026-09-29:** task 3a added at plan start (parking-lot item, owner approved).

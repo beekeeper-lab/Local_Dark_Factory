@@ -1,0 +1,12 @@
+
+CI  ci-fault-20260929
+
+  ok    pull request            https://github.com/beekeeper-lab/seating-planner-py/pull/18
+  ok    required                gates
+  ok    workflows               1 on this branch
+  FAIL  gates                   FAILURE  https://github.com/beekeeper-lab/seating-planner-py/actions/runs/36639356470/job/109647686259
+
+  --    re-opening             task-1 task-2
+
+CI FAILED — gates. The run goes back to build; see ci-findings.md
+exit 9

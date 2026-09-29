@@ -185,6 +185,23 @@ case "$GATE_IMAGE" in
       printf '        %-28s which CI cannot pull. factory/gate-image/publish.sh, then re-run this.
 ' ""
     fi ;;
+  *)
+    # A published image makes a real run possible; it is not a real run. The
+    # predicate reads `pass` only with a recorded one: a required check that went
+    # red on GitHub and a ci.sh that sent the run back to build for it.
+    REAL_CI=""
+    for d in "$ROOT"/evidence/phase2-real-ci-failure-*/; do
+      [ -f "$d/ci.json" ] && [ -f "$d/rewind.json" ] || continue
+      [ "$(jq -r '.to // ""' "$d/rewind.json")" = build ] && REAL_CI="$d"
+    done
+    if [ "$(jq -r '.remote_ci_failure_tests' <<<"$PREDICATES")" = pass ]; then
+      if [ -n "$REAL_CI" ]; then
+        printf '  --    %-28s exercised for real: %s\n' "remote_ci_failure_tests" "${REAL_CI#"$ROOT"/}"
+      else
+        pred remote_ci_failure_tests pass_in_tests
+        printf '  --    %-28s the suites pass; no real CI failure is on record under evidence/\n' "remote_ci_failure_tests"
+      fi
+    fi ;;
 esac
 
 assert_in stale_branch_tests blocker sync \

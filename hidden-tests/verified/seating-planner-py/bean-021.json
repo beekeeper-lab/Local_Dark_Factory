@@ -4,9 +4,9 @@
   "suite_sha256": "74b24021bc8a760576eac37ab4ac77ea5a8103e464d6fa03927d69e32a88c3fb",
   "tests": 3,
   "outcome": "ok",
-  "checked_against": "/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/f2802e04-4dd2-4ae0-8517-4a7479e1099a/scratchpad/tree-fixed",
-  "tree_sha": null,
+  "checked_against": "origin/main",
+  "tree_sha": "1c11769e893b146d67efcbe5642504ff78481936",
   "both_directions": true,
-  "verified_at": "2026-09-28T20:25:11Z",
+  "verified_at": "2026-09-29T22:24:44Z",
   "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2"
 }

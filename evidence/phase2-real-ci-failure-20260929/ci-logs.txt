@@ -1,0 +1,153 @@
+=== gates ===
+gates	Run the gates	﻿2026-09-29T22:24:37.0750747Z ##[group]Run set -uo pipefail
+gates	Run the gates	2026-09-29T22:24:37.0751375Z [36;1mset -uo pipefail[0m
+gates	Run the gates	2026-09-29T22:24:37.0752635Z [36;1mIMAGE='ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2'[0m
+gates	Run the gates	2026-09-29T22:24:37.0755721Z [36;1mecho '[{"id": "lint", "run": ["ruff", "check", "."]}, {"id": "format", "run": ["ruff", "format", "--check", "."]}, {"id": "types", "run": ["mypy", "src"]}, {"id": "unit", "run": ["pytest", "-q", "--cov=src", "--cov-report=term-missing", "--cov-fail-under=60"], "coverage_floor": "60%"}]' > /tmp/gates.json[0m
+gates	Run the gates	2026-09-29T22:24:37.0757860Z [36;1mn="$(python3 -c "import json;print(len(json.load(open('/tmp/gates.json'))))")"[0m
+gates	Run the gates	2026-09-29T22:24:37.0758664Z [36;1mfailed=0[0m
+gates	Run the gates	2026-09-29T22:24:37.0759075Z [36;1mfor i in $(seq 0 $((n - 1))); do[0m
+gates	Run the gates	2026-09-29T22:24:37.0759893Z [36;1m  id="$(python3 -c "import json;print(json.load(open('/tmp/gates.json'))[$i]['id'])")"[0m
+gates	Run the gates	2026-09-29T22:24:37.0760941Z [36;1m  # argv, never a shell string: the manifest stores arrays precisely so[0m
+gates	Run the gates	2026-09-29T22:24:37.0761940Z [36;1m  # there is no quoting to get wrong and nothing for a path to inject[0m
+gates	Run the gates	2026-09-29T22:24:37.0762846Z [36;1m  # through, and that property has to survive the trip into CI.[0m
+gates	Run the gates	2026-09-29T22:24:37.0764425Z [36;1m  mapfile -t argv < <(python3 -c "import json;[print(a) for a in json.load(open('/tmp/gates.json'))[$i]['run']]")[0m
+gates	Run the gates	2026-09-29T22:24:37.0765481Z [36;1m  echo "::group::gate $id — ${argv[*]}"[0m
+gates	Run the gates	2026-09-29T22:24:37.0766259Z [36;1m  # A writable copy, as the local gate does: pytest writes caches and[0m
+gates	Run the gates	2026-09-29T22:24:37.0767226Z [36;1m  # coverage data, and a read-only mount would fail the unit gate for a[0m
+gates	Run the gates	2026-09-29T22:24:37.0768175Z [36;1m  # reason that has nothing to do with the change under test. The copy[0m
+gates	Run the gates	2026-09-29T22:24:37.0769123Z [36;1m  # is thrown away after each gate so one cannot leave state for the next.[0m
+gates	Run the gates	2026-09-29T22:24:37.0769840Z [36;1m  #[0m
+gates	Run the gates	2026-09-29T22:24:37.0770743Z [36;1m  # `rw` on the mount is not enough, and this is why it passed locally[0m
+gates	Run the gates	2026-09-29T22:24:37.0771634Z [36;1m  # and failed here for a week. The image runs as uid 1000 (`gate`);[0m
+gates	Run the gates	2026-09-29T22:24:37.0772483Z [36;1m  # the runner checks out as its own uid, so the copy is owned by[0m
+gates	Run the gates	2026-09-29T22:24:37.0773327Z [36;1m  # someone the container is not, and `ruff check .` died on[0m
+gates	Run the gates	2026-09-29T22:24:37.0774685Z [36;1m  # "Failed to initialize cache at /work/.ruff_cache: Permission[0m
+gates	Run the gates	2026-09-29T22:24:37.0775611Z [36;1m  # denied" — a red required check that says nothing about the change.[0m
+gates	Run the gates	2026-09-29T22:24:37.0776525Z [36;1m  # On Forge the developer is uid 1000 too, so the local gate never[0m
+gates	Run the gates	2026-09-29T22:24:37.0777431Z [36;1m  # saw it. The toolchain is pinned by digest precisely so a green here[0m
+gates	Run the gates	2026-09-29T22:24:37.0778372Z [36;1m  # and a green there are the same claim; ownership is the other half[0m
+gates	Run the gates	2026-09-29T22:24:37.0779134Z [36;1m  # of that and was not pinned at all.[0m
+gates	Run the gates	2026-09-29T22:24:37.0779690Z [36;1m  #[0m
+gates	Run the gates	2026-09-29T22:24:37.0780265Z [36;1m  # A FRESH directory per gate, not one reused. chmod alone fixed the[0m
+gates	Run the gates	2026-09-29T22:24:37.0781266Z [36;1m  # first gate and broke the second: lint then owned `.ruff_cache/` as[0m
+gates	Run the gates	2026-09-29T22:24:37.0782183Z [36;1m  # uid 1000 with mode 755, and unlinking a file needs write on its[0m
+gates	Run the gates	2026-09-29T22:24:37.0783093Z [36;1m  # parent, which the runner did not have — so the next iteration's[0m
+gates	Run the gates	2026-09-29T22:24:37.0784235Z [36;1m  # `rm -rf` failed and took the job down with "cannot remove ...[0m
+gates	Run the gates	2026-09-29T22:24:37.0785147Z [36;1m  # Permission denied". Reuse was the flaw; a per-gate directory is[0m
+gates	Run the gates	2026-09-29T22:24:37.0786057Z [36;1m  # what "thrown away after each gate" was always trying to say, and[0m
+gates	Run the gates	2026-09-29T22:24:37.0786943Z [36;1m  # it cannot be defeated by whatever the container leaves behind.[0m
+gates	Run the gates	2026-09-29T22:24:37.0787719Z [36;1m  tree="$(mktemp -d /tmp/gate-tree.XXXXXX)"[0m
+gates	Run the gates	2026-09-29T22:24:37.0788654Z [36;1m  cp -a "$PWD/." "$tree/"[0m
+gates	Run the gates	2026-09-29T22:24:37.0789150Z [36;1m  chmod -R a+rwX "$tree"[0m
+gates	Run the gates	2026-09-29T22:24:37.0789636Z [36;1m  docker run --rm \[0m
+gates	Run the gates	2026-09-29T22:24:37.0790095Z [36;1m    --network=none \[0m
+gates	Run the gates	2026-09-29T22:24:37.0790565Z [36;1m    --volume "$tree":/work:rw \[0m
+gates	Run the gates	2026-09-29T22:24:37.0791075Z [36;1m    --workdir /work \[0m
+gates	Run the gates	2026-09-29T22:24:37.0791574Z [36;1m    --env PYTHONPATH=/work/src \[0m
+gates	Run the gates	2026-09-29T22:24:37.0792146Z [36;1m    "$IMAGE" "${argv[@]}"[0m
+gates	Run the gates	2026-09-29T22:24:37.0792638Z [36;1m  rc=$?[0m
+gates	Run the gates	2026-09-29T22:24:37.0793019Z [36;1m  echo "::endgroup::"[0m
+gates	Run the gates	2026-09-29T22:24:37.0793986Z [36;1m  if [ "$rc" -eq 0 ]; then echo "ok    $id"[0m
+gates	Run the gates	2026-09-29T22:24:37.0794685Z [36;1m  else echo "::error::gate $id failed (exit $rc)"; failed=1; fi[0m
+gates	Run the gates	2026-09-29T22:24:37.0795333Z [36;1mdone[0m
+gates	Run the gates	2026-09-29T22:24:37.0795692Z [36;1mexit "$failed"[0m
+gates	Run the gates	2026-09-29T22:24:37.0861037Z shell: /usr/bin/bash -e {0}
+gates	Run the gates	2026-09-29T22:24:37.0861318Z ##[endgroup]
+gates	Run the gates	2026-09-29T22:24:37.1841716Z ##[group]gate lint — ruff check .
+gates	Run the gates	2026-09-29T22:24:37.3502153Z All checks passed!
+gates	Run the gates	2026-09-29T22:24:37.4005471Z ##[endgroup]
+gates	Run the gates	2026-09-29T22:24:37.4015026Z ok    lint
+gates	Run the gates	2026-09-29T22:24:37.4485349Z ##[group]gate format — ruff format --check .
+gates	Run the gates	2026-09-29T22:24:37.5969595Z 36 files already formatted
+gates	Run the gates	2026-09-29T22:24:37.6383024Z ##[endgroup]
+gates	Run the gates	2026-09-29T22:24:37.6385479Z ok    format
+gates	Run the gates	2026-09-29T22:24:37.6860637Z ##[group]gate types — mypy src
+gates	Run the gates	2026-09-29T22:24:39.1505204Z Success: no issues found in 14 source files
+gates	Run the gates	2026-09-29T22:24:39.2052098Z ##[endgroup]
+gates	Run the gates	2026-09-29T22:24:39.2053178Z ok    types
+gates	Run the gates	2026-09-29T22:24:39.2547582Z ##[group]gate unit — pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60
+gates	Run the gates	2026-09-29T22:24:41.5797632Z ..............................................................FF.......  [100%]
+gates	Run the gates	2026-09-29T22:24:41.5798697Z =================================== FAILURES ===================================
+gates	Run the gates	2026-09-29T22:24:41.5799616Z _________________________ test_heavier_keep_apart_wins _________________________
+gates	Run the gates	2026-09-29T22:24:41.5800680Z 
+gates	Run the gates	2026-09-29T22:24:41.5801055Z     def test_heavier_keep_apart_wins() -> None:
+gates	Run the gates	2026-09-29T22:24:41.5801862Z         # Two confirmed guests, two 2-seat tables: a weight-100 soft keep-apart
+gates	Run the gates	2026-09-29T22:24:41.5802783Z         # rule and a weight-1 soft sit-together rule name the same pair, and
+gates	Run the gates	2026-09-29T22:24:41.5804429Z         # nothing else binds the model — both charts (the pair together at one
+gates	Run the gates	2026-09-29T22:24:41.5805272Z         # table, or apart across the two tables) are valid. The heavier
+gates	Run the gates	2026-09-29T22:24:41.5805925Z         # preference must decide which one wins.
+gates	Run the gates	2026-09-29T22:24:41.5806522Z         tables = [_table("t-a", capacity=2), _table("t-b", capacity=2)]
+gates	Run the gates	2026-09-29T22:24:41.5807105Z         guests = [_guest("g-1"), _guest("g-2")]
+gates	Run the gates	2026-09-29T22:24:41.5807556Z         event = _event(
+gates	Run the gates	2026-09-29T22:24:41.5807893Z             "e-keep",
+gates	Run the gates	2026-09-29T22:24:41.5808219Z             tables,
+gates	Run the gates	2026-09-29T22:24:41.5808585Z             guests,
+gates	Run the gates	2026-09-29T22:24:41.5808958Z             rules=[
+gates	Run the gates	2026-09-29T22:24:41.5809482Z                 _soft("r-keep", RuleType.DIFFERENT_TABLE, 100, ("g-1", "g-2")),
+gates	Run the gates	2026-09-29T22:24:41.5810166Z                 _soft("r-sit", RuleType.SAME_TABLE, 1, ("g-1", "g-2")),
+gates	Run the gates	2026-09-29T22:24:41.5810516Z             ],
+gates	Run the gates	2026-09-29T22:24:41.5810719Z         )
+gates	Run the gates	2026-09-29T22:24:41.5810960Z         result = solve_event(event, mode="planning")
+gates	Run the gates	2026-09-29T22:24:41.5811453Z         assert result.status == "feasible"  # both charts fit: no rule or lock forces a conflict
+gates	Run the gates	2026-09-29T22:24:41.5811963Z         assignments = result.assignments
+gates	Run the gates	2026-09-29T22:24:41.5812340Z         # The weight-100 keep-apart rule held in the returned chart.
+gates	Run the gates	2026-09-29T22:24:41.5812754Z >       assert assignments["g-1"] != assignments["g-2"]
+gates	Run the gates	2026-09-29T22:24:41.5813151Z E       AssertionError: assert 't-b' != 't-b'
+gates	Run the gates	2026-09-29T22:24:41.5813697Z 
+gates	Run the gates	2026-09-29T22:24:41.5813973Z tests/solver/test_soft_keep_apart.py:80: AssertionError
+gates	Run the gates	2026-09-29T22:24:41.5814697Z ________________________ test_returned_chart_is_optimal ________________________
+gates	Run the gates	2026-09-29T22:24:41.5815543Z 
+gates	Run the gates	2026-09-29T22:24:41.5815744Z     def test_returned_chart_is_optimal() -> None:
+gates	Run the gates	2026-09-29T22:24:41.5816376Z         # A small hard-rule-free event in the defect's shape: enumerate every
+gates	Run the gates	2026-09-29T22:24:41.5817127Z         # chart that fits the table capacities, score each with the report's
+gates	Run the gates	2026-09-29T22:24:41.5817881Z         # semantics, and hold the solver to its own result. The chart the solver
+gates	Run the gates	2026-09-29T22:24:41.5818663Z         # returns is among the enumerated ones, so no valid chart may out-score
+gates	Run the gates	2026-09-29T22:24:41.5819451Z         # it. Every assertion below reads the solve itself, not the enumeration.
+gates	Run the gates	2026-09-29T22:24:41.5820131Z         tables = [_table("t-a", capacity=2), _table("t-b", capacity=2)]
+gates	Run the gates	2026-09-29T22:24:41.5820662Z         guests = [_guest("g-1"), _guest("g-2")]
+gates	Run the gates	2026-09-29T22:24:41.5821084Z         event = _event(
+gates	Run the gates	2026-09-29T22:24:41.5821416Z             "e-keep",
+gates	Run the gates	2026-09-29T22:24:41.5821750Z             tables,
+gates	Run the gates	2026-09-29T22:24:41.5822076Z             guests,
+gates	Run the gates	2026-09-29T22:24:41.5822373Z             rules=[
+gates	Run the gates	2026-09-29T22:24:41.5822830Z                 _soft("r-keep", RuleType.DIFFERENT_TABLE, 100, ("g-1", "g-2")),
+gates	Run the gates	2026-09-29T22:24:41.5823991Z                 _soft("r-sit", RuleType.SAME_TABLE, 1, ("g-1", "g-2")),
+gates	Run the gates	2026-09-29T22:24:41.5824519Z             ],
+gates	Run the gates	2026-09-29T22:24:41.5824811Z         )
+gates	Run the gates	2026-09-29T22:24:41.5825146Z         result = solve_event(event, mode="planning")
+gates	Run the gates	2026-09-29T22:24:41.5825657Z         assert result.status == "feasible"
+gates	Run the gates	2026-09-29T22:24:41.5826263Z         best = max(_chart_soft_score(event, chart) for chart in _valid_charts(event))
+gates	Run the gates	2026-09-29T22:24:41.5827058Z         # The reported soft score of the returned chart is at least as high as
+gates	Run the gates	2026-09-29T22:24:41.5827759Z         # any valid chart's: no valid chart out-scores the solver's.
+gates	Run the gates	2026-09-29T22:24:41.5828304Z >       assert result.score >= best
+gates	Run the gates	2026-09-29T22:24:41.5828717Z E       AssertionError: assert 1 >= 100
+gates	Run the gates	2026-09-29T22:24:41.5830500Z E        +  where 1 = SolveResult(status='feasible', assignments={'g-1': 't-b', 'g-2': 't-b'}, assigned_count=2, unassigned_count=0, score=1...olver_config=SolverConfig(seed=0, num_search_workers=1, time_limit_s=10.0), mode='planning', infeasibility_report=None).score
+gates	Run the gates	2026-09-29T22:24:41.5831954Z 
+gates	Run the gates	2026-09-29T22:24:41.5832192Z tests/solver/test_soft_keep_apart.py:155: AssertionError
+gates	Run the gates	2026-09-29T22:24:41.5832767Z ================================ tests coverage ================================
+gates	Run the gates	2026-09-29T22:24:41.5833678Z _______________ coverage: platform linux, python 3.12.14-final-0 _______________
+gates	Run the gates	2026-09-29T22:24:41.5834170Z 
+gates	Run the gates	2026-09-29T22:24:41.5834399Z Name                                           Stmts   Miss  Cover   Missing
+gates	Run the gates	2026-09-29T22:24:41.5835019Z ----------------------------------------------------------------------------
+gates	Run the gates	2026-09-29T22:24:41.5835724Z src/seating_planner/__init__.py                    1      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5836456Z src/seating_planner/domain/__init__.py           121      4    97%   120-121, 189, 193
+gates	Run the gates	2026-09-29T22:24:41.5837243Z src/seating_planner/feasibility/__init__.py        2      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5837993Z src/seating_planner/feasibility/preflight.py      82      2    98%   108, 157
+gates	Run the gates	2026-09-29T22:24:41.5839250Z src/seating_planner/invariant_api.py             115     29    75%   80, 83, 90-93, 98, 102, 109, 112, 118, 121, 145, 148, 161-162, 166-167, 171, 174, 179, 193-196, 202-205
+gates	Run the gates	2026-09-29T22:24:41.5840433Z src/seating_planner/rules/__init__.py             86      8    91%   38-39, 49-50, 83, 88, 117, 121
+gates	Run the gates	2026-09-29T22:24:41.5841223Z src/seating_planner/rules/template.py             11      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5842009Z src/seating_planner/solver/__init__.py             4      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5842753Z src/seating_planner/solver/config.py              17      2    88%   30, 32
+gates	Run the gates	2026-09-29T22:24:41.5844237Z src/seating_planner/solver/hard.py               277     31    89%   105, 113, 115, 121, 123, 130, 135, 139, 144, 146, 157, 184, 191, 284-285, 327, 355-360, 430, 456, 458, 530, 535, 569, 619, 681, 717, 721, 737, 741
+gates	Run the gates	2026-09-29T22:24:41.5845968Z src/seating_planner/solver/report.py              43      4    91%   56, 78, 132, 136
+gates	Run the gates	2026-09-29T22:24:41.5846877Z src/seating_planner/solver/result.py              32      1    97%   40
+gates	Run the gates	2026-09-29T22:24:41.5847682Z src/seating_planner/store/__init__.py             72      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5848455Z src/seating_planner/store/audit.py                25      0   100%
+gates	Run the gates	2026-09-29T22:24:41.5849209Z ----------------------------------------------------------------------------
+gates	Run the gates	2026-09-29T22:24:41.5849877Z TOTAL                                            888     81    91%
+gates	Run the gates	2026-09-29T22:24:41.5850571Z Required test coverage of 60% reached. Total coverage: 90.88%
+gates	Run the gates	2026-09-29T22:24:41.5851350Z =========================== short test summary info ============================
+gates	Run the gates	2026-09-29T22:24:41.5856416Z FAILED tests/solver/test_soft_keep_apart.py::test_heavier_keep_apart_wins - A...
+gates	Run the gates	2026-09-29T22:24:41.5857390Z FAILED tests/solver/test_soft_keep_apart.py::test_returned_chart_is_optimal
+gates	Run the gates	2026-09-29T22:24:41.5858020Z 2 failed, 69 passed in 1.78s
+gates	Run the gates	2026-09-29T22:24:41.7451244Z ##[error]Process completed with exit code 1.

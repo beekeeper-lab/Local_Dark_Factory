@@ -1,0 +1,22 @@
+{
+  "schema": "ci/1.1.0",
+  "status": "failed",
+  "checked_at": "2026-09-29T22:24:50Z",
+  "pull_request": "https://github.com/beekeeper-lab/seating-planner-py/pull/18",
+  "candidate_sha": "35af0fca4346e589b1b0119772f709781a8fc43c",
+  "required": [
+    "gates"
+  ],
+  "failed": [
+    "gates"
+  ],
+  "why": null,
+  "checks": [
+    {
+      "bucket": "fail",
+      "link": "https://github.com/beekeeper-lab/seating-planner-py/actions/runs/36639356470/job/109647686259",
+      "name": "gates",
+      "state": "FAILURE"
+    }
+  ]
+}

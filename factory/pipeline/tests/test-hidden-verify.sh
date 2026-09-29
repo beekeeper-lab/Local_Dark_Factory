@@ -178,7 +178,10 @@ printf '\n== --image runs the suite where its imports exist ==\n\n'
 IMG="$(grep -m1 -oE 'ghcr.io[^" ]+' "$ROOT/factory/scaffold/factory/gates.lock.yaml" 2>/dev/null || true)"
 if command -v podman >/dev/null 2>&1 && [ -n "$IMG" ] && podman image exists "$IMG" 2>/dev/null; then
   mkdir -p "$ROOT/hidden-tests/_test-fixture/bean-y"
-  printf 'import ortools\n\ndef test_ortools_is_importable():\n    assert ortools\n' \
+  # It reads the tree as well as importing ortools. Until 2026-09-29 it imported
+  # only, which passes against an empty tree, and "fails against nothing" held only
+  # because the container could not open the 0700 temp dir it was given.
+  printf 'import os\nimport ortools\n\ndef test_ortools_is_importable():\n    assert ortools\n    assert os.path.exists(os.path.join(os.environ["HIDDEN_TREE"], "made.txt"))\n' \
     > "$ROOT/hidden-tests/_test-fixture/bean-y/test_needs_ortools.py"
   if ! python3 -c 'import ortools' 2>/dev/null; then
     out="$(bash "$V" _test-fixture/bean-y --tree "$GOOD" 2>&1)"; rc=$?
