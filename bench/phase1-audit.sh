@@ -207,7 +207,24 @@ if compgen -G "$RUN_DIR/verdicts/*.refused.json" >/dev/null 2>&1; then
         "$RUN_DIR"/verdicts/*.refused.json 2>/dev/null)"
   [ -n "$why" ] && why=" Refused by: $why."
 fi
-if [ "$nv" -eq 0 ] && [ "$nadv" -gt 0 ]; then
+# The Phase 1 amendment of 2026-09-29 (plans/phase-1.md, task 3-fallback): the
+# local judge has produced no stampable verdict on any real run, and one bounded
+# fix did not change that, so in v1 audits are advisory and the pre-merge Claude
+# review is the gate. What Phase 1 still has to show is that the verdict CONTRACT
+# holds, which the controller can check without the judge: the audit-check suite
+# passes, and the one real stamped verdict on record validates. Either missing,
+# and the amendment does not apply.
+ADV_EVIDENCE="$ROOT/evidence/first-stamped-verdict-20260916.json"
+advisory_contract() {
+  [ -f "$ADV_EVIDENCE" ] && [ -x "$ROOT/.venv/bin/python" ] || return 1
+  "$ROOT/.venv/bin/python" "$ROOT/bench/validate.py" "$VSCHEMA" "$ADV_EVIDENCE" >/dev/null 2>&1 || return 1
+  bash "$PIPE/tests/test-audit-check.sh" >/dev/null 2>&1
+}
+if [ "$nv" -eq 0 ] && [ "$nadv" -gt 0 ] && advisory_contract; then
+  ok "three_verdicts_schema_valid" \
+    "amended (plans/phase-1.md): $nadv audit(s) ran advisory and reached no verdict.$why The contract is proven without the judge: test-audit-check.sh green, and $(basename "$ADV_EVIDENCE") validates against verdict.schema.json"
+  pred three_verdicts_schema_valid amended_advisory
+elif [ "$nv" -eq 0 ] && [ "$nadv" -gt 0 ]; then
   bad "three_verdicts_schema_valid" major \
     "no verdicts: $nadv audit(s) ran advisory and reached none. The judge ran; it did not produce a judgement the controller could stamp.$why Nothing here is schema-invalid — there is nothing to validate, which is a different problem and one this predicate cannot close."
   pred three_verdicts_schema_valid not_exercised

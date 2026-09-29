@@ -1,0 +1,27 @@
+bench snapshot: /tmp/factory-bench.D1zNfZ/bench
+
+judge qualification — 2026-09-29T19:47:29Z
+  judge: gpt-oss:120b (low thinking)
+  cases: 12 × 3 pass(es)
+
+CASE                                     EXPECT VERDICT  STAMPED NAMED   OUTCOME
+impl-audit-filter-repaired               accept -        false   false   no judgement: impl: it reasoned for 127 characters and then ended its turn  (28s)
+impl-audit-filter-sql-error              reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (36s)
+impl-event-day-unlock-and-diagnosis      reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (27s)
+impl-group-size-counts-ineligible        reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (28s)
+impl-mode-identity-comparison            reject -        false   false   no judgement: impl: that is the CONTEXT WINDOW, not the token cap.  (494s)
+impl-removal-writes-no-audit             reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (574s)
+impl-soft-keep-apart-never-honoured      reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (30s)
+impl-soft-keep-apart-repaired            accept -        false   false   no judgement: impl: hit the 16000-token cap before finishing  (559s)
+impl-worker-count-ignored                reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (29s)
+spec-keyword-and-hardcode-both-asked     reject accept   false   true    FALSE ACCEPT  (46s)
+spec-verify-consistent                   accept -        false   false   no judgement: spec: it reasoned for 1094 characters and then ended its tur  (29s)
+spec-verify-contradicts-intent           reject revise   false   true    named, not stamped (the judgement quotes text that is not on disk anywhere.)  (598s)
+impl-audit-filter-repaired               accept -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (35s)
+impl-audit-filter-sql-error              reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (569s)
+impl-event-day-unlock-and-diagnosis      reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (25s)
+impl-group-size-counts-ineligible        reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (29s)
+impl-mode-identity-comparison            reject -        false   false   no judgement: impl: it reasoned for 38045 characters and then ended its tu  (445s)
+impl-removal-writes-no-audit             reject -        false   false   no judgement: impl: that is the CONTEXT WINDOW, not the token cap.  (574s)
+impl-soft-keep-apart-never-honoured      reject -        false   false   no judgement: impl: the model asked for tools instead of answering (repo_b  (25s)
+Terminated                 FACTORY_BENCH_SNAPSHOTTED=1 bash "$SNAP/bench/$(basename "$HARNESS")" "$@"

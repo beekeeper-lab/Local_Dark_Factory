@@ -194,6 +194,38 @@ check "naming what is missing"      "impl-detail.html" "$out"
 printf 'impl\n' > "$RUN/impl-detail.html"
 
 # ---------------------------------------------------------------------------
+printf '\n== a retry can be cited from another run, and says so ==\n\n'
+#
+# Phase 1 plan task 5. The closing run needed no retry; bean-006's did. A cited
+# pass is `pass_cited` and names the run, and a cited run with no retry fails.
+CITED="$WORK/cited-run"; mkdir -p "$CITED/build/task-1/attempt-2"
+printf '{"event":"attempt","task":"task-1","attempt":2}\n' > "$CITED/tasks.jsonl"
+printf 'the real failure output\n' > "$CITED/build/task-1/attempt-2/feedback.md"
+out="$( cd "$REPO" && bash "$AUDIT" "$RUN" --repo "$REPO" --cite-retry "$CITED" 2>&1 )"
+pred  task_retry_with_evidence pass_cited "$out"
+check "and names the cited run" "cited: cited-run" "$out"
+EMPTY="$WORK/empty-run"; mkdir -p "$EMPTY"
+out="$( cd "$REPO" && bash "$AUDIT" "$RUN" --repo "$REPO" --cite-retry "$EMPTY" 2>&1 )"
+pred  task_retry_with_evidence fail "$out"
+
+# ---------------------------------------------------------------------------
+printf '\n== advisory audits close the verdict predicate only as an amendment ==\n\n'
+#
+# Phase 1 plan task 3-fallback. No verdicts, audits recorded advisory: the
+# predicate reads `amended_advisory`, never `pass`, and only while the contract
+# evidence holds.
+SAVED_V="$(ls "$RUN/verdicts")"
+mkdir -p "$RUN/verdicts.bak"; [ -n "$SAVED_V" ] && mv "$RUN"/verdicts/* "$RUN/verdicts.bak/"
+mkdir -p "$RUN/failed-attempts"; printf 'advisory\n' > "$RUN/failed-attempts/audit-spec.advisory.1"
+out="$(run_audit)"
+pred  three_verdicts_schema_valid amended_advisory "$out"
+nope  "and it is not called a pass" "three_verdicts_schema_valid: pass" "$out"
+rm -f "$RUN/failed-attempts/audit-spec.advisory.1"
+out="$(run_audit)"
+pred  three_verdicts_schema_valid fail "$out"
+[ -n "$SAVED_V" ] && mv "$RUN"/verdicts.bak/* "$RUN/verdicts/"; rmdir "$RUN/verdicts.bak"
+
+# ---------------------------------------------------------------------------
 printf '\n== every predicate it can pass is one it can also fail ==\n\n'
 #
 # Same argument as the phase-0 suite: a predicate with only a pass path is a line
@@ -204,7 +236,7 @@ N="$(printf '%s\n' "$NAMES" | grep -c .)"
 only_ok=""; only_fail=""
 while IFS= read -r nm; do
   [ -n "$nm" ] || continue
-  grep -qE "pred $nm (pass|pass_for_its_version|mechanism_proven)" "$AUDIT" || only_fail="$only_fail $nm"
+  grep -qE "pred $nm (pass|pass_for_its_version|pass_cited|amended_advisory|mechanism_proven)" "$AUDIT" || only_fail="$only_fail $nm"
   grep -qE "pred $nm (fail|pending|not_exercised)" "$AUDIT"                 || only_ok="$only_ok $nm"
 done <<< "$NAMES"
 if [ -z "$only_ok" ]; then printf '  ok    none of the %s predicates is green-only\n' "$N"; PASS=$((PASS+1))
