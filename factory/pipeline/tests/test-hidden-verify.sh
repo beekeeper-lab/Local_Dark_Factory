@@ -74,6 +74,25 @@ check "and names the test"            "test_asks_for_something_no_bean_produces"
 check "and says why it is the worst one" "blocks every attempt of its bean" "$out"
 check "and that the worker cannot see it" "told only a count" "$out"
 
+printf '\n== a parametrized test passes only when every case does ==\n\n'
+cp "$SUITE/test_h.py" "$WORK/test_h.saved"
+cat > "$SUITE/test_h.py" <<'PY'
+import os, pathlib
+import pytest
+T = pathlib.Path(os.environ.get("HIDDEN_TREE", "/work"))
+
+@pytest.mark.parametrize("name", ["made.txt", "never-made.txt"])
+def test_each_file_is_there(name):
+    assert (T / name).is_file()
+
+def test_no_forbidden_file():
+    assert not (T / "forbidden.txt").exists()
+PY
+out="$(bash "$V" _test-fixture/bean-x --tree "$GOOD" 2>&1)"; rc=$?
+rc_is "one failing case of two fails the suite" "$rc" 1
+check "and names the test"            "test_each_file_is_there" "$out"
+cp "$WORK/test_h.saved" "$SUITE/test_h.py"
+
 printf '\n== an undeclared test that passes on nothing is still caught ==\n\n'
 python3 - "$SUITE/test_h.py" <<'PY'
 import sys

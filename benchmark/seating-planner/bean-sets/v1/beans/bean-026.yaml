@@ -1,0 +1,73 @@
+schema_version: bean/2.0.0
+id: bean-026
+repo: beekeeper-lab/seating-planner-py
+title: The default wedding template's accessible-seating rule starts disabled, so a template event can be solved
+intent: >
+  An event that starts from the default wedding template can be solved as it stands: the
+  template still carries its hard accessible-seating rule, created disabled until seat
+  positions are configured, so enabling it later is one field.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly: the rule starts disabled)"
+  approved_at: "2026-09-29T15:30:00Z"
+  order: 26
+source:
+  kind: manual
+  ref: evidence/reviews/retroactive-20260928.md
+  date: "2026-09-29"
+  excerpt: "bean-026: The default wedding template's accessible-seating rule is a HARD `min_distance` rule, which the solver refuses, so any event that uses the template cannot be solved, and preflight is silent about it."
+context:
+  read_paths:
+    - src/seating_planner/rules/
+    - src/seating_planner/solver/
+    - tests/rules/
+  background: >
+    A defect found by the retroactive review of 2026-09-28 in the code bean-003 shipped.
+    default_wedding_rules() returns seven rules, all enabled. Six are soft same-table or
+    different-table rules. The seventh, template-accessible_seating, is a HARD
+    min_distance rule (target dance_floor, two zones). The solver has no table-level
+    meaning for min_distance and refuses any enabled hard rule it cannot express, so
+    every event built from the template raises instead of solving, and the pre-flight
+    check reports nothing.
+
+    Measured on the main branch: an event with three tables of eight, fourteen confirmed
+    guests, one group per template category and the template's rules as they come.
+    run_preflight returns no findings, and solve_event in planning mode raises
+    "hard rule 'template-accessible_seating' of kind 'min_distance' has no table-level
+    interpretation".
+
+    The owner's decision: the template creates the rule disabled until seat positions are
+    configured. It stays a hard min_distance rule with the same target and zone count, so
+    turning it on is setting enabled to true. Disabled rules are already ignored by the
+    solver and the pre-flight check. bean-003's own template test asserts that every
+    template rule starts enabled; that one expectation changes with this bean.
+allowed_write_paths:
+  - src/seating_planner/rules/template.py
+  - tests/rules/**
+acceptance_criteria:
+  - id: ac1
+    text: An event whose rules are exactly default_wedding_rules(), with one group per template category and enough seats for every guest, solves in planning mode with every guest seated.
+    verify: { kind: test, test_id: "tests/rules/test_template_defaults.py::test_template_event_solves" }
+  - id: ac2
+    text: The template's template-accessible_seating rule is present with enabled false and is otherwise the same rule as before (hard, min_distance, no weight, group accessible_seating, target dance_floor, two zones), so setting enabled to true alone restores it; it stays disabled through to_dict and from_dict.
+    verify: { kind: test, test_id: "tests/rules/test_template_defaults.py::test_accessible_rule_starts_disabled" }
+  - id: ac3
+    text: The other six template rules are unchanged, and each starts enabled.
+    verify: { kind: test, test_id: "tests/rules/test_template_defaults.py::test_other_template_rules_unchanged" }
+  - id: ac4
+    text: Every existing test passes; the existing template test changes only where it expects every template rule to start enabled.
+    verify: { kind: command, run: ["pytest", "-q"] }
+constraints:
+  - the template still returns seven rules, one per category, fresh on every call
+  - the default_wedding_rules signature and TEMPLATE_CATEGORIES are unchanged
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 350 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no change to how the solver treats min_distance rules; an enabled hard min_distance rule is still refused
+  - no pre-flight warning about rules the solver cannot express
+  - no change to what happens when a template rule names a group the event does not have
+dependencies: [bean-003]

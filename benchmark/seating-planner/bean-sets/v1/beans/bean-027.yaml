@@ -1,0 +1,80 @@
+schema_version: bean/2.0.0
+id: bean-027
+repo: beekeeper-lab/seating-planner-py
+title: A hard rule with fewer than two seated guests is unevaluable, and rule ids are unique within an event
+intent: >
+  A hard rule the chart cannot test is reported unevaluable, as its soft twin already is,
+  and an event never holds two rules with the same id, so every result has one state per
+  rule and a score that agrees with those states.
+status: approved
+approval:
+  approved_by: "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations"
+  approved_at: "2026-09-29T15:30:00Z"
+  order: 27
+source:
+  kind: manual
+  ref: evidence/reviews/retroactive-20260928.md
+  date: "2026-09-29"
+  excerpt: "bean-008 ac3: A rule that could not be evaluated is reported as unevaluable, never as satisfied."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/domain/
+    - tests/solver/
+    - tests/domain/
+  background: >
+    Two defects in the result reporting bean-008 shipped, found by the retroactive review
+    of 2026-09-28.
+
+    First: the report marks every enabled hard rule satisfied on a feasible result,
+    because every expressible hard rule is a constraint of the model. A hard rule whose
+    targets include fewer than two eligible guests adds no constraint at all, so nothing
+    was evaluated, yet it is reported satisfied. The soft rule on the same guests is
+    reported unevaluable. Measured on the main branch: a hard and a soft same-table rule
+    between a confirmed and a declined guest come back as
+    {'hard-pair': 'satisfied', 'soft-pair': 'unevaluable'}. That is the false success
+    bean-008 ac3 forbids.
+
+    Second: nothing refuses two rules with the same id. The domain checks that table,
+    guest and group ids are unique but not rule ids, and the solver keys rule_states by
+    rule id, so two rules sharing an id collapse into one state. Measured: a satisfied
+    weight-10 soft rule and a violated weight-1 soft rule, both with id 'dup', report
+    {'dup': 'violated'} with a score of 10. The store keys rules by id as well, so such
+    an event also cannot be saved.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - src/seating_planner/domain/**
+  - tests/solver/**
+  - tests/domain/**
+acceptance_criteria:
+  - id: ac1
+    text: In a feasible result, in any mode, a hard same-table or different-table rule whose targets include fewer than two eligible guests is reported unevaluable, exactly as a soft rule on the same guests is, and never satisfied.
+    verify: { kind: test, test_id: "tests/solver/test_rule_reporting.py::test_hard_rule_without_two_seated_guests_is_unevaluable" }
+  - id: ac2
+    text: Building an event with two rules that share an id, or adding a rule whose id one of the event's rules already has, raises a ValueError whose message names the id, whether or not either rule is enabled.
+    verify: { kind: test, test_id: "tests/domain/test_rule_ids.py::test_duplicate_rule_id_is_refused" }
+  - id: ac3
+    text: solve_event, in every mode, refuses an event whose rules share an id, however they got into its rule list, with a ValueError whose message names the id, before any solve runs.
+    verify: { kind: test, test_id: "tests/solver/test_rule_reporting.py::test_solve_refuses_duplicate_rule_ids" }
+  - id: ac4
+    text: In every result, rule_states has exactly one entry per enabled rule, the score equals the total weight of the soft rules reported satisfied, and the violations are exactly the soft rules reported violated. This already holds for events with unique rule ids and is a guard, not a red test, so verify it with pytest and never with the red-test helper.
+    verify: { kind: test, test_id: "tests/solver/test_rule_reporting.py::test_states_and_score_agree" }
+  - id: ac5
+    text: Every existing test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q"] }
+constraints:
+  - a hard rule with two or more eligible targets is still reported satisfied in a feasible result
+  - the solve_event signature and the result shape are unchanged
+  - the domain module imports nothing from the rules or solver packages; Event.rules stays a list of objects, and an entry without an id is not checked by the domain
+suggested_risk_tier: 2
+size_budget: { max_tasks: 4, max_files: 5, max_diff_lines: 500 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - "no whole-event validation on use: bounds, eligibility, groups, locks, guest limits and duplicate guest ids at solve or save time are bean-029's; this bean refuses duplicate rule ids and nothing else"
+  - no change to how rules are scored or optimized (bean-021)
+  - no change to the infeasibility diagnosis (bean-028)
+  - no change to the rule model or the default template (bean-026)
+dependencies: [bean-008]

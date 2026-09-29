@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test imports the rules
+# template from the tree, and an empty tree has none to import.

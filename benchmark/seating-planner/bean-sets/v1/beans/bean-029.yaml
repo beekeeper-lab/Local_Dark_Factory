@@ -1,0 +1,75 @@
+schema_version: bean/2.0.0
+id: bean-029
+repo: beekeeper-lab/seating-planner-py
+title: A reserved seat is a yes or a no, and every distance measure a rule carries is a real one
+intent: >
+  A guest's reserved_seat is a bool and eligibility is always a bool derived from it, so a
+  pending guest is seated only with a reserved seat of True; and a minimum-distance rule
+  refuses any measure it is given that is not valid on its own, even beside a valid one.
+status: approved
+approval:
+  approved_by: "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations"
+  approved_at: "2026-09-29T15:30:00Z"
+  order: 29
+source:
+  kind: manual
+  ref: evidence/reviews/retroactive-20260928.md
+  date: "2026-09-29"
+  excerpt: "bean-002 ac3: A guest is eligible when Confirmed, or Pending with a reserved seat, and not otherwise. bean-003 ac4: A minimum-distance rule without a numeric distance or zone count is rejected."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/rules/
+    - tests/domain/
+    - tests/rules/
+  background: >
+    Two defects found by the retroactive review of bean-002 and bean-003, both in the
+    checks made when an object is built. The first half of the review's bean-029
+    finding; the validation of a whole event on use is bean-030.
+
+    First: Guest takes reserved_seat without checking its type, and Guest.eligible
+    returns `status is PENDING and self.reserved_seat`, which is the stored value
+    itself. Measured on the main branch: a pending guest built with
+    reserved_seat="no" has eligible == 'no', which is truthy, and a planning solve
+    seats them. The same holds for "false", which is what a CSV column says.
+
+    Second: a minimum-distance rule is accepted when distance_m is valid OR min_zones
+    is valid, so a valid measure carries an invalid other into storage. Measured:
+    Rule(..., distance_m="far apart", min_zones=1) is built and stores "far apart",
+    the very phrase FR-035 says shall not be stored as an executable rule.
+
+    A caller that reads a reserved seat or a measure from text converts it before
+    building the object; the object does not guess.
+allowed_write_paths:
+  - src/seating_planner/domain/**
+  - src/seating_planner/rules/**
+  - tests/domain/**
+  - tests/rules/**
+acceptance_criteria:
+  - id: ac1
+    text: Building a Guest with a reserved_seat that is not a bool (for example "no", "false", 1 or None) raises a ValueError; True and False are accepted, and the default is still False.
+    verify: { kind: test, test_id: "tests/domain/test_guest_fields.py::test_reserved_seat_must_be_a_bool" }
+  - id: ac2
+    text: Guest.eligible is always a bool, True only for a Confirmed guest or a Pending guest whose reserved_seat is True, including when reserved_seat was set to something else after construction.
+    verify: { kind: test, test_id: "tests/domain/test_guest_fields.py::test_eligible_is_always_a_bool" }
+  - id: ac3
+    text: A minimum-distance rule, soft or hard, built directly or through from_dict, is refused with a ValueError when a distance_m it is given is not a number greater than zero or a min_zones it is given is not an integer of at least one, whether or not the other measure is valid; a rule with only valid measures is built as before.
+    verify: { kind: test, test_id: "tests/rules/test_distance_measures.py::test_every_given_measure_is_valid" }
+  - id: ac4
+    text: Every existing test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q"] }
+constraints:
+  - a bool is not a number and not an integer here, as everywhere else in the rule model
+  - an integer distance_m is still accepted and stored as a float
+  - no solver, store or feasibility code changes
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 5, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - "no validation of an event on use: solve_event and save_event re-checking what construction checked is bean-030"
+  - no change to how a reserved seat is persisted or loaded
+  - no change to table capacity or position checks
+dependencies: [bean-002, bean-003]

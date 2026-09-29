@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test imports the domain,
+# the solver or the store, and an empty tree has none of them to import.
