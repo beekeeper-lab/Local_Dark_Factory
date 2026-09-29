@@ -48,9 +48,10 @@ Every stage works except the judge.
       v1 the local judge is advisory and the pre-merge Claude review is the working gate.
       This is the same move the owner made for invariants on 2026-09-15.
 - [ ] **4. The owner reads the two documents** for one run (`spec.html` and
-      `impl-detail.html` of `bean-014-20260928T162157Z`) and records who read them and when in
+      `impl-detail.html` of `bean-021-20260929T165628Z`) and records who read them and when in
       `documents-read-by.txt`. About 20 minutes. This is the one step that needs the owner.
-- [ ] **5. Let the audit take evidence from more than one run.** Retry evidence comes from
+- [x] **5. Let the audit take evidence from more than one run.** Done 2026-09-29:
+      `--cite-retry <run>` reports `pass_cited` and names the run. Retry evidence comes from
       bean-006, and the closing run is bean-014. Change `phase1-audit.sh` to accept a
       `--cite <run>` for a predicate and to name the cited run in its report.
 - [ ] **6. Closing ritual.** Compute the exit, generate the audit
@@ -76,4 +77,7 @@ phase_1_exit: { seven_stages_completed: pass, three_verdicts_schema_valid: pass 
 
 ## Amendments
 
-_None._
+- **2026-09-29, closing run changed from bean-014 to `bean-021-20260929T165628Z`.** That run
+  finished after this plan was written. It was made on the current pipeline, passed the
+  pre-merge review and is merged (PR #17). Tasks 3, 4 and 6 use it, and task 5's
+  `--cite-retry` cites bean-006. This is not a scope change.

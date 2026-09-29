@@ -36,18 +36,22 @@ usage() {
   cat <<'EOF'
 phase1-audit.sh — the seven phase_1_exit predicates, computed.
 
-usage: phase1-audit.sh <run-dir> [--repo <dir>] [--json <path>]
+usage: phase1-audit.sh <run-dir> [--repo <dir>] [--json <path>] [--cite-retry <run-dir>]
 
 <run-dir> is a run from the target repository (factory/runs/<bean>-<stamp>).
 --repo defaults to the run directory's own repository.
+--cite-retry names an earlier run of the same line as the evidence for
+task_retry_with_evidence, when the audited run needed no retry. It reports
+`pass_cited` and names that run, never plain `pass`.
 EOF
 }
 
-RUN_DIR=""; REPO=""; JSON_OUT=""
+RUN_DIR=""; REPO=""; JSON_OUT=""; CITE_RETRY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="${2:?}"; shift 2 ;;
     --json) JSON_OUT="${2:?}"; shift 2 ;;
+    --cite-retry) CITE_RETRY="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) usage >&2; exit 2 ;;
     *) [ -z "$RUN_DIR" ] || { usage >&2; exit 2; }; RUN_DIR="$1"; shift ;;
@@ -341,16 +345,30 @@ fi
 # A retry that carried the real failure output into the next attempt, rather than
 # a summary of it. Evidence: an attempt after the first whose predecessor
 # recorded a failure, and a feedback.md that is not empty.
-retries=0
-[ -f "$RUN_DIR/tasks.jsonl" ] && retries="$(jq -rs '[.[] | select(.event == "attempt" and .attempt > 1)] | length' "$RUN_DIR/tasks.jsonl" 2>/dev/null)"
-retries="${retries:-0}"
-withfb=0
-for f in "$RUN_DIR"/build/*/attempt-*/feedback.md; do
-  [ -s "$f" ] && withfb=$((withfb+1))
-done
+# A run that needed no retry says nothing about the retry path, so Phase 1 may
+# name another run of the same line that did (plans/phase-1.md, task 5). The
+# same check runs on the cited run; the result says it is cited and names it.
+count_retries() {
+  local d="$1" r=0 fb=0 f
+  [ -f "$d/tasks.jsonl" ] && r="$(jq -rs '[.[] | select(.event == "attempt" and .attempt > 1)] | length' "$d/tasks.jsonl" 2>/dev/null)"
+  for f in "$d"/build/*/attempt-*/feedback.md; do [ -s "$f" ] && fb=$((fb+1)); done
+  printf '%s %s\n' "${r:-0}" "$fb"
+}
+read -r retries withfb < <(count_retries "$RUN_DIR")
 if [ "$retries" -gt 0 ] && [ "$withfb" -gt 0 ]; then
   ok "task_retry_with_evidence" "$retries retry attempt(s), $withfb carrying the real failure output"
   pred task_retry_with_evidence pass
+elif [ "$retries" -eq 0 ] && [ -n "$CITE_RETRY" ]; then
+  if [ -d "$CITE_RETRY" ]; then
+    read -r cr cfb < <(count_retries "$CITE_RETRY")
+  else cr=0; cfb=0; fi
+  if [ "$cr" -gt 0 ] && [ "$cfb" -gt 0 ]; then
+    ok "task_retry_with_evidence" "cited: $(basename "$CITE_RETRY") — $cr retry attempt(s), $cfb carrying the real failure output (this run needed none)"
+    pred task_retry_with_evidence pass_cited
+  else
+    bad "task_retry_with_evidence" major "the cited run $(basename "$CITE_RETRY") does not evidence a retry either ($cr retries, $cfb feedback files)"
+    pred task_retry_with_evidence fail
+  fi
 elif [ "$retries" -eq 0 ]; then
   bad "task_retry_with_evidence" minor \
     "no task needed a retry in this run — the path is tested (tests/test-build-loop.sh) but this run does not evidence it"
