@@ -66,6 +66,11 @@ if [ -n "$BRANCH" ]; then
   TREE="$(mktemp -d)"; CLEANUP="$TREE"
   git -C "$REPO" archive "$BRANCH" 2>/dev/null | tar -x -C "$TREE" \
     || { printf 'verify: could not export %s from %s\n' "$BRANCH" "$REPO" >&2; exit 2; }
+  # mktemp -d makes the directory 0700. The gate image runs as its own non-root
+  # user, which rootless podman maps to a subuid that cannot open it, so every
+  # --branch --image check failed as "cannot pass" when it had never read a file.
+  # Found in bean-021's pre-merge review, 2026-09-29.
+  chmod -R a+rX "$TREE"
 fi
 # No tree is its own answer, not an error. Most beans have not run yet, and for
 # those only half of this can be checked — which is worth saying, because "the
@@ -117,7 +122,7 @@ all_tests() { grep -hoE '^[[:space:]]*def (test_[A-Za-z0-9_]+)' "$DIR"/*.py | se
 printf '\nhidden suite: %s\n  real tree: %s\n\n' "$SUITE" "${BRANCH:-${TREE:-none given — this bean has not produced one yet}}"
 
 ALL="$(all_tests)"; N_ALL="$(printf '%s\n' "$ALL" | grep -c . || true)"
-EMPTY_TREE="$(mktemp -d)"; mkdir -p "$EMPTY_TREE/src"
+EMPTY_TREE="$(mktemp -d)"; mkdir -p "$EMPTY_TREE/src"; chmod -R a+rX "$EMPTY_TREE"
 PASS_EMPTY="$(passes_in "$EMPTY_TREE")"
 rm -rf "$EMPTY_TREE"
 PASS_REAL=""

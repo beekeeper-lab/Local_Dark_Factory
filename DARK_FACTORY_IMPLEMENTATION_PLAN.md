@@ -565,9 +565,11 @@ phase_2_exit:
   13 ok, 0 findings — with `remote_ci_failure_tests` reported as **`pass_in_tests`**,
   because `gates.lock.yaml` still pins a `localhost/` image that CI cannot pull, so that
   fault has only ever met a stubbed `gh`.
-- [ ] Exit verified — waiting on the one thing above: publish the gate image, install the
-  workflow, and let a real required check fail once. Everything else is computed green.
-- [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-2-COMPLETE` committed
+- [x] Exit verified. A real required check failed once on 2026-09-29 (seating-planner-py#18,
+  `evidence/phase2-real-ci-failure-20260929/`).
+- [x] Findings corrected   - [x] Audit re-run green   - [x] `PHASE-2-COMPLETE` committed
+
+**Phase 2 is closed, 2026-09-29.** See `audits/PHASE-2-AUDIT-20260929.md` and `plans/phase-2.md`.
 
 ---
 

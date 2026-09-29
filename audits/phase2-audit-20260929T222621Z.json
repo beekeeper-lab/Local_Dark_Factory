@@ -1,0 +1,28 @@
+{
+  "schema": "phase2-audit/1.0.0",
+  "audited_at": "2026-09-29T22:36:02Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.7-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-29T22:36:02Z",
+    "pipeline_version": "1.4.0-df.1"
+  },
+  "phase_2_exit": {
+    "controller_restart_tests": "pass",
+    "unauthorized_path_tests": "pass",
+    "unclaimed_ac_test": "pass",
+    "size_budget_test": "pass",
+    "doc_mismatch_test": "pass",
+    "duplicate_pr_tests": "pass",
+    "credential_exposure_tests": "pass",
+    "remote_ci_failure_tests": "pass",
+    "stale_branch_tests": "pass",
+    "pr_head_violation_tests": "pass",
+    "wrong_model_tests": "pass",
+    "frontier_provider_refused": "pass",
+    "human_merge_required": "verified"
+  },
+  "findings": [],
+  "note": "Computed by running the suites and looking for named assertions, not by reading the plan. A renamed assertion reports as missing, which is correct: this cannot tell a rename from a deletion, and neither can a reader of a checklist."
+}
