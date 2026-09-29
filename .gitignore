@@ -32,6 +32,7 @@ bench/results/*
 # verdict, at a named configuration. The figure the seeded-defect harnesses
 # cannot produce.
 !bench/results/reaudit-*
+!bench/results/judge-qualify-2*
 # The ledger that says what each of these measured and whether a claim still
 # rests on it. Without it the directory is twenty timestamps.
 !bench/results/INDEX.md

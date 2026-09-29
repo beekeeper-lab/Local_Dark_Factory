@@ -73,6 +73,7 @@ a superseded figure produces a second superseded figure with a nicer header.
 
 | file | provenance | still load-bearing? |
 | --- | --- | --- |
+| `judge-qualify-20260929T144810Z.json` | yes | **yes** — the first qualification of gpt-oss:120b against real audits: 36 runs (12 cases × 3), 4 answered, 0 stamped, **0 of 9 pairs told apart**, 1 false accept, 1 false alarm. 32 runs wrote no judgement: 15 asked for tools that do not exist (`repo_browser`), 6 filled the 32k context window, 5 hit the 16k token cap, 5 ended after a few hundred characters of reasoning, 1 answered JSON that was not a judgement. Logs are not kept (1.5 MB, regenerable) |
 | `phase0-20260914T173319Z.json` | yes | **yes** — the serial/co-resident regime decision |
 | `provenance-post-reboot-20260914T173223Z.json` | yes | yes — the post-reboot machine state |
 | `harmony-20260914T182045Z.json` | yes | yes — gpt-oss:120b holds a schema with thinking on |
