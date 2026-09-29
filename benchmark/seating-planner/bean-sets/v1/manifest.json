@@ -135,6 +135,54 @@
       "reopens_approval": false,
       "rule": "A new bean, approved by the owner directly; nothing already approved changes.",
       "note": "bean-014 (seating-planner PR #16) was the first bean through the pre-merge review, which found three demonstrated defects (evidence/reviews/bean-014-20260928T162157Z.md). The owner merged it with this bean as the repair for two of them; the third, identity dispatch on the new mode, is bean-023's, whose criteria cover every mode the solver has when it runs."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-024 amended: the solves that diagnose an infeasible event may stay at one worker; the result still records the request",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations",
+      "reopens_approval": false,
+      "rule": "A constraint that narrows nothing bean-024's criteria require; its criteria and hidden tests are unchanged.",
+      "note": "bean-024's intent says the requested worker count applies to every CP-SAT solve, and bean-028's diagnosis extracts an infeasible core, which is only reliable with one worker. Neither bean's criteria or hidden tests pin the worker count of a diagnosis solve, so without this the two beans could be built into a contradiction that neither one's tests would notice."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-026 added: the default wedding template's accessible-seating rule starts disabled (repairs bean-003)",
+      "by": "Gregg Reed (owner), directly",
+      "reopens_approval": false,
+      "rule": "A new bean; nothing already approved changes.",
+      "note": "Found by the retroactive review of 2026-09-28 (evidence/reviews/retroactive-20260928.md). Hidden tests were written from the criteria and verified both ways in the gate image against a reference fix that was never committed. default_wedding_rules() enabled a hard min_distance rule that the solver has no table-level meaning for and refuses, so every event built from the template raised instead of solving, and pre-flight returned no findings. The owner chose disabled over soft or a pre-flight warning. The rule keeps its hard min_distance shape, so enabling it later is one field. bean-003's own template test asserts every rule starts enabled; that one expectation changes with this bean. Budget 350: three test criteria for a 3-line source fix."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-027 added: a hard rule with fewer than two seated guests is unevaluable, and rule ids are unique within an event (repairs bean-008)",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations",
+      "reopens_approval": false,
+      "rule": "A new bean; nothing already approved changes.",
+      "note": "Found by the retroactive review of 2026-09-28 (evidence/reviews/retroactive-20260928.md). Hidden tests were written from the criteria and verified both ways in the gate image against a reference fix that was never committed. Every enabled hard rule was reported satisfied on a feasible result, including one with fewer than two eligible targets, which constrains nothing, while its soft twin was unevaluable (bean-008 ac3). No layer refused duplicate rule ids, and rule_states is keyed by id: a satisfied weight-10 and a violated weight-1 rule sharing id 'dup' reported {'dup': 'violated'} with score 10. Refused at construction, in add_rule and in solve_event. ac4 is a guard that already holds and says so, so the spec does not verify it as a red test. Budget 500."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-028 added: an infeasibility report names every cause, and names a lock as a lock (repairs bean-010, bean-011)",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations",
+      "reopens_approval": false,
+      "rule": "A new bean; nothing already approved changes.",
+      "note": "Found by the retroactive review of 2026-09-28 (evidence/reviews/retroactive-20260928.md). Hidden tests were written from the criteria and verified both ways in the gate image against a reference fix that was never committed. The one-removal diagnosis names a cause only when removing it alone restores feasibility, so whenever two things are wrong at once nothing is named. Measured on main: two independent contradictory pairs, no rule ids; a seat shortage plus a contradictory pair, capacity advice only; three guests locked to a one-seat table, blamed on 'the enabled hard rules'. The criteria are properties (what is named is enough, and each named cause is part of some conflict), not expected lists. Unlock recommendations gain guest_id and table_id. Event-day diagnosis stays bean-025's. Budget 550."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-029 added: a reserved seat is a yes or a no, and every distance measure a rule carries is a real one (repairs bean-002, bean-003)",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations",
+      "reopens_approval": false,
+      "rule": "A new bean; nothing already approved changes.",
+      "note": "Found by the retroactive review of 2026-09-28 (evidence/reviews/retroactive-20260928.md). Hidden tests were written from the criteria and verified both ways in the gate image against a reference fix that was never committed. Guest.eligible returned the stored reserved_seat itself, so reserved_seat='no' made a pending guest eligible and a planning solve seated them. A minimum-distance rule was accepted when either measure was valid, so distance_m='far apart' was stored beside a valid min_zones. The review proposed one bean; it was split into this construction-time half and bean-030, validation on use, because they need different write paths. Budget 400."
+    },
+    {
+      "date": "2026-09-29",
+      "change": "bean-030 added: a solve and a save check the event as it is, not as it was built (repairs bean-002, bean-003, bean-006, bean-011)",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations",
+      "reopens_approval": false,
+      "rule": "A new bean; nothing already approved changes.",
+      "note": "Found by the retroactive review of 2026-09-28 (evidence/reviews/retroactive-20260928.md). Hidden tests were written from the criteria and verified both ways in the gate image against a reference fix that was never committed. Every check ran only at construction, and the objects stay mutable. Measured on main: a weight changed to 10^6 was scored, a hard rule given a weight solved, a 501st or duplicate-id guest appended to the list solved, a lock left on a removed table raised a raw KeyError in the model builder, and the same event saved and then would not load. Rule checks were skipped when the event had no eligible guests or no tables. solve_event and save_event refuse with EventValidationError, a ValueError subclass; save refuses exactly what load could not load. Duplicate rule ids stay bean-027's. Depends on bean-029. Budget 600: several subtrees."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",

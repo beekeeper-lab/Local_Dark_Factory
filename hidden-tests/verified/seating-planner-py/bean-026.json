@@ -1,0 +1,12 @@
+{
+  "schema": "hidden-verify/1.0.0",
+  "suite": "seating-planner-py/bean-026",
+  "suite_sha256": "78c496e3f0f1fe7e1aa85cf915884add5e44de10eb87ef0b08c0c8ba8b529921",
+  "tests": 7,
+  "outcome": "ok",
+  "checked_against": "/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/c755eaa6-e46b-4d1c-aaf3-e4585a9a9dcb/scratchpad/bean-026/tree-fix",
+  "tree_sha": null,
+  "both_directions": true,
+  "verified_at": "2026-09-29T15:13:39Z",
+  "ran_in": "localhost/factory-gate-python:20260914"
+}

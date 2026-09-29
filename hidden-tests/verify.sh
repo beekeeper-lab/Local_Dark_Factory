@@ -84,8 +84,13 @@ fi
 # The names that are supposed to pass against nothing, declared next to the tests.
 DECLARED="$(sed 's/#.*//; s/[[:space:]]//g' "$DIR/absent-by-design.txt" 2>/dev/null | sed '/^$/d' | sort -u)"
 
-passes_in() { # passes_in <tree> -> the test names that PASSED, one per line
-  local t="$1" log; log="$(mktemp)"
+passes_in() { # passes_in <tree> [all] -> the test names that PASSED, one per line
+  # A parametrized test is one name here and several cases in pytest's output.
+  # By default a name counts as passing when ANY case passed, which is the strict
+  # reading for the empty tree. With `all`, it counts only when no case of it
+  # failed or errored, which is the strict reading for the real tree: 41 cases
+  # with one broken still blocks the bean, and used to be reported as passing.
+  local t="$1" mode="${2:-any}" log; log="$(mktemp)"
   if [ -n "$IMAGE" ]; then
     podman run --rm --network=none -v "$t:/work:ro,Z" -v "$DIR:/hidden:ro,Z" -w /work \
       -e HIDDEN_TREE=/work -e PYTHONPATH=/work/src -e PYTHONDONTWRITEBYTECODE=1 \
@@ -93,9 +98,18 @@ passes_in() { # passes_in <tree> -> the test names that PASSED, one per line
   else
     ( cd "$t" && HIDDEN_TREE="$t" PYTHONPATH="$t/src" pytest -q -p no:cacheprovider -rA "$DIR" ) > "$log" 2>&1
   fi
-  { grep -oE '^PASSED[[:space:]]+[^[:space:]]+::test_[A-Za-z0-9_]+' "$log" | sed 's/.*:://'
+  local passed failed
+  passed="$({ grep -oE '^PASSED[[:space:]]+[^[:space:]]+::test_[A-Za-z0-9_]+' "$log" | sed 's/.*:://'
     grep -oE '::test_[A-Za-z0-9_]+[[:space:]]+PASSED' "$log" | sed 's/^:://; s/[[:space:]]*PASSED$//'
-  } | sort -u
+  } | sort -u)"
+  if [ "$mode" = all ]; then
+    failed="$({ grep -oE '^(FAILED|ERROR)[[:space:]]+[^[:space:]]+::test_[A-Za-z0-9_]+' "$log" | sed 's/.*:://'
+      grep -oE '::test_[A-Za-z0-9_]+(\[[^]]*\])?[[:space:]]+(FAILED|ERROR)' "$log" | sed 's/^:://; s/[[:space:][].*//'
+    } | sort -u)"
+    comm -23 <(printf '%s\n' "$passed") <(printf '%s\n' "$failed") | sed '/^$/d'
+  else
+    printf '%s\n' "$passed" | sed '/^$/d'
+  fi
   rm -f "$log"
 }
 all_tests() { grep -hoE '^[[:space:]]*def (test_[A-Za-z0-9_]+)' "$DIR"/*.py | sed 's/.*def //' | sort -u; }
@@ -107,7 +121,7 @@ EMPTY_TREE="$(mktemp -d)"; mkdir -p "$EMPTY_TREE/src"
 PASS_EMPTY="$(passes_in "$EMPTY_TREE")"
 rm -rf "$EMPTY_TREE"
 PASS_REAL=""
-[ "$HALF" -eq 0 ] && PASS_REAL="$(passes_in "$TREE")"
+[ "$HALF" -eq 0 ] && PASS_REAL="$(passes_in "$TREE" all)"
 
 rc=0
 # 1. Against the real tree: everything passes.

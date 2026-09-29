@@ -1,0 +1,2 @@
+# Nothing here passes against an empty tree: every test imports the solver and
+# solves an infeasible event, and an empty tree has no solver to import.

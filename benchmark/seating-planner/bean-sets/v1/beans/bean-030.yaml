@@ -1,0 +1,99 @@
+schema_version: bean/2.0.0
+id: bean-030
+repo: beekeeper-lab/seating-planner-py
+title: A solve and a save check the event as it is, not as it was built
+intent: >
+  solve_event and save_event validate the whole event when they are called and refuse an
+  invalid one with an EventValidationError naming what is wrong, so a change made after
+  construction is never scored, never raises a raw KeyError, and never saves what will not
+  load again.
+status: approved
+approval:
+  approved_by: "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29 to act on its recommendations"
+  approved_at: "2026-09-29T15:30:00Z"
+  order: 30
+source:
+  kind: manual
+  ref: evidence/reviews/retroactive-20260928.md
+  date: "2026-09-29"
+  excerpt: "bean-006 intent: Eligible guests are assigned to tables such that no hard constraint and no table capacity is violated, or the problem is reported infeasible."
+context:
+  read_paths:
+    - src/seating_planner/domain/
+    - src/seating_planner/rules/
+    - src/seating_planner/solver/
+    - src/seating_planner/store/
+    - tests/solver/
+    - tests/store/
+  background: >
+    Defects found by the retroactive review of bean-002, bean-003, bean-006 and
+    bean-011: every check runs when an object is built, and the objects stay mutable,
+    so nothing checks the event a solve or a save is actually handed. The second half
+    of the review's bean-029 finding; the construction checks themselves are bean-029.
+
+    Measured on the main branch, each on an event built valid and then changed: a soft
+    weight set to 10^6 is scored as 1000000; a hard rule given a weight solves; a
+    group's members changed to a guest the event lacks solves; a 501st guest appended
+    to the list, or a second guest with an existing id, solves. A lock left pointing
+    at a table removed from event.tables raises a raw KeyError inside the model
+    builder, and the same event saves without complaint and then fails in
+    load_event, so it cannot be opened again.
+
+    Separately, solve_event returns before it looks at any rule when the event has no
+    eligible guests or no tables: an enabled hard rule naming an unknown guest, or of
+    a kind the solver refuses, is refused in an event with guests and tables and is
+    answered feasible or infeasible in one without them.
+
+    Two levels of check. What a constructor enforces (table, guest, rule, the event's
+    limits, unique table, guest and group ids, locks naming a guest and a table the
+    event has) must hold for a save and for a solve: whatever save_event accepts,
+    load_event can load. What only a solve reads (every group member is a guest of the
+    event, every enabled rule's guests and groups exist, every enabled hard rule is of
+    a kind the solver expresses) must hold for a solve, however many guests and tables
+    there are. A rule naming a group not yet added still saves, as a template event
+    does before its groups exist.
+
+    Duplicate rule ids are bean-027's and are not repeated here.
+allowed_write_paths:
+  - src/seating_planner/domain/**
+  - src/seating_planner/rules/**
+  - src/seating_planner/solver/**
+  - src/seating_planner/store/**
+  - src/seating_planner/validation.py
+  - tests/domain/**
+  - tests/rules/**
+  - tests/solver/**
+  - tests/store/**
+acceptance_criteria:
+  - id: ac1
+    text: In every mode, solve_event refuses an event changed after construction so that it breaks a rule its constructors enforce (a soft weight outside 1..100, a hard rule with a weight, an invalid distance measure, more than 500 guests, a duplicate guest id, a reserved_seat that is not a bool) with EventValidationError, whose message names the offending rule or guest id or the limit, before any solve runs.
+    verify: { kind: test, test_id: "tests/solver/test_validate_on_use.py::test_mutated_event_is_refused" }
+  - id: ac2
+    text: In every mode, solve_event refuses a lock naming a table or a guest the event no longer has, and a group naming a guest the event does not have, with EventValidationError naming that table or guest id, never a KeyError.
+    verify: { kind: test, test_id: "tests/solver/test_validate_on_use.py::test_dangling_reference_is_refused" }
+  - id: ac3
+    text: An event with no eligible guests, no guests or no tables is refused with EventValidationError naming the rule when an enabled rule names an unknown guest or group, or when an enabled hard rule is of a kind solve_event refuses in an event with guests and tables; a valid such event is still answered as before.
+    verify: { kind: test, test_id: "tests/solver/test_validate_on_use.py::test_rules_checked_with_nothing_to_seat" }
+  - id: ac4
+    text: save_event refuses an event that load_event could not load with EventValidationError naming what is wrong, and leaves the previously saved event exactly as it was; an event load_event can load, including one whose rule names a group it does not have yet, still saves and loads back.
+    verify: { kind: test, test_id: "tests/store/test_save_validation.py::test_save_refuses_what_cannot_load" }
+  - id: ac5
+    text: Every existing test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q"] }
+constraints:
+  - EventValidationError is a subclass of ValueError, importable from seating_planner.domain, so every existing ValueError check still holds
+  - the domain module imports nothing from the rules or solver packages; Event.rules stays a list of objects
+  - the solve_event and save_event signatures and the result shape are unchanged
+  - a valid event solves and saves exactly as before
+suggested_risk_tier: 2
+size_budget: { max_tasks: 5, max_files: 8, max_diff_lines: 600 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no duplicate rule id checks (bean-027)
+  - no freezing of the domain objects; they stay mutable, and the check is on use
+  - no change to the pre-flight check or the infeasibility diagnosis (bean-028)
+  - no change to the default template (bean-026)
+dependencies: [bean-011, bean-029]

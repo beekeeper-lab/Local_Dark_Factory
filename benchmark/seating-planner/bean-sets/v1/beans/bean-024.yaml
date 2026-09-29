@@ -46,6 +46,7 @@ acceptance_criteria:
 constraints:
   - the default stays one worker
   - the solve_event signature is unchanged
+  - the solves that diagnose an infeasible event may stay at one worker, because an infeasible core is only reliable with one; the result still records the request
 suggested_risk_tier: 2
 size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }
 definition_of_done:
