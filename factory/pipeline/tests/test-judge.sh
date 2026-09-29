@@ -88,6 +88,10 @@ class H(http.server.BaseHTTPRequestHandler):
         # unassertable while this was a discarded read.
         raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         open(REQ, "wb").write(raw)
+        # Every request as well, numbered, for the paths that ask twice and
+        # where what changed between the two asks is the thing under test.
+        n = len([f for f in os.listdir(os.path.dirname(REPLY)) if f.startswith("request-")])
+        open(os.path.join(os.path.dirname(REPLY), f"request-{n+1:03d}.json"), "wb").write(raw)
         # A second reply file, consumed once, for the paths where judge.sh asks
         # twice. Without it the retry gets the same answer and a test can only
         # assert that asking twice fails twice — never that the second answer is
@@ -355,14 +359,26 @@ printf '\n-- asked once more, because nothing was judged the first time --\n\n'
 clean_verdicts
 reply "$(jq -nc --arg c "$GOOD_JUDGEMENT" '{model:"test-judge:latest", done:true, done_reason:"stop", message:{role:"assistant", content:$c}}')"
 printf '%s' "$TOOLCALL" > "$WORK/reply-2.json"   # the FIRST answer; reply.json is the second
+rm -f "$WORK"/request-*.json
 out="$(judge)"; rc=$?
+FIRST_REQ="$(ls "$WORK"/request-*.json | head -1)"
 rc_is "the second answer is used"      "$rc" 0
-check "and it says it asked again"     "sending the" "$out"
-# What the second chance is, not just that there was one. The body is re-sent
-# byte-identical at temperature 0 and the model is never told its call was
-# refused, so "asking once more" read like a correction when it is a repeat.
-check "and that the request is unchanged" "same request again unchanged" "$out"
-check "and that the model is not told why" "it is not told the call was refused" "$out"
+check "and it says it asked again"     "asking again" "$out"
+# What the second chance is, not just that there was one. Until 2026-09-29 the
+# body was re-sent byte-identical; now the model's call is answered, the way any
+# tool-use conversation continues, and the retry carries that exchange.
+check "and that its call is answered"  "with its call answered" "$out"
+RETRY_REQ="$(cat "$WORK/last-request.json")"
+eq   "the retry carries the model's own tool calls" "2" \
+     "$(jq '[.messages[] | select(.role=="assistant") | .tool_calls[]] | length' <<<"$RETRY_REQ")"
+eq   "and one tool result per call"   "repo_browser.open_file,repo_browser.search" \
+     "$(jq -r '[.messages[] | select(.role=="tool") | .tool_name] | join(",")' <<<"$RETRY_REQ")"
+check "saying the tool does not exist" "this tool does not exist" \
+     "$(jq -r '[.messages[] | select(.role=="tool") | .content][0]' <<<"$RETRY_REQ")"
+eq   "after every original message"   "$(jq '.messages | length + 3' "$FIRST_REQ")" \
+     "$(jq '.messages | length' <<<"$RETRY_REQ")"
+eq   "and the record says the call was answered" "true" \
+     "$(jq -r '.retry.calls_answered' "$R"/verdicts/spec.request.json 2>/dev/null)"
 check "naming what it asked for"       "repo_browser.open_file" "$out"
 want  "and the judgement is on disk"   "a judgement file should exist" \
       test -n "$(ls -1 "$R"/verdicts/spec*.judgement.json 2>/dev/null)"
