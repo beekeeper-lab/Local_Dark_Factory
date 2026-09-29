@@ -1,0 +1,24 @@
+{
+  "schema": "phase1-audit/1.0.0",
+  "measured_at": "2026-09-29T21:49:06Z",
+  "run": "bean-021-20260929T165628Z",
+  "phase_1_exit": {
+    "seven_stages_completed": "pass",
+    "run_record_conforms": "pass",
+    "three_verdicts_schema_valid": "amended_advisory",
+    "every_handoff_is_commit": "pass",
+    "docs_rendered_and_read": "pass",
+    "allowed_path_enforced_task_and_bean": "pass",
+    "task_retry_with_evidence": "pass_cited",
+    "independent_invariant_ran": "mechanism_proven"
+  },
+  "findings": [],
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.7-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-09-29T21:49:06Z",
+    "pipeline_version": "1.4.0-df.1"
+  },
+  "green": true
+}

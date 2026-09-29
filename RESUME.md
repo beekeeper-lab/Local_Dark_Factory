@@ -1,6 +1,6 @@
 # Resume here — Phase 1
 
-> **The plan is in `plans/`** (one per phase; Phase 1 active). This file is a session log, not the plan.
+> **The plan is in `plans/`** (one per phase; Phase 1 complete 2026-09-29, Phase 2 active). This file is a session log, not the plan.
 
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.

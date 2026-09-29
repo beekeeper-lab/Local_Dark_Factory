@@ -462,7 +462,9 @@ phase_1_exit: { seven_stages_completed: pass, three_verdicts_schema_valid: pass,
                 docs_rendered_and_read: pass, allowed_path_enforced_task_and_bean: pass,
                 task_retry_with_evidence: pass, independent_invariant_ran: pass }
 ```
-- [ ] Exit verified   - [ ] Audit generated   - [ ] Findings corrected   - [ ] Audit re-run green   - [ ] `PHASE-1-COMPLETE` committed
+- [x] Exit verified   - [x] Audit generated   - [x] Findings corrected (none)   - [x] Audit re-run green   - [x] `PHASE-1-COMPLETE` committed
+
+**Phase 1 is closed, 2026-09-29.** `audits/PHASE-1-AUDIT-20260929.md` has two recorded amendments: the local judge is advisory in v1, and the retry evidence is cited from bean-006. The plan is `plans/phase-1.md`.
 
 ---
 
