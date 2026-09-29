@@ -31,17 +31,22 @@ Every stage works except the judge.
       it checked, even though every one had passed its gate. **Conclusion:** the developer
       model and the line hold up. The judge is the weak part, and a passing gate is not a
       quality signal on its own.
-- [ ] **2. Fix the judge's tool-call failure. This is a bounded attempt.** 15 of 32 failed
+- [x] **2. Fix the judge's tool-call failure. This is a bounded attempt.** 15 of 32 failed
       qualification runs were the judge calling a `repo_browser` tool that does not exist.
       Change `judge.sh` to answer any tool call with "no tools; judge from the artifacts
       given", and say the same in the system prompt. Then re-run `bench/judge-qualify.sh`.
       *Limit: one change, one qualification run (about 2 h).*
-- [ ] **3. Produce three stamped verdicts on one real run.** Re-audit the spec, impl and
+      **Result, 2026-09-29: missed.** The change went in (PR #28), and the retry now answers the
+      call. Qualification was stopped at 18 of 36 runs because the outcome could no longer
+      change: **0 stamped**, 11 of 18 still ended on tool calls (15 of 36 before the change),
+      and 1 false accept. Log: `evidence/judge-qualify-tool-answer-partial-20260929.log`.
+- [~] **3. Produce three stamped verdicts on one real run.** *Skipped: task 2 missed its limit, so the fallback applies.* Re-audit the spec, impl and
       package stages of a completed run (bean-014), using copies of the run directory, with
       audits non-advisory.
       *Limit: 3 passes. Stamped means the controller accepted it. Whether it is right is
       Phase 5's question.*
-- [ ] **3-fallback, if 2 or 3 misses its limit.** Stop working on the judge in Phase 1.
+- [x] **3-fallback, if 2 or 3 misses its limit.** *Applied 2026-09-29.* `phase1-audit.sh` reports
+      `amended_advisory` only while the contract suite passes and the stamped verdict validates. Stop working on the judge in Phase 1.
       Amend the predicate so the verdict contract is proven by `factory/pipeline/tests/test-audit-check.sh`
       plus the one real stamped verdict in
       `evidence/first-stamped-verdict-20260916.json`. Record in the design document that in
