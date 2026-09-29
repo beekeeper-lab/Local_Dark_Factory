@@ -73,6 +73,54 @@ def test_broken():
 out="$(rt tests/test_mixed.py)"; rc=$?
 rc_is "one right and one wrong is still broken" "$rc" 1
 
+printf '\n== an assertion that reads nothing from the project ==\n\n'
+t test_blind_guard.py 'import itertools
+
+def test_it():
+    # bean-021 run 2: the scenario forces every enumerated chart to one score,
+    # so this guard fails on every implementation, the fixed one included.
+    def score(pick):
+        return 60 if pick[0] != pick[1] else 50
+    scores = [score(p) for p in itertools.product("ab", repeat=2) if p[0] != p[1]]
+    assert len(set(scores)) >= 2
+    assert buggy_sum(2, 2) == 4'
+out="$(rt tests/test_blind_guard.py)"; rc=$?
+rc_is "a guard over the test's own enumeration" "$rc" 1
+check "is called broken"                         "reads nothing from the project" "$out"
+check "and quotes it"                            "assert len(set(scores)) >= 2" "$out"
+t test_uses_result.py 'def test_it():
+    got = buggy_sum(2, 2)
+    def double(x):
+        return x * 2
+    assert double(got) == 8'
+out="$(rt tests/test_uses_result.py)"; rc=$?
+rc_is "a nested helper over the project's result" "$rc" 0
+t test_callback.py 'def test_it():
+    seen = []
+    def record(v):
+        seen.append(v)
+    record(buggy_sum(2, 2))
+    assert seen == [4]'
+out="$(rt tests/test_callback.py)"; rc=$?
+rc_is "a list a callback fills"                  "$rc" 0
+t test_raises.py 'import pytest
+
+def test_it():
+    with pytest.raises(TypeError) as exc:
+        buggy_sum(None, None)
+    assert "operand" not in str(exc.value)'
+out="$(rt tests/test_raises.py)"; rc=$?
+rc_is "what pytest.raises caught, as exc"        "$rc" 0
+t test_flag.py 'def test_it():
+    try:
+        buggy_sum(1, 1) == 2 or (_ for _ in ()).throw(ValueError())
+        raised = False
+    except ValueError:
+        raised = True
+    assert not raised'
+out="$(rt tests/test_flag.py)"; rc=$?
+rc_is "a flag set in an except handler"          "$rc" 0
+
 printf '\n== not red at all ==\n\n'
 t test_green.py 'def test_it():
     assert buggy_sum(2, 0) == 2'

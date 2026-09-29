@@ -171,6 +171,12 @@ What the controller checks, so you may as well get it right:
   inside `--fixes`. Name in `--fixes` the paths the LATER task will change —
   the bean's source paths, not the test file. spec-check refuses a `! pytest`
   verify.
+  It also refuses a failing assertion that reads nothing from the project. A
+  guard over the test's own scenario, such as "the charts I enumerate span at
+  least two scores", fails on every implementation when the scenario is wrong,
+  and the fixing task cannot repair it. That happened in bean-021's second run:
+  2-seat tables and a hard keep-apart on the other pair left one score. Work the
+  scenario's arithmetic out before writing the test.
 - **`depends_on` is real.** Tasks run in dependency order; a task that silently
   needs an earlier one's output but does not say so will run first and fail.
 - **Stay inside `size_budget`.** Over `max_tasks` and the bean goes back to a
