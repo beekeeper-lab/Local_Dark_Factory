@@ -3,6 +3,49 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-09-29: bean-021 halted again on a blind red test; repair beans 026–030 approved and written; the judge qualification ran
+
+**Standing authorisation (owner, 2026-09-29).** Claude commits, pushes and merges to
+`main` on its own judgement and keeps the line moving. It asks only when it is truly
+blocked, and every question carries a recommendation. A demonstrated defect in a
+pre-merge review still goes to the owner.
+
+- **bean-021 run 2 (`bean-021-20260928T233744Z`) halted in build.** task-2 was blocked
+  after 3 attempts. task-1's red test guarded its own scenario with
+  `assert len(set(scores)) >= 2`. With 2-seat tables and a hard keep-apart on g-2/g-3,
+  every valid chart scores 60, so the guard fails on every solver, including the fixed
+  one. It was a plain assert, so `red-test.py` accepted it. **Fixed in factory PR #22.**
+  A failing assert is now traced back through the test, and one that reads nothing from
+  the project is BROKEN. Across 13,308 asserts in every local suite it flags only this
+  guard and 10 literal tautologies. The same PR fixes a `FRAME` regex that crossed
+  newlines. Scaffolded to seating-planner `main` as `8d3a913`. Run 2's branch is
+  `backup/bean-021-run-20260928T233744Z`, and its attempt-3 leftover diff is in the run
+  directory.
+- **Repair beans 026–030 (factory PR #23, seating-planner `95c5137`).** The owner chose
+  *disabled* for 026. The review's 029 was split into 029 (construction checks) and
+  030 (validate on use). Every bean has hidden tests verified both ways in the gate
+  image. bean-024 gained a constraint: diagnosis solves may stay at one worker, which
+  bean-028's infeasible core needs.
+- **`hidden-tests/verify.sh`:** a parametrized test counted as passing on the real tree
+  when any one of its cases passed. It now needs every case.
+- **Judge qualification, first real run** (`bench/results/judge-qualify-20260929T144810Z.json`,
+  gpt-oss:120b at `low`, 12 cases × 3 passes, 10:48–12:56 EDT). It told apart **0 of 9
+  pairs**. 4 of 36 runs answered and none was stamped; there was 1 false accept and 1 false
+  alarm. The judge as configured cannot audit a real bean. 32 runs wrote nothing usable:
+  - 15 asked for tools that do not exist (`repo_browser`, gpt-oss's trained browsing
+    tool). judge.sh resends the same request unchanged.
+  - 6 filled the 32k context window.
+  - 5 hit the 16k token cap.
+  - 5 ended after a few hundred characters of reasoning.
+  - 1 answered JSON that was not a judgement.
+
+  **The next lever is the tool calls**, not accuracy: answer the call with "no tools; judge
+  from the artifacts", or say so in the system prompt, then re-qualify. Audits stay advisory,
+  and the pre-merge Claude review is the gate that works.
+- **Run order:** 021 (restart from spec), then 022–025, then 026–030, then 015–020.
+  Each is reviewed before it merges. `factory go` would take 015 first, so run the
+  beans one by one with `factory run <bean>`.
+
 ## 2026-09-28 (late): red tests must be red for the right reason; seven more merged beans reviewed
 
 - **bean-021 run 1 halted in build.** task-1's red test built a soft weight of 120
