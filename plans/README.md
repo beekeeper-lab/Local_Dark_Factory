@@ -7,8 +7,8 @@ are") links here and is updated when a plan completes, and at no other time.
 | Phase | Plan | Status |
 | --- | --- | --- |
 | 0 — Measure on Forge | closed 2026-09-14 (`phase-0-complete`, `audits/PHASE-0-AUDIT-20260914.md`) | **complete** |
-| 1 — One bean through every stage | [phase-1.md](phase-1.md) | **active** |
-| 2 — Controller drives it; developer cannot commit | [phase-2.md](phase-2.md) | queued, nearly built |
+| 1 — One bean through every stage | [phase-1.md](phase-1.md) · closed 2026-09-29 (`audits/PHASE-1-AUDIT-20260929.md`) | **complete** |
+| 2 — Controller drives it; developer cannot commit | [phase-2.md](phase-2.md) | **active** |
 | 3 — Intake refinery | [phase-3.md](phase-3.md) | queued, not started |
 | 4 — Lights-out to PRs | [phase-4.md](phase-4.md) | queued, partly built |
 | 5 — Supervised operation | [phase-5.md](phase-5.md) | queued |

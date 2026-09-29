@@ -1,6 +1,6 @@
 # Phase 2 — The controller drives it; the developer cannot commit
 
-**Status:** queued behind Phase 1. Almost all of it is built.
+**Status:** active since 2026-09-29, when Phase 1 closed. Almost all of it is built.
 **Goal:** one bean runs unattended from lease to PR. Every fault in the list is injected
 and handled correctly, and a human merges.
 

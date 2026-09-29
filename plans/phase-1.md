@@ -1,6 +1,6 @@
 # Phase 1 — One bean, by hand, through every stage
 
-**Status:** active since 2026-09-29 (plan written that day; the phase itself opened 2026-09-14).
+**Status:** **complete 2026-09-29.** Tag `phase-1-complete`, audit `audits/PHASE-1-AUDIT-20260929.md`, 8 ok and 0 findings.
 **Goal:** one real bean goes from spec to PR through every stage, and each stage leaves
 evidence that the exit script can check.
 
@@ -52,14 +52,14 @@ Every stage works except the judge.
       `evidence/first-stamped-verdict-20260916.json`. Record in the design document that in
       v1 the local judge is advisory and the pre-merge Claude review is the working gate.
       This is the same move the owner made for invariants on 2026-09-15.
-- [ ] **4. The owner reads the two documents** for one run (`spec.html` and
+- [x] **4. The owner reads the two documents** for one run (`spec.html` and
       `impl-detail.html` of `bean-021-20260929T165628Z`) and records who read them and when in
       `documents-read-by.txt`. About 20 minutes. This is the one step that needs the owner.
 - [x] **5. Let the audit take evidence from more than one run.** Done 2026-09-29:
       `--cite-retry <run>` reports `pass_cited` and names the run. Retry evidence comes from
       bean-006, and the closing run is bean-014. Change `phase1-audit.sh` to accept a
       `--cite <run>` for a predicate and to name the cited run in its report.
-- [ ] **6. Closing ritual.** Compute the exit, generate the audit
+- [x] **6. Closing ritual.** Compute the exit, generate the audit
       (`audits/PHASE-1-AUDIT-<date>.md`), correct the findings, re-run green, then commit
       `PHASE-1-COMPLETE` with tag `phase-1-complete`. Update the design document and demo to
       the owner.
