@@ -9,7 +9,7 @@ are") links here and is updated when a plan completes, and at no other time.
 | 0 — Measure on Forge | closed 2026-09-14 (`phase-0-complete`, `audits/PHASE-0-AUDIT-20260914.md`) | **complete** |
 | 1 — One bean through every stage | [phase-1.md](phase-1.md) · closed 2026-09-29 (`audits/PHASE-1-AUDIT-20260929.md`) | **complete** |
 | 2 — Controller drives it; developer cannot commit | [phase-2.md](phase-2.md) · closed 2026-09-29 (`audits/PHASE-2-AUDIT-20260929.md`) | **complete** |
-| 3 — Intake refinery | [phase-3.md](phase-3.md) | **next**: waiting on a transcript and a decision from the owner |
+| 3 — Intake refinery | [phase-3.md](phase-3.md) | **active** since 2026-09-30 (target `tic-tac-toe-py`) |
 | 4 — Lights-out to PRs | [phase-4.md](phase-4.md) | queued, partly built |
 | 5 — Supervised operation | [phase-5.md](phase-5.md) | queued |
 | 6 — Merge modes and deploy-to-test | [phase-6.md](phase-6.md) | queued |
