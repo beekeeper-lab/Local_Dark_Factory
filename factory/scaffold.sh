@@ -138,7 +138,27 @@ copy() { # copy <src> <relative path>
 printf '\nscaffolding %s\n  from bean set: %s\n  pipeline tier: %s\n\n' "$TARGET" "$BEAN_SET" "$TIER"
 
 # -- control files --------------------------------------------------------------
-for f in repo.yaml risk-policy.yaml gates.lock.yaml; do
+#
+# The repository these beans are FOR, read from the beans rather than assumed.
+# repo.yaml named seating-planner-py for every target until the second target
+# existed (tic-tac-toe-py, Phase 3), so a scaffold into any other repo would
+# have told the line it was somewhere it was not.
+BEANS_DIR="$BEAN_SET/beans"
+[ -d "$BEANS_DIR" ] || BEANS_DIR="$BEAN_SET"
+SET_REPO=""
+for b in "$BEANS_DIR"/*.yaml "$BEANS_DIR"/*.yml; do
+  [ -e "$b" ] || continue
+  SET_REPO="$(jq -r '.repo // empty' <<<"$("$HERE/pipeline/yaml2json.sh" "$b")")"
+  [ -n "$SET_REPO" ] && break
+done
+[ -n "$SET_REPO" ] || { echo "no bean in $BEAN_SET names its repo" >&2; exit 1; }
+if [ "$DRY" = 1 ]; then say "would" "factory/repo.yaml (repo: $SET_REPO)"
+else
+  mkdir -p "$TARGET/factory"
+  sed "s#^repo: .*#repo: $SET_REPO#" "$SRC/repo.yaml" > "$TARGET/factory/repo.yaml"
+  say "write" "factory/repo.yaml (repo: $SET_REPO)"
+fi
+for f in risk-policy.yaml gates.lock.yaml; do
   copy "$SRC/$f" "factory/$f"
 done
 for f in "$SRC"/templates/*.html; do
@@ -190,7 +210,11 @@ fi
 # Invariants: acceptance fixtures from outside the developer's reach (§05). They
 # are tier 3 and absent from repo_allowed_paths, so the line can run them and
 # never edit them — which is the only reason their passing means anything.
-if [ -d "$SRC/invariants" ]; then
+#
+# Only where a bean points at them. They are one project's guarantees (seating),
+# and installed in a project that has no such module they would be a gate that
+# can only fail.
+if [ -d "$SRC/invariants" ] && grep -qs '^invariants_ref:' "$BEANS_DIR"/*.yaml "$BEANS_DIR"/*.yml; then
   for f in "$SRC"/invariants/*; do
     [ -e "$f" ] || continue
     copy "$f" "factory/invariants/$(basename "$f")"
@@ -198,8 +222,6 @@ if [ -d "$SRC/invariants" ]; then
 fi
 
 # -- beans: approved only -------------------------------------------------------
-BEANS_DIR="$BEAN_SET/beans"
-[ -d "$BEANS_DIR" ] || BEANS_DIR="$BEAN_SET"
 installed=0
 skipped=0
 INDEX_ROWS=""
