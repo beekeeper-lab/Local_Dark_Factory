@@ -1,14 +1,19 @@
 # Phase 3 — Intake refinery
 
-**Status:** queued. Only the queue (`factory go`) is built.
+**Status:** active since 2026-09-30. Entry met; the queue (`factory go`) was already built.
 **Goal:** a real meeting transcript becomes at least five approved beans, through a
 conversation with the owner, and those beans survive the size budget when they are specified.
 
 ## Entry (owner inputs needed)
 
 - **A real transcript** (Markdown) for a real target repo. *The owner supplies this.*
+  **Met 2026-09-30:** the owner's 1m 45s voice recording, transcribed by `transcribe-audio`
+  (OpenAI `gpt-4o-mini-transcribe`, 202 words), is at
+  `intake/tic-tac-toe-py/transcript-20260930.md`. The target is a new private repo,
+  `beekeeper-lab/tic-tac-toe-py` (skeleton only: package, smoke test, tooling).
 - **Who plays the AI side.** The owner decides. My recommendation: the developer model drafts
   and the judge reviews. The judge has not shown it can hold a long structured task on its own.
+  **Decided 2026-09-30:** the owner chose the recommendation. The developer drafts and the judge reviews.
 
 ## Tasks
 
