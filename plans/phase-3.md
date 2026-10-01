@@ -17,15 +17,15 @@ conversation with the owner, and those beans survive the size budget when they a
 
 ## Tasks
 
-- [ ] 1. `factory intake --repo <owner/name> --source <transcript.md>`: an interactive
+- [x] 1. `factory intake --repo <owner/name> --source <transcript.md>`: an interactive
       session over a read-only repo tree.
-- [ ] 2. Work-item extraction with source excerpts. Ambiguities come out as questions.
-- [ ] 3. Draft beans are schema-valid on save (`bean/2.0.0`, every AC has a `verify`,
+- [x] 2. Work-item extraction with source excerpts. Ambiguities come out as questions.
+- [x] 3. Draft beans are schema-valid on save (`bean/2.0.0`, every AC has a `verify`,
       `size_budget` set).
-- [ ] 4. Joint review: split, merge, reject, reorder and fix dependencies. `manual` ACs are
+- [x] 4. Joint review: split, merge, reject, reorder and fix dependencies. `manual` ACs are
       flagged.
-- [ ] 5. Approval stamps `status: approved` and an `approval` block.
-- [ ] 6. An intake branch and PR. The owner merges.
+- [x] 5. Approval stamps `status: approved` and an `approval` block.
+- [ ] 6. An intake branch and PR. The owner merges. *(PR open: beekeeper-lab/tic-tac-toe-py#1, waiting on the owner.)*
 - [x] 7. `factory go` refuses beans that are not approved (`factory/pipeline/queue.sh`,
       `tests/test-queue.sh`).
 - [ ] 8. Specify each approved bean and confirm every one holds its `size_budget`.
