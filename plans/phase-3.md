@@ -25,7 +25,7 @@ conversation with the owner, and those beans survive the size budget when they a
 - [x] 4. Joint review: split, merge, reject, reorder and fix dependencies. `manual` ACs are
       flagged.
 - [x] 5. Approval stamps `status: approved` and an `approval` block.
-- [ ] 6. An intake branch and PR. The owner merges. *(PR open: beekeeper-lab/tic-tac-toe-py#1, waiting on the owner.)*
+- [x] 6. An intake branch and PR. The owner merges. *(beekeeper-lab/tic-tac-toe-py#1, merged 2026-10-01 at the owner's request.)*
 - [x] 7. `factory go` refuses beans that are not approved (`factory/pipeline/queue.sh`,
       `tests/test-queue.sh`).
 - [ ] 8. Specify each approved bean and confirm every one holds its `size_budget`.
@@ -48,4 +48,14 @@ done during build-out only. It is in the parking lot, not in this plan.
 
 ## Amendments
 
-_None._
+- **2026-10-01, task 8: specify in dependency order, which means building.** Blocker: beans
+  002–005 depend on earlier beans and read files those beans create (bean-002 reads
+  `src/tictactoe/game.py` from bean-001), so the queue holds them, and a spec written against
+  a tree without those files would describe code that does not exist. Smallest change: each
+  bean runs the line to its PR (`factory go --bean <id> --stop-after pr`), gets the pre-merge
+  Claude review, and merges, and then the next bean is specified. The exit predicate is
+  unchanged: `bench/phase3-audit.sh` reads each bean's spec-check record.
+  `--stop-after pr` because the target's CI cannot pull the gate image yet (intake PR #1's
+  `gates` check: GHCR `manifest unknown`, most likely because the private package is not linked
+  to `tic-tac-toe-py`). The owner fixes that in Package settings → Manage Actions access. The
+  intake PR was merged at the owner's request with that check red. It changed only beans.
