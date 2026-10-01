@@ -1,0 +1,12 @@
+{
+  "bean_set": "v1",
+  "corpus": "tic-tac-toe-py",
+  "requirements_sha256": "67eaf7f08346048e805343332d86c2b6356acbe870182d71598c8dad51bd0d56",
+  "requirements_path": "intake/tic-tac-toe-py/20260930T141643Z/source.md",
+  "intake_session": "intake/tic-tac-toe-py/20260930T141643Z",
+  "drafted_by": "qwen3.8:27b-mtp-q8_0 (factory intake, developer role)",
+  "reviewed_by": "judge role, advisory; the owner in joint review",
+  "approved_by": "Gregg Reed",
+  "approved_at": "2026-10-01T09:37:31Z",
+  "rejected_at_intake": []
+}

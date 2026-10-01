@@ -43,6 +43,9 @@ factory — run the line against the repository you are standing in.
                             what the newest run did, stage by stage
   factory doctor            is this repository ready to be run against?
   factory beans             the approved beans, in run order
+  factory intake <cmd> ...  turn a transcript into approved beans for a repo:
+                            start, answer, draft, judge, review, approve, pr
+                            (factory intake --help for every command)
   factory read [<run-dir>]  confirm you have read the run's two documents, and
                             record who and when — the one exit predicate a script
                             cannot settle
@@ -1032,6 +1035,12 @@ The two documents this run produced:
         set -- --bean "$by" "$@" ;;
     esac
     exec bash "$PIPE/reaudit.sh" "$rd" "$@"
+    ;;
+
+  intake)
+    # Runs from anywhere: the target is named by --repo and the session
+    # directory lives in this repo (intake/<repo>/<session>/), not the target.
+    exec "$(factory_python)" "$PIPE/intake.py" "$@"
     ;;
 
   beans)

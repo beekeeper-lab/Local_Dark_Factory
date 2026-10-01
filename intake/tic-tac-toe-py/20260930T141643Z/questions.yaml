@@ -1,0 +1,47 @@
+questions:
+  - id: q-1
+    about: [wi-4]
+    question: What should happen when the board fills up with no one having three in a row (a draw)?
+    why: >
+      The transcript describes the win and loss messages but never mentions a
+      draw, and on a 3 by 3 board a game can end without a winner. The builder
+      would otherwise have to invent the result text, or leave the game
+      frozen.
+    recommendation: >
+      Show a draw result (for example "It's a draw.") and, like any other game
+      end, let the player start a new game.
+
+  - id: q-2
+    about: [wi-3]
+    question: How strong should the "strategic" system user be?
+    why: >
+      "Strategic" could mean anything from simple win-then-block play to
+      perfect minimax play. A perfectly playing O is unbeatable, so the human
+      could never win and the "you win, congratulations" message could never be
+      shown. That is a real design decision the transcript does not settle.
+    recommendation: >
+      Build a strategy that wins when it can, blocks the human's threats, and
+      otherwise prefers the center, then corners, then sides. The human can
+      still win if they play well, so both end messages stay reachable.
+
+  - id: q-3
+    about: [wi-1]
+    question: Which GUI toolkit should the app use?
+    why: >
+      The transcript says "a GUI" but names no toolkit. This decides the
+      dependency the first bean has to install and the shape of the front-end
+      code every later bean builds on.
+    recommendation: >
+      Tkinter. It ships with Python, so the app has no third-party dependency
+      and the repo's dependency list can stay empty.
+
+  - id: q-4
+    about: [wi-5, wi-6]
+    question: After a win or loss is shown, how does a player start another game?
+    why: >
+      The transcript says play continues "until it wins" and describes the end
+      messages, but says nothing about what happens after. The app needs some
+      way to clear the board, or it is single-use.
+    recommendation: >
+      After the result is shown, disable clicks on the grid and offer a
+      "New Game" control that clears the board; the human starts again as X.

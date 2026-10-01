@@ -1,0 +1,105 @@
+schema_version: bean/2.0.0
+id: bean-002
+repo: beekeeper-lab/tic-tac-toe-py
+title: 'Pure game core, part two: win and draw detection over the eight lines'
+intent: 'The GUI-free tictactoe.game module also detects a win for either player on any of the eight three-in-a-row
+  lines and a draw when the full board has no winner, proven by headless tests, so the strategy and the
+  session can both rely on one set of rules.
+
+  '
+status: approved
+source:
+  kind: transcript
+  ref: source.md
+  date: '2026-09-30'
+  excerpt: The goal of tic-tac-toe is, of course, to have three in a row, whether it be horizontally,
+    diagonal through the center, or vertical.
+context:
+  read_paths:
+  - src/tictactoe/game.py
+  - tests/test_board.py
+  background: 'bean-001 has landed: src/tictactoe/game.py holds the board model — nine cells each empty,
+    X or O, whose turn it is, and move application that refuses occupied and out-of-range cells — with
+    tests in tests/test_board.py. The transcript fixes the winning rule: "three in a row, whether it be
+    horizontally, diagonal through the center, or vertical", which on a 3 by 3 board is exactly the eight
+    lines of three rows, three columns and two diagonals. This bean extends the same tictactoe.game module
+    (it does not create a new one) with the winning lines, a query reporting which player currently wins,
+    a query returning the specific winning line, and a draw query that is true only when the board is
+    full and no one has won. It may read and add to tictactoe.game and its tests, but it must not change
+    the behaviour bean-001 pinned: fresh board, turn order, and legal-move rejection stay as their tests
+    describe. New criteria are proven by headless pytest tests in tests/test_winner.py. The module still
+    imports no GUI toolkit: tests run in a container with no display and no Tk library, where `import
+    tkinter` fails.
+
+    '
+allowed_write_paths:
+- src/tictactoe/game.py
+- tests/test_winner.py
+acceptance_criteria:
+- id: ac1
+  text: Any of the three horizontal rows filled with one mark is detected as a win for that player.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_each_horizontal_row_wins
+- id: ac2
+  text: Any of the three vertical columns filled with one mark is detected as a win for that player.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_each_vertical_column_wins
+- id: ac3
+  text: Both diagonals through the center filled with one mark are detected as wins for that player.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_each_diagonal_wins
+- id: ac4
+  text: A board with partial lines whose marks do not line up three in a row reports no winner.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_no_winner_without_a_complete_line
+- id: ac5
+  text: A full board with no winning line is a draw; a non-full board with no winner is never reported
+    as a draw.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_draw_requires_full_board_without_winner
+- id: ac6
+  text: The winner query and the winning-line query stay in sync, naming a winner exactly when some line
+    is full of one mark, and naming the correct line.
+  verify:
+    kind: test
+    test_id: tests/test_winner.py::test_winner_and_winning_line_agree
+constraints:
+- Python 3.11 or later, mypy strict clean
+- text: no GUI toolkit in the game core
+  forbidden_imports:
+  - tkinter
+- text: no move selection or game-flow logic in this bean; the strategy is bean-003 and the session is
+    bean-004
+  forbidden_imports:
+  - tictactoe.strategy
+  - tictactoe.session
+- text: does not change board, turn or legal-move behaviour pinned by bean-001's tests
+non_goals:
+- text: no GUI or entry point
+  forbidden_paths:
+  - src/tictactoe/app.py
+  - src/tictactoe/__main__.py
+  - src/tictactoe/__init__.py
+- text: no strategy module
+  forbidden_paths:
+  - src/tictactoe/strategy.py
+suggested_risk_tier: 1
+size_budget:
+  max_tasks: 4
+  max_files: 2
+  max_diff_lines: 200
+definition_of_done:
+- all AC verify pass
+- gates green
+- spec and impl-detail docs accepted
+dependencies:
+- bean-001
+approval:
+  approved_by: Gregg Reed
+  approved_at: '2026-10-01T09:37:31Z'
+  order: 2

@@ -1,0 +1,31 @@
+{
+  "order": [],
+  "rejected": {},
+  "log": [
+    {
+      "at": "2026-10-01T02:20:38Z",
+      "op": "revise",
+      "split": [
+        "bean-001",
+        "bean-003"
+      ],
+      "merge": null,
+      "fix": [
+        "bean-002"
+      ],
+      "note": "bean-002: O takes its own winning move first and blocks only when it cannot win (win, then block, then center, corners, sides, as answered in q-2). ac2 must not say O blocks when it could win. bean-001: split into (a) the board and legal moves - a fresh board, applying a move, refusing occupied or out-of-range cells, whose turn it is if you model it - and (b) win and draw detection over the eight lines. bean-003: split into (a) a headless game-session module with no GUI import that owns the flow - the human's X, O's reply via the strategy, ignoring moves after the game ends, the exact result message for a win, a loss and a draw, and New Game resetting with X to move - all verified by tests, and (b) a thin Tkinter window over that session, whose only manual criteria are what a person must see in the window. Expected result: five beans in run order: board and moves, win and draw, strategy, game session, Tkinter window."
+    },
+    {
+      "at": "2026-10-01T09:37:31Z",
+      "op": "approve",
+      "by": "Gregg Reed",
+      "beans": [
+        "bean-001",
+        "bean-002",
+        "bean-003",
+        "bean-004",
+        "bean-005"
+      ]
+    }
+  ]
+}
