@@ -1,0 +1,111 @@
+schema_version: bean/2.0.0
+id: bean-003
+repo: beekeeper-lab/tic-tac-toe-py
+title: Strategic system-user move selection for O
+intent: 'A headless tictactoe.strategy.choose_move picks O''s move by the fixed order win, then block,
+  then center, then corners, then sides — never random, but still beatable, so the human can win.
+
+  '
+status: approved
+source:
+  kind: transcript
+  ref: source.md
+  date: '2026-09-30'
+  excerpt: The OS user wouldn't choose a random location, but would try to choose a strategic location
+    to win the game.
+context:
+  read_paths:
+  - src/tictactoe/game.py
+  - tests/test_board.py
+  - tests/test_winner.py
+  background: 'bean-001 and bean-002 have landed: src/tictactoe/game.py holds the entire rule set — the
+    board, legal moves, and detection of every one of the eight winning lines and of a draw — with headless
+    tests. The transcript makes the system user deliberately non-random: it should "try to choose a strategic
+    location to win the game". A design question (q-2) was answered by the person: the strategy tries,
+    in this strict order, (1) take O''s own immediate winning move, (2) otherwise block the human''s immediate
+    winning move, and (3) otherwise prefer the center, then a corner, then a side. Taking O''s own winning
+    move comes first without exception: even when O could win, it never plays a block instead. That is
+    NOT perfect minimax — deliberately, because a perfect O could never lose and the "you win, congratulations"
+    message would be unreachable, whereas this order the human can still beat. Ties inside a tier must
+    break deterministically (lowest cell index) so every choice is testable without randomness. This bean
+    adds src/tictactoe/strategy.py with one public function, `choose_move(board, symbol) -> int` built
+    on the tictactoe.game rule set (try each open cell and ask the game rules whether it wins or blocks),
+    plus tests/test_strategy.py. It imports no GUI toolkit: the gate container has no display and no Tk
+    library, where `import tkinter` fails.
+
+    '
+allowed_write_paths:
+- src/tictactoe/strategy.py
+- tests/test_strategy.py
+acceptance_criteria:
+- id: ac1
+  text: When O has an open cell that completes three in a row, choose_move plays exactly that cell, even
+    when a block would also be available.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_takes_own_winning_move_first
+- id: ac2
+  text: When O has no winning move of its own and the human has an open cell that would complete three
+    in a row, choose_move plays that cell.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_blocks_when_it_cannot_win
+- id: ac3
+  text: With no immediate win or block available and the center empty, choose_move returns the center
+    cell.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_prefers_center_when_available
+- id: ac4
+  text: With no immediate win or block and the center taken, an open corner is chosen over an open side,
+    and the whole choice is deterministic (no randomness) across repeated calls.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_prefers_corners_over_sides_deterministically
+- id: ac5
+  text: choose_move always returns an in-range, currently-empty cell for every reachable non-terminal
+    position in a game.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_move_is_always_legal
+- id: ac6
+  text: A scripted, well-played X can defeat this strategy in a full game, so the human win remains reachable.
+  verify:
+    kind: test
+    test_id: tests/test_strategy.py::test_a_human_x_can_still_win
+constraints:
+- Python 3.11 or later, mypy strict clean
+- text: no randomness in move selection; ties between cells of equal priority break to the lowest cell
+    index
+- text: strategy priority is exactly win first, then block, then center, corners, sides
+- text: no GUI toolkit in the strategy module
+  forbidden_imports:
+  - tkinter
+- text: no changes to the game core; bean-001 and bean-002 own tictactoe.game
+  forbidden_paths:
+  - src/tictactoe/game.py
+non_goals:
+- text: no GUI or entry point
+  forbidden_paths:
+  - src/tictactoe/app.py
+  - src/tictactoe/__main__.py
+  - src/tictactoe/__init__.py
+- text: no game session or flow logic in this bean; that is bean-004
+  forbidden_paths:
+  - src/tictactoe/session.py
+suggested_risk_tier: 1
+size_budget:
+  max_tasks: 4
+  max_files: 2
+  max_diff_lines: 250
+definition_of_done:
+- all AC verify pass
+- gates green
+- spec and impl-detail docs accepted
+dependencies:
+- bean-001
+- bean-002
+approval:
+  approved_by: Gregg Reed
+  approved_at: '2026-10-01T09:37:31Z'
+  order: 3

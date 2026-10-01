@@ -1,0 +1,45 @@
+{
+  "model": "gpt-oss:120b",
+  "at": "2026-09-30T20:09:30Z",
+  "advisory": true,
+  "done_reason": "stop",
+  "eval_count": 269,
+  "review": {
+    "beans": [
+      {
+        "id": "bean-001",
+        "findings": [
+          {
+            "severity": "blocker",
+            "text": "The bean defines five acceptance criteria (tasks) while the size_budget limits `max_tasks` to **4**. This exceeds the allowed task count."
+          }
+        ]
+      },
+      {
+        "id": "bean-002",
+        "findings": [
+          {
+            "severity": "blocker",
+            "text": "The bean defines six acceptance criteria (tasks) but its size_budget caps `max_tasks` at **4**, so it exceeds the allowed number of tasks."
+          },
+          {
+            "severity": "concern",
+            "text": "Acceptance criterion `ac5` does not include a `verify` field, making it impossible to automatically verify that this AC is satisfied as required by the definition of done."
+          }
+        ]
+      },
+      {
+        "id": "bean-003",
+        "findings": [
+          {
+            "severity": "blocker",
+            "text": "The bean defines five acceptance criteria (tasks) whereas the size_budget permits only **4** tasks, violating the task\u2011count limit."
+          }
+        ]
+      }
+    ],
+    "missing": []
+  },
+  "usable": true,
+  "seconds": 187
+}

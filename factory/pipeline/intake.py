@@ -681,7 +681,16 @@ def cmd_judge(a) -> None:
 
 
 def beans(s: Session) -> dict[str, dict]:
-    return {p.stem: load_yaml(p) for p in s.draft_files()}
+    """Drafts that parse. One that does not is reported by check_drafts, and must
+    not take the review table down with it."""
+    out = {}
+    for p in s.draft_files():
+        try:
+            b = load_yaml(p)
+        except yaml.YAMLError:
+            b = None
+        out[p.stem] = b if isinstance(b, dict) else {"title": "(does not parse; see check)"}
+    return out
 
 
 def run_order(s: Session) -> list[str]:
@@ -804,8 +813,7 @@ def cmd_revise(a) -> None:
     for bid in a.split or []:
         if bid not in known:
             die(f"no draft {bid}")
-        lines.append(f"- **Split {bid}** into two beans. Keep {bid} for the first part and write the "
-                     "second as the next free bean number, depending on the first.")
+        lines.append(f"- **Split {bid}** into two beans, the second depending on the first.")
     for pair in a.merge or []:
         x, y = pair
         if x not in known or y not in known:
@@ -816,6 +824,11 @@ def cmd_revise(a) -> None:
         if bid not in known:
             die(f"no draft {bid}")
         lines.append(f"- **Revise {bid}.**")
+    if a.split or a.merge:
+        lines.append("\nAfter a split or a merge, renumber the whole set bean-001, bean-002, ... in run "
+                     "order, so that every dependency has a lower number than the bean that needs it. "
+                     "Update every `id`, every `dependencies` entry and every mention of a bean id in "
+                     "the text, and delete any file whose id no longer exists.")
     lines.append(f"\nThe owner's note: {a.note}\n")
     (s.dir / "instructions.md").write_text("\n".join(lines))
     st = s.review_state()

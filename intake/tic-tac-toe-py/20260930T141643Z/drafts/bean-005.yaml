@@ -1,0 +1,141 @@
+schema_version: bean/2.0.0
+id: bean-005
+repo: beekeeper-lab/tic-tac-toe-py
+title: 'Tkinter window over the session: clickable grid, O replies, result messages, New Game'
+intent: '`python -m tictactoe` opens a thin window around the headless game session: a 3 by 3 grid the
+  human clicks to place X first, O''s reply from the strategy, a win, loss or draw message, and a New
+  Game control — with every rule delegated to the GUI-free core.
+
+  '
+status: approved
+source:
+  kind: transcript
+  ref: source.md
+  date: '2026-09-30'
+  excerpt: This tic-tac-toe app would run as a Python app, and it would have a GUI that would generate
+    the grid for tic-tac-toe.
+context:
+  read_paths:
+  - src/tictactoe/game.py
+  - src/tictactoe/strategy.py
+  - src/tictactoe/session.py
+  - tests/test_session.py
+  - README.md
+  background: 'beans 001 through 004 have landed: tictactoe.game holds every rule, tictactoe.strategy.choose_move
+    picks O''s move, and tictactoe.session''s `GameSession` owns the whole flow — human X move, O''s reply,
+    moves ignored after the end, the exact result messages ("You win. Congratulations.", "You lost. Better
+    luck next time.", "It''s a draw."), and new_game() resetting with X to move. All of it is headless
+    and tested. Design questions were settled with the person: the toolkit is tkinter (q-3, no third-party
+    dependency), and after any result the grid stops accepting clicks and a "New Game" control starts
+    the human as X again (q-4). This bean is the only place in the project that touches a GUI toolkit.
+    It adds src/tictactoe/app.py with a `run()` that builds the window around one `GameSession`: a 3 by
+    3 grid of cells, a status label, and a New Game button. A click on a cell just calls the session''s
+    move; after any call the window repaints itself from the session''s board and shows the session''s
+    message when the game has ended. No game rules, no strategy, no win or draw checks live in the window.
+    src/tictactoe/__main__.py starts the window so `python -m tictactoe` works, __init__.py exposes the
+    package exports, and README.md gets short run instructions. The test container has no display and
+    no Tk library, so tests/test_gui_isolation.py can only prove headless guarantees; everything a person
+    must see is a manual acceptance criterion.
+
+    '
+allowed_write_paths:
+- src/tictactoe/app.py
+- src/tictactoe/__main__.py
+- src/tictactoe/__init__.py
+- tests/test_gui_isolation.py
+- README.md
+acceptance_criteria:
+- id: ac1
+  text: The game, strategy and session modules still import cleanly in the gate container, which has no
+    display and no Tk library — proof that no GUI toolkit leaked into any non-GUI module.
+  verify:
+    kind: test
+    test_id: tests/test_gui_isolation.py::test_core_modules_import_without_a_gui
+- id: ac2
+  text: Exactly one module in src/tictactoe imports tkinter (app.py), so the rules cannot drift into the
+    GUI layer.
+  verify:
+    kind: test
+    test_id: tests/test_gui_isolation.py::test_app_module_is_the_only_tkinter_consumer
+- id: ac3
+  text: The window opens showing an empty 3 by 3 grid and a New Game control; clicking a cell marks it
+    with X, after which an O appears in another cell, and the alternation continues as long as the game
+    is not over.
+  verify:
+    kind: manual
+    note: 'Manual because no headless test can open a window: the gate container has no display and no
+      Tk library. Run `python -m tictactoe` from the repo root and watch the window: the grid must be
+      3 by 3 and empty, a click on any cell must show an X in exactly that cell, and an O must then appear
+      in a different, previously empty cell.
+
+      '
+- id: ac4
+  text: Each way the game can end shows the agreed message; three X in a row shows "You win. Congratulations.",
+    three O in a row shows "You lost. Better luck next time.", and a full board with no line shows "It's
+    a draw."; after any of them, clicks on the grid no longer do anything.
+  verify:
+    kind: manual
+    note: 'Manual because the messages appear only in the window and no headless test can read one. Play
+      games to each of the three endings (a loss is easy: take the side cells and let O build its line)
+      and check the exact wording of each message, then click the grid to confirm it is inert.
+
+      '
+- id: ac5
+  text: New Game clears the grid and restarts with the human playing X first, even after a finished game.
+  verify:
+    kind: manual
+    note: 'Manual because it exercises only what a person sees in the window. After a win, a loss or a
+      draw, click New Game: every cell must be empty again, the result message must be gone, and the human''s
+      next click must place an X.
+
+      '
+- id: ac6
+  text: The window contains no game rules of its own; the board, legality, win and draw, O's move, the
+    result messages and the reset all come from tictactoe.session.
+  verify:
+    kind: test
+    test_id: tests/test_gui_isolation.py::test_app_delegates_every_rule_to_the_session
+constraints:
+- Python 3.11 or later, mypy strict clean
+- tkinter is the only GUI toolkit; no third-party runtime dependency is added
+- text: app.py stays a thin layer — no win/draw rules, strategy or game flow implemented inside it
+- text: no changes to the rules, strategy or session owned by earlier beans
+  forbidden_paths:
+  - src/tictactoe/game.py
+  - src/tictactoe/strategy.py
+  - src/tictactoe/session.py
+  - tests/test_board.py
+  - tests/test_winner.py
+  - tests/test_strategy.py
+  - tests/test_session.py
+non_goals:
+- text: no changes to any core module or its tests
+  forbidden_paths:
+  - src/tictactoe/game.py
+  - src/tictactoe/strategy.py
+  - src/tictactoe/session.py
+- text: no second GUI toolkit or new runtime dependency
+- text: no CI workflow files
+  forbidden_paths:
+  - .github/workflows/**
+  - .gitlab-ci.yml
+  - .circleci/**
+  - Jenkinsfile
+suggested_risk_tier: 2
+size_budget:
+  max_tasks: 4
+  max_files: 5
+  max_diff_lines: 400
+definition_of_done:
+- all AC verify pass
+- gates green
+- spec and impl-detail docs accepted
+dependencies:
+- bean-001
+- bean-002
+- bean-003
+- bean-004
+approval:
+  approved_by: Gregg Reed
+  approved_at: '2026-10-01T09:37:31Z'
+  order: 5

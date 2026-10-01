@@ -1,0 +1,14 @@
+{"at": "2026-09-30T14:16:43Z", "event": "start", "repo": "beekeeper-lab/tic-tac-toe-py", "source": "intake/tic-tac-toe-py/transcript-20260930.md"}
+{"at": "2026-09-30T14:21:43Z", "event": "developer-session", "n": 1, "mode": "extract", "started_at": "2026-09-30T14:16:51Z", "seconds": 291, "rc": 0, "model": "qwen3.8:27b-mtp-q8_0", "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7", "contained": true, "readonly_violations": [], "stray_paths": []}
+{"at": "2026-09-30T14:21:57Z", "event": "check-drafts", "beans": 0, "findings": 0}
+{"at": "2026-09-30T19:49:30Z", "event": "answers", "ids": ["q-1", "q-2", "q-3", "q-4"]}
+{"at": "2026-09-30T20:08:48Z", "event": "developer-session", "n": 2, "mode": "draft", "started_at": "2026-09-30T19:49:37Z", "seconds": 1150, "rc": 0, "model": "qwen3.8:27b-mtp-q8_0", "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7", "contained": true, "readonly_violations": [], "stray_paths": []}
+{"at": "2026-09-30T20:08:48Z", "event": "check-drafts", "beans": 3, "findings": 0}
+{"at": "2026-09-30T20:12:37Z", "event": "judge", "file": "judge-1.json", "usable": true, "seconds": 187}
+{"at": "2026-10-01T02:34:48Z", "event": "developer-session", "n": 3, "mode": "draft", "started_at": "2026-10-01T02:20:45Z", "seconds": 843, "rc": 0, "model": "qwen3.8:27b-mtp-q8_0", "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7", "contained": true, "readonly_violations": [], "stray_paths": []}
+{"at": "2026-10-01T02:34:49Z", "event": "check-drafts", "beans": 5, "findings": 1}
+{"at": "2026-10-01T02:38:16Z", "event": "developer-session", "n": 4, "mode": "draft", "started_at": "2026-10-01T02:35:11Z", "seconds": 185, "rc": 0, "model": "qwen3.8:27b-mtp-q8_0", "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7", "contained": true, "readonly_violations": [], "stray_paths": []}
+{"at": "2026-10-01T02:38:16Z", "event": "check-drafts", "beans": 5, "findings": 0}
+{"at": "2026-10-01T02:48:10Z", "event": "judge", "file": "judge-2.json", "usable": true, "seconds": 567}
+{"at": "2026-10-01T09:37:31Z", "event": "approve", "by": "Gregg Reed", "beans": ["bean-001", "bean-002", "bean-003", "bean-004", "bean-005"]}
+{"at": "2026-10-01T09:37:47Z", "event": "pr", "url": "https://github.com/beekeeper-lab/tic-tac-toe-py/pull/1"}

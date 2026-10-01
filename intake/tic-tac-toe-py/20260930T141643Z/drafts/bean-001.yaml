@@ -1,0 +1,99 @@
+schema_version: bean/2.0.0
+id: bean-001
+repo: beekeeper-lab/tic-tac-toe-py
+title: 'Pure game core, part one: the 3 by 3 board and legal moves'
+intent: 'A GUI-free tictactoe.game module exists that models a fresh 3 by 3 board, applies a legal move
+  for whichever player is to move, and refuses occupied or out-of-range cells, proven by headless tests,
+  so every later bean shares one board model.
+
+  '
+status: approved
+source:
+  kind: transcript
+  ref: source.md
+  date: '2026-09-30'
+  excerpt: The human user goes first. They use an X. The system user goes after using an O, and then we
+    alternate each one until it wins.
+context:
+  read_paths:
+  - pyproject.toml
+  - src/tictactoe/__init__.py
+  - tests/test_smoke.py
+  background: 'The repository is already scaffolded: pyproject.toml declares the `tictactoe` project (Python
+    3.11+, ruff, mypy strict, pytest configured with a src layout and importlib import mode), and src/tictactoe/__init__.py
+    and tests/test_smoke.py exist only as an import smoke check. No game rules exist yet. This bean starts
+    the shared rule set by adding src/tictactoe/game.py, a module that imports no GUI toolkit and contains
+    the board model only: a 3 by 3 board held as nine empty marks that can hold X or O, a factory for
+    a fresh board, tracking of whose turn it is (the human''s X always moves first, and the turn flips
+    after every move), and move application that marks the chosen cell with the current player''s mark
+    and then passes the turn. Applying a move to an occupied cell, or to an index outside 0 through 8,
+    must raise ValueError. No win or draw logic lives here; bean-002 adds the eight winning lines on top
+    of this same board model. Every acceptance criterion is a headless pytest test in tests/test_board.py.
+    Tests run in a container with no display and no Tk library, so the module must not import tkinter
+    — the gate container would fail on `import tkinter` — which is why this bean is the foundation the
+    later beans keep GUI-free.
+
+    '
+allowed_write_paths:
+- src/tictactoe/game.py
+- tests/test_board.py
+acceptance_criteria:
+- id: ac1
+  text: A fresh board has nine empty cells with no mark anywhere and it is X's turn to move first.
+  verify:
+    kind: test
+    test_id: tests/test_board.py::test_fresh_board_is_empty_and_x_moves_first
+- id: ac2
+  text: Applying a move to an empty, in-range cell marks that exact cell with the current player's mark
+    and passes the turn.
+  verify:
+    kind: test
+    test_id: tests/test_board.py::test_apply_move_marks_cell_and_flips_turn
+- id: ac3
+  text: Applying a move to an already-occupied cell raises ValueError and leaves the board and the turn
+    unchanged.
+  verify:
+    kind: test
+    test_id: tests/test_board.py::test_apply_move_rejects_occupied_cell
+- id: ac4
+  text: Applying a move to an index outside 0 through 8 (negative or above eight) raises ValueError and
+    leaves the board and the turn unchanged.
+  verify:
+    kind: test
+    test_id: tests/test_board.py::test_apply_move_rejects_out_of_range_index
+- id: ac5
+  text: Turns strictly alternate X, O, X, ... from an empty board for any sequence of legal moves.
+  verify:
+    kind: test
+    test_id: tests/test_board.py::test_turns_alternate_from_x
+constraints:
+- Python 3.11 or later, mypy strict clean
+- text: no GUI toolkit in the game core
+  forbidden_imports:
+  - tkinter
+- text: no win or draw detection in this bean; that is bean-002, and no strategy; that is bean-003
+non_goals:
+- text: no GUI or entry point
+  forbidden_paths:
+  - src/tictactoe/app.py
+  - src/tictactoe/__main__.py
+  - src/tictactoe/__init__.py
+- text: no strategy module
+  forbidden_paths:
+  - src/tictactoe/strategy.py
+  forbidden_imports:
+  - tictactoe.strategy
+suggested_risk_tier: 1
+size_budget:
+  max_tasks: 4
+  max_files: 2
+  max_diff_lines: 200
+definition_of_done:
+- all AC verify pass
+- gates green
+- spec and impl-detail docs accepted
+dependencies: []
+approval:
+  approved_by: Gregg Reed
+  approved_at: '2026-10-01T09:37:31Z'
+  order: 1

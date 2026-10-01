@@ -1,0 +1,80 @@
+{
+  "schema": "intake-session/1",
+  "id": "20260930T141643Z",
+  "repo": "beekeeper-lab/tic-tac-toe-py",
+  "repo_dir": "/home/gregg/workspace/tic-tac-toe-py",
+  "source_ref": "intake/tic-tac-toe-py/transcript-20260930.md",
+  "source_sha256": "67eaf7f08346048e805343332d86c2b6356acbe870182d71598c8dad51bd0d56",
+  "date": "2026-09-30",
+  "created_at": "2026-09-30T14:16:43Z",
+  "ai_side": {
+    "drafts": "developer",
+    "reviews": "judge (advisory)"
+  },
+  "developer_sessions": [
+    {
+      "n": 1,
+      "mode": "extract",
+      "started_at": "2026-09-30T14:16:51Z",
+      "seconds": 291,
+      "rc": 0,
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7",
+      "contained": true,
+      "readonly_violations": [],
+      "stray_paths": []
+    },
+    {
+      "n": 2,
+      "mode": "draft",
+      "started_at": "2026-09-30T19:49:37Z",
+      "seconds": 1150,
+      "rc": 0,
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7",
+      "contained": true,
+      "readonly_violations": [],
+      "stray_paths": []
+    },
+    {
+      "n": 3,
+      "mode": "draft",
+      "started_at": "2026-10-01T02:20:45Z",
+      "seconds": 843,
+      "rc": 0,
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7",
+      "contained": true,
+      "readonly_violations": [],
+      "stray_paths": []
+    },
+    {
+      "n": 4,
+      "mode": "draft",
+      "started_at": "2026-10-01T02:35:11Z",
+      "seconds": 185,
+      "rc": 0,
+      "model": "qwen3.8:27b-mtp-q8_0",
+      "repo_head": "1846f8838d33c74ed1a8d42b1b247619e23aafc7",
+      "contained": true,
+      "readonly_violations": [],
+      "stray_paths": []
+    }
+  ],
+  "approved": {
+    "by": "Gregg Reed",
+    "at": "2026-10-01T09:37:31Z",
+    "beans": [
+      "bean-001",
+      "bean-002",
+      "bean-003",
+      "bean-004",
+      "bean-005"
+    ],
+    "rejected": []
+  },
+  "pr": {
+    "url": "https://github.com/beekeeper-lab/tic-tac-toe-py/pull/1",
+    "branch": "intake/20260930T141643Z"
+  }
+}

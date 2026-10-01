@@ -1,0 +1,52 @@
+items:
+  - id: wi-1
+    title: The app is a Python GUI that draws the tic-tac-toe grid
+    summary: >
+      The person wants a tic-tac-toe app that runs as a Python program with a
+      graphical window that shows the tic-tac-toe grid.
+    excerpts:
+      - "This tic-tac-toe app would run as a Python app, and it would have a GUI that would generate the grid for tic-tac-toe."
+
+  - id: wi-2
+    title: A human plays X and goes first, by clicking a cell
+    summary: >
+      The human user goes first, plays as X, and places an X by clicking on an
+      area inside the grid.
+    excerpts:
+      - "It would allow the human user to go first and click on an area inside the grid to perform an X"
+      - "the original human user would go first. They would click somewhere on the screen, and it would represent an X where they clicked."
+
+  - id: wi-3
+    title: The system user plays O and replies with a strategic move
+    summary: >
+      After each human move, the system user plays O. Its move is not random;
+      it should try to choose a strategic location in order to win.
+    excerpts:
+      - "then the random system user would have an O"
+      - "The OS user wouldn't choose a random location, but would try to choose a strategic location to win the game."
+
+  - id: wi-4
+    title: The human and system alternate until someone wins
+    summary: >
+      The human (X) and the system (O) take turns in alternation, until one of
+      them wins. A win is three in a row, horizontally, vertically, or on a
+      diagonal through the center.
+    excerpts:
+      - "The human user goes first. They use an X. The system user goes after using an O, and then we alternate each one until it wins."
+      - "The goal of tic-tac-toe is, of course, to have three in a row, whether it be horizontally, diagonal through the center, or vertical."
+
+  - id: wi-5
+    title: When the human wins, congratulate them
+    summary: >
+      If the human user wins, the app should tell them they won with a
+      congratulatory message.
+    excerpts:
+      - "If the human user wins, then you would present, you win, congratulations."
+
+  - id: wi-6
+    title: When the human loses, tell them and encourage them
+    summary: >
+      If the human user loses, the app should tell them they lost with the
+      message "better luck next time".
+    excerpts:
+      - "And if the human user loses, you would say, you lost, better luck next time."
