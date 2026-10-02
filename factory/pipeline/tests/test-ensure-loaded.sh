@@ -143,5 +143,99 @@ out="$(el no-such-role --check-only)"; rc=$?
 rc_is "an unknown role refuses"       "$rc" 1
 check "and says why"                  "no model for role" "$out"
 
+# ------------------------------------------------------------------------------
+# The inference manager (Phase 4, task 3): eviction in the serial regime, the
+# health check, retries, and the load record. A server with state this time:
+# what is loaded, the digests /api/tags reports, how many loads to fail, and
+# whether a probe answers.
+cat > "$WORK/server2.py" <<'PY'
+import http.server, json, sys
+ST = sys.argv[2]
+def st(): return json.load(open(ST))
+def save(s): json.dump(s, open(ST, "w"))
+class H(http.server.BaseHTTPRequestHandler):
+    def _send(self, obj):
+        b = json.dumps(obj).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        s = st()
+        if self.path.startswith("/api/tags"):
+            self._send({"models": [{"name": m, "digest": d} for m, d in s["digests"].items()]})
+        else:
+            self._send({"models": [{"name": m, "context_length": c} for m, c in s["loaded"].items()]})
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        s = st(); s.setdefault("log", []).append({"path": self.path, "model": body.get("model"),
+                                                  "keep_alive": body.get("keep_alive")})
+        m = body.get("model")
+        if self.path == "/api/generate" and body.get("keep_alive") == 0:
+            s["loaded"].pop(m, None); save(s); return self._send({"done": True})
+        if self.path == "/api/chat":
+            if s.get("fail_loads", 0) > 0:
+                s["fail_loads"] -= 1; save(s); return self._send({"error": "load failed"})
+            s["loaded"][m] = (body.get("options") or {}).get("num_ctx", 2048); save(s)
+            return self._send({"done": True})
+        save(s)  # the probe
+        return self._send({"done": s.get("probe_ok", True), "response": "OK"})
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+PORT2=18954
+python3 "$WORK/server2.py" "$PORT2" "$WORK/st.json" & SERVER2_PID=$!
+trap 'kill "$SERVER2_PID" 2>/dev/null; cleanup' EXIT
+cat > "$WORK/roles2.json" <<'RJ'
+{"provider_allowlist":["ollama"],
+ "roles":{"developer":{"provider":"ollama","model":"dev:1b","num_ctx":65536},
+          "judge":{"provider":"ollama","model":"judge:1b","num_ctx":32768}}}
+RJ
+server_is() { # server_is <json>
+  jq -c '. + {log: []}' <<<"$1" > "$WORK/st.json"
+}
+el2() { OLLAMA_HOST="http://127.0.0.1:$PORT2" ROLES_FILE="$WORK/roles2.json" \
+        bash "$PIPELINE_DIR/ensure-loaded.sh" "$@" 2>&1; }
+for _ in $(seq 1 50); do server_is '{"loaded":{},"digests":{}}'; curl -s -o /dev/null "http://127.0.0.1:$PORT2/api/ps" && break; sleep 0.1; done
+
+printf '\n== serial regime: the other role goes first ==\n\n'
+server_is '{"loaded":{"dev:1b":65536},"digests":{"dev:1b":"sha256:aaaa1111bbbb","judge:1b":"sha256:cccc2222dddd"}}'
+out="$(el2 judge --record "$WORK/loads.jsonl")"; rc=$?
+rc_is "the judge loads"                 "$rc" 0
+check "after the developer is evicted"  "EVICTED  dev:1b" "$out"
+check "and only the judge is resident"  '["judge:1b"]' "$(jq -c '.loaded | keys' "$WORK/st.json")"
+check "the eviction preceded the load"  '"keep_alive":0' "$(jq -c '.log[0]' "$WORK/st.json")"
+check "the load is recorded"            '"outcome":"loaded"' "$(tail -1 "$WORK/loads.jsonl")"
+check "with what it evicted"            '"evicted":["dev:1b"]' "$(tail -1 "$WORK/loads.jsonl")"
+check "and how long it took"            '"load_seconds":' "$(tail -1 "$WORK/loads.jsonl")"
+server_is '{"loaded":{"dev:1b":65536},"digests":{}}'
+out="$(el2 judge --coresident)"
+check "co-resident evicts nothing"      '["dev:1b","judge:1b"]' "$(jq -c '.loaded | keys' "$WORK/st.json")"
+
+printf '\n== a failed load is retried, then reported ==\n\n'
+server_is '{"loaded":{},"digests":{},"fail_loads":1}'
+out="$(el2 judge --retries 2 --record "$WORK/loads.jsonl")"; rc=$?
+rc_is "one failure, then it loads"      "$rc" 0
+check "and the attempts are counted"    '"load_attempts":2' "$(tail -1 "$WORK/loads.jsonl")"
+server_is '{"loaded":{},"digests":{},"fail_loads":9}'
+out="$(el2 judge --retries 1 --record "$WORK/loads.jsonl")"; rc=$?
+rc_is "past the retries it gives up"    "$rc" 2
+check "and says which attempt"          "attempt 2 of 2" "$out"
+check "the failure is recorded"         '"outcome":"load_failed"' "$(tail -1 "$WORK/loads.jsonl")"
+
+printf '\n== the health check ==\n\n'
+server_is '{"loaded":{"judge:1b":32768},"digests":{"judge:1b":"sha256:cccc2222dddd"}}'
+out="$(el2 judge --healthcheck --expect-digest cccc2222dddd)"; rc=$?
+rc_is "the right digest and an answer"  "$rc" 0
+check "is healthy"                      "HEALTHY  judge:1b" "$out"
+out="$(el2 judge --healthcheck --expect-digest 999999999999)"; rc=$?
+rc_is "a different digest is unhealthy" "$rc" 3
+check "and it says never proceed"       "never proceed on the wrong model" "$out"
+server_is '{"loaded":{"judge:1b":32768},"digests":{"judge:1b":"sha256:cccc2222dddd"},"probe_ok":false}'
+out="$(el2 judge --healthcheck)"; rc=$?
+rc_is "no answer to the probe is unhealthy" "$rc" 3
+check "and says so"                     "no answer to a one-token probe" "$out"
+server_is '{"loaded":{"judge:1b":32768},"digests":{}}'
+out="$(el2 judge --healthcheck)"; rc=$?
+rc_is "a model missing from tags is unhealthy" "$rc" 3
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
