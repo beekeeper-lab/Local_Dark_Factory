@@ -37,6 +37,9 @@ factory — run the line against the repository you are standing in.
                             stopping at the first halt
   factory queue [--all]     what is runnable, and what blocks the rest
   factory state [<bean>]   each bean's state in the §09 machine, and who holds its lease
+  factory pause | drain | stop-now | resume
+                            the emergency stop (§09): hold at the next step, stop there resumably,
+                            or stop now; resume clears pause and drain
   factory clear <bean>      a person clears a blocked (halted) bean back to ready
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
@@ -177,6 +180,13 @@ newest_run() {
   local runs
   runs="$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
   ls -1dt "$TARGET_ROOT/$runs"/*/ 2>/dev/null | head -1
+}
+
+# Where the state machine's log, leases and control file live: beside the runs,
+# under the config's runs_root (beanstate.py). Call after require_target.
+state_dir() {
+  local d="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+  mkdir -p "$d" && printf '%s' "$d"
 }
 
 cmd="${1:-}"; shift 2>/dev/null || true
@@ -642,9 +652,54 @@ run from the working tree."
     exec bash "$PIPE/queue.sh" "$@"
     ;;
 
+  pause|resume|drain|stop-now)
+    # The emergency stop (§09). pause and drain are read at the next step boundary
+    # by every running orchestrator and by `factory go` between beans; resume
+    # clears either. stop-now does not wait for a boundary: it signals each lease
+    # holder's process group and kills the line's worker containers. The evidence
+    # (run directories, the state log) is never touched, and a stopped run comes
+    # back with --resume.
+    require_target
+    verb="$cmd"
+    ctl="$(state_dir)/control"
+    if [ "$verb" = resume ]; then
+      rm -f "$ctl"
+      printf 'resumed: the control file is cleared\n'
+      exit 0
+    fi
+    jq -nc --arg v "$verb" --arg by "$(git config user.name 2>/dev/null || whoami)" \
+      --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{verb:$v, by:$by, at:$at}' > "$ctl.tmp" && mv "$ctl.tmp" "$ctl"
+    case "$verb" in
+      pause) printf 'paused: in-flight steps finish, then everything waits. factory resume to continue.\n' ;;
+      drain) printf 'draining: each run stops at its next step boundary, resumable. factory resume clears it.\n' ;;
+      stop-now)
+        n=0
+        for owner in $(jq -r '.[].owner' "$(state_dir)/leases.json" 2>/dev/null); do
+          host="${owner%:*}"; pid="${owner##*:}"
+          [ "$host" = "$(hostname)" ] || { printf 'not signalled: %s is on another host\n' "$owner"; continue; }
+          kill -0 "$pid" 2>/dev/null || continue
+          pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')"
+          if [ -n "$pgid" ] && [ "$pgid" != "$(ps -o pgid= -p $$ | tr -d ' ')" ]; then
+            kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+          else
+            kill -TERM "$pid" 2>/dev/null || true
+          fi
+          n=$((n + 1)); printf 'signalled %s (process group %s)\n' "$owner" "${pgid:-?}"
+        done
+        if command -v "${FACTORY_PODMAN:-podman}" >/dev/null 2>&1; then
+          for c in $("${FACTORY_PODMAN:-podman}" ps -q --filter name=factory-worker- 2>/dev/null); do
+            "${FACTORY_PODMAN:-podman}" kill "$c" >/dev/null 2>&1 && printf 'killed worker container %s\n' "$c"
+          done
+        fi
+        printf 'stop-now: %s run(s) signalled. Evidence is kept; each resumes with factory run <bean> --resume <dir>.\n' "$n"
+        ;;
+    esac
+    exit 0
+    ;;
+
   state)
     require_target
-    export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+    FACTORY_STATE_DIR="$(state_dir)"; export FACTORY_STATE_DIR
     exec "$(factory_python)" "$PIPE/beanstate.py" state "$@"
     ;;
 
@@ -653,7 +708,7 @@ run from the working tree."
     # and clearing says it was answered. Recorded with who did it.
     require_target
     [ $# -ge 1 ] || die "usage: factory clear <bean>"
-    export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+    FACTORY_STATE_DIR="$(state_dir)"; export FACTORY_STATE_DIR
     exec "$(factory_python)" "$PIPE/beanstate.py" clear "$1" --by "${FACTORY_CLEARED_BY:-$(git config user.name || whoami)}"
     ;;
 
@@ -757,10 +812,26 @@ run from the working tree."
         exit 1
       fi
 
+      # The kill switch, between beans (§09). pause holds the queue here; drain
+      # and stop-now end it. Inside a bean the orchestrator reads the same file.
+      GO_CTL="$(state_dir)/control"
+      if [ -f "$GO_CTL" ] && [ "$(jq -r .verb "$GO_CTL" 2>/dev/null)" = pause ]; then
+        printf '\nPAUSED before %s (factory pause). factory resume to continue.\n' "$NEXT"
+        while [ -f "$GO_CTL" ] && [ "$(jq -r .verb "$GO_CTL" 2>/dev/null)" = pause ]; do sleep "${FACTORY_PAUSE_POLL:-5}"; done
+      fi
+      if [ -f "$GO_CTL" ] && [ -n "$(jq -r '.verb // empty' "$GO_CTL" 2>/dev/null)" ]; then
+        printf '\nSTOPPING before %s: factory %s. %s bean(s) run.\n' "$NEXT" "$(jq -r .verb "$GO_CTL")" "$GO_RAN"
+        exit 0
+      fi
+
       printf '\n=== %s ===\n' "$NEXT"
       GO_RC=0
       bash "$0" run "$NEXT" ${GO_STOP:+--stop-after "$GO_STOP"} || GO_RC=$?
       GO_RAN=$((GO_RAN + 1))
+      if [ "$GO_RC" -eq 75 ]; then
+        printf '\nDRAINED inside %s. The queue stops; the run resumes from its record.\n' "$NEXT"
+        exit 0
+      fi
       if [ "$GO_RC" -ne 0 ]; then
         printf '\nSTOPPED at %s (exit %s). The line does not move on from a halt: whatever\n' "$NEXT" "$GO_RC"
         printf 'stopped it would stop the next bean too, and a queue that kept going would\n'

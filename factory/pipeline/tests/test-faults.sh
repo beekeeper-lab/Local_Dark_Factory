@@ -642,5 +642,86 @@ check "and the run ends with a whole one" "DOC CHECK PASS" "$dres"
 want  "which is not the fragment"       "the document on disk must not still be the killed attempt's" \
       bash -c "[ \"\$(cat '${DOC_R}impl-detail.md')\" != \"\$FRAGMENT\" ]"
 
+
+# ============================================================ the kill switch ==
+# Phase 4 task 5: §09's three verbs, each verified against a real orchestrator
+# run (stub worker) rather than against the function that reads the file.
+CTL="$REPO/factory/runs/.state/control"
+FAC=(env PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" bash "$PIPELINE_DIR/../bin/factory")
+bg_line() { # bg_line <out> <stub-build-extra> [args] — the line in its own process group
+  local out="$1" extra="$2"; shift 2
+  PI_SESSIONS_DIR="$WORK/sessions" \
+  STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" STUB_DOC="$WORK/doc-good.md" \
+  STUB_BUILD_EXTRA="$extra" FACTORY_PAUSE_POLL=1 \
+  FACTORY_SCHEMAS="$PIPELINE_DIR/../../schemas" SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+  PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
+  FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
+  PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
+    setsid bash "$WORK/pipeline/orchestrate.sh" bean-001 "$@" > "$out" 2>&1 &
+  LINE_PID=$!
+}
+wait_for() { # wait_for <file> <text> <seconds>
+  for _ in $(seq 1 $(( $3 * 2 ))); do grep -qF "$2" "$1" 2>/dev/null && return 0; sleep 0.5; done; return 1
+}
+leased_now() { jq -e '."bean-001"' "$REPO/factory/runs/.state/leases.json" >/dev/null 2>&1; }
+
+printf '\n== drain: the run stops at the next step boundary, resumably ==\n\n'
+reset_repo
+o="$( ( cd "$REPO" && STUB_BUILD_EXTRA="mkdir -p '$REPO/factory/runs/.state'; printf '{\"verb\":\"drain\"}' > '$CTL'" \
+        run_line --stop-after gate ); echo "rc=$?")"
+check "it drains before the next step"   "DRAINED before gate (factory drain)" "$o"
+check "with exit 75, not a failure"      "rc=75" "$o"
+R="$(ls -1dt "$REPO"/factory/runs/bean-001-*/ | head -1)"
+check "run.json says drained, and where" '"drained_before_step":"gate"' "$(cat "$R/run.json")"
+if leased_now; then want "the lease is released" "a drained run must not hold its bean" false
+else want "the lease is released" "" true; fi
+rm -f "$CTL"
+o="$( (cd "$REPO" && run_line --resume "${R%/}" --stop-after gate); echo "rc=$?")"
+check "factory resume, then --resume carries on" "GATE PASS" "$o"
+check "without redoing the build"        "SKIP   build          already PASS" "$o"
+
+printf '\n== pause: the run holds at the boundary until resumed ==\n\n'
+reset_repo
+bg_line "$WORK/o-pause" "mkdir -p '$REPO/factory/runs/.state'; printf '{\"verb\":\"pause\"}' > '$CTL'" --stop-after gate
+want  "it pauses before the next step"   "no PAUSED line within 60s" wait_for "$WORK/o-pause" "PAUSED before gate" 60
+sleep 2
+nope "and does not run it while paused" "GATE bean-001" "$(cat "$WORK/o-pause")"
+want  "it keeps its lease while paused"  "a paused run should still hold bean-001" leased_now
+( cd "$REPO" && "${FAC[@]}" resume >/dev/null )
+wait "$LINE_PID"; rc=$?
+check "factory resume lets it go on"     "RESUMED at gate" "$(cat "$WORK/o-pause")"
+check "and the run finishes"             "GATE PASS" "$(cat "$WORK/o-pause")"
+want  "with exit 0"                      "rc=$rc" test "$rc" -eq 0
+
+printf '\n== stop-now: the run is stopped mid-step, evidence kept ==\n\n'
+reset_repo
+bg_line "$WORK/o-stop" "sleep 30" --stop-after gate
+want  "the build is under way"           "no ATTEMPT line within 60s" wait_for "$WORK/o-stop" "ATTEMPT 1/" 60
+want  "under a lease"                    "bean-001 should be leased" leased_now
+TEST_PGID="$(ps -o pgid= -p $$ | tr -d ' ')"; LINE_PGID="$(ps -o pgid= -p "$LINE_PID" | tr -d ' ')"
+if [ "$LINE_PGID" = "$LINE_PID" ] && [ "$LINE_PGID" != "$TEST_PGID" ]; then
+  t0="$(date +%s)"
+  so="$(cd "$REPO" && FACTORY_PODMAN=/bin/false "${FAC[@]}" stop-now 2>&1)"
+  wait "$LINE_PID" 2>/dev/null
+  t1="$(date +%s)"
+  check "stop-now signals the run"       "signalled $(hostname):" "$so"
+  want  "and it stops without waiting out the step" "took $((t1 - t0))s; the stub step sleeps 30" test $((t1 - t0)) -lt 20
+  check "the run says it was interrupted" "stopping the line" "$(cat "$WORK/o-stop")"
+  R="$(ls -1dt "$REPO"/factory/runs/bean-001-*/ | head -1)"
+  want  "the evidence is kept"           "the run directory should still be there" test -f "$R/run.json"
+  if leased_now; then want "the lease is released" "a stopped run must not hold its bean: $(cat "$REPO/factory/runs/.state/leases.json")" false
+  else want "the lease is released" "" true; fi
+  st="$(FACTORY_STATE_DIR="$REPO/factory/runs/.state" "$PIPELINE_DIR/../../.venv/bin/python" "$PIPELINE_DIR/beanstate.py" state bean-001 --json | jq -r '."bean-001".state')"
+  check "the bean stays where it was, for reconciliation" "building" "$st"
+  rm -f "$CTL"
+  o="$( (cd "$REPO" && run_line --resume "${R%/}" --stop-after gate); echo "rc=$?")"
+  check "and resumes from its record"    "GATE PASS" "$o"
+else
+  printf '  --    setsid did not give the line its own process group; not signalling a\n'
+  printf '        group that could be this test'"'"'s own. stop-now unverified here.\n'
+  kill -TERM "$LINE_PID" 2>/dev/null; wait "$LINE_PID" 2>/dev/null
+  FAIL=$((FAIL + 1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
