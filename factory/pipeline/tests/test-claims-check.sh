@@ -121,6 +121,24 @@ run "$s"; rc=$?
 rc_is "and the check does not fail"    "$rc" 0
 lacks_item "the file is not called missing" missing_paths 'src/seating_planner/missing.py' "$out"
 
+printf '\n-- a "no" about another noun is not a denial of the path --\n\n'
+# Every tic-tac-toe spec (2026-10-01) carried "says these are absent and they ARE
+# present", from sentences like this one: the "no" is about tests, not the file.
+s="$(spec '`tests/test_winner.py` does not exist yet, and no test outside
+`src/seating_planner/missing.py` (plus the smoke test) mentions winning.')"
+out="$(cc "$s")"
+has_item "the path in its own clause is denied" paths_said_to_be_absent 'tests/test_winner.py' "$out"
+lacks_item "the path after another noun's no is not" paths_said_to_be_absent 'src/seating_planner/missing.py' "$out"
+s="$(spec 'There is no game code yet. The repository is scaffolded: `pyproject.toml` declares the project.')"
+out="$(cc "$s")"
+lacks_item "a no in the previous sentence does not reach" paths_said_to_be_absent 'pyproject.toml' "$out"
+# Specs are hard-wrapped, so a line break is not the end of a clause.
+s="$(spec 'The store has no Python files, and `tests/store/`
+does not exist. Neither does `src/seating_planner/missing.py`.')"
+out="$(cc "$s")"
+has_item "a denial wrapped onto the next line still counts" paths_said_to_be_absent 'tests/store/' "$out"
+has_item "and neither does counts" paths_said_to_be_absent 'src/seating_planner/missing.py' "$out"
+
 printf '\n-- said absent, but present: recorded and never failed --\n\n'
 #
 # Deciding which noun a negation attaches to is not something a regex can do, and
@@ -189,11 +207,15 @@ printf '\n== how far a negation reaches, measured rather than assumed ==\n\n'
 # The entire working tree (excluding `factory/`...)" as a denial of `factory/`.
 # It bounds the reach; it does not eliminate it, and the comment in the source
 # said otherwise until these two cases were run.
+# Until 2026-10-02 the window let this sentence's "does not exist" reach the next
+# sentence's path and suppress the check on it. A denial now has to be in the
+# path's own clause, so the invented file is caught here too.
 s="$(spec 'The package does not exist. The repository already contains `src/config.py`.')"
 out="$(cc "$s")"
-has_item "an adjacent negation still reaches" paths_said_to_be_absent 'src/config.py' "$out"
+lacks_item "a negation in the previous sentence no longer reaches" paths_said_to_be_absent 'src/config.py' "$out"
+has_item   "the invented file is caught"   missing_paths           'src/config.py' "$out"
 run "$s"; rc=$?
-rc_is "which suppresses the failure"   "$rc" 0
+rc_is "and the check fails"            "$rc" 1
 
 s="$(spec 'The package does not exist. Separately: the repository already contains `src/config.py`.')"
 out="$(cc "$s")"

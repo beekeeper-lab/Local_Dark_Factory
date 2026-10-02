@@ -34,7 +34,7 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
 - [ ] 9. **The workload.** Run the seating-planner backlog unattended: repair beans 021–030,
       then 015–020, plus new beans from Phase 3. That makes 25 or more completed beans. Each PR
       still gets the pre-merge Claude review before it merges.
-- [ ] 10. **claims-check stops calling present files absent** (from the Phase 3 parking lot,
+- [x] 10. **claims-check stops calling present files absent** (from the Phase 3 parking lot,
       taken in by the owner 2026-10-02). Every tic-tac-toe spec drew "it also calls these
       absent, and they are not", when the spec said they exist. A check that fires on every
       spec trains people to ignore it.
