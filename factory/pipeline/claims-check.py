@@ -113,7 +113,7 @@ NEGATION = re.compile(
         no | not | never | nothing | none | without
         | isn't | aren't | doesn't | don't | won't | cannot | can't
         | absent | missing | empty | lacks? | lacking
-        | yet\s+to\s+be | does\s+not | do\s+not
+        | yet\s+to\s+be | does\s+not | do\s+not | neither | nor
     )\b""",
     re.VERBOSE | re.IGNORECASE,
 )
@@ -141,6 +141,39 @@ AFTER = 32
 def around(text: str, index: int, end: int) -> str:
     """The few words either side of the token, and no more."""
     return text[max(0, index - BEFORE):min(len(text), end + AFTER)]
+
+
+# Where a clause ends, for deciding what a negation is about.
+# Not a bare newline: specs are hard-wrapped, so "`x`\n  does not exist" is one clause.
+# A blank line or a new list item is.
+CLAUSE_END = re.compile(r"[.;:!?\u2014]|\s--\s|\s-\s|\n\s*\n|\n\s*[-*]\s")
+# A negation BEFORE the path counts only this close to it.
+DENY_WORDS_BEFORE = 2
+
+
+def denies(text: str, index: int, end: int) -> bool:
+    """Does the sentence say THIS path is absent, rather than mention it near a "no"?
+
+    The 48-character window alone read "no test outside `tests/test_board.py`
+    mentions winning" as calling test_board.py absent, so every tic-tac-toe spec
+    (2026-10-01) carried "says these are absent and they ARE present". A
+    negation before the path now has to be within a few words of it and in the
+    same clause ("there is no `x`", "without `x`"). After the path, it has to be
+    in the path's own clause ("`x` does not exist yet", but not the "no test"
+    of the next clause after a comma).
+    """
+    before = text[max(0, index - BEFORE):index]
+    cut = [m.end() for m in CLAUSE_END.finditer(before)]
+    if cut:
+        before = before[cut[-1]:]
+    words = before.split()
+    if NEGATION.search(" ".join(words[-DENY_WORDS_BEFORE:])):
+        return True
+    after = text[end:min(len(text), end + AFTER)]
+    m = re.search(r"[,(]|" + CLAUSE_END.pattern, after)
+    if m:
+        after = after[:m.start()]
+    return bool(NEGATION.search(after))
 
 # Words that look like identifiers and are not. Everything here appeared in a
 # real spec as prose or as a tool name.
@@ -184,7 +217,7 @@ def claims(body: str) -> tuple[list[str], list[str], list[str], list[str]]:
         )
         context = around(text, m.start(), m.end())
         if is_path:
-            if NEGATION.search(context):
+            if denies(text, m.start(), m.end()):
                 denied.append(tok)
             elif ASSERTS_EXISTENCE.search(context):
                 asserted.append(tok)
