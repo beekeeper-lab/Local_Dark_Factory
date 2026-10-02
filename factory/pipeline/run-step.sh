@@ -245,6 +245,16 @@ STEPS="$RUN_DIR/steps.jsonl"
 STARTS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "start")] | length' "$STEPS")"
 ENDS_BEFORE="$(jq -rs --arg s "$STEP" '[.[] | select(.step == $s and .event == "end")] | length' "$STEPS")"
 
+# The state machine hears about the step NOW, not when its boundaries are written
+# after the child exits (below): an operator, or reconciliation after a crash,
+# needs to see `specifying` while the spec is being written. When the late start
+# boundary goes through step.sh, the bean is already in that state and nothing
+# moves (beanstate.py: a walk to the state you are in is no walk).
+if [ "${FACTORY_STATE:-1}" = 1 ]; then
+  "$(factory_python)" "$PIPELINE_DIR/beanstate.py" step "$RUN_DIR" "$STEP" start \
+    --attempt "$((ENDS_BEFORE + 1))" || [ "${FACTORY_STATE_STRICT:-0}" != 1 ] || exit 1
+fi
+
 # -- launch the child (output streams straight through) ------------------------------
 #
 # Contained, when the repository has a worker manifest. The worker is the one
