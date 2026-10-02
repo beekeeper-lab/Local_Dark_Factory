@@ -723,5 +723,35 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+
+printf '\n== an induced crash (kill -9): reconcile, then resume ==\n\n'
+#
+# Phase 4 task 6. kill -9 runs no trap: the lease names a dead process, the bean
+# says building, and the interrupted attempt's edits are in the tree.
+reset_repo
+bg_line "$WORK/o-crash" "printf 'half\n' > src/half-written.py; sleep 30" --stop-after gate
+want  "the build is under way"           "no ATTEMPT line within 60s" wait_for "$WORK/o-crash" "ATTEMPT 1/" 60
+sleep 1
+TEST_PGID="$(ps -o pgid= -p $$ | tr -d ' ')"; LINE_PGID="$(ps -o pgid= -p "$LINE_PID" | tr -d ' ')"
+if [ "$LINE_PGID" = "$LINE_PID" ] && [ "$LINE_PGID" != "$TEST_PGID" ]; then
+  kill -KILL -- "-$LINE_PGID" 2>/dev/null; wait "$LINE_PID" 2>/dev/null
+  want  "the dead run left its lease"    "kill -9 runs no trap, so the lease should still be there" leased_now
+  want  "and its half-written edit"      "src/half-written.py should be in the tree" test -f "$REPO/src/half-written.py"
+  ro="$(cd "$REPO" && "${FAC[@]}" reconcile --apply 2>&1)"
+  check "reconcile drops the dead lease"  "drop the lease held by $(hostname):$LINE_PID" "$ro"
+  check "and rolls the attempt back"      "saved the interrupted attempt" "$ro"
+  want  "the tree is clean again"         "src/half-written.py should be gone" test ! -f "$REPO/src/half-written.py"
+  R="$(ls -1dt "$REPO"/factory/runs/bean-001-*/ | head -1)"
+  check "the edit is kept as evidence"    "src/half-written.py" "$(cat "$R"/rolled-back-*.diff)"
+  check "and it says how to resume"       "--resume ${R%/}" "$ro"
+  o="$( (cd "$REPO" && run_line --resume "${R%/}" --stop-after gate); echo "rc=$?")"
+  check "the resume finishes the bean"    "GATE PASS" "$o"
+else
+  printf '  --    setsid did not give the line its own process group; not sending kill -9\n'
+  printf '        to a group that could be this test'"'"'s own. crash recovery unverified here.\n'
+  kill -TERM "$LINE_PID" 2>/dev/null; wait "$LINE_PID" 2>/dev/null
+  FAIL=$((FAIL + 1))
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

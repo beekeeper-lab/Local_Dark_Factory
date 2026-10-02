@@ -41,6 +41,7 @@ factory — run the line against the repository you are standing in.
                             the emergency stop (§09): hold at the next step, stop there resumably,
                             or stop now; resume clears pause and drain
   factory clear <bean>      a person clears a blocked (halted) bean back to ready
+  factory reconcile [--apply]  after a crash: leases, GitHub, halts and the tree, made consistent
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
                             scratch space
@@ -695,6 +696,15 @@ run from the working tree."
         ;;
     esac
     exit 0
+    ;;
+
+  reconcile)
+    # Startup reconciliation (§09): make the state log agree with GitHub, the run
+    # records and the tree after a crash. Plans by default; --apply does it. The
+    # systemd unit runs `factory reconcile --apply` before `factory go`.
+    require_target
+    FACTORY_STATE_DIR="$(state_dir)"; export FACTORY_STATE_DIR
+    exec "$(factory_python)" "$PIPE/reconcile.py" "$@"
     ;;
 
   state)

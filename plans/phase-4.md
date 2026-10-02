@@ -48,7 +48,16 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       containers, and the evidence and the bean's state are kept for reconciliation. Each verb
       is verified against a real orchestrator run in `test-faults.sh` (stop-now ended a 30 s
       stub step in under 20 s).)*
-- [ ] 6. Startup reconciliation after an induced crash (GitHub state, worktrees, `events.jsonl`).
+- [x] 6. Startup reconciliation after an induced crash (GitHub state, worktrees, `events.jsonl`).
+      *(2026-10-02.) `factory reconcile [--apply]` (`reconcile.py`) works through four checks.
+      It drops leases whose owner is dead or expired. It moves a bean to what its PR says
+      (merged; open with checks green, red or pending), recorded as an observation, not as a
+      transition. It blocks a bean whose run halted without the log knowing. For a bean in
+      flight with no lease, it saves the interrupted attempt's edits into the run directory,
+      resets the tree to the branch's last commit, and prints the resume command. It only
+      plans unless `--apply` is given, and a second run changes nothing. Induced crash in
+      `test-faults.sh`: `kill -9` of the whole run mid-build, then reconcile, then the resume
+      reaches GATE PASS. This also writes `merged`, the gap left in task 1.)*
 - [ ] 7. A hardened systemd unit with podman storage under StateDirectory, and the
       `factory` user's environment scrubbed of API keys.
 - [ ] 8. Telemetry: false-approval taxonomy, task attempts, revise rate per stage, swap
