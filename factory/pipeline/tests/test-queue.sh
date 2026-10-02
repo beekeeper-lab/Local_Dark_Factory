@@ -81,6 +81,7 @@ GH
 chmod +x "$WORK/gh"
 export QUEUE_GH="$WORK/gh"
 
+PY="${PIPELINE_PYTHON:-$PIPELINE_DIR/../../.venv/bin/python}"; [ -x "$PY" ] || PY=python3
 q()  { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" "$@" 2>&1 ); }
 qj() { ( cd "$REPO" && bash "$PIPELINE_DIR/queue.sh" --json 2>/dev/null ); }
 fac(){ ( cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" "$FACTORY" "$@" 2>&1 ); }
@@ -108,6 +109,19 @@ out="$(q --all)"
 eq "one bean is ready"            "bean-001" "$(jq -r '.ready | join(" ")' <<<"$(qj)")"
 check "and the rest wait on it"   "waiting on: bean-001(not built)" "$out"
 check "in order"                  "bean-002" "$out"
+
+printf '\n-- a halted bean waits for a person, not for git --\n\n'
+#
+# Nothing in git says a run halted; the state machine does (Phase 4).
+ST="$WORK/qstate"
+FACTORY_STATE_DIR="$ST" "$PY" "$PIPELINE_DIR/beanstate.py" transition bean-001 --to leased --key q1 >/dev/null
+FACTORY_STATE_DIR="$ST" "$PY" "$PIPELINE_DIR/beanstate.py" block bean-001 --key q2 --why test >/dev/null
+hq="$(cd "$REPO" && FACTORY_STATE_DIR="$ST" bash "$PIPELINE_DIR/queue.sh" --all 2>&1)"
+check "it is not offered"         "a run halted and nobody has cleared it: factory clear bean-001" "$hq"
+nope  "and nothing is ready"      "ready: bean-001" "$hq"
+FACTORY_STATE_DIR="$ST" "$PY" "$PIPELINE_DIR/beanstate.py" clear bean-001 --by test >/dev/null
+hq="$(cd "$REPO" && FACTORY_STATE_DIR="$ST" bash "$PIPELINE_DIR/queue.sh" 2>&1)"
+check "cleared, it is ready again" "ready: bean-001" "$hq"
 
 printf '\n-- the unapproved one is refused, not skipped --\n\n'
 #

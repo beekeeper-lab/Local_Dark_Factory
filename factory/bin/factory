@@ -36,6 +36,8 @@ factory — run the line against the repository you are standing in.
                             run the approved beans in order, one at a time,
                             stopping at the first halt
   factory queue [--all]     what is runnable, and what blocks the rest
+  factory state [<bean>]   each bean's state in the §09 machine, and who holds its lease
+  factory clear <bean>      a person clears a blocked (halted) bean back to ready
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
                             scratch space
@@ -638,6 +640,21 @@ run from the working tree."
   queue)
     require_target
     exec bash "$PIPE/queue.sh" "$@"
+    ;;
+
+  state)
+    require_target
+    export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+    exec "$(factory_python)" "$PIPE/beanstate.py" state "$@"
+    ;;
+
+  clear)
+    # blocked -> ready is a person's decision (§09): a halted run asked a question,
+    # and clearing says it was answered. Recorded with who did it.
+    require_target
+    [ $# -ge 1 ] || die "usage: factory clear <bean>"
+    export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+    exec "$(factory_python)" "$PIPE/beanstate.py" clear "$1" --by "${FACTORY_CLEARED_BY:-$(git config user.name || whoami)}"
     ;;
 
   go)

@@ -229,6 +229,14 @@ halted_run_for() {
 }
 
 # ---------------------------------------------------------------- the queue --
+# What the §09 state machine says (beanstate.py, Phase 4). Git and GitHub say
+# whether a bean was built; only the state machine knows a run halted and nobody
+# has cleared it yet. Read once; a repository with no state log reads as {}.
+MACHINE='{}'
+if [ "${FACTORY_STATE:-1}" = 1 ] && { [ -n "${FACTORY_STATE_DIR:-}" ] || [ -f "${CONFIG_PATH:-}" ]; }; then
+  MACHINE="$(FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$CONFIG_PATH")")/.state}" \
+    "$(factory_python)" "$PIPELINE_DIR/beanstate.py" state --json 2>/dev/null || echo '{}')"
+fi
 ROWS='[]'
 while IFS= read -r id; do
   [ -n "$id" ] || continue
@@ -281,6 +289,11 @@ while IFS= read -r id; do
       else
         state=ready; why=""
       fi
+    fi
+  fi
+  if [ "$state" = ready ] || [ "$state" = in_progress ]; then
+    if [ "$(jq -r --arg i "$id" '.[$i].state // ""' <<<"$MACHINE")" = blocked ]; then
+      state=blocked; why="a run halted and nobody has cleared it: factory clear $id"
     fi
   fi
   [ -n "${closed:-}" ] && why="${why:+$why; }pull request closed without merging: $closed"

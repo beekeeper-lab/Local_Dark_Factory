@@ -18,8 +18,15 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
 
 ## Tasks
 
-- [ ] 1. Queue state machine (every state in `event.schema.json`), atomic leases,
+- [x] 1. Queue state machine (every state in `event.schema.json`), atomic leases,
       idempotency keys and provenance.
+      *(`factory/pipeline/beanstate.py`, 2026-10-02.) It holds the §09 table edge by edge
+      and keeps an append-only `events.jsonl` under the runs root, with every event
+      validated against the schema. `step.sh` drives it, the orchestrator takes and releases
+      the lease, and a halt is `blocked` until `factory clear` (a `--resume` counts as a clear).
+      In the tests, 20 racers produce exactly one lease. A refused edge only warns until
+      `FACTORY_STATE_STRICT=1`, which gets switched on after the first real runs come out clean.
+      `merged` is not yet written: GitHub knows it, and task 6's reconciliation reads it.)*
 - [ ] 2. Worktree manager (`worktrees/<bean-id>`, `max_inflight`), with evidence kept when a
       bean blocks.
 - [ ] 3. Inference manager: finish `ensure_loaded(role)` and `healthcheck(role)`, and record

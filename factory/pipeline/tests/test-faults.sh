@@ -332,7 +332,7 @@ run_line() {
   PI_SESSIONS_DIR="$WORK/sessions" \
   STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
   STUB_DOC="${STUB_DOC:-$WORK/doc-good.md}" \
-  SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+  FACTORY_SCHEMAS="$PIPELINE_DIR/../../schemas" SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
   PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
   FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
   PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
@@ -384,6 +384,10 @@ check "and preflight refuses"      "definition-of-done" "$o"
   | "$PIPELINE_DIR/../../.venv/bin/python" -c 'import json,sys,yaml; yaml.safe_dump(json.load(sys.stdin), sys.stdout, sort_keys=False)' \
   > "$REPO/factory/beans/bean-001-scaffold/bean.yaml"
 git -C "$REPO" commit -aqm "the same field used for prose, which the schema permits"
+# The halt above blocked the bean; fixing the bean and running again is a
+# person's decision, made with `factory clear` (Phase 4, beanstate.py).
+FACTORY_STATE_DIR="$REPO/factory/runs/.state" "$PIPELINE_DIR/../../.venv/bin/python" \
+  "$PIPELINE_DIR/beanstate.py" clear bean-001 --by test >/dev/null
 o="$(run_line --stop-after preflight)"
 check "prose is not treated as an id" "no dangling criterion references" "$o"
 cp "$WORK/bean-backup.yaml" "$REPO/factory/beans/bean-001-scaffold/bean.yaml"
@@ -494,7 +498,7 @@ reset_repo
 PI_SESSIONS_DIR="$WORK/sessions" \
 STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
 STUB_DOC="$WORK/doc-good.md" STUB_BUILD_EXTRA='sleep 20' \
-SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+FACTORY_SCHEMAS="$PIPELINE_DIR/../../schemas" SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
 PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
 FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
 PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
@@ -586,7 +590,7 @@ rm -f "$WORK/o-killdoc" "$WORK/o-docresume"
 PI_SESSIONS_DIR="$WORK/sessions" \
 STUB_TASKS="$WORK/tasks-live.yaml" STUB_SPEC_MD="$WORK/spec.md" \
 STUB_DOC="$WORK/doc-good.md" STUB_DOC_PARTIAL=1 \
-SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
+FACTORY_SCHEMAS="$PIPELINE_DIR/../../schemas" SPEC_CHECK_VALIDATOR="$PIPELINE_DIR/../../bench/validate.py" \
 PIPELINE_PYTHON="$PIPELINE_DIR/../../.venv/bin/python" \
 FACTORY_CONTAIN_WORKER=0 FACTORY_VERIFY_SANDBOX=0 FACTORY_SANDBOX_ROOT="$WORK/sb" \
 PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" \
