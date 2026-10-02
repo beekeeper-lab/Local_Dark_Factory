@@ -59,3 +59,6 @@ done during build-out only. It is in the parking lot, not in this plan.
   `gates` check: GHCR `manifest unknown`, most likely because the private package is not linked
   to `tic-tac-toe-py`). The owner fixes that in Package settings → Manage Actions access. The
   intake PR was merged at the owner's request with that check red. It changed only beans.
+  **Fixed 2026-10-01 ~21:30 EDT:** the owner added `tic-tac-toe-py` (read) under the package's
+  Manage Actions access. `gates` is green on `main` at `4fbd8c3` (covering beans 001–003, which
+  merged before CI could run). bean-004 ran its `ci` step green on PR #5; bean-005 runs the full line.
