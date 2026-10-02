@@ -1,0 +1,131 @@
+schema_version: bean/2.0.0
+id: bean-004
+repo: beekeeper-lab/tic-tac-toe-py
+title: Headless game session owning the human-versus-O flow
+intent: 'A GUI-free tictactoe.session module owns one whole game — the human''s X move, O''s reply via
+  the strategy, ignoring moves after the game ends, the exact result message for a win, a loss and a draw,
+  and a reset that starts the human as X again — all verified by headless tests.
+
+  '
+status: approved
+source:
+  kind: transcript
+  ref: source.md
+  date: '2026-09-30'
+  excerpt: If the human user wins, then you would present, you win, congratulations.
+context:
+  read_paths:
+  - src/tictactoe/game.py
+  - src/tictactoe/strategy.py
+  - tests/test_board.py
+  - tests/test_winner.py
+  - tests/test_strategy.py
+  background: 'beans 001 through 003 have landed: tictactoe.game holds the entire rule set (board, legal
+    moves, the eight winning lines, draw) and tictactoe.strategy.choose_move picks O''s strategic move
+    in the fixed order win, then block, then center, corners, sides; both are headless and fully tested.
+    Design questions were settled with the person: on a draw the result is "It''s a draw." (q-1); after
+    any result a New Game action clears the board with the human starting again as X (q-4). This bean
+    adds src/tictactoe/session.py with a `GameSession` class that owns the whole game flow and imports
+    no GUI toolkit, so the later Tkinter window is a thin layer that only renders and forwards clicks.
+    Its contract: a fresh session is an empty board with X to move and no result; `move(cell)` plays the
+    human''s X on an empty cell, applies the legal-move rules of tictactoe.game (ValueError for an occupied
+    or out-of-range cell while the game is live), then — unless the game just ended — replies with O''s
+    move from tictactoe.strategy; once the game is over, further `move` calls are ignored entirely (no
+    exception, no board change); the session exposes the outcome as one of win (the human), loss (O),
+    or draw, plus the exact message the window will show: "You win. Congratulations.", "You lost. Better
+    luck next time.", or "It''s a draw."; `new_game()` resets to an empty board with X to move and no
+    result or message. Everything is proven by headless pytest tests in tests/test_session.py, which script
+    real game lines through the real strategy — including a line that loses to O and a line that ends
+    in a draw — so the exact message for every ending is checked against actual play, not mocks. Tests
+    run in a container with no display and no Tk library, where `import tkinter` fails, which is why the
+    session must stay GUI-free.
+
+    '
+allowed_write_paths:
+- src/tictactoe/session.py
+- tests/test_session.py
+acceptance_criteria:
+- id: ac1
+  text: A fresh session shows an empty board, X to move, and no result or message; each live human move
+    places an X and, unless the game just ended, an O appears in another cell via the strategy.
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_human_moves_x_and_o_replies
+- id: ac2
+  text: When X completes a line, the session reports the human win with the exact message "You win. Congratulations."
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_win_message_is_exact
+- id: ac3
+  text: When O completes a line in a scripted loss for the human, the session reports the loss with the
+    exact message "You lost. Better luck next time."
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_loss_message_is_exact
+- id: ac4
+  text: A scripted line that fills the board with no winner ends the session with a draw and the exact
+    message "It's a draw."
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_draw_message_is_exact
+- id: ac5
+  text: 'After the game ends, any further move call is ignored: no exception, and the board, the result
+    and the message stay exactly as they were.'
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_moves_after_the_end_are_ignored
+- id: ac6
+  text: While the game is live, a move to an occupied cell or an out-of-range index raises ValueError
+    and changes nothing.
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_illegal_move_raises_while_live
+- id: ac7
+  text: new_game() — including on a finished session — resets to an empty board with it being X's turn
+    and no result or message, and the human's next move places an X.
+  verify:
+    kind: test
+    test_id: tests/test_session.py::test_new_game_resets_with_x_to_move
+constraints:
+- Python 3.11 or later, mypy strict clean
+- text: no GUI toolkit in the session module
+  forbidden_imports:
+  - tkinter
+- text: the session delegates every rule to tictactoe.game and every O move to tictactoe.strategy instead
+    of re-implementing them
+- text: no changes to the game core or strategy owned by earlier beans
+  forbidden_paths:
+  - src/tictactoe/game.py
+  - src/tictactoe/strategy.py
+non_goals:
+- text: no GUI or entry point; the window is bean-005
+  forbidden_paths:
+  - src/tictactoe/app.py
+  - src/tictactoe/__main__.py
+  - src/tictactoe/__init__.py
+- text: no game-core changes
+  forbidden_paths:
+  - src/tictactoe/game.py
+  - tests/test_board.py
+  - tests/test_winner.py
+- text: no strategy changes
+  forbidden_paths:
+  - src/tictactoe/strategy.py
+  - tests/test_strategy.py
+suggested_risk_tier: 1
+size_budget:
+  max_tasks: 4
+  max_files: 2
+  max_diff_lines: 300
+definition_of_done:
+- all AC verify pass
+- gates green
+- spec and impl-detail docs accepted
+dependencies:
+- bean-001
+- bean-002
+- bean-003
+approval:
+  approved_by: Gregg Reed
+  approved_at: '2026-10-01T09:37:31Z'
+  order: 4

@@ -38,10 +38,14 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       taken in by the owner 2026-10-02). Every tic-tac-toe spec drew "it also calls these
       absent, and they are not", when the spec said they exist. A check that fires on every
       spec trains people to ignore it.
-- [ ] 11. **Weak-test cases in `bench/qualify/`** (Phase 3 parking lot, taken in 2026-10-02). The
+- [x] 11. **Weak-test cases in `bench/qualify/`** (Phase 3 parking lot, taken in 2026-10-02). The
       mutants the Phase 3 reviews found pass the suite on wrong code: bean-003's tie-breaks,
       its finished-game `ValueError`, X as the system mark, and bean-004's strategy asked for X.
       Frozen as cases with a known answer, so Phase 5 can measure a judge against them.
+      *(Done 2026-10-02: two pairs, the side tie-break and the session asking for X. Both mutants
+      pass 28/28 in the gate image, and each one's wrong behaviour was measured. The finished-game
+      `ValueError` and X-as-system mutants were left out, because the code under review for those
+      two is not wrong. They are test gaps with nothing for a judge to reject.)*
 - [ ] 12. Closing ritual, then `PHASE-4-COMPLETE`, the design document update, and a demo.
 
 *Limit: a bean that halts twice for the same cause is parked with its evidence. The queue

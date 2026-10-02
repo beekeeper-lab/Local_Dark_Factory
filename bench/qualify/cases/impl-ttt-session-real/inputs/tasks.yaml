@@ -1,0 +1,196 @@
+schema_version: tasks/1.0.0
+bean_id: bean-004
+tasks:
+  - id: task-1
+    title: Write the seven red session tests and a NotImplementedError stub
+    intent: |
+      Create exactly two files: tests/test_session.py and
+      src/tictactoe/session.py. Do not modify anything else. Run
+      `ruff check .`, `ruff format` on the two files you wrote, and
+      `mypy src` before finishing; there is no pytest in this container, so
+      do not try to run the tests — and this task has failed if you write
+      any session logic: the tests must be RED when you finish.
+
+      tests/test_session.py must define exactly these seven test functions,
+      with these exact names, importing only pytest, tictactoe.game and
+      tictactoe.session — never tkinter or any GUI module:
+
+        * test_human_moves_x_and_o_replies (ac1): assert the fresh session
+          has all-EMPTY cells, board.turn == X, result is None and message
+          is None. Then session.move(0): assert cells[0] == X,
+          cells[4] == O (the strategy's first reply is the center), turn
+          back to X, still no result or message. Then session.move(8):
+          assert cells[8] == X, cells[2] == O (no O win, no X threat,
+          center taken, so the lowest open corner), exactly two X and two
+          O among all cells, and turn X.
+        * test_win_message_is_exact (ac2): play session.move for each of
+          (0, 7, 6, 8) in order. With the real strategy replying 4, 2 and
+          3, the X move on 8 completes the bottom row. Assert
+          board.winner() == X, result == "win" and
+          message == "You win. Congratulations." (exact string).
+        * test_loss_message_is_exact (ac3): play session.move for each of
+          (0, 8, 1) in order. These are two opposite corners that never
+          threaten; O replies 4, 2 and then completes its own (2, 4, 6)
+          line at 6. Assert board.winner() == O, result == "loss" and
+          message == "You lost. Better luck next time." (exact string).
+        * test_draw_message_is_exact (ac4): play session.move for each of
+          (0, 1, 6, 5, 7) in order. X creates exactly two real threats, 2
+          from (0, 1, 2) and 3 from (0, 3, 6), and O blocks both (replies
+          4, 2, 3, 8); O's own lines never complete because the corners X
+          holds break them. The board fills with no winner. Assert
+          board.winner() == EMPTY, board.is_draw(), result == "draw" and
+          message == "It's a draw." (exact string).
+        * test_moves_after_the_end_are_ignored (ac5): play the win line
+          (0, 7, 6, 8), snapshot board.cells (and result/message), then
+          call session.move for 1, 0, 9 and -1 in order — an empty cell,
+          an occupied cell and two out-of-range indices. None may raise.
+          Assert board.cells equals the snapshot, result == "win" and the
+          win message are unchanged.
+        * test_illegal_move_raises_while_live (ac6): on a fresh session,
+          with pytest.raises(ValueError): session.move(9) and
+          session.move(-1); assert all cells are still EMPTY. Then one
+          legal exchange, session.move(0): snapshot cells, then
+          with pytest.raises(ValueError): session.move(0) (occupied);
+          assert cells equal the snapshot, turn X and result is None.
+        * test_new_game_resets_with_x_to_move (ac7): play the win line
+          (0, 7, 6, 8) on a fresh session, assert result == "win" and
+          message is not None, call session.new_game(), assert all-EMPTY
+          cells, turn X, result None and message None, then session.move(2)
+          places X on 2 and the strategy replies O on 4, with no result —
+          the reset really starts a game.
+
+      src/tictactoe/session.py is created in the same task as an importable
+      stub: exactly one class,
+
+        class GameSession:
+            def __init__(self) -> None:
+                raise NotImplementedError
+            @property
+            def board(self) -> Board:
+                raise NotImplementedError
+            @property
+            def result(self) -> str | None:
+                raise NotImplementedError
+            @property
+            def message(self) -> str | None:
+                raise NotImplementedError
+            def move(self, cell: int) -> None:
+                raise NotImplementedError
+            def new_game(self) -> None:
+                raise NotImplementedError
+
+      with a module docstring and `from tictactoe.game import Board` so it
+      type-checks. There is no session logic in this task.
+
+      src/tictactoe/session.py must stay clean under `ruff check .` and
+      `mypy --strict` (run both from the repo root; `mypy src` works). The
+      stub shape exists so the test file's import succeeds and all seven
+      tests fail with an exception raised inside
+      src/tictactoe/session.py — the task's red-test verification accepts
+      exactly that shape, and it rejects a missing module (a collection
+      error) and a test that breaks on its own scenario.
+
+      The spec at <run-dir>/spec.md, section "Proposed change", contains a
+      complete reference test file and reference stub that were written,
+      lint-checked and function-driven for this bean: all seven tests pass
+      against the reference session and, against the stub, all seven fail
+      inside session.py. Use the reference test file and stub as your
+      starting point. If you deviate, keep the seven test names, the three
+      scripted lines (0, 7, 6, 8) / (0, 8, 1) / (0, 1, 6, 5, 7), the
+      exact O replies, the exact message strings, the (1, 0, 9, -1)
+      post-end probing, and the stub semantics exactly as stated above,
+      and re-run ruff and mypy on whatever you wrote.
+    write_paths:
+      - src/tictactoe/session.py
+      - tests/test_session.py
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4, ac5, ac6, ac7]
+    verify:
+      - { kind: command, run: ["python", "factory/tools/red-test.py", "--fixes", "src/tictactoe/session.py", "--fixes", "**/src/tictactoe/session.py", "tests/test_session.py"] }
+    max_attempts: 3
+    teaching_note: >-
+      The seven tests are the contract for this bean, so they are written
+      first, red, and left red. Each scripted game line was replayed
+      against the real deterministic strategy before being pinned, which
+      is what makes the exact O replies and the exact ending messages safe
+      to assert: the red-test verifier certifies every failure as "the fix
+      could turn this green" — all seven die inside the very file task-2
+      replaces — and rejects both a missing module and a test whose own
+      scenario fails on any implementation.
+  - id: task-2
+    title: Implement GameSession with the move/reply/settle/new_game flow
+    intent: |
+      Replace the NotImplementedError stub in src/tictactoe/session.py with
+      the real GameSession. Do not modify tests/test_session.py: those seven
+      tests are this task's definition of done and the controller will run
+      them; if one of them looks wrong, do not chase it — implement the
+      flow below and say so in your final report.
+
+      GameSession owns one whole game. Required behaviour:
+
+        * A fresh session is a new tictactoe.game Board (empty cells, X to
+          move), with no result and no message. Expose board, result and
+          message as read-only properties; result is None while live and
+          exactly "win", "loss" or "draw" once the game ends; message is
+          None while live and, once ended, exactly "You win. Congratulations.",
+          "You lost. Better luck next time." or "It's a draw."
+        * move(cell): if a result already exists, return immediately — this
+          check comes before every rule-set call, which is what makes
+          occupied, empty AND out-of-range indices all silently ignored
+          after the game ends. Otherwise delegate the placement to
+          board.apply_move(cell) and let its ValueError for an occupied or
+          out-of-range cell propagate (it changes nothing when it raises).
+          Then settle: X's winning line means result "win" with
+          "You win. Congratulations."; O's means "loss" with "You lost.
+          Better luck next time."; a full board with no winner means
+          "draw" with "It's a draw." Only if the human's move did not end
+          the game may O answer, and the answer is
+          choose_move(board, O) applied through board.apply_move, followed
+          by settling again. Never call choose_move on a finished position.
+        * new_game(): a fresh Board, result None, message None — callable
+          on a finished session, which is its main use.
+
+      Every rule must be delegated: no second table of winning lines in
+      this module, no private legality check, no direct writes to
+      board.cells (the only writers are apply_move, once for the human and
+      once for the strategy's reply). Import nothing except tictactoe.game
+      and tictactoe.strategy — never tkinter or any GUI module, and no
+      random. The module must stay clean under `ruff check .` and
+      `mypy --strict` (run both from the repo root; `mypy src` works).
+
+      You cannot run pytest here, but you can exercise the session
+      directly with python3 the way the spec's reference was checked:
+      instantiate GameSession and play the three scripted lines —
+      (0, 7, 6, 8) must end result "win" / "You win. Congratulations."
+      with board.cells 8 == O having answered 4, 2, 3; (0, 8, 1) must end
+      "loss" with O completing 2-4-6; (0, 1, 6, 5, 7) must fill the board
+      to a draw with O answering 4, 2, 3, 8 — and after a win, move(9)
+      must be silent and change nothing. The spec at <run-dir>/spec.md,
+      section "Proposed change", contains a lint-checked working
+      implementation of this exact design; use it as your starting point
+      and re-run ruff and mypy on whatever you submit.
+    write_paths:
+      - src/tictactoe/session.py
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4, ac5, ac6, ac7]
+    verify:
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_human_moves_x_and_o_replies"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_win_message_is_exact"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_loss_message_is_exact"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_draw_message_is_exact"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_moves_after_the_end_are_ignored"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_illegal_move_raises_while_live"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_session.py::test_new_game_resets_with_x_to_move"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests"] }
+    max_attempts: 3
+    teaching_note: >-
+      The whole design pressure in this bean is the ordering inside
+      move(): over-check first makes post-end moves silent even for
+      out-of-range indices (ac5) while live illegality still raises
+      (ac6), and settle-before-reply keeps choose_move from ever seeing a
+      finished board — the strategy itself raises ValueError there, so a
+      mis-ordered session would crash on the human's winning move instead
+      of reporting the win. The session owns flow, not rules: it composes
+      Board.apply_move with choose_move and stores only the pair
+      (result, message), which is exactly what makes bean-005's window a
+      thin renderer over board.cells and message.

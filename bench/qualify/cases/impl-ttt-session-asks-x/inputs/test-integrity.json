@@ -1,0 +1,28 @@
+{
+  "schema": "test-integrity/1.0.0",
+  "base": "4fbd8c34da1a8c1b29ef2bcbb97943e897e0078e",
+  "test_files": [
+    "tests/test_session.py"
+  ],
+  "source_files": [
+    "src/tictactoe/session.py"
+  ],
+  "prose_files": [],
+  "fails_on_revert": {
+    "result": "yes",
+    "why": "the tests pass with the change and fail without it, so something in them depends on it",
+    "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60",
+    "exit_code": 1,
+    "control_exit_code": 0,
+    "passed_with_the_change_reverted": [],
+    "caveat": "The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something. passed_with_the_change_reverted is the finer answer where the runner gives one: tests in the CHANGED test files that pass anyway, which is the whole suite result telling you yes while some of the new tests assert what was already true. It is empty both when every new test pins the change and when the module would not import without it — the printed line says which."
+  },
+  "test_integrity": {
+    "deleted_tests": 0,
+    "new_skips": 0,
+    "removed_asserts": 0,
+    "added_asserts": 38,
+    "files_that_lost_assertions": [],
+    "caveat": "Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place. removed_asserts and added_asserts are totals across the diff, and a total is a net: files_that_lost_assertions names each file that removed more than it added, because six added in a new file and five stripped from an existing one is a true total and a gutted test file."
+  }
+}

@@ -1,0 +1,168 @@
+diff --git a/src/tictactoe/session.py b/src/tictactoe/session.py
+new file mode 100644
+index 0000000..1e48bc8
+--- /dev/null
++++ b/src/tictactoe/session.py
+@@ -0,0 +1,57 @@
++"""The headless game session owning one whole human-versus-O game (bean-004)."""
++
++from tictactoe.game import Board, O, X
++from tictactoe.strategy import choose_move
++
++WIN_MESSAGE = "You win. Congratulations."
++LOSS_MESSAGE = "You lost. Better luck next time."
++DRAW_MESSAGE = "It's a draw."
++
++
++class GameSession:
++    """One whole game: the human plays X, O replies via the strategy."""
++
++    def __init__(self) -> None:
++        self._board = Board()
++        self._result: str | None = None
++        self._message: str | None = None
++
++    @property
++    def board(self) -> Board:
++        """The live rule-set board; the human's X is to move whenever live."""
++        return self._board
++
++    @property
++    def result(self) -> str | None:
++        """None while live; 'win', 'loss' or 'draw' once the game ends."""
++        return self._result
++
++    @property
++    def message(self) -> str | None:
++        """None while live; the exact window text once the game ends."""
++        return self._message
++
++    def move(self, cell: int) -> None:
++        """The human's X move: place, settle, and reply with O unless over."""
++        if self._result is not None:
++            return
++        self._board.apply_move(cell)  # ValueError for an illegal cell
++        self._settle()
++        if self._result is None:  # no reply after a game the move ended
++            self._board.apply_move(choose_move(self._board, X))
++            self._settle()
++
++    def new_game(self) -> None:
++        """Start over: empty board, X to move, no result and no message."""
++        self._board = Board()
++        self._result = None
++        self._message = None
++
++    def _settle(self) -> None:
++        """Record the result and its exact message when this move ended it."""
++        if self._board.winner() == X:
++            self._result, self._message = "win", WIN_MESSAGE
++        elif self._board.winner() == O:
++            self._result, self._message = "loss", LOSS_MESSAGE
++        elif self._board.is_draw():
++            self._result, self._message = "draw", DRAW_MESSAGE
+diff --git a/tests/test_session.py b/tests/test_session.py
+new file mode 100644
+index 0000000..31f8e1d
+--- /dev/null
++++ b/tests/test_session.py
+@@ -0,0 +1,99 @@
++"""Acceptance tests for the headless game session (bean-004)."""
++
++import pytest
++
++from tictactoe.game import EMPTY, O, X
++from tictactoe.session import GameSession
++
++
++def test_human_moves_x_and_o_replies() -> None:
++    session = GameSession()
++    assert session.board.cells == [EMPTY] * 9
++    assert session.board.turn == X
++    assert session.result is None
++    assert session.message is None
++    session.move(0)
++    assert session.board.cells[0] == X
++    assert session.board.cells[4] == O  # the strategy's first reply is the center
++    assert session.board.turn == X
++    assert session.result is None
++    assert session.message is None
++    session.move(8)
++    assert session.board.cells[8] == X
++    assert session.board.cells[2] == O  # no win, no block, center taken -> corner
++    assert sum(cell == X for cell in session.board.cells) == 2
++    assert sum(cell == O for cell in session.board.cells) == 2
++    assert session.board.turn == X
++
++
++def test_win_message_is_exact() -> None:
++    session = GameSession()
++    # 0, then fork with 7 and 6; the strategy replies 4, 2 and blocks 3.
++    for cell in (0, 7, 6, 8):
++        session.move(cell)
++    assert session.board.winner() == X
++    assert session.result == "win"
++    assert session.message == "You win. Congratulations."
++
++
++def test_loss_message_is_exact() -> None:
++    session = GameSession()
++    # 0, then two opposite corners that never threaten; O finishes (2,4,6).
++    for cell in (0, 8, 1):
++        session.move(cell)
++    assert session.board.winner() == O
++    assert session.result == "loss"
++    assert session.message == "You lost. Better luck next time."
++
++
++def test_draw_message_is_exact() -> None:
++    session = GameSession()
++    # 0,1,6,5,7: X's two threats (2 and 3) are blocked, O never completes.
++    for cell in (0, 1, 6, 5, 7):
++        session.move(cell)
++    assert session.board.winner() == EMPTY
++    assert session.board.is_draw()
++    assert session.result == "draw"
++    assert session.message == "It's a draw."
++
++
++def test_moves_after_the_end_are_ignored() -> None:
++    session = GameSession()
++    for cell in (0, 7, 6, 8):
++        session.move(cell)
++    cells_before = list(session.board.cells)
++    for cell in (1, 0, 9, -1):  # empty, occupied and out of range: all ignored
++        session.move(cell)
++    assert session.board.cells == cells_before
++    assert session.result == "win"
++    assert session.message == "You win. Congratulations."
++
++
++def test_illegal_move_raises_while_live() -> None:
++    session = GameSession()
++    for index in (9, -1):
++        with pytest.raises(ValueError):
++            session.move(index)
++    assert session.board.cells == [EMPTY] * 9
++    session.move(0)
++    cells_after_exchange = list(session.board.cells)
++    with pytest.raises(ValueError):
++        session.move(0)  # occupied
++    assert session.board.cells == cells_after_exchange
++    assert session.board.turn == X
++    assert session.result is None
++
++
++def test_new_game_resets_with_x_to_move() -> None:
++    session = GameSession()
++    for cell in (0, 7, 6, 8):
++        session.move(cell)
++    session.new_game()
++    assert session.board.cells == [EMPTY] * 9
++    assert session.board.turn == X
++    assert session.result is None
++    assert session.message is None
++    session.move(2)  # the reset really starts a game
++    assert session.board.cells[2] == X
++    assert session.board.cells[4] == O
++    assert session.result is None

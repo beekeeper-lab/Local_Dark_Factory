@@ -60,6 +60,9 @@ while [ $# -gt 0 ]; do
 done
 [ -d "$REPO/.git" ] || { echo "--repo must be the target repository (a git checkout)" >&2; exit 2; }
 REPO="$(cd "$REPO" && pwd)"
+# owner/name from origin, to tell this target's cases from another's. Empty for a
+# repository with no GitHub origin (the suite's fixtures), and then nothing is skipped.
+REPO_SLUG="$(git -C "$REPO" remote get-url origin 2>/dev/null | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')"
 case "$PASSES" in ''|*[!0-9]*|0) echo "--passes wants a positive number" >&2; exit 2 ;; esac
 if [ -n "$ROLES" ]; then
   [ -f "$ROLES" ] || { echo "no such roles file: $ROLES" >&2; exit 2; }
@@ -101,6 +104,13 @@ for pass in $(seq 1 "$PASSES"); do
     id="$(jq -r .id "$c")"; target="$(jq -r .target "$c")"; expect="$(jq -r .expect "$c")"
     cand="$(jq -r .source.candidate_sha "$c")"
     WT="$WORK/wt-$id-$pass"
+    # Cases come from more than one target (seating-planner-py, tic-tac-toe-py),
+    # and a run measures one. A case from another target is not a missing fetch.
+    crepo="$(jq -r '.source.repo // ""' "$c")"
+    if [ -n "$REPO_SLUG" ] && [ -n "$crepo" ] && [ "$crepo" != "$REPO_SLUG" ]; then
+      [ "$pass" = 1 ] && printf '%-40s skipped: a %s case; run again with --repo for it\n' "$id" "$crepo"
+      continue
+    fi
     git -C "$REPO" cat-file -e "$cand^{commit}" 2>/dev/null \
       || { printf '%-40s candidate %s is not in %s — fetch it first\n' "$id" "${cand:0:12}" "$REPO"; continue; }
     git -C "$REPO" worktree add -q --detach "$WT" "$cand" 2>/dev/null \

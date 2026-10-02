@@ -1,0 +1,43 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-ttt-session-real",
+  "target": "impl",
+  "expect": "accept",
+  "source": {
+    "repo": "beekeeper-lab/tic-tac-toe-py",
+    "run_id": "bean-004-20261002T001224Z",
+    "pr": 5,
+    "candidate_sha": "79cd12aa57ec459e1dbae3a04bd39d75a1afcd03",
+    "bean_at": "4fbd8c34da1a8c1b29ef2bcbb97943e897e0078e",
+    "bean_path": "factory/beans/bean-004-headless-game-session-owning-the-human-v/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "",
+  "answer_key": {
+    "why": "The merged bean-004 as the line built it (tic-tac-toe-py PR #5). Its pre-merge review drove every human move sequence through GameSession against an independent oracle: 489 games, 0 mismatches, one choose_move(board, O) call per O reply. The tests would not catch the symbol being X (its twin); that is a test gap, not a code defect.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+            self._board.apply_move(choose_move(self._board, O))"
+      }
+    ]
+  },
+  "anchors": [],
+  "key_by": "Claude Opus 5.5; bean-004 pre-merge review, evidence/reviews/bean-004-20261002T001224Z.md",
+  "key_checked_at": "2026-10-02",
+  "difficulty": "",
+  "contested": null,
+  "twin_of": "impl-ttt-session-asks-x",
+  "repair": {
+    "synthetic": false,
+    "description": "the real merged code; its twin is the synthetic mutant"
+  }
+}
