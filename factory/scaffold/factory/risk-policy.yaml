@@ -21,6 +21,9 @@ repo_allowed_paths:
   - src/**
   - tests/**
   - docs/**
+  # README.md: a document with no execution risk, same class as docs/**. Added
+  # 2026-10-02 after tic-tac-toe-py bean-005 hit it (owner decision).
+  - README.md
   - pyproject.toml
   - .gitignore
   - factory/specs/**
@@ -29,7 +32,7 @@ repo_allowed_paths:
 rules:
   # Documents the line writes about its own work. Still reviewed, never merged
   # without a human here, but they carry no execution risk.
-  - match: "{factory/specs/**,factory/impl/**,docs/**}"
+  - match: "{factory/specs/**,factory/impl/**,docs/**,README.md}"
     min_tier: 0
     reason: documents the line writes about its own work
 
