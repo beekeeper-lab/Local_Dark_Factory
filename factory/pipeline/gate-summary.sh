@@ -37,7 +37,7 @@ jq -e . >/dev/null 2>&1 < "$GATE" || { printf 'gate-summary: not JSON: %s\n' "$G
 jq -r '
   (if (.containment.contained | not) then "  - containment: " + (.containment.violations | join(", ")) else empty end),
   (.gates[]? | select(.status != "pass") | "  - gate " + .id + ": exit " + (.exit_code|tostring)),
-  (.acceptance_criteria[]? | select(.status != "pass") | "  - " + .id + ": " + (.reason // .command // "failed")),
+  (.acceptance_criteria[]? | select(.status != "pass" and .status != "manual") | "  - " + .id + ": " + (.reason // .command // "failed")),
   (if (.invariants != null and .invariants.status != "pass")
      then "  - invariants: " + (.invariants.reason // .invariants.ref) else empty end),
   (if (.secret_scan != null and ((.secret_scan.suspicious_lines // []) | length) > 0)

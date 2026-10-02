@@ -252,9 +252,24 @@ else
   fi
 
   # Every acceptance criterion the bean declares, run by the controller.
+  #
+  # Except `manual` ones. On a bean, `manual` is a legitimate verify: intake
+  # accepts it with a note saying what the person checks, and it marks the bean
+  # for a human (§05). verify.sh refuses it, correctly, because no machine can
+  # satisfy it; running it here made every bean with a manual criterion fail the
+  # gate forever (tic-tac-toe-py bean-005, 2026-10-01, the first such bean). It is
+  # recorded as `manual`, not passed and not failed, and the PR body lists it for
+  # the person who merges. A manual verify inside a TASK is still a spec defect:
+  # that is the build loop's check, not this one.
   while IFS= read -r ac; do
     acid="$(jq -r '.id' <<<"$ac")"
     v="$(jq -c '.verify' <<<"$ac")"
+    if [ "$(jq -r '.kind' <<<"$v")" = manual ]; then
+      AC_ROWS="$(jq -c --arg id "$acid" --argjson v "$v" \
+        '. + [{id:$id, kind:"manual", status:"manual", command:"", note:($v.note // "")}]' <<<"$AC_ROWS")"
+      note manual "ac:$acid" "a person checks: $(jq -r '.note // ""' <<<"$v" | cut -c1-60)"
+      continue
+    fi
     log="$RUN_DIR/ac-$acid.log"
     res="$("$PIPELINE_DIR/verify.sh" "$v" --out "$log" ${SB_ARGS+"${SB_ARGS[@]}"} ${SANDBOX_ENV_ARGS+"${SANDBOX_ENV_ARGS[@]}"} 2>/dev/null)"
     rc=$?

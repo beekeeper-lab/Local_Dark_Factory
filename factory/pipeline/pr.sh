@@ -289,6 +289,12 @@ BODY="$(mktemp)"
   if [ -f "$RUN_DIR/gate.json" ]; then
     jq -r '.gates[]? | "- `\(.id)` \(.status)"' "$RUN_DIR/gate.json"
     jq -r '.acceptance_criteria[]? | "- `\(.id)` \(.status) — \(.command // "")"' "$RUN_DIR/gate.json"
+    # Manual criteria are the merger's to check; no gate ran them.
+    if jq -e '[.acceptance_criteria[]? | select(.status == "manual")] | length > 0' "$RUN_DIR/gate.json" >/dev/null 2>&1; then
+      printf '\n**A person checks these before merging. No machine ran them:**\n\n'
+      jq -r '.acceptance_criteria[]? | select(.status == "manual") | "- [ ] `\(.id)` \(.note)"' "$RUN_DIR/gate.json"
+      printf '\n'
+    fi
     if [ "$(jq -r '.invariants // "null"' "$RUN_DIR/gate.json")" != "null" ]; then
       printf -- '- independent invariants: %s (`%s`)\n' \
         "$(jq -r '.invariants.status' "$RUN_DIR/gate.json")" "$(jq -r '.invariants.ref' "$RUN_DIR/gate.json")"
