@@ -127,6 +127,22 @@ check "a dependency must exist" "depends on bean-009, which is not a bean in thi
 check "check exits non-zero on findings" "1" "$rc"
 check "findings are written for the developer's next round" "bean-003.yaml: status" "$(cat "$S/check-findings.md")"
 
+# -- a bean path the repo's policy does not allow --------------------------------
+# The gate enforces the intersection, so this would be built and then rejected
+# (tic-tac-toe-py bean-005, README.md, 2026-10-01). Said at check time instead.
+R2="$WORK/repo2"; S2="$FACTORY_INTAKE_ROOT/demo/s2"
+mkdir -p "$R2/factory" "$S2/drafts"
+printf 'repo_allowed_paths:\n  - src/**\n  - tests/**\n' > "$R2/factory/risk-policy.yaml"
+git -C "$R2" init -q -b main && git -C "$R2" add -A \
+  && git -C "$R2" -c user.email=t@example.com -c user.name=T commit -qm policy
+cp "$S/source.md" "$S2/"
+sed -e 's/"id": "s1"/"id": "s2"/' -e "s#/nonexistent#$R2#" "$S/session.json" > "$S2/session.json"
+good bean-001 | sed 's#allowed_write_paths: \["src/demo/board.py", "tests/test_board.py"\]#allowed_write_paths: ["src/demo/board.py", "tests/test_board.py", "README.md"]#' \
+  > "$S2/drafts/bean-001.yaml"
+out="$("$PY" "$INTAKE" check "$S2" 2>&1)"
+check "a path outside the repo policy is refused" "README.md is outside the repo's repo_allowed_paths" "$out"
+nope  "and the paths inside it are not" "src/demo/board.py is outside the repo's" "$out"
+
 # -- approval ------------------------------------------------------------------
 out="$("$PY" "$INTAKE" approve "$S" --by tester 2>&1)"
 check "approval refuses while drafts fail" "approval stamps only valid beans" "$out"

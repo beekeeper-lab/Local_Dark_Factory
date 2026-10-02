@@ -60,6 +60,8 @@ FACTORY = PIPELINE.parent
 ROOT = FACTORY.parent
 sys.path.insert(0, str(ROOT / "bench"))
 import validate as schema_tools  # noqa: E402  (bench/validate.py: registry + loader)
+sys.path.insert(0, str(PIPELINE))
+import contain  # noqa: E402  (the same matcher the gate's containment uses)
 
 import jsonschema  # noqa: E402
 import yaml  # noqa: E402
@@ -387,6 +389,18 @@ def _validator() -> jsonschema.Draft202012Validator:
                                            registry=schema_tools.local_registry())
 
 
+def repo_allowed_paths(s: Session) -> list[str] | None:
+    """The target's repo_allowed_paths at its committed HEAD, or None when the
+    repo has no risk policy yet (then there is nothing to intersect with)."""
+    r = subprocess.run(["git", "-C", s.meta["repo_dir"], "show", "HEAD:factory/risk-policy.yaml"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    pol = yaml.safe_load(r.stdout) or {}
+    paths = pol.get("repo_allowed_paths")
+    return [str(p) for p in paths] if isinstance(paths, list) else None
+
+
 def check_bean(path: Path, s: Session, all_ids: set[str], stage: str = "draft") -> list[str]:
     """Everything a saved draft must satisfy. `stage` is draft or approved."""
     name = path.name
@@ -421,6 +435,18 @@ def check_bean(path: Path, s: Session, all_ids: set[str], stage: str = "draft") 
         if not isinstance(sb.get(k), int):
             f.append(f"{name}: size_budget.{k} is not set")
     writable = [str(p) for p in b.get("allowed_write_paths") or []]
+    # The gate enforces the INTERSECTION of the bean's paths and the repo's
+    # (§08), so a bean path the repo policy does not allow is a write the line
+    # will reject after building it. tic-tac-toe-py bean-005 (2026-10-01) was
+    # approved with README.md, which the repo's policy does not list, and failed
+    # its gate on containment. Said here, where the owner can still decide.
+    repo_ok = repo_allowed_paths(s)
+    if repo_ok is not None:
+        for w in writable:
+            if not any(contain.matches(w, r) for r in repo_ok):
+                f.append(f"{name}: allowed_write_paths: {w} is outside the repo's repo_allowed_paths"
+                         " (factory/risk-policy.yaml), so the gate would reject the write. Drop the"
+                         " path, or the owner widens the repo policy")
     for ac in b.get("acceptance_criteria") or []:
         if not isinstance(ac, dict):
             continue

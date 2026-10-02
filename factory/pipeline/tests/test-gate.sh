@@ -252,6 +252,34 @@ YAML
     --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
   check "with it, the package imports"        "ok     ac:ac1" "$out"
 
+  # A manual criterion on the bean is a person's check, not a failure. Before
+  # 2026-10-01 the gate sent it to verify.sh, which refuses `manual`, so every
+  # bean carrying one failed the gate on every attempt (tic-tac-toe-py bean-005).
+  cat > "$WORK/manual-bean.yaml" <<'YAML'
+schema_version: bean/2.0.0
+id: bean-001
+repo: example/x
+title: has a manual check
+intent: i
+status: approved
+allowed_write_paths: ["src/**"]
+acceptance_criteria:
+  - id: ac1
+    text: the package imports
+    verify: { kind: command, run: ["python", "-c", "import pkg"] }
+  - id: ac2
+    text: the window looks right
+    verify: { kind: manual, note: "open the window and look at the grid" }
+suggested_risk_tier: 1
+definition_of_done: ["ac1", "ac2"]
+YAML
+  out="$(PIPELINE_CONFIG="$WORK/cfg.json" bash "$PIPELINE_DIR/gate.sh" ai/runs/R --bean "$WORK/manual-bean.yaml" \
+    --policy factory/risk-policy.yaml --gates factory/gates.lock.yaml 2>&1)"
+  check "a manual criterion is left for a person" "manual ac:ac2" "$out"
+  check "with what they check"                    "open the window and look at the grid" "$out"
+  check "and does not fail the gate"              "GATE PASS" "$out"
+  check "gate.json records it as manual"          '"status": "manual"' "$(cat ai/runs/R/gate.json)"
+
   reset_branch
   mkdir -p src && printf 'BAD\n' > src/a.py
   commit_all "bad"
