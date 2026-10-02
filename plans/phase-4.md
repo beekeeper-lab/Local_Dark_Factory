@@ -39,7 +39,15 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       failure halts the step and pushes a notification. Real runs only: the suites stay
       uncontained and never touch the GPU.)*
 - [ ] 4. Role-batched scheduler (`swap_policy`). The regime is serial, measured in Phase 0.
-- [ ] 5. Kill switch: `pause`, `drain` and `stop-now`, each verified.
+- [x] 5. Kill switch: `pause`, `drain` and `stop-now`, each verified.
+      *(2026-10-02.) `factory pause|drain|stop-now|resume` write a control file beside the state
+      log. Every orchestrator reads it at each step boundary, and `factory go` reads it between
+      beans. On pause, the run holds its lease and waits. On drain, the run records
+      `drained_before_step`, releases its lease and exits 75, and `--resume` carries on.
+      stop-now signals each lease holder's process group and kills `factory-worker-*`
+      containers, and the evidence and the bean's state are kept for reconciliation. Each verb
+      is verified against a real orchestrator run in `test-faults.sh` (stop-now ended a 30 s
+      stub step in under 20 s).)*
 - [ ] 6. Startup reconciliation after an induced crash (GitHub state, worktrees, `events.jsonl`).
 - [ ] 7. A hardened systemd unit with podman storage under StateDirectory, and the
       `factory` user's environment scrubbed of API keys.

@@ -1073,6 +1073,44 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
   exit "$HALT_RC"
 }
 
+# ------------------------------------------------------------- kill switch --
+# §09's three verbs, read at every step boundary from the control file the
+# `factory` CLI writes ($FACTORY_STATE_DIR/control). A boundary is the only place
+# a run can stop and still be resumed from its own record, which is why pause and
+# drain wait for one; stop-now does not wait, and is the CLI signalling the
+# process group (see `factory stop-now`).
+#
+#   pause     hold here, lease kept, until `factory resume` clears the file
+#   drain     stop here: run.json says drained and which step is next, the lease
+#             is released, exit 75, and `--resume` carries on from this step
+#   stop-now  if the signal has not already ended the run, stop as drain does
+DRAIN_RC=75
+control_verb() {
+  local f="${FACTORY_STATE_DIR:-}/control"
+  [ -n "${FACTORY_STATE_DIR:-}" ] && [ -f "$f" ] || { printf ''; return 0; }
+  jq -r '.verb // ""' "$f" 2>/dev/null || printf ''
+}
+honour_control() { # <next step>
+  local next="$1" v
+  v="$(control_verb)"
+  if [ "$v" = pause ]; then
+    printf 'PAUSED before %s (factory pause). Waiting; factory resume to continue.\n' "$next"
+    while [ "$(control_verb)" = pause ]; do sleep "${FACTORY_PAUSE_POLL:-5}"; done
+    v="$(control_verb)"
+    [ -z "$v" ] && printf 'RESUMED at %s\n' "$next"
+  fi
+  if [ "$v" = drain ] || [ "$v" = stop-now ]; then
+    if [ -n "${RUN_DIR:-}" ] && [ -f "$RUN_DIR/run.json" ]; then
+      jq -c --arg s "$next" --arg v "$v" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '. + {status:"drained", drained_by:$v, drained_before_step:$s, drained_at:$t}' \
+        "$RUN_DIR/run.json" > "$RUN_DIR/run.json.tmp" && mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
+    fi
+    printf 'DRAINED before %s (factory %s). Resume with: factory run %s --resume %s\n' \
+      "$next" "$v" "$BEAN_ID" "${RUN_DIR:-<no run dir yet>}"
+    exit "$DRAIN_RC"
+  fi
+}
+
 # ----------------------------------------------------------------- failures --
 handle_other_failure() { # a non-audit step failed: no findings, no blind retry
   local step="$1" rc="${2:-1}"
@@ -1189,6 +1227,7 @@ while [ "$STEP_I" -lt "${#STEPS[@]}" ]; do
     halt "${STEPS[$STEP_I]}" 1
   fi
   STEP="${STEPS[$STEP_I]}"
+  honour_control "$STEP"
   # Preflight runs on main (it verifies that). Every step after it — including
   # audits and the run dir's gates — runs on the bean's branch, and the on-main
   # guard is the belt to ensure_run_branch's braces.
