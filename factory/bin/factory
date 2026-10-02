@@ -710,6 +710,10 @@ run from the working tree."
   state)
     require_target
     FACTORY_STATE_DIR="$(state_dir)"; export FACTORY_STATE_DIR
+    if [ "${1:-}" = --control ]; then   # the kill switch's current verb, or nothing
+      jq -r '.verb // empty' "$FACTORY_STATE_DIR/control" 2>/dev/null || true
+      exit 0
+    fi
     exec "$(factory_python)" "$PIPE/beanstate.py" state "$@"
     ;;
 

@@ -1,0 +1,62 @@
+# darkfactory@<repo>.service — the line, unattended, on one target repository.
+#
+#   instance (%i) = the repository's directory under /var/lib/darkfactory/repos
+#   e.g. systemctl enable --now darkfactory@seating-planner-py
+#
+# Hardening is from §08 and the design document's appendix, enabled incrementally
+# and checked by factory/deploy/check-unit.sh rather than blanket-enabled. The
+# controller runs rootless podman, which keeps its storage under $HOME by
+# default; ProtectHome would then break it, so storage is moved under the
+# StateDirectory (storage.conf) and HOME points there too.
+[Unit]
+Description=Dark Factory line for %i
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=factory
+Group=factory
+StateDirectory=darkfactory
+RuntimeDirectory=darkfactory
+WorkingDirectory=/var/lib/darkfactory/repos/%i
+Environment=HOME=/var/lib/darkfactory
+Environment=XDG_RUNTIME_DIR=/run/darkfactory
+Environment=CONTAINERS_STORAGE_CONF=/etc/darkfactory/storage.conf
+Environment=OLLAMA_HOST=http://127.0.0.1:11434
+# The GitHub token for the factory's account, and nothing else. No frontier
+# provider key exists in the runtime (§08); run-line.sh drops anything not on its
+# allowlist even if this file grows one.
+EnvironmentFile=/etc/darkfactory/env
+ExecStart=/opt/darkfactory/factory/deploy/run-line.sh
+# A stop is a drain (§09): runs finish their current step and record where they
+# stopped, so the next start resumes them. systemd's SIGTERM only comes after
+# ExecStop returns or TimeoutStopSec runs out, and a build step can be long.
+ExecStop=/opt/darkfactory/factory/deploy/drain-and-wait.sh
+TimeoutStopSec=2h
+KillSignal=SIGTERM
+KillMode=control-group
+Restart=on-failure
+RestartSec=60
+
+# NOT NoNewPrivileges=true, which the design document's template has: rootless
+# podman maps its user namespace through newuidmap/newgidmap, which are setuid,
+# and no_new_privs stops them ("newuidmap: write to uid_map failed: Operation
+# not permitted"). The worker containers still run with
+# --security-opt=no-new-privileges, so the model's sandbox keeps it.
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/darkfactory /run/darkfactory
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
