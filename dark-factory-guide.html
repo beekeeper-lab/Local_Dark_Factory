@@ -171,7 +171,7 @@
       <span class="sub">A lights-out software line on local models: humans and AI refine requirements into beans; the line writes the spec, audits it, builds it task by task, audits the build, documents it, audits the documents, and opens the PR. Frontier models build the line — they never run on it.</span>
     </h1>
     <p class="lede">You spend your time at the front — turning meeting transcripts and conversations into approved, ordered beans — and at the back, reading two teaching documents per change: the <b>specification</b> (the plan) and the <b>implementation detail</b> (what was done). Everything between is the line: a Qwen developer driven through Pi, a gpt-oss judge from a different model family, and a deterministic controller that owns every decision with consequences.</p>
-    <div class="meta">v5.1 · 2026-09-29 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · <a href="#status">where we are: Phases 0–2 complete, Phase 3 next</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
+    <div class="meta">v5.2 · 2026-10-02 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · <a href="#status">where we are: Phases 0–3 complete, Phase 4 next</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
 
     <div class="banner">
       <p><b>Four standing rules.</b></p>
@@ -295,21 +295,21 @@
 
 <section id="status">
   <div class="wrap">
-    <p class="kicker">00 — WHERE WE ARE · updated 2026-09-29, Phase 2 closed</p><hr class="lead-line">
-    <h2>Phases 0–2 are complete; Phase 3 is next</h2>
+    <p class="kicker">00 — WHERE WE ARE · updated 2026-10-02, Phase 3 closed</p><hr class="lead-line">
+    <h2>Phases 0–3 are complete; Phase 4 is next</h2>
     <p>Each phase has its own plan in <a href="plans/README.md"><code>plans/</code></a>. Only one plan is active at a time. Its scope is fixed when it starts, and new ideas go to the <a href="plans/PARKING-LOT.md">parking lot</a> until the phase closes. We pivot only on a blocker, and the plan records it under <i>Amendments</i>. Each phase is audited as one chunk of work. <b>This section is updated when a plan completes, and at no other time.</b></p>
     <div class="tbl"><table>
       <tr><th>Phase</th><th>Status</th><th>Plan</th><th>In one line</th></tr>
       <tr><td><b>0</b> Measure on Forge</td><td><span class="st done">COMPLETE</span></td><td>closed 2026-09-14 · tag <code>phase-0-complete</code></td><td>Hardware measured and provenanced. The regime is serial, because the two models cannot co-reside.</td></tr>
       <tr><td><b>1</b> One bean through every stage</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-1.md">phase-1.md</a> · closed 2026-09-29 · tag <code>phase-1-complete</code></td><td>8 of 8 on bean-021 with two recorded amendments: the local judge is advisory in v1, and the retry evidence is cited from bean-006. The owner read both documents.</td></tr>
       <tr><td><b>2</b> Controller drives; developer cannot commit</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-2.md">phase-2.md</a> · closed 2026-09-29 · tag <code>phase-2-complete</code></td><td>All 13 fault injections pass, one of them a real GitHub CI failure that sent the run back to build. The worker is contained, and the full loop runs unattended up to a human-authorised merge.</td></tr>
-      <tr><td><b>3</b> Intake refinery</td><td><span class="st active">NEXT</span></td><td><a href="plans/phase-3.md">phase-3.md</a></td><td>Not started beyond <code>factory go</code>. Needs a real transcript from the owner.</td></tr>
-      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>A serial queue runs today. 15 seating-planner beans merged; 15 remain, 022–030 of them repairs.</td></tr>
+      <tr><td><b>3</b> Intake refinery</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-3.md">phase-3.md</a> · closed 2026-10-02 · tag <code>phase-3-complete</code></td><td>The owner's 1m 45s voice memo became 5 approved tic-tac-toe beans, and every one held its size budget at specify. Four ran on to reviewed, merged PRs. Bean-005 (the window) waits on the owner's three manual checks.</td></tr>
+      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st active">NEXT</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>A serial queue runs today. 15 seating-planner beans merged; 15 remain, 022–030 of them repairs.</td></tr>
       <tr><td><b>5</b> Supervised operation</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-5.md">phase-5.md</a></td><td>Judge accuracy work belongs here, measured by the qualification suite.</td></tr>
       <tr><td><b>6</b> Merge modes &amp; deploy-to-test</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-6.md">phase-6.md</a></td><td>Not started.</td></tr>
     </table></div>
     <div class="statusbox">
-      <p><b>What works today.</b> A bean runs unattended from spec to a PR with green GitHub CI, and 15 such PRs have merged. The developer model wrote all of them. Every bean from 001 to 010 reached a passing gate.</p>
+      <p><b>What works today.</b> A recorded conversation becomes approved beans through <code>factory intake</code>, and those beans run unattended from spec to a PR with green GitHub CI. 19 such PRs have merged across two repositories. The developer model wrote all of them. Every bean from 001 to 010 reached a passing gate.</p>
       <p><b>What does not.</b> The local judge (<code>gpt-oss:120b</code>) has not produced a verdict the controller could stamp on any real run, so audits run <i>advisory</i>. <b>This is v1 by decision</b>: one bounded fix was tried on 2026-09-29 and failed (0 stamped verdicts in 18 runs), and Phase 1 closed with that recorded as an amendment. Judge accuracy is Phase 5 work. A pre-merge Claude review is the gate that works: it found a real defect in each of the 12 merged beans it checked, even though every one had passed its gate. Those defects are why repair beans 021–030 exist.</p>
     </div>
   </div>
@@ -837,6 +837,7 @@ KillSignal=SIGTERM          <span class="c"># SIGTERM→drain; SIGINT→pause; c
     <p class="kicker">14 — CHANGELOG, OPEN QUESTIONS &amp; REFERENCES</p><hr class="lead-line">
     <h3>Changelog</h3>
     <ul class="tight">
+      <li><b>v5.2 · 2026-10-02</b> — §00: Phase 3 (intake refinery) closed. A transcript became 5 approved beans for <code>tic-tac-toe-py</code>, and all of them held their size budget at specify (<code>audits/PHASE-3-AUDIT-20261002.md</code>). Phase 4 is next.</li>
       <li><b>v5.1 · 2026-09-29</b> — Added §00 "Where we are" (Phases 1 and 2 closed the same day), with a plan per phase in <code>plans/</code> and the rule that scope is fixed per phase, pivots happen only on a blocker, and each phase is audited as a whole. This section is updated only when a plan completes.</li>
       <li><b>v5.0 · 2026-09-14</b> — Aligned to the owner's process and the Forge/local-model goal. Added the document pipeline (spec → spec audit → build → impl audit → impl-detail → pre-PR audit) with three verdict stages and hash-bound HTML artifacts; the intake refinery (transcript → beans → joint review → approval PR → <code>go</code>); the task loop with per-task <code>verify</code>, containment and attempt caps ("does not quit early" as a controller property); agentic acceptance criteria (<code>verify</code> on every AC); bean <code>repo</code>/<code>status</code>/<code>source</code>/<code>approval</code>/<code>size_budget</code>; new <code>task</code> and <code>repo-config</code> schemas; per-repo <code>merge_mode</code> with signed <code>auto</code> opt-in and <code>post_merge</code> deploy-to-test; git worktrees with <code>max_inflight</code>; role-batched scheduler for the serial regime with co-resident fallback; Forge described as 126 GB unified memory with a configurable GPU split; GitHub as the single host; the outside builder (Opus) defined as structurally absent from the runtime; Phases 3 (intake), 5 (supervised operation) and 6 (merge modes) added; model-change protocol added. Fixed the truncated bean example; schemas moved to <code>schemas/</code>.</li>
       <li><b>v4.0 · 2026-09-13</b> — Judge reviews an immutable <code>candidate_sha</code>; real JSON Schemas; Phase-0 context handling; argv gates; full sandbox contract; serial model lifecycle; checkable plan.</li>

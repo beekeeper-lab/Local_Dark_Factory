@@ -1,0 +1,220 @@
+{
+  "schema": "phase3-audit/1.0.0",
+  "audited_at": "2026-10-02T12:25:24Z",
+  "provenance": {
+    "host": "forge",
+    "kernel": "7.2.7-100.fc43.x86_64",
+    "ollama_version": "0.32.13",
+    "measured_at": "2026-10-02T12:25:24Z",
+    "pipeline_version": "1.4.0-df.1"
+  },
+  "target": {
+    "repo": "tic-tac-toe-py",
+    "ref": "origin/main",
+    "sha": "a8dead0"
+  },
+  "phase_3_exit": {
+    "transcript_to_beans": "pass",
+    "all_ac_verifiable_or_manual": "pass",
+    "non_approved_refused": "pass",
+    "size_budget_holds_at_specify": "pass"
+  },
+  "findings": [],
+  "beans": [
+    {
+      "path": "factory/beans/bean-001-pure-game-core-part-one-the-3-by-3-board/bean.yaml",
+      "id": "bean-001",
+      "status": "approved",
+      "source": "transcript",
+      "approved": true,
+      "acs": [
+        {
+          "id": "ac1",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac2",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac3",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac4",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac5",
+          "kind": "test",
+          "runnable": true
+        }
+      ]
+    },
+    {
+      "path": "factory/beans/bean-002-pure-game-core-part-two-win-and-draw-det/bean.yaml",
+      "id": "bean-002",
+      "status": "approved",
+      "source": "transcript",
+      "approved": true,
+      "acs": [
+        {
+          "id": "ac1",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac2",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac3",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac4",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac5",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac6",
+          "kind": "test",
+          "runnable": true
+        }
+      ]
+    },
+    {
+      "path": "factory/beans/bean-003-strategic-system-user-move-selection-for/bean.yaml",
+      "id": "bean-003",
+      "status": "approved",
+      "source": "transcript",
+      "approved": true,
+      "acs": [
+        {
+          "id": "ac1",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac2",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac3",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac4",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac5",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac6",
+          "kind": "test",
+          "runnable": true
+        }
+      ]
+    },
+    {
+      "path": "factory/beans/bean-004-headless-game-session-owning-the-human-v/bean.yaml",
+      "id": "bean-004",
+      "status": "approved",
+      "source": "transcript",
+      "approved": true,
+      "acs": [
+        {
+          "id": "ac1",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac2",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac3",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac4",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac5",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac6",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac7",
+          "kind": "test",
+          "runnable": true
+        }
+      ]
+    },
+    {
+      "path": "factory/beans/bean-005-tkinter-window-over-the-session-clickabl/bean.yaml",
+      "id": "bean-005",
+      "status": "approved",
+      "source": "transcript",
+      "approved": true,
+      "acs": [
+        {
+          "id": "ac1",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac2",
+          "kind": "test",
+          "runnable": true
+        },
+        {
+          "id": "ac3",
+          "kind": "manual",
+          "runnable": true
+        },
+        {
+          "id": "ac4",
+          "kind": "manual",
+          "runnable": true
+        },
+        {
+          "id": "ac5",
+          "kind": "manual",
+          "runnable": true
+        },
+        {
+          "id": "ac6",
+          "kind": "test",
+          "runnable": true
+        }
+      ]
+    }
+  ]
+}

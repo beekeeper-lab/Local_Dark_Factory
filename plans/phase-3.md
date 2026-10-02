@@ -1,6 +1,6 @@
 # Phase 3 — Intake refinery
 
-**Status:** active since 2026-09-30. Entry met; the queue (`factory go`) was already built.
+**Status:** complete 2026-10-02 (`audits/PHASE-3-AUDIT-20261002.md`, tag `phase-3-complete`). Active from 2026-09-30.
 **Goal:** a real meeting transcript becomes at least five approved beans, through a
 conversation with the owner, and those beans survive the size budget when they are specified.
 
@@ -28,8 +28,8 @@ conversation with the owner, and those beans survive the size budget when they a
 - [x] 6. An intake branch and PR. The owner merges. *(beekeeper-lab/tic-tac-toe-py#1, merged 2026-10-01 at the owner's request.)*
 - [x] 7. `factory go` refuses beans that are not approved (`factory/pipeline/queue.sh`,
       `tests/test-queue.sh`).
-- [ ] 8. Specify each approved bean and confirm every one holds its `size_budget`.
-- [ ] 9. Closing ritual, then `PHASE-3-COMPLETE`, the design document update, and a demo.
+- [x] 8. Specify each approved bean and confirm every one holds its `size_budget`. *(001–004 2/4, 005 3/4 tasks.)*
+- [x] 9. Closing ritual, then `PHASE-3-COMPLETE`, the design document update, and a demo. *(Demo: with the owner, at bean-005's manual check.)*
 
 *Limit: if the chosen AI side cannot produce a schema-valid bean in 3 sessions on the real
 transcript, stop and bring the owner a model or role change. Do not tune the prompt further.*
