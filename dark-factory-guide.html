@@ -171,7 +171,7 @@
       <span class="sub">A lights-out software line on local models: humans and AI refine requirements into beans; the line writes the spec, audits it, builds it task by task, audits the build, documents it, audits the documents, and opens the PR. Frontier models build the line — they never run on it.</span>
     </h1>
     <p class="lede">You spend your time at the front — turning meeting transcripts and conversations into approved, ordered beans — and at the back, reading two teaching documents per change: the <b>specification</b> (the plan) and the <b>implementation detail</b> (what was done). Everything between is the line: a Qwen developer driven through Pi, a gpt-oss judge from a different model family, and a deterministic controller that owns every decision with consequences.</p>
-    <div class="meta">v5.2 · 2026-10-02 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · <a href="#status">where we are: Phases 0–3 complete, Phase 4 next</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
+    <div class="meta">v5.2 · 2026-10-02 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · <a href="#status">where we are: Phases 0–3 complete, Phase 4 waits on the owner</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
 
     <div class="banner">
       <p><b>Four standing rules.</b></p>
@@ -296,22 +296,48 @@
 <section id="status">
   <div class="wrap">
     <p class="kicker">00 — WHERE WE ARE · updated 2026-10-02, Phase 3 closed</p><hr class="lead-line">
-    <h2>Phases 0–3 are complete; Phase 4 is next</h2>
-    <p>Each phase has its own plan in <a href="plans/README.md"><code>plans/</code></a>. Only one plan is active at a time. Its scope is fixed when it starts, and new ideas go to the <a href="plans/PARKING-LOT.md">parking lot</a> until the phase closes. We pivot only on a blocker, and the plan records it under <i>Amendments</i>. Each phase is audited as one chunk of work. <b>This section is updated when a plan completes, and at no other time.</b></p>
+    <h2>Phases 0–3 are complete; Phase 4 waits on two owner decisions</h2>
+    <p>Each phase has its own plan in <a href="plans/README.md"><code>plans/</code></a>. Only one plan is active at a time. Its scope is fixed when it starts, and new ideas go to the <a href="plans/PARKING-LOT.md">parking lot</a> until the phase closes. We pivot only on a blocker, and the plan records it under <i>Amendments</i>. Each phase is audited as one chunk of work, by a script, not a checklist.</p>
     <div class="tbl"><table>
       <tr><th>Phase</th><th>Status</th><th>Plan</th><th>In one line</th></tr>
       <tr><td><b>0</b> Measure on Forge</td><td><span class="st done">COMPLETE</span></td><td>closed 2026-09-14 · tag <code>phase-0-complete</code></td><td>Hardware measured and provenanced. The regime is serial, because the two models cannot co-reside.</td></tr>
-      <tr><td><b>1</b> One bean through every stage</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-1.md">phase-1.md</a> · closed 2026-09-29 · tag <code>phase-1-complete</code></td><td>8 of 8 on bean-021 with two recorded amendments: the local judge is advisory in v1, and the retry evidence is cited from bean-006. The owner read both documents.</td></tr>
-      <tr><td><b>2</b> Controller drives; developer cannot commit</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-2.md">phase-2.md</a> · closed 2026-09-29 · tag <code>phase-2-complete</code></td><td>All 13 fault injections pass, one of them a real GitHub CI failure that sent the run back to build. The worker is contained, and the full loop runs unattended up to a human-authorised merge.</td></tr>
-      <tr><td><b>3</b> Intake refinery</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-3.md">phase-3.md</a> · closed 2026-10-02 · tag <code>phase-3-complete</code></td><td>The owner's 1m 45s voice memo became 5 approved tic-tac-toe beans, and every one held its size budget at specify. Four ran on to reviewed, merged PRs. Bean-005 (the window) waits on the owner's three manual checks.</td></tr>
-      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st active">NEXT</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>A serial queue runs today. 15 seating-planner beans merged; 15 remain, 022–030 of them repairs.</td></tr>
+      <tr><td><b>1</b> One bean through every stage</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-1.md">phase-1.md</a> · closed 2026-09-29 · tag <code>phase-1-complete</code></td><td>8 of 8 on bean-021, with two recorded amendments: the local judge is advisory in v1, and the retry evidence is cited from bean-006.</td></tr>
+      <tr><td><b>2</b> Controller drives; developer cannot commit</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-2.md">phase-2.md</a> · closed 2026-09-29 · tag <code>phase-2-complete</code></td><td>All 13 fault injections pass, one of them a real GitHub CI failure that sent the run back to build. The worker is contained.</td></tr>
+      <tr><td><b>3</b> Intake refinery</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-3.md">phase-3.md</a> · closed 2026-10-02 · tag <code>phase-3-complete</code></td><td>A 1m 45s voice memo became 5 approved beans for a new repo, <code>tic-tac-toe-py</code>. All 5 held their size budget at specify, and all 5 then built, passed review and merged. The game is playable.</td></tr>
+      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st active">NEXT</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>The line runs unattended for 48 h or more and produces at least 25 bean PRs, with a kill switch and crash recovery. Entry waits on the owner (below).</td></tr>
       <tr><td><b>5</b> Supervised operation</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-5.md">phase-5.md</a></td><td>Judge accuracy work belongs here, measured by the qualification suite.</td></tr>
       <tr><td><b>6</b> Merge modes &amp; deploy-to-test</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-6.md">phase-6.md</a></td><td>Not started.</td></tr>
     </table></div>
+
+    <h3>By the numbers</h3>
+    <div class="tbl"><table>
+      <tr><th>Repository</th><th>Beans merged</th><th>Remaining</th><th>Notes</th></tr>
+      <tr><td><code>seating-planner-py</code></td><td>15 of 30</td><td>15: 015–020 (features) and 022–030 (repairs from the retroactive reviews)</td><td>Run order: 022–025, then 026–030, then 015–020. 016, 018, 019, 020 and 030 wait on dependencies.</td></tr>
+      <tr><td><code>tic-tac-toe-py</code></td><td>5 of 5</td><td>none</td><td>Specified, built and merged 2026-10-01 to 10-02, with CI green from bean-004 on. bean-005's README run command failed review and was fixed before merge.</td></tr>
+    </table></div>
+    <p>Factory suite: <b>2,479 assertions, all green.</b> Every merged bean since 2026-09-28 has had a pre-merge Claude review, with findings in <code>evidence/reviews/</code>.</p>
+
     <div class="statusbox">
-      <p><b>What works today.</b> A recorded conversation becomes approved beans through <code>factory intake</code>, and those beans run unattended from spec to a PR with green GitHub CI. 19 such PRs have merged across two repositories. The developer model wrote all of them. Every bean from 001 to 010 reached a passing gate.</p>
-      <p><b>What does not.</b> The local judge (<code>gpt-oss:120b</code>) has not produced a verdict the controller could stamp on any real run, so audits run <i>advisory</i>. <b>This is v1 by decision</b>: one bounded fix was tried on 2026-09-29 and failed (0 stamped verdicts in 18 runs), and Phase 1 closed with that recorded as an amendment. Judge accuracy is Phase 5 work. A pre-merge Claude review is the gate that works: it found a real defect in each of the 12 merged beans it checked, even though every one had passed its gate. Those defects are why repair beans 021–030 exist.</p>
+      <p><b>What works today.</b> A recorded conversation becomes approved beans through <code>factory intake</code>, and the line takes each bean from spec to a PR with green GitHub CI without anyone touching it. 20 such PRs have merged across two repositories. The developer model (<code>qwen3.8:27b</code>) wrote all of them. Deterministic checks catch most of what goes wrong: containment, size budget, red-for-the-right-reason tests, reverted-change pinning, document coverage and quote checking.</p>
+      <p><b>What does not.</b> The local judge (<code>gpt-oss:120b</code>) still cannot be a gate. In Phase 3 it invented a method that was not in a spec, returned malformed JSON, and described a class that does not exist. Audits run <i>advisory</i> by decision, and judge accuracy is Phase 5 work. The pre-merge Claude review is the gate that works. In Phase 3 it caught the one real defect, a README run command that failed, and it found test gaps on every bean.</p>
+      <p><b>Fixed in Phase 3.</b> A bean with a <code>manual</code> criterion could never pass the gate. It now goes to a person, as a checklist in the PR. Intake no longer approves a write path the target's risk policy forbids. A new target's CI can now pull the private gate image once the repo is granted package access.</p>
     </div>
+
+    <h3>Waiting on you (the owner)</h3>
+    <div class="tbl"><table>
+      <tr><th>#</th><th>Decision</th><th>Why it gates</th><th>My recommendation</th></tr>
+      <tr><td>1</td><td><b>Review <code>factory/risk-policy.yaml</code></b> (<code>factory policy</code> shows its effect)</td><td>It decides what the line may touch unsupervised, and no human has signed it off. This is a Phase 4 entry condition.</td><td>Approve as is. On seating-planner, 27 of 30 beans come out tier 2 and 3 come out tier 1. No bean reaches tier 3, because none touches agent control, secrets or infrastructure, which is correct. One overlap is harmless: <code>.github/workflows/**</code> matches both the tier-2 CI rule and the tier-3 infra rule, and the higher tier wins.</td></tr>
+      <tr><td>2</td><td><b>Baseline approval of this document</b></td><td>A Phase 4 entry condition. Phase 4 builds against a design nobody has frozen.</td><td>Approve v5.2. Changes after that go in the changelog (§14).</td></tr>
+      <tr><td>3</td><td>Parking-lot items from Phase 3</td><td>Reviewed only at a phase close, which is now.</td><td>Take <b>the claims-check false positive</b> into Phase 4, because a check that fires on every spec teaches people to ignore it. Add the weak tests the reviews found to <code>bench/qualify/</code>. Add <code>README.md</code> to the scaffold's default docs paths. Run the local-transcription A/B test when the GPU is idle.</td></tr>
+    </table></div>
+
+    <h3>What is left, in order</h3>
+    <div class="tbl"><table>
+      <tr><th>Phase</th><th>Remaining work</th></tr>
+      <tr><td><b>4</b></td><td>Queue state machine with leases and idempotency; worktree manager; inference manager (<code>ensure_loaded</code>, <code>healthcheck</code>); role-batched scheduler; kill switch (<code>pause</code>, <code>drain</code>, <code>stop-now</code>); crash reconciliation; hardened systemd unit; telemetry. The exit is a 48-hour unattended run with at least 25 bean PRs. The 15 seating-planner beans still to build are the natural workload.</td></tr>
+      <tr><td><b>5</b></td><td>Supervised operation: judge accuracy through the model-change protocol, measured against the qualification suite (0 of 9 pairs on 2026-09-29).</td></tr>
+      <tr><td><b>6</b></td><td>Merge modes beyond <code>human_required</code>, and deploy-to-test.</td></tr>
+    </table></div>
   </div>
 </section>
 
