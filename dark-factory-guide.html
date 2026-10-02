@@ -149,9 +149,30 @@
     .banner{background:#fff}
     h1,h2,h3,td b,.callout h4,.panel h4{color:#111}
     .dim,td,p,li,.unit{color:#333}
-    pre,.panel,.phasebox,figure,table,ol.loop>li{break-inside:avoid}
+    pre,.panel,.phasebox,figure,ol.loop>li{break-inside:avoid}
     .pulse{animation:none}
+    /* Save as PDF (browser print). Tables may split across pages, or a long one
+       jumps to the next page and leaves a blank one behind; rows stay whole. */
+    @page{size:Letter;margin:16mm 15mm 18mm}
+    body{font-size:10pt}
+    table,.tbl{break-inside:auto;overflow:visible}
+    tr,.callout,.statusbox{break-inside:avoid}
+    thead{display:table-header-group}
+    section{padding-top:10px;padding-bottom:10px}
+    h2,h3,.kicker,hr.lead-line{break-after:avoid}
+    /* !important: these screen rules are declared after this block, so plain
+       print rules lose to them by source order. */
+    header.hero *,.lead,.meta,.hero p,.statusbox p,th,nav li,nav a{color:#222!important}
+    b,strong,ol.loop b{color:#111!important}
+    code{background:#eee!important;color:#111!important}
+    pre code{background:transparent!important}
+    .statusbox{background:#fff!important;border-color:#a60!important}
+    .st,td .t{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .print-btn{display:none}
   }
+  .print-btn{position:fixed;top:14px;right:14px;z-index:10;font:600 13px/1 var(--mono);padding:9px 12px;border-radius:7px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+  .print-btn:hover{border-color:var(--worker)}
   @media (prefers-reduced-motion:no-preference){
     .pulse{animation:pulse 2.6s ease-in-out infinite}
     @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
@@ -163,6 +184,7 @@
 </style>
 </head>
 <body>
+<button class="print-btn" type="button" onclick="window.print()" title="Opens the print dialog; choose Save as PDF">Save as PDF</button>
 
 <header class="hero">
   <div class="wrap">
