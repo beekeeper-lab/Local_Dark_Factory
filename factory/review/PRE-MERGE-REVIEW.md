@@ -37,6 +37,12 @@ and looks in particular for:
 an export of the branch, with the command and its output in the review. An
 undemonstrated suspicion is reported as such and does not block.
 
+**Hidden tests: run `hidden-tests/verify.sh` with `HIDDEN_VERIFIED_DIR` set to a
+scratch directory.** Running it against `main` is how a review shows that the
+suite fails without the fix, and by default that run overwrites
+`hidden-tests/verified/<repo>/<bean>.json` with `not_verified`. That downgrades
+a record someone earned by running it both ways (bean-022's review, 2026-10-02).
+
 ## Outcomes
 
 - **No demonstrated defect** — merge. Minor points are noted in the review record
