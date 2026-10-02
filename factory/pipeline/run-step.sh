@@ -366,9 +366,18 @@ ensure_role_loaded() {
   [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] || return 0
   [ -x "$PIPELINE_DIR/ensure-loaded.sh" ] || return 0
   local el_rc=0
-  ROLES_FILE="$ROLES_FILE" "$PIPELINE_DIR/ensure-loaded.sh" "$ROLE" >&2 || el_rc=$?
-  [ "$el_rc" -ge 2 ] && printf 'WARN   %s   could not preload %s; the step runs at whatever context the server has\n' \
-    "$STEP" "$ROLE_MODEL" >&2
+  # The inference manager's contract (§09, Phase 4 task 3): the other role out,
+  # this one in, healthy on the digest the run declared, and the load timed into
+  # model-loads.jsonl for swap_overhead_pct. A load that fails its retries, or a
+  # model that fails its health check, fails the step: "never proceed on the
+  # wrong model", and the halt that follows blocks the bean.
+  ROLES_FILE="$ROLES_FILE" "$PIPELINE_DIR/ensure-loaded.sh" "$ROLE" --healthcheck \
+    ${DECLARED_DIGEST:+--expect-digest "$DECLARED_DIGEST"} --record "$RUN_DIR/model-loads.jsonl" >&2 || el_rc=$?
+  if [ "$el_rc" -ge 2 ]; then
+    command -v notify-push >/dev/null 2>&1 \
+      && notify-push "factory: $STEP cannot load $ROLE_MODEL (exit $el_rc); the bean will block" >/dev/null 2>&1 || true
+    die "$STEP: the $ROLE model $ROLE_MODEL could not be loaded healthy (ensure-loaded exit $el_rc); see $RUN_DIR/model-loads.jsonl"
+  fi
   return 0
 }
 

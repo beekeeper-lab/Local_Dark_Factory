@@ -643,6 +643,22 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # `repo_browser` tool namespace that does not exist here, gets nothing, and
       # answers anyway — a fluent audit of a document it never read. judge.sh
       # puts the artifacts in the question instead. See its header.
+      #
+      # The judge's model through the inference manager first (§09, Phase 4 task
+      # 3): the developer out, the judge in and healthy, the load timed. Only for a
+      # real run — the suites run uncontained with a stub judge, and loading 64GB
+      # for a stub is wrong whether or not a test is watching (run-step.sh says the
+      # same of the developer). A judge that cannot be loaded halts the step.
+      if [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] && [ "${FACTORY_CONTAIN_WORKER:-1}" != 0 ]; then
+        el_rc=0
+        "$PIPELINE_DIR/ensure-loaded.sh" judge --healthcheck \
+          --expect-digest "$(jq -r '.conditions.judge.digest // empty' "$RUN_DIR/run.json")" \
+          --record "$RUN_DIR/model-loads.jsonl" || el_rc=$?
+        if [ "$el_rc" -ge 2 ]; then
+          record_failure "$step" "$el_rc" "the judge model could not be loaded healthy (ensure-loaded exit $el_rc)"
+          halt "$step" "$el_rc"
+        fi
+      fi
       "$PIPELINE_DIR/judge.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$(bean_yaml)" || rc=$?
       # The judge's own exit code was being captured and then thrown away by an
       # unconditional reset on the next line, so a judge that never answered was

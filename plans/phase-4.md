@@ -29,8 +29,15 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       `merged` is not yet written: GitHub knows it, and task 6's reconciliation reads it.)*
 - [ ] 2. Worktree manager (`worktrees/<bean-id>`, `max_inflight`), with evidence kept when a
       bean blocks.
-- [ ] 3. Inference manager: finish `ensure_loaded(role)` and `healthcheck(role)`, and record
+- [x] 3. Inference manager: finish `ensure_loaded(role)` and `healthcheck(role)`, and record
       load-time telemetry.
+      *(2026-10-02.) `ensure-loaded.sh` now does the §09 contract. In the serial regime it
+      evicts the other role's model first. It retries a failed load twice, health-checks the
+      model (it must be in `/api/tags` on the digest the run declared, and answer a one-token
+      probe), and times each load into the run's `model-loads.jsonl`. `run-step.sh` (developer)
+      and the orchestrator (judge, before every audit) call it, and a load or health-check
+      failure halts the step and pushes a notification. Real runs only: the suites stay
+      uncontained and never touch the GPU.)*
 - [ ] 4. Role-batched scheduler (`swap_policy`). The regime is serial, measured in Phase 0.
 - [ ] 5. Kill switch: `pause`, `drain` and `stop-now`, each verified.
 - [ ] 6. Startup reconciliation after an induced crash (GitHub state, worktrees, `events.jsonl`).
