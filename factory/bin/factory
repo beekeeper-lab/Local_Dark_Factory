@@ -15,6 +15,13 @@
 #
 # So: the target repo is wherever you are, its config is found rather than
 # recited, and the factory's own location is derived from this script.
+# The whole CLI is one compound command, closed at the end of the file, so bash
+# parses all of it before running any of it. A script is otherwise read from
+# disk as it executes, and `factory go` runs for hours: editing this file under a
+# running queue (a git pull, a fix landing) made bean-023's go loop read the
+# shifted file and die with "unexpected EOF" after its bean (2026-10-02). The
+# orchestrator runs from a snapshot; this is the same protection for the CLI.
+{
 set -uo pipefail
 BIN_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 FACTORY_ROOT="$(cd "$BIN_DIR/.." && pwd)"
@@ -1156,3 +1163,5 @@ The two documents this run produced:
     die "unknown command: $cmd"
     ;;
 esac
+exit $?
+}
