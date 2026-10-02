@@ -193,7 +193,7 @@
       <span class="sub">A lights-out software line on local models: humans and AI refine requirements into beans; the line writes the spec, audits it, builds it task by task, audits the build, documents it, audits the documents, and opens the PR. Frontier models build the line — they never run on it.</span>
     </h1>
     <p class="lede">You spend your time at the front — turning meeting transcripts and conversations into approved, ordered beans — and at the back, reading two teaching documents per change: the <b>specification</b> (the plan) and the <b>implementation detail</b> (what was done). Everything between is the line: a Qwen developer driven through Pi, a gpt-oss judge from a different model family, and a deterministic controller that owns every decision with consequences.</p>
-    <div class="meta">v5.2 · 2026-10-02 · owner: Gregg Reed · status: <b>candidate for baseline approval</b> · <a href="#status">where we are: Phases 0–3 complete, Phase 4 waits on the owner</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
+    <div class="meta">v5.2 · 2026-10-02 · owner: Gregg Reed · status: <b>baseline, approved by the owner 2026-10-02</b> · <a href="#status">where we are: Phases 0–3 complete, Phase 4 active</a> · companions: <a href="plans/README.md"><code>plans/</code></a>, <code>DARK_FACTORY_IMPLEMENTATION_PLAN.md</code>, <code>schemas/*.json</code> · changelog &amp; references in §14</div>
 
     <div class="banner">
       <p><b>Four standing rules.</b></p>
@@ -318,7 +318,7 @@
 <section id="status">
   <div class="wrap">
     <p class="kicker">00 — WHERE WE ARE · updated 2026-10-02, Phase 3 closed</p><hr class="lead-line">
-    <h2>Phases 0–3 are complete; Phase 4 waits on two owner decisions</h2>
+    <h2>Phases 0–3 are complete; Phase 4 is active</h2>
     <p>Each phase has its own plan in <a href="plans/README.md"><code>plans/</code></a>. Only one plan is active at a time. Its scope is fixed when it starts, and new ideas go to the <a href="plans/PARKING-LOT.md">parking lot</a> until the phase closes. We pivot only on a blocker, and the plan records it under <i>Amendments</i>. Each phase is audited as one chunk of work, by a script, not a checklist.</p>
     <div class="tbl"><table>
       <tr><th>Phase</th><th>Status</th><th>Plan</th><th>In one line</th></tr>
@@ -326,7 +326,7 @@
       <tr><td><b>1</b> One bean through every stage</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-1.md">phase-1.md</a> · closed 2026-09-29 · tag <code>phase-1-complete</code></td><td>8 of 8 on bean-021, with two recorded amendments: the local judge is advisory in v1, and the retry evidence is cited from bean-006.</td></tr>
       <tr><td><b>2</b> Controller drives; developer cannot commit</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-2.md">phase-2.md</a> · closed 2026-09-29 · tag <code>phase-2-complete</code></td><td>All 13 fault injections pass, one of them a real GitHub CI failure that sent the run back to build. The worker is contained.</td></tr>
       <tr><td><b>3</b> Intake refinery</td><td><span class="st done">COMPLETE</span></td><td><a href="plans/phase-3.md">phase-3.md</a> · closed 2026-10-02 · tag <code>phase-3-complete</code></td><td>A 1m 45s voice memo became 5 approved beans for a new repo, <code>tic-tac-toe-py</code>. All 5 held their size budget at specify, and all 5 then built, passed review and merged. The game is playable.</td></tr>
-      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st active">NEXT</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>The line runs unattended for 48 h or more and produces at least 25 bean PRs, with a kill switch and crash recovery. Entry waits on the owner (below).</td></tr>
+      <tr><td><b>4</b> Lights-out to PRs</td><td><span class="st active">ACTIVE</span></td><td><a href="plans/phase-4.md">phase-4.md</a></td><td>The line runs unattended for 48 h or more and produces at least 25 bean PRs, with a kill switch and crash recovery. Entry met 2026-10-02.</td></tr>
       <tr><td><b>5</b> Supervised operation</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-5.md">phase-5.md</a></td><td>Judge accuracy work belongs here, measured by the qualification suite.</td></tr>
       <tr><td><b>6</b> Merge modes &amp; deploy-to-test</td><td><span class="st queued">QUEUED</span></td><td><a href="plans/phase-6.md">phase-6.md</a></td><td>Not started.</td></tr>
     </table></div>
@@ -345,12 +345,12 @@
       <p><b>Fixed in Phase 3.</b> A bean with a <code>manual</code> criterion could never pass the gate. It now goes to a person, as a checklist in the PR. Intake no longer approves a write path the target's risk policy forbids. A new target's CI can now pull the private gate image once the repo is granted package access.</p>
     </div>
 
-    <h3>Waiting on you (the owner)</h3>
+    <h3>Owner decisions at the Phase 3 close (all made 2026-10-02)</h3>
     <div class="tbl"><table>
-      <tr><th>#</th><th>Decision</th><th>Why it gates</th><th>My recommendation</th></tr>
-      <tr><td>1</td><td><b>Review <code>factory/risk-policy.yaml</code></b> (<code>factory policy</code> shows its effect)</td><td>It decides what the line may touch unsupervised, and no human has signed it off. This is a Phase 4 entry condition.</td><td>Approve as is. On seating-planner, 27 of 30 beans come out tier 2 and 3 come out tier 1. No bean reaches tier 3, because none touches agent control, secrets or infrastructure, which is correct. One overlap is harmless: <code>.github/workflows/**</code> matches both the tier-2 CI rule and the tier-3 infra rule, and the higher tier wins.</td></tr>
-      <tr><td>2</td><td><b>Baseline approval of this document</b></td><td>A Phase 4 entry condition. Phase 4 builds against a design nobody has frozen.</td><td>Approve v5.2. Changes after that go in the changelog (§14).</td></tr>
-      <tr><td>3</td><td>Parking-lot items from Phase 3</td><td>Reviewed only at a phase close, which is now.</td><td>Take <b>the claims-check false positive</b> into Phase 4, because a check that fires on every spec teaches people to ignore it. Add the weak tests the reviews found to <code>bench/qualify/</code>. Add <code>README.md</code> to the scaffold's default docs paths. Run the local-transcription A/B test when the GPU is idle.</td></tr>
+      <tr><th>#</th><th>Decision</th><th>Why it gated</th><th>Outcome</th></tr>
+      <tr><td>1</td><td><b>Review <code>factory/risk-policy.yaml</code></b> (<code>factory policy</code> shows its effect)</td><td>It decides what the line may touch unsupervised, and no human has signed it off. This is a Phase 4 entry condition.</td><td><b>Approved as is.</b> On seating-planner, 27 of 30 beans come out tier 2 and 3 come out tier 1. No bean reaches tier 3, because none touches agent control, secrets or infrastructure, which is correct. One overlap is harmless: <code>.github/workflows/**</code> matches both the tier-2 CI rule and the tier-3 infra rule, and the higher tier wins.</td></tr>
+      <tr><td>2</td><td><b>Baseline approval of this document</b></td><td>A Phase 4 entry condition. Phase 4 builds against a design nobody has frozen.</td><td><b>Approved v5.2 as the baseline.</b> Changes from here go in the changelog (§14).</td></tr>
+      <tr><td>3</td><td>Parking-lot items from Phase 3</td><td>Reviewed only at a phase close, which is now.</td><td><b>Taken as recommended.</b> The claims-check false positive went into Phase 4 (task 10), because a check that fires on every spec teaches people to ignore it. and the weak tests went into <code>bench/qualify/</code> (task 11). <code>README.md</code> is now in the scaffold's default docs paths. The local-transcription A/B test waits for an idle GPU.</td></tr>
     </table></div>
 
     <h3>What is left, in order</h3>
@@ -885,7 +885,7 @@ KillSignal=SIGTERM          <span class="c"># SIGTERM→drain; SIGINT→pause; c
     <p class="kicker">14 — CHANGELOG, OPEN QUESTIONS &amp; REFERENCES</p><hr class="lead-line">
     <h3>Changelog</h3>
     <ul class="tight">
-      <li><b>v5.2 · 2026-10-02</b> — §00: Phase 3 (intake refinery) closed. A transcript became 5 approved beans for <code>tic-tac-toe-py</code>, and all of them held their size budget at specify (<code>audits/PHASE-3-AUDIT-20261002.md</code>). Phase 4 is next.</li>
+      <li><b>v5.2 · 2026-10-02</b> — §00: Phase 3 (intake refinery) closed. A transcript became 5 approved beans for <code>tic-tac-toe-py</code>, and all of them held their size budget at specify (<code>audits/PHASE-3-AUDIT-20261002.md</code>). Phase 4 is next. The same day the owner approved v5.2 as the baseline and the risk policy as is, and Phase 4 began.</li>
       <li><b>v5.1 · 2026-09-29</b> — Added §00 "Where we are" (Phases 1 and 2 closed the same day), with a plan per phase in <code>plans/</code> and the rule that scope is fixed per phase, pivots happen only on a blocker, and each phase is audited as a whole. This section is updated only when a plan completes.</li>
       <li><b>v5.0 · 2026-09-14</b> — Aligned to the owner's process and the Forge/local-model goal. Added the document pipeline (spec → spec audit → build → impl audit → impl-detail → pre-PR audit) with three verdict stages and hash-bound HTML artifacts; the intake refinery (transcript → beans → joint review → approval PR → <code>go</code>); the task loop with per-task <code>verify</code>, containment and attempt caps ("does not quit early" as a controller property); agentic acceptance criteria (<code>verify</code> on every AC); bean <code>repo</code>/<code>status</code>/<code>source</code>/<code>approval</code>/<code>size_budget</code>; new <code>task</code> and <code>repo-config</code> schemas; per-repo <code>merge_mode</code> with signed <code>auto</code> opt-in and <code>post_merge</code> deploy-to-test; git worktrees with <code>max_inflight</code>; role-batched scheduler for the serial regime with co-resident fallback; Forge described as 126 GB unified memory with a configurable GPU split; GitHub as the single host; the outside builder (Opus) defined as structurally absent from the runtime; Phases 3 (intake), 5 (supervised operation) and 6 (merge modes) added; model-change protocol added. Fixed the truncated bean example; schemas moved to <code>schemas/</code>.</li>
       <li><b>v4.0 · 2026-09-13</b> — Judge reviews an immutable <code>candidate_sha</code>; real JSON Schemas; Phase-0 context handling; argv gates; full sandbox contract; serial model lifecycle; checkable plan.</li>
@@ -917,7 +917,7 @@ KillSignal=SIGTERM          <span class="c"># SIGTERM→drain; SIGINT→pause; c
 
 <footer>
   <div class="wrap">
-    <p><b>Status: candidate for baseline approval</b> — pending the owner's recorded sign-off; a specification does not approve itself. This version describes the whole process end to end: intake with a human, a seven-stage line with three audits and two teaching documents, per-repo merge policy, and a frontier model that improves the line without ever running on it. Begin with Phase 0 on Forge; the controller skeleton is generated against the seven schemas; every phase is proven as a checklist before any unattended commit.</p>
+    <p><b>Status: baseline</b>, approved by the owner on 2026-10-02 (v5.2). Changes from here are recorded in the §14 changelog. This version describes the whole process end to end: intake with a human, a seven-stage line with three audits and two teaching documents, per-repo merge policy, and a frontier model that improves the line without ever running on it. Begin with Phase 0 on Forge; the controller skeleton is generated against the seven schemas; every phase is proven as a checklist before any unattended commit.</p>
   </div>
 </footer>
 
