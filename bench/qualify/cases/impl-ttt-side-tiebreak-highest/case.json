@@ -1,0 +1,59 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-ttt-side-tiebreak-highest",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/tic-tac-toe-py",
+    "run_id": "bean-003-20261001T212853Z",
+    "pr": 4,
+    "candidate_sha": "f7b805df6a6aebb607bd50f62bbf5bcd8291c31f",
+    "bean_at": "2d951438600b6945dc79754b5e11bcc271bad2c4",
+    "bean_path": "factory/beans/bean-003-strategic-system-user-move-selection-for/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The side tier walks SIDES = (7, 5, 3, 1), so when only sides are open O takes the HIGHEST empty side. The bean's constraint says ties inside a tier break to the lowest cell index. No test exercises a side tie-break, so the suite passes on it.",
+  "answer_key": {
+    "why": "Synthetic, from the mutants bean-003's pre-merge review found surviving the suite. The bean requires a deterministic lowest-index tie-break within every tier; this diff orders the sides from highest to lowest. Across all 2,097 reachable positions where O is to move, 4 get a different move than the lowest-side rule gives (e.g. XOX.X.OXO: 5 instead of 3). Game endings through the session are unchanged, which is why only the bean's constraint shows it, and why it is hard. The tests pin corner-over-side and determinism, never which side.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+SIDES = (7, 5, 3, 1)"
+      },
+      {
+        "file": "bean/bean.yaml",
+        "quote": "ties between cells of equal priority break to the lowest cell"
+      }
+    ]
+  },
+  "anchors": [
+    "SIDES",
+    "(7, 5, 3, 1)",
+    "highest",
+    "lowest cell",
+    "lowest index",
+    "lowest-index",
+    "tie-break",
+    "tie break",
+    "ties"
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; the mutant run in the gate image against tic-tac-toe-py main: the real suite still passes 28/28",
+  "key_checked_at": "2026-10-02",
+  "difficulty": "hard",
+  "contested": false,
+  "twin_of": null,
+  "repair": null,
+  "mutation": {
+    "synthetic": true,
+    "file": "diff.txt",
+    "description": "SIDES = (1, 3, 5, 7) changed to (7, 5, 3, 1); nothing else"
+  }
+}

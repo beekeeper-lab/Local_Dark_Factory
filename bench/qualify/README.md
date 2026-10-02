@@ -63,12 +63,23 @@ stricter: audit-check has checked every quote in that judgement against the disk
 | `spec-verify-contradicts-intent` | spec | reject | medium | bean-003-20260918T022947Z |
 | `spec-verify-consistent` | spec | accept | - | twin of `spec-verify-contradicts-intent` |
 | `spec-keyword-and-hardcode-both-asked` | spec | reject | medium | bean-009-20260925T125445Z |
+| `impl-ttt-side-tiebreak-highest` | impl | reject | hard | **synthetic mutant** of tic-tac-toe-py bean-003 (PR #4); the suite passes on it |
+| `impl-ttt-strategy-real` | impl | accept | - | twin of `impl-ttt-side-tiebreak-highest`: the real merged code |
+| `impl-ttt-session-asks-x` | impl | reject | medium | **synthetic mutant** of tic-tac-toe-py bean-004 (PR #5); the suite passes on it |
+| `impl-ttt-session-real` | impl | accept | - | twin of `impl-ttt-session-asks-x`: the real merged code |
 
 Each `case.json` holds the defect, the reasoning, the evidence as verbatim
 quotes from `inputs/` (checked on write), and the anchors. **Contested** means
 there is a defensible reading under which accept is right. The bean-005 case is
 one: the code matches its own spec and disagrees with the bean's intent. Contested
 cases are scored separately and never count toward the catch rate.
+
+The `impl-ttt-*` cases (Phase 4 task 11, 2026-10-02) run the other way round. The real merged
+code is the twin and expects accept. The defect case is a mutant the pre-merge review found
+surviving the line's own tests, applied to `diff.txt` alone and marked `mutation.synthetic: true`.
+These cases ask whether a judge reads the diff against the bean, or only checks that the tests
+are green. They belong to `tic-tac-toe-py`, so run them with
+`--repo ~/workspace/tic-tac-toe-py`. A run against another target skips them and says so.
 
 There are no clean controls taken from merged beans. Every merged bean that was
 reviewed closely turned out to have a defect, so the twins are the controls. Each

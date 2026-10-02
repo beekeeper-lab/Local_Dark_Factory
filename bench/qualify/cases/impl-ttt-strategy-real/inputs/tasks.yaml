@@ -1,0 +1,157 @@
+schema_version: tasks/1.0.0
+bean_id: bean-003
+tasks:
+  - id: task-1
+    title: Write the six red strategy tests and a NotImplementedError stub
+    intent: |
+      Create exactly two files: tests/test_strategy.py and src/tictactoe/strategy.py.
+      Run `ruff check .`, `ruff format` on the two files you wrote, and `mypy src`
+      before finishing; there is no pytest in this container, so do not try to run
+      the tests.
+
+      tests/test_strategy.py must define exactly these six test functions, with
+      these exact names, importing only from tictactoe (plus the standard
+      library) — never tkinter or any GUI module:
+
+      The first four each build one fixed position with a small helper that
+      takes a nine-character mark string, position 0 reading first and
+      left to right (character i is the mark of cell i, a dot is an empty
+      cell), overwrites Board.cells with it, and sets Board.turn. In every one
+      of these positions X has exactly one mark more than O, so it is O's
+      turn; each test calls choose_move(board, O) and asserts ONE exact cell:
+
+        * test_takes_own_winning_move_first: marks "XX.X.XOO." -> 8.
+          O owns cells 6 and 7, so 8 is O's immediate winning cell; X owns 0, 1
+          and 5, so the block at 2 is open in the same position. The whole point
+          of the test is that the win is taken, not the block.
+        * test_blocks_when_it_cannot_win: marks "XX.O.X..O" -> 2.
+          O owns 3 and 8, which share no winning line, so O has no win of its
+          own; X owns 0, 1 and 5, and 2 is the only cell that would let X
+          complete three in a row, so the block is 2.
+        * test_prefers_center_when_available: marks "X........" -> 4.
+          X has played only cell 0; nobody can win or be blocked yet and the
+          center is empty.
+        * test_prefers_corners_over_sides_deterministically: marks "X...X...O" -> 2.
+          X owns cell 0 and the center (which kills X's own (0,4,8) diagonal),
+          and corners 2 and 6 plus all four sides are open with no win or
+          block in sight: the answer is the lowest open corner, 2, and 25
+          repeated calls must all give 2 (collect the answers in a set and
+          assert it equals {2}).
+
+      The last two drive the game with Board.apply_move (no cell overwriting):
+
+        * test_move_is_always_legal: walk every reachable position breadth-first
+          from the empty board. For a board, for each of its empty cells, build
+          a child Board (copy cells and turn, then apply_move), and if the
+          child has no winner and is not a draw, call choose_move(child,
+          child.turn) and assert the returned cell is 0..8 and empty in the
+          child. De-duplicate by tuple(cells) before enqueuing children: there
+          are 4520 distinct reachable non-terminal boards, which the walk
+          visits in well under a second, whereas enumerating move orders without
+          dedup would be a quarter million steps. Finish by asserting the walk
+          saw far more than a handful of positions (for example len(seen) > 1000).
+        * test_a_human_x_can_still_win: play a full game. X is scripted to the
+          fixed line (0, 7, 6, 8) — corner, then the corner opposite the
+          strategy's second corner, then the opposite corner again to fork,
+          then the row completion — and O answers every turn by applying
+          choose_move(board, O), using the real Board's own turn tracking. Stop
+          at the first finished position and assert board.winner() == X.
+
+      src/tictactoe/strategy.py must be a real importable module that defines
+      `def choose_move(board: Board, symbol: str) -> int:` with the correct
+      signature and a docstring, whose body raises NotImplementedError. There
+      is no strategy logic in this task, and if the six tests pass this task
+      has failed: they must be RED when you finish. The stub exists so the test
+      file's import succeeds and every test fails with an exception raised
+      inside src/tictactoe/strategy.py — the task's red-test verification
+      accepts exactly that shape, and it rejects a missing module (a collection
+      error) and a test that breaks on its own scenario.
+
+      The spec at <run-dir>/spec.md, section "Proposed change", contains a
+      lint-checked complete reference implementation of BOTH files; it was
+      written and checked for this bean, so use it as your starting point. If
+      you deviate, keep the six test names, the four mark strings, the four
+      expected cells, the (0, 7, 6, 8) X line, the de-duplicated BFS, and the
+      NotImplementedError stub semantics exactly as stated above, and re-run
+      ruff and mypy on whatever you wrote.
+    write_paths:
+      - src/tictactoe/strategy.py
+      - tests/test_strategy.py
+    depends_on: []
+    satisfies: [ac1, ac2, ac3, ac4, ac5, ac6]
+    verify:
+      - { kind: command, run: ["python", "factory/tools/red-test.py", "--fixes", "src/tictactoe/strategy.py", "--fixes", "**/src/tictactoe/strategy.py", "tests/test_strategy.py"] }
+    max_attempts: 3
+    teaching_note: >-
+      The tests are the contract for this bean, so they are written first, red,
+      and left red. The NotImplementedError stub in the future strategy module
+      is what makes the red-test verifier able to certify each failure as "the
+      fix could turn this green": every test dies inside the very file task-2
+      will rewrite, and the verifier rejects both a missing module (collection
+      error) and a test whose own scenario fails on any implementation. That
+      double guard exists because bean-021 shipped a red test that broke on
+      its own setup, and task-2 spent its attempts against a test it could not
+      repair.
+  - id: task-2
+    title: Implement choose_move with the win/block/center/corner/side tiers
+    intent: |
+      Replace the NotImplementedError body of choose_move in
+      src/tictactoe/strategy.py with the real strategy. Do not modify
+      tests/test_strategy.py: those tests are this task's definition of done
+      and the controller will run them; if one of them looks wrong, do not
+      chase it — implement the tiers below and say so in your final report.
+
+      choose_move(board, symbol) must, in this strict order —
+        1. return the lowest-index empty cell at which placing `symbol`
+           would complete a winning line (take own win, even when a block is
+           open in the same position);
+        2. else return the lowest-index empty cell at which placing the
+           opposite mark would complete a winning line (block it);
+        3. else return the center cell (4) if it is empty;
+        4. else return the lowest-index empty corner (0, 2, 6, 8 in that
+           order);
+        5. else return the lowest-index empty side (1, 3, 5, 7 in that order).
+      In a finished position (board.winner() is not EMPTY, or board.is_draw())
+      it raises ValueError.
+
+      "Would complete a winning line" must be computed through the game rules,
+      not a private table: copy board.cells into a scratch Board, put the
+      mark in the trial cell, and call Board.winning_line() on it. The original
+      board is never mutated by choose_move. The module adds no second copy of
+      the eight winning lines, imports nothing from the standard library's
+      random, and imports no GUI toolkit. It must stay clean under `ruff check
+      .` and `mypy --strict` (run both; `mypy src` works from the repo root).
+
+      You cannot run pytest here, but you can exercise the function directly
+      with python3 the way the spec's reference was checked: call
+      choose_move on the four test scenarios and expect exactly 8, 2, 4 and 2,
+      and replay the X line (0, 7, 6, 8) against your own calls for O and
+      expect X to win. The spec at <run-dir>/spec.md, section "Proposed
+      change", contains a lint-checked working implementation of this exact
+      design; use it as your starting point and re-run ruff and mypy on
+      whatever you submit.
+    write_paths:
+      - src/tictactoe/strategy.py
+    depends_on: [task-1]
+    satisfies: [ac1, ac2, ac3, ac4, ac5, ac6]
+    verify:
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_takes_own_winning_move_first"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_blocks_when_it_cannot_win"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_prefers_center_when_available"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_prefers_corners_over_sides_deterministically"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_move_is_always_legal"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests/test_strategy.py::test_a_human_x_can_still_win"] }
+      - { kind: command, run: ["python", "-m", "pytest", "-q", "tests"] }
+    max_attempts: 3
+    teaching_note: >-
+      The strategy is the only judgement call in this bean, and the bean fixes
+      the whole of it: the win-then-block-then-center-then-corners-then-sides
+      order with lowest-index tie-breaks is exactly what gives every test a
+      single exact expected cell. The trial-board technique (copy the cells,
+      place the mark, ask Board.winning_line()) keeps the policy reading the
+      rule set it is built on, rather than a private second table of the eight
+      lines. ac6 is the guard in the other direction: a "smarter"
+      implementation — minimax, threat counting beyond one ply, anything that
+      starts playing perfect tic-tac-toe — would lose or draw the scripted
+      human's game and make the human's win unreachable, which is the outcome
+      this bean exists to prevent.

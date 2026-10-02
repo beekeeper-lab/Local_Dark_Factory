@@ -1,0 +1,169 @@
+diff --git a/src/tictactoe/strategy.py b/src/tictactoe/strategy.py
+new file mode 100644
+index 0000000..e442309
+--- /dev/null
++++ b/src/tictactoe/strategy.py
+@@ -0,0 +1,50 @@
++"""Move selection for the system user (bean-003).
++
++The policy, pinned by tests/test_strategy.py: take the caller's own winning
++move, otherwise block the opponent's winning move, otherwise the center,
++then a corner, then a side, with every tie broken to the lowest empty cell
++index. Finished positions (a winner or a draw) raise ValueError.
++"""
++
++from tictactoe.game import EMPTY, Board, O, X
++
++CENTER = 4
++CORNERS = (0, 2, 6, 8)
++SIDES = (1, 3, 5, 7)
++
++
++def _completes(board: Board, index: int, mark: str) -> bool:
++    """Would placing ``mark`` at ``index`` complete a winning line?"""
++    trial = Board()
++    trial.cells = list(board.cells)
++    trial.cells[index] = mark
++    return trial.winning_line() is not None
++
++
++def choose_move(board: Board, symbol: str) -> int:
++    """Pick an empty cell for ``symbol``'s turn in ``board``.
++
++    Tries, in strict order: the caller's own immediate winning move, the
++    opponent's immediate winning move (the block), the center, an open
++    corner, an open side; ties inside a tier break to the lowest cell index.
++    Raises ValueError when the position is already finished.
++    """
++    if board.winner() != EMPTY or board.is_draw():
++        raise ValueError(f"game is already over: {board.cells!r}")
++    opponent = O if symbol == X else X
++    empty = [index for index in range(9) if board.cells[index] == EMPTY]
++    for index in empty:  # 1. take own winning move, even when a block is open
++        if _completes(board, index, symbol):
++            return index
++    for index in empty:  # 2. otherwise block the opponent's winning move
++        if _completes(board, index, opponent):
++            return index
++    if board.cells[CENTER] == EMPTY:  # 3. the center
++        return CENTER
++    for index in CORNERS:  # 4. a corner
++        if board.cells[index] == EMPTY:
++            return index
++    for index in SIDES:  # 5. a side
++        if board.cells[index] == EMPTY:
++            return index
++    raise AssertionError("non-terminal board with no empty cell")
+diff --git a/tests/test_strategy.py b/tests/test_strategy.py
+new file mode 100644
+index 0000000..eb52d2e
+--- /dev/null
++++ b/tests/test_strategy.py
+@@ -0,0 +1,107 @@
++"""Acceptance tests for strategic move selection for the system user (bean-003).
++
++The rule set in src/tictactoe/game.py knows everything about the game except
++which move to play. These six tests pin the policy that
++tictactoe.strategy.choose_move must implement: take O's own winning move,
++otherwise block the human's winning move, otherwise the center, then a corner,
++then a side, with every tie broken to the lowest empty cell index. They are
++written red on purpose: the module currently ships a NotImplementedError stub,
++and a later task replaces that body.
++"""
++
++from collections import deque
++
++from tictactoe.game import EMPTY, Board, O, X
++from tictactoe.strategy import choose_move
++
++
++def _board(marks: str, turn: str) -> Board:
++    """Build a fresh Board from a nine-character mark string, '.' an empty cell.
++
++    Character i is the mark of cell i, position 0 reading first and left to
++    right. Every fixed scenario below has exactly one more X than O, so it is
++    O's turn.
++    """
++    board = Board()
++    board.cells = [EMPTY if m == "." else m for m in marks]
++    board.turn = turn
++    return board
++
++
++def test_takes_own_winning_move_first() -> None:
++    # O owns 6 and 7, so 8 is O's immediate winning cell; X owns 0, 1 and 5,
++    # so the block at 2 is open in the same position. The win is taken, not
++    # the block.
++    board = _board("XX.X.XOO.", O)
++    assert choose_move(board, O) == 8
++
++
++def test_blocks_when_it_cannot_win() -> None:
++    # O owns 3 and 8, which share no winning line, so O has no win of its
++    # own; X owns 0, 1 and 5, and 2 is the only cell that would let X
++    # complete three in a row.
++    board = _board("XX.O.X..O", O)
++    assert choose_move(board, O) == 2
++
++
++def test_prefers_center_when_available() -> None:
++    # X has played only cell 0; nobody can win or be blocked yet and the
++    # center is empty.
++    board = _board("X........", O)
++    assert choose_move(board, O) == 4
++
++
++def test_prefers_corners_over_sides_deterministically() -> None:
++    # X owns cell 0 and the center (which kills X's own (0, 4, 8) diagonal);
++    # corners 2 and 6 plus all four sides are open with no win or block in
++    # sight. The answer is the lowest open corner, 2, on every one of 25
++    # repeated calls.
++    answers = {choose_move(_board("X...X...O", O), O) for _ in range(25)}
++    assert answers == {2}
++
++
++def test_move_is_always_legal() -> None:
++    # Breadth-first over every reachable position from the empty board. For
++    # each non-terminal child, the chosen cell must be in range and empty.
++    # Children are de-duplicated by cell contents: 4520 distinct reachable
++    # non-terminal boards, visited in well under a second, versus a quarter
++    # million move orders without de-duplication.
++    start = _board(".........", X)
++    seen: set[tuple[str, ...]] = {tuple(start.cells)}
++    frontier: deque[Board] = deque([start])
++    while frontier:
++        board = frontier.popleft()
++        for cell in range(9):
++            if board.cells[cell] != EMPTY:
++                continue
++            child = Board()
++            child.cells = list(board.cells)
++            child.turn = board.turn
++            child.apply_move(cell)
++            if child.winner() != EMPTY or child.is_draw():
++                continue
++            move = choose_move(child, child.turn)
++            assert 0 <= move <= 8
++            assert child.cells[move] == EMPTY
++            key = tuple(child.cells)
++            if key not in seen:
++                seen.add(key)
++                frontier.append(child)
++    assert len(seen) > 1000
++
++
++def test_a_human_x_can_still_win() -> None:
++    # X is scripted to the fixed line (0, 7, 6, 8): a corner, then the corner
++    # opposite the strategy's second corner, then the opposite corner again to
++    # fork, then the row completion. O answers every turn with choose_move.
++    # The strategy is deliberately beatable, so the final winner must be X.
++    board = Board()
++    x_moves = iter((0, 7, 6, 8))
++    while True:
++        if board.turn == X:
++            board.apply_move(next(x_moves))
++        else:
++            board.apply_move(choose_move(board, O))
++        if board.winner() != EMPTY or board.is_draw():
++            break
++    assert board.winner() == X

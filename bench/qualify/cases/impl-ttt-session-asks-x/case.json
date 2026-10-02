@@ -1,0 +1,57 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-ttt-session-asks-x",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/tic-tac-toe-py",
+    "run_id": "bean-004-20261002T001224Z",
+    "pr": 5,
+    "candidate_sha": "79cd12aa57ec459e1dbae3a04bd39d75a1afcd03",
+    "bean_at": "4fbd8c34da1a8c1b29ef2bcbb97943e897e0078e",
+    "bean_path": "factory/beans/bean-004-headless-game-session-owning-the-human-v/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The session asks the strategy for X's move on O's turn: choose_move(self._board, X). O then places its mark on the cell that is best for X, so it blocks when it could win. Every session test still passes.",
+  "answer_key": {
+    "why": "Synthetic, from the mutant bean-004's pre-merge review found surviving the suite. The bean has O answer with bean-003's strategic move for O; this passes X as the symbol, and apply_move then writes O on X's best cell. Playing every human move sequence through the session: real code ends 350 O wins, 127 draws, 12 human wins; this mutant 268, 303, 12. The tests check that O replies and where its mark lands in fixed openings, not that the strategy is asked about O.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+            self._board.apply_move(choose_move(self._board, X))"
+      },
+      {
+        "file": "bean/bean.yaml",
+        "quote": "tictactoe.strategy.choose_move picks O''s strategic move"
+      }
+    ]
+  },
+  "anchors": [
+    "choose_move(self._board, X)",
+    "X's move",
+    "for X",
+    "wrong symbol",
+    "wrong mark",
+    "asks for X",
+    "symbol X"
+  ],
+  "key_by": "Claude Opus 5.5, read against the frozen inputs; the mutant run in the gate image against tic-tac-toe-py main: the real suite still passes 28/28",
+  "key_checked_at": "2026-10-02",
+  "difficulty": "medium",
+  "contested": false,
+  "twin_of": null,
+  "repair": null,
+  "mutation": {
+    "synthetic": true,
+    "file": "diff.txt",
+    "description": "choose_move(self._board, O) changed to choose_move(self._board, X); nothing else"
+  }
+}

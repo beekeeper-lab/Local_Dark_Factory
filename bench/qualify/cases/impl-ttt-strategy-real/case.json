@@ -1,0 +1,43 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-ttt-strategy-real",
+  "target": "impl",
+  "expect": "accept",
+  "source": {
+    "repo": "beekeeper-lab/tic-tac-toe-py",
+    "run_id": "bean-003-20261001T212853Z",
+    "pr": 4,
+    "candidate_sha": "f7b805df6a6aebb607bd50f62bbf5bcd8291c31f",
+    "bean_at": "2d951438600b6945dc79754b5e11bcc271bad2c4",
+    "bean_path": "factory/beans/bean-003-strategic-system-user-move-selection-for/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "",
+  "answer_key": {
+    "why": "The merged bean-003 as the line built it (tic-tac-toe-py PR #4). Its pre-merge review checked choose_move against an independent oracle on all 2,097 positions where O is to move: 0 mismatches, sides taken lowest first. The tests do leave the side tie-break unpinned, which a strict auditor may note as a test gap; it is not a defect in the code.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "+SIDES = (1, 3, 5, 7)"
+      }
+    ]
+  },
+  "anchors": [],
+  "key_by": "Claude Opus 5.5; bean-003 pre-merge review, evidence/reviews/bean-003-20261001T212853Z.md",
+  "key_checked_at": "2026-10-02",
+  "difficulty": "",
+  "contested": null,
+  "twin_of": "impl-ttt-side-tiebreak-highest",
+  "repair": {
+    "synthetic": false,
+    "description": "the real merged code; its twin is the synthetic mutant"
+  }
+}
