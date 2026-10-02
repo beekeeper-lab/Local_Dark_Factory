@@ -60,6 +60,17 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       reaches GATE PASS. This also writes `merged`, the gap left in task 1.)*
 - [ ] 7. A hardened systemd unit with podman storage under StateDirectory, and the
       `factory` user's environment scrubbed of API keys.
+      *(Built and tested 2026-10-02, waiting on an install that needs sudo.)* `factory/deploy/` has
+      `darkfactory@.service` (scored 7.1 by `systemd-analyze security --offline`, with podman's
+      user namespaces limiting how far it can go). `NoNewPrivileges` is off because rootless
+      podman's setuid `newuidmap` needs it; the worker containers keep `no-new-privileges`. Also
+      there: `storage.conf` under the StateDirectory, and `run-line.sh`, which rebuilds the
+      environment from an allowlist (tested: no `*_API_KEY`, `AWS_*` or other key reaches the
+      line, and `GH_TOKEN` does), loops reconcile → go → wait, and stops after 3 halts in a row.
+      `drain-and-wait.sh` is ExecStop, so a stop is a drain. `INSTALL.md` has the owner's
+      one-line sudo steps, and `check-unit.sh` verifies the install before it is enabled.
+      `test-deploy.sh` covers 31 cases.
+
 - [ ] 8. Telemetry: false-approval taxonomy, task attempts, revise rate per stage, swap
       overhead %, blocked reasons, judge wall-clock per audit.
 - [ ] 9. **The workload.** Run the seating-planner backlog unattended: repair beans 021–030,
