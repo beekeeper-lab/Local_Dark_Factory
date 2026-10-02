@@ -70,19 +70,19 @@ git config user.email t@example.com
 git config user.name "Test"
 git remote add origin "$WORK/origin.git"
 
-mkdir -p ai/beans/BEAN-001-loop ai/pipeline src factory/templates
+mkdir -p ai/beans/bean-001-loop ai/pipeline src factory/templates
 cp "$PIPELINE_DIR/../scaffold/factory/templates/spec.html" factory/templates/
 printf 'ai/runs/\n' > .gitignore
 
-cat > ai/beans/BEAN-001-loop/bean.md <<'MD'
-# BEAN-001 — exercise the loop
+cat > ai/beans/bean-001-loop/bean.md <<'MD'
+# bean-001 — exercise the loop
 
 | Field | Value |
 |---|---|
 | **Pipeline Tier** | small |
 MD
 
-cat > ai/beans/BEAN-001-loop/bean.yaml <<'YAML'
+cat > ai/beans/bean-001-loop/bean.yaml <<'YAML'
 schema_version: bean/2.0.0
 id: bean-001
 repo: example/x
@@ -102,7 +102,7 @@ YAML
 cat > ai/beans/INDEX.md <<'MD'
 | ID | Title | Tier | Owner | Status |
 |---|---|---|---|---|
-| BEAN-001 | Exercise the loop | small | test | Approved |
+| bean-001 | Exercise the loop | small | test | Approved |
 MD
 
 # A spec document with all seven sections filled. The controller lints these,
@@ -183,11 +183,11 @@ run_orchestrate() {
   STUB_ACTIONS="$WORK/actions" STUB_TASKS="$WORK/tasks.yaml" \
   STUB_SPEC_MD="${STUB_SPEC_MD-$WORK/spec.md}" \
   PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
-    bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after build 2>&1
+    bash "$PIPELINE_DIR/orchestrate.sh" bean-001 --stop-after build 2>&1
 }
 cleanup_run() {
   git -C "$REPO" checkout -q main
-  git -C "$REPO" branch -D bean/BEAN-001-loop >/dev/null 2>&1
+  git -C "$REPO" branch -D bean/bean-001-loop >/dev/null 2>&1
   rm -rf "$REPO/ai/runs"
   git -C "$REPO" clean -fdq
   git -C "$REPO" checkout -q -- .
@@ -210,7 +210,7 @@ check "the document is linted"     "ok    spec.md" "$out"
 check "the task list is validated" "ok    tasks.yaml" "$out"
 check "criteria are claimed"       "ok    acceptance criteria" "$out"
 check "and the document renders"   "ok    spec.html" "$out"
-run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+run_dir="$(ls -d "$REPO"/ai/runs/bean-001-* 2>/dev/null | head -1)"
 want "spec.html exists"            "the controller should have rendered it" test -f "$run_dir/spec.html"
 cleanup_run
 
@@ -236,8 +236,8 @@ STUB
 chmod +x "$WORK/stub-questions"
 out="$(PI_BIN="$WORK/stub-questions" PI_SESSIONS_DIR="$WORK/sessions" FACTORY_CONTAIN_WORKER=0 \
   PIPELINE_CONFIG="$REPO/ai/pipeline/config.json" \
-  bash "$PIPELINE_DIR/orchestrate.sh" BEAN-001 --stop-after spec 2>&1)"
-run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+  bash "$PIPELINE_DIR/orchestrate.sh" bean-001 --stop-after spec 2>&1)"
+run_dir="$(ls -d "$REPO"/ai/runs/bean-001-* 2>/dev/null | head -1)"
 kept="$(ls "$run_dir"/questions-from-worker/*.md 2>/dev/null | head -1)"
 want "the model's questions are kept"   "questions-from-worker/ should hold them" test -n "$kept"
 check "with the model's own words"      "never installed" "$(cat "$kept" 2>/dev/null)"
@@ -290,7 +290,7 @@ out="$(run_orchestrate)"; rc=$?
 check "the loop blocks"            "BLOCKED  task-1 exhausted its attempts" "$out"
 check "the driver halts"           "HALT  build" "$out"
 want "halt exit code"              "expected 3 (halt)" test "$rc" -eq 3
-run_dir="$(ls -d "$REPO"/ai/runs/BEAN-001-* 2>/dev/null | head -1)"
+run_dir="$(ls -d "$REPO"/ai/runs/bean-001-* 2>/dev/null | head -1)"
 want "QUESTIONS.md is written"     "expected QUESTIONS.md at the run root" test -f "$run_dir/QUESTIONS.md"
 q="$(cat "$run_dir/QUESTIONS.md" 2>/dev/null)"
 check "it points at the task evidence" "BLOCKED.md" "$q"

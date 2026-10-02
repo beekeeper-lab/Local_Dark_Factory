@@ -84,3 +84,14 @@ jq -cn \
   --argjson attempt "$attempt" \
   --argjson verdict "$verdict_json" \
   '{ts: $ts, step: $step, event: $event, attempt: $attempt, verdict: $verdict}' >> "$STEPS_FILE"
+
+# The bean state machine (beanstate.py, Phase 4) follows the step boundaries.
+# Every step boundary goes through this one script, so this is the only hook it
+# needs. A transition the table refuses is a warning unless FACTORY_STATE_STRICT=1:
+# a run must not die on the bookkeeping that is meant to describe it, until that
+# bookkeeping has been through real runs. FACTORY_STATE=0 turns it off (the suites
+# that exercise step.sh on its own).
+if [ "${FACTORY_STATE:-1}" = 1 ]; then
+  "$(factory_python)" "$PIPELINE_DIR/beanstate.py" step "$RUN_DIR" "$STEP" "$EVENT" "$VERDICT" \
+    --attempt "$attempt" || [ "${FACTORY_STATE_STRICT:-0}" != 1 ] || exit 1
+fi

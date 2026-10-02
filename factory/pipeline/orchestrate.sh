@@ -226,6 +226,30 @@ if [ -n "$STOP_AFTER" ]; then
   [ "$found" = 1 ] || die "--stop-after '$STOP_AFTER' is not in the $TIER tier: ${STEPS[*]}"
 fi
 
+# ------------------------------------------------------------------- lease --
+# Nothing works on a bean without its lease (§09). Taken before preflight: the
+# lease and the event log live in factory/runs/.state, which git ignores, so
+# taking it does not dirty the tree preflight inspects. Released on every exit,
+# including a signal; the bean's STATE stays where the run left it, which is what
+# reconciliation reads. FACTORY_STATE=0 skips it (the suites that drive this
+# script without a target repository).
+LEASE_OWNER="$(hostname):$$"
+if [ "${FACTORY_STATE:-1}" = 1 ]; then
+  # Beside the runs it describes, under the config's runs_root, which the target
+  # repository already ignores. A fixed factory/runs/.state dirtied the tree of a
+  # repository whose runs live somewhere else (the suites use ai/runs).
+  export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$CONFIG_PATH")")/.state}"
+  lease_args=(lease "$BEAN_ID" --owner "$LEASE_OWNER")
+  if [ -n "$RESUME_DIR" ]; then
+    export FACTORY_RESUME=1
+    lease_args+=(--resume)
+  fi
+  lease_out="$("$(factory_python)" "$PIPELINE_DIR/beanstate.py" "${lease_args[@]}" 2>&1)" \
+    || die "$lease_out"
+  printf 'LEASE  %s\n' "$lease_out"
+  trap '"$(factory_python)" "$PIPELINE_DIR/beanstate.py" release "$BEAN_ID" --owner "$LEASE_OWNER" >/dev/null 2>&1 || true' EXIT
+fi
+
 # ---------------------------------------------------------------- run dir --
 if [ -n "$RESUME_DIR" ]; then
   RUN_DIR="$RESUME_DIR"
@@ -1026,6 +1050,10 @@ halt() { # <step> [exit-status] — write QUESTIONS.md, mark the run, stop. Neve
   mv "$RUN_DIR/run.json.tmp" "$RUN_DIR/run.json"
 
   printf '\nHALT  %s after %s failed attempt(s) — see %s/QUESTIONS.md\n' "$step" "$n" "$RUN_DIR"
+  # A halted bean is blocked until a person clears it (`factory clear <bean>`).
+  [ "${FACTORY_STATE:-1}" = 1 ] && "$(factory_python)" "$PIPELINE_DIR/beanstate.py" block "$BEAN_ID" \
+    --key "$(jq -r '.run_id // "run"' "$RUN_DIR/run.json"):halt:$step:$ts" \
+    --why "halted at $step: see $RUN_DIR/QUESTIONS.md" >/dev/null 2>&1 || true
   exit "$HALT_RC"
 }
 
