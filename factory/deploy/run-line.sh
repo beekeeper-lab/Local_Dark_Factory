@@ -11,6 +11,9 @@
 #    same-class rule: three beans in a row halting means the cause is probably
 #    the line or the machine, not the beans, so it stops and says so rather than
 #    walking the rest of the queue into the same wall.
+# One compound command, parsed whole before it runs: this loop runs for days and
+# its file is updated by git pull underneath it (see bin/factory).
+{
 set -uo pipefail
 
 if [ -z "${_DF_SCRUBBED:-}" ]; then
@@ -67,3 +70,5 @@ while :; do
     sleep "$IDLE"
   fi
 done
+exit $?
+}
