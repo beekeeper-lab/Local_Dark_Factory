@@ -162,8 +162,20 @@ chcon -R -t container_file_t -l s0 "$AGENT_ABS" 2>/dev/null || true
 # "not a git repository", the history cannot be read or rewritten, and the host's
 # .git is untouched. The worker never needed it — the controller makes every
 # commit, after it has decided the attempt is worth one.
-GIT_MASK="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fgitmask.XXXXXX")"
-trap 'rmdir "$GIT_MASK" 2>/dev/null || true' EXIT
+#
+# In a bean worktree (worktree.sh, Phase 4) .git is not a directory but a file
+# naming the main repository's git dir, and podman cannot mount a directory over a
+# file: bean-025 and bean-026's first contained runs died with crun's "Not a
+# directory". So the mask takes the shape of what it masks. An empty .git file is
+# as much "not a git repository" as an empty directory, and it also hides where
+# the main repository is.
+if [ -f "$TREE_ABS/.git" ]; then
+  GIT_MASK="$(mktemp "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fgitmask.XXXXXX")"
+  trap 'rm -f "$GIT_MASK" 2>/dev/null || true' EXIT
+else
+  GIT_MASK="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fgitmask.XXXXXX")"
+  trap 'rmdir "$GIT_MASK" 2>/dev/null || true' EXIT
+fi
 
 RUN_ARGS=(
   --rm
