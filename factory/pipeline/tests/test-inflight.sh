@@ -143,5 +143,17 @@ want  "two were in flight at once"          "peak concurrency $overlap" test "$o
 check "each in its own worktree"            "$WORK/repo.worktrees/bean-002" "$(cat "$WORK/runs.log")"
 check "and the main checkout stayed on main" "main" "$(git -C "$REPO" branch --show-current)"
 
+printf '\n-- --only: these beans, in this order --\n\n'
+for b in bean-001 bean-002 bean-003; do git -C "$REPO" branch -D "bean/$b-x" >/dev/null 2>&1; done
+git -C "$REPO" worktree list --porcelain | sed -n 's/^worktree //p' | grep -F "$WORK/repo.worktrees/" \
+  | while read -r w; do git -C "$REPO" worktree remove --force "$w"; done
+for b in bean-001 bean-002 bean-003; do git -C "$REPO" branch -D "bean/$b-x" >/dev/null 2>&1; done
+: > "$WORK/runs.log"
+out="$(cd "$REPO" && FACTORY_GO_RUNNER="$WORK/runner" FACTORY_GO_STAGGER=0.5 bash "$FACTORY" go --max-inflight 2 --only "bean-003 bean-001" 2>&1)"
+check "only the two named run"              "2 bean(s) run" "$out"
+check "in the order given"                  "start bean-003" "$(head -1 "$WORK/runs.log")"
+if grep -q "start bean-002" "$WORK/runs.log"; then printf '  FAIL  bean-002 was not named and ran anyway\n'; FAIL=$((FAIL+1))
+else printf '  ok    and the unnamed one does not\n'; PASS=$((PASS+1)); fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
