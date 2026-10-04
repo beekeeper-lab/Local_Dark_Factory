@@ -568,6 +568,10 @@ run_dir_manifest() { # run_dir_manifest <attempt-dir> — hash the record, not t
     | while IFS= read -r -d '' f; do
         case "$f" in
           "$RUN_DIR_ABS/steps.jsonl") continue ;;
+          # The inference manager times each model load into this file during the
+          # task's own step (Phase 4). The controller's write, not the session's:
+          # bean-024's first build attempt was failed as "tampered" for it.
+          "$RUN_DIR_ABS/model-loads.jsonl") continue ;;
         esac
         [ -n "$adir" ] && case "$f" in "$adir"/*|"$adir") continue ;; esac
         printf '%s  %s\n' "$(sha256sum < "$f" | cut -d' ' -f1)" "${f#"$RUN_DIR_ABS"/}"

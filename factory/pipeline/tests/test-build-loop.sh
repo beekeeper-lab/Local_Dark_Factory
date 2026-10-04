@@ -532,6 +532,18 @@ want  "only one attempt was made"      "expected exactly 1 attempt dir" \
 nope  "and nothing was committed"      "task-1 should not have been committed" \
       git -C "$REPO" log --oneline -1 --format=%s | grep -q task-1
 
+printf "\n-- the inference manager's load record is the controller's, not tampering --\n\n"
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+printf '{"outcome":"loaded"}\n' >> "$ATTEMPT_DIR/../../../model-loads.jsonl"
+SH
+out="$(run_loop)"; rc=$?
+nope  "model-loads.jsonl is not called tampering" "a load record was called tampering" grep -q "TAMPERED" <<<"$out"
+nope  "task-1's attempt is not recorded as tampered" "result.json says tampered" \
+      grep -q '"result": *"tampered"' "$RUN_DIR/build/task-1/attempt-1/result.json"
+check "and task-1 verifies"           "PASS   task-1" "$out"
+
 printf '\n== the controller\'s own writes are never tampering, however the path was typed ==\n\n'
 #
 # The run directory is passed to build-loop.sh as whatever the caller typed, and
