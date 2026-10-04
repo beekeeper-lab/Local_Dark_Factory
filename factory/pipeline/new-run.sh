@@ -29,6 +29,13 @@ runs_root="$(jq -r '.runs_root' "$CONFIG_PATH")"
 [[ "$runs_root" =~ ^[A-Za-z0-9._/-]+$ ]] || die "suspicious runs_root in config: $runs_root"
 
 branch="$(git -C "$root" branch --show-current 2>/dev/null || true)"
+# A bean's worktree (worktree.sh) starts detached at main's tip, the one detached
+# state preflight accepts; it is main in every sense the record needs, and
+# ensure_run_branch replaces it with the bean branch straight after. Missing this
+# halted bean-025 and bean-026, the first two worktree runs, with an empty RUN_DIR.
+if [ -z "$branch" ] && [ "$(git -C "$root" rev-parse HEAD 2>/dev/null)" = "$(git -C "$root" rev-parse main 2>/dev/null)" ]; then
+  branch=main
+fi
 [ -n "$branch" ] || die "could not determine current branch in $root"
 
 # Resolve the newest Pi session JSONL whose session entry has cwd == this repo.

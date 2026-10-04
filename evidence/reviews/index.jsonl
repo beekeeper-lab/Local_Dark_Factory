@@ -14,3 +14,4 @@
 {"run_id": "bean-003-20261001T212853Z", "repo": "beekeeper-lab/tic-tac-toe-py", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-003-20261001T212853Z.md"}
 {"run_id": "bean-004-20261002T001224Z", "repo": "beekeeper-lab/tic-tac-toe-py", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-004-20261002T001224Z.md"}
 {"run_id": "bean-005-20261002T015014Z", "repo": "beekeeper-lab/tic-tac-toe-py", "verdict": "do-not-merge", "defect_class": "doc_quality", "defect": "README run command failed; fixed on the branch before merge", "source": "evidence/reviews/bean-005-20261002T015014Z.md"}
+{"run_id": "bean-024-20261002T205459Z", "repo": "beekeeper-lab/seating-planner-py", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-024-20261002T205459Z.md"}

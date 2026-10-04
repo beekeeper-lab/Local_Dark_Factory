@@ -753,5 +753,23 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+
+printf '\n== a real run inside a bean worktree (Phase 4 task 2) ==\n\n'
+#
+# The stub-runner test in test-inflight.sh never reached new-run.sh, which died on
+# a detached HEAD and halted the first two real worktree runs (bean-025, -026)
+# with an empty RUN_DIR. This drives the orchestrator itself from a worktree.
+reset_repo
+WTP="$( cd "$REPO" && PIPELINE_CONFIG="$REPO/factory/pipeline-config.json" FACTORY_WORKTREES="$WORK/wts" \
+        bash "$PIPELINE_DIR/worktree.sh" add bean-001 2>&1 )"
+o="$( (cd "$WTP" && run_line --stop-after gate); echo "rc=$?")"
+check "preflight passes in the worktree"  "a bean worktree, detached at main's tip" "$o"
+check "and the run reaches its gate"       "GATE PASS" "$o"
+R="$(ls -1dt "$REPO"/factory/runs/bean-001-*/ 2>/dev/null | head -1)"
+want  "its record is in the main checkout's runs" "no run dir under $REPO/factory/runs" test -n "$R"
+check "on its bean branch"                 "bean/bean-001" "$(jq -r .branch "$R/run.json" 2>/dev/null)"
+check "and the main checkout never moved"  "main" "$(git -C "$REPO" branch --show-current)"
+git -C "$REPO" worktree remove --force "$WTP" 2>/dev/null
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
