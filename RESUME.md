@@ -1,9 +1,34 @@
-# Resume here — Phase 1
+# Resume here
 
 > **The plan is in `plans/`** (one per phase; Phases 1–2 complete 2026-09-29, Phase 3 next). This file is a session log, not the plan.
 
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
+
+## 2026-10-04 (11:15 EDT): Phase 4 mid-flight; pick up here
+
+**Plan:** `plans/phase-4.md`. Done: tasks 1–8 code (7 built, install waits on the owner's sudo:
+`factory/deploy/INSTALL.md`), 10, 11. Open: 9 (workload), 12 (closing), and 13–14 (amendment,
+owner-approved: inference measurement harness, then judge prefill order). Parking lot gained the
+*Inference Engineering* items (see memory `inference-engineering-book`).
+
+**seating-planner-py state:** 015–023 merged except 015–020 (features, not started); 024 merged
+(PR #21; `factory state` still says merge_pending — `factory reconcile --apply` writes merged).
+025 blocked, 026 draining (control file says drain: `factory resume` clears it).
+
+**Open bug, blocks `--max-inflight 2`: worktree run dirs are invisible to the worker.** Run records
+now live in the MAIN checkout (`lib.sh runs_root_dir`), but the contained worker only sees its
+worktree, so the spec session cannot write `spec.md`/`tasks.yaml` into `$RUN_DIR` and spec-check
+fails "not written" (bean-025 run `bean-025-20261004T134348Z`). The faults test passed because it
+runs uncontained. Fix options: keep each run dir inside its worktree (`<wt>/factory/runs/…`) with only
+`.state` shared, and teach queue/telemetry/reconcile to look in worktrees; or bind-mount the run dir
+into the sandbox. Add a CONTAINED worktree test before re-enabling parallel runs. Until fixed, run
+beans one at a time (`factory go --bean <id>` in the main checkout), repairs first: 025, 026–029,
+then 015–020. bean-025/026 need `factory clear` and their empty worktrees/branches removed
+(`worktree.sh remove <bean> --force`, delete `bean/<id>-*` if it has no commits).
+
+**Waiting on the owner:** tic-tac-toe v2 voice memo (for 10–12 more beans; Phase 4 needs >= 25),
+and the service install.
 
 ## 2026-09-29: bean-021 halted again on a blind red test; repair beans 026–030 approved and written; the judge qualification ran
 

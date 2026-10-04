@@ -110,6 +110,12 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       pass 28/28 in the gate image, and each one's wrong behaviour was measured. The finished-game
       `ValueError` and X-as-system mutants were left out, because the code under review for those
       two is not wrong. They are test gaps with nothing for a judge to reject.)*
+- [ ] 13. **Inference measurement harness** (amendment, 2026-10-04): record prompt_eval/eval
+      counts and durations per model call, and replay recorded requests against a server
+      configuration, one variable at a time.
+- [ ] 14. **Judge prefill** (amendment, 2026-10-04): reorder judge.sh's request so the shared
+      context (bean, spec) comes first and target-specific content last, batch a bean's audits
+      while the judge is resident, and measure the effect with task 13's harness.
 - [ ] 12. Closing ritual, then `PHASE-4-COMPLETE`, the design document update, and a demo.
 
 *Limit: a bean that halts twice for the same cause is parked with its evidence. The queue
@@ -127,4 +133,7 @@ phase_4_exit: { unattended_run_hours: ">= 48", completed_beans: ">= 25",
 
 ## Amendments
 
-_None._
+- **2026-10-04, tasks 13 and 14 (owner approved):** at 1.5 to 2.5 GPU-hours per bean, 25 beans in
+  a 48-hour unattended run is at risk on throughput alone. Eleven audits fit to the judge spending
+  about all of its time in prefill (~96 tok/s), so prefix-friendly prompt order is a lossless win.
+  The other *Inference Engineering* items stay in the parking lot.
