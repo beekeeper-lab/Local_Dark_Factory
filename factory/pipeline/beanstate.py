@@ -65,7 +65,10 @@ EDGES: dict[str, set[str]] = {
     "ready": {"leased"},
     "leased": {"specifying", "ready"},
     "specifying": {"spec_committing", "specifying"},
-    "spec_committing": {"spec_auditing"},
+    # specifying too: spec-check (the controller's half of specify) refusing a
+    # spec sends it straight back, and without this edge the walk recorded a spec
+    # audit that never ran (bean-026, 2026-10-04).
+    "spec_committing": {"spec_auditing", "specifying"},
     "spec_auditing": {"spec_accepted", "specifying"},
     "spec_accepted": {"building"},
     "building": {"task_started", "containing"},

@@ -128,6 +128,11 @@ check "a failed audit moves nothing"          "spec_auditing" "$(state_of bean-0
 hook spec start --attempt 2 >/dev/null
 check "and the retry is the revise edge"      "specifying" "$(state_of bean-005)"
 
+reset; "${BS[@]}" lease bean-005 --owner "$(hostname):$$" >/dev/null
+hook spec start >/dev/null; hook spec end PASS >/dev/null
+hook spec start --attempt 2 >/dev/null
+check "a spec-check retry goes straight back" '"from_state":"spec_committing","to_state":"specifying"' "$(tail -1 "$FACTORY_STATE_DIR/events.jsonl")"
+
 printf '\n== a halt blocks, and only a person unblocks ==\n\n'
 "${BS[@]}" block bean-005 --key halt-1 --why "halted at spec" >/dev/null
 check "a halt is blocked"                     "blocked" "$(state_of bean-005)"
