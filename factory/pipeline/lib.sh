@@ -59,6 +59,25 @@ resolve_repo_path() {
   fi
 }
 
+# main_root — the target repository's MAIN checkout, even from a linked worktree.
+# Phase 4 runs each in-flight bean in its own worktree (worktree.sh), but a bean's
+# run records, the state log and the leases belong to the repository, not to one
+# checkout of it: the queue, reconciliation and telemetry must all see one set.
+main_root() {
+  local c
+  if c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+    case "$c" in */.git) printf '%s\n' "${c%/.git}" ;; *) repo_root ;; esac
+  else
+    repo_root
+  fi
+}
+
+# runs_root_dir — the config's runs_root, resolved against the main checkout.
+runs_root_dir() {
+  local rr; rr="$(jq -r '.runs_root' "$CONFIG_PATH")"
+  if [ "${rr#/}" != "$rr" ]; then printf '%s\n' "$rr"; else printf '%s/%s\n' "$(main_root)" "$rr"; fi
+}
+
 # Config location: overridable for tests, otherwise co-located with the scripts.
 CONFIG_PATH="${PIPELINE_CONFIG:-$PIPELINE_DIR/config.json}"
 

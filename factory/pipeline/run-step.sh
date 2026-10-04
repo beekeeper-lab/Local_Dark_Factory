@@ -402,6 +402,15 @@ if [ "$CONTAIN" = 1 ]; then
   # gateway would not open had already spent the minutes it takes to put 64GB on
   # the GPU, for a step that then died. Nothing between here and the worker needs
   # the model; the gateway is the cheap thing and it goes first.
+  # The GPU is one model at a time (Phase 0), and with more than one bean in
+  # flight another bean's step would evict this one's model mid-session. Hold
+  # the inference gate (infergate.py, Phase 4 task 4) from the load until the
+  # step's process exits; the gate batches waiting steps by role.
+  GATE_OWNER="$(hostname):$$"
+  "$(factory_python)" "$PIPELINE_DIR/infergate.py" acquire --role "$ROLE" \
+    --bean "$(jq -r '.bean_id // .bean // "?"' "$RUN_DIR/run.json" 2>/dev/null)" --owner "$GATE_OWNER" \
+    || die "$STEP: could not take the inference gate"
+  trap 'rm -f "$SNAP" "$NEW"; "$(factory_python)" "$PIPELINE_DIR/infergate.py" release --owner "$GATE_OWNER" 2>/dev/null || true' EXIT
   ensure_role_loaded
   AGENT_DIR="$(mktemp -d "${FACTORY_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/fagent.XXXXXX")"
   mkdir -p "$AGENT_DIR/sessions"

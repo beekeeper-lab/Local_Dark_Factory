@@ -238,7 +238,7 @@ if [ "${FACTORY_STATE:-1}" = 1 ]; then
   # Beside the runs it describes, under the config's runs_root, which the target
   # repository already ignores. A fixed factory/runs/.state dirtied the tree of a
   # repository whose runs live somewhere else (the suites use ai/runs).
-  export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$CONFIG_PATH")")/.state}"
+  export FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(runs_root_dir)/.state}"
   lease_args=(lease "$BEAN_ID" --owner "$LEASE_OWNER")
   if [ -n "$RESUME_DIR" ]; then
     export FACTORY_RESUME=1
@@ -649,7 +649,12 @@ run_step() { # <step> [-- <extra args carried through to the child>]
       # real run — the suites run uncontained with a stub judge, and loading 64GB
       # for a stub is wrong whether or not a test is watching (run-step.sh says the
       # same of the developer). A judge that cannot be loaded halts the step.
+      JUDGE_GATED=0
       if [ "${FACTORY_ENSURE_LOADED:-1}" = 1 ] && [ "${FACTORY_CONTAIN_WORKER:-1}" != 0 ]; then
+        # One model at a time across in-flight beans (infergate.py): held from
+        # the judge's load until judge.sh returns.
+        "$(factory_python)" "$PIPELINE_DIR/infergate.py" acquire --role judge --bean "$BEAN_ID" \
+          --owner "$(hostname):$$" && JUDGE_GATED=1
         el_rc=0
         "$PIPELINE_DIR/ensure-loaded.sh" judge --healthcheck \
           --expect-digest "$(jq -r '.conditions.judge.digest // empty' "$RUN_DIR/run.json")" \
@@ -660,6 +665,7 @@ run_step() { # <step> [-- <extra args carried through to the child>]
         fi
       fi
       "$PIPELINE_DIR/judge.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$(bean_yaml)" || rc=$?
+      [ "$JUDGE_GATED" = 1 ] && "$(factory_python)" "$PIPELINE_DIR/infergate.py" release --owner "$(hostname):$$" || true
       # The judge's own exit code was being captured and then thrown away by an
       # unconditional reset on the next line, so a judge that never answered was
       # handed to audit-check, which reported a missing judgement — a true

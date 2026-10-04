@@ -39,7 +39,7 @@ factory — run the line against the repository you are standing in.
   factory step <step> <bean-id>
                             one step: spec, build, gate, doc, sync, pr, ci,
                             or audit-{spec,impl,doc,package}
-  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>]
+  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>] [--max-inflight N]
                             run the approved beans in order, one at a time,
                             stopping at the first halt
   factory queue [--all]     what is runnable, and what blocks the rest
@@ -188,13 +188,13 @@ bean_yaml_for() { # bean_yaml_for <bean-id>
 newest_run() {
   local runs
   runs="$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
-  ls -1dt "$TARGET_ROOT/$runs"/*/ 2>/dev/null | head -1
+  ls -1dt "$(main_root)/$runs"/*/ 2>/dev/null | head -1
 }
 
 # Where the state machine's log, leases and control file live: beside the runs,
 # under the config's runs_root (beanstate.py). Call after require_target.
 state_dir() {
-  local d="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")/.state}"
+  local d="${FACTORY_STATE_DIR:-$(CONFIG_PATH="$PIPELINE_CONFIG" runs_root_dir)/.state}"
   mkdir -p "$d" && printf '%s' "$d"
 }
 
@@ -506,7 +506,7 @@ run from the working tree."
     # Phase-1 exit predicate a script cannot settle. It had no surface at all
     # until `factory runs` grew a column, and doctor is where someone looks to
     # find out what this repository still owes.
-    RR="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG" 2>/dev/null)"
+    RR="$(main_root)/$(jq -r '.runs_root // "factory/runs"' "$CONFIG" 2>/dev/null)"
     DONE_N=0; UNREAD_N=0; AGENT_N=0
     while IFS= read -r rd; do
       [ -f "$rd/run.json" ] || continue
@@ -711,7 +711,7 @@ run from the working tree."
     # revise and stamp rates per stage, judge wall-clock, refusals by rule, swap
     # overhead, blocked reasons, and false approvals against the review index.
     require_target
-    runs_root="$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")"
+    runs_root="$(CONFIG_PATH="$PIPELINE_CONFIG" runs_root_dir)"
     exec "$(factory_python)" "$PIPE/telemetry-summary.py" "$runs_root" \
       --reviews "$FACTORY_ROOT/../evidence/reviews/index.jsonl" "$@"
     ;;
@@ -758,7 +758,7 @@ run from the working tree."
     # Phase 0 measured why (the Q8 developer and the judge cannot co-reside, so a
     # second concurrent bean would make two beans wait on the same model).
     require_target
-    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""
+    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""; GO_MAX="${FACTORY_MAX_INFLIGHT:-1}"
     while [ $# -gt 0 ]; do
       case "$1" in
         --limit)
@@ -771,6 +771,10 @@ run from the working tree."
           esac
           shift 2 ;;
         --dry-run) GO_DRY=1; shift ;;
+        --max-inflight)
+          GO_MAX="${2:?--max-inflight needs a number}"
+          case "$GO_MAX" in ''|*[!0-9]*|0) die "--max-inflight takes a whole number of 1 or more" ;; esac
+          shift 2 ;;
         --bean) GO_ONE="${2:?--bean needs an id}"; shift 2 ;;
         # Passed through to every bean. The case it exists for: a repository whose
         # CI is not wired yet, where `ci` correctly refuses rather than waiting for
@@ -798,6 +802,59 @@ run from the working tree."
     fi
 
     GO_RAN=0
+
+    # More than one bean in flight (§09, Phase 4 tasks 2 and 4): each in its own
+    # worktree (worktree.sh), model steps serialised and role-batched by the
+    # inference gate (infergate.py). One in flight is the loop below, unchanged.
+    if [ "$GO_MAX" -gt 1 ] && [ -z "$GO_ONE" ] && [ "$GO_DRY" = 0 ]; then
+      declare -A GO_PID=()      # bean -> pid
+      GO_LOGS="$(state_dir)/go-logs"; mkdir -p "$GO_LOGS"
+      GO_STOPPING=""
+      while :; do
+        # Start beans while there is room, nothing has stopped the queue, and the
+        # kill switch says go.
+        verb="$(jq -r '.verb // empty' "$(state_dir)/control" 2>/dev/null || true)"
+        [ -n "$verb" ] && [ -z "$GO_STOPPING" ] && GO_STOPPING="factory $verb"
+        while [ -z "$GO_STOPPING" ] && [ "${#GO_PID[@]}" -lt "$GO_MAX" ]; do
+          if [ "$GO_LIMIT" -gt 0 ] && [ "$GO_RAN" -ge "$GO_LIMIT" ]; then GO_STOPPING="--limit $GO_LIMIT"; break; fi
+          NEXT=""
+          for cand in $(bash "$PIPE/queue.sh" --json | jq -r '.ready[]'); do
+            [ -n "${GO_PID[$cand]:-}" ] || { NEXT="$cand"; break; }
+          done
+          [ -n "$NEXT" ] || break
+          wt="$(bash "$PIPE/worktree.sh" add "$NEXT")" || { GO_STOPPING="worktree for $NEXT"; break; }
+          # FACTORY_GO_RUNNER replaces the per-bean `factory run` (tests only).
+          if [ -n "${FACTORY_GO_RUNNER:-}" ]; then
+            ( cd "$wt" && exec "$FACTORY_GO_RUNNER" "$NEXT" ) > "$GO_LOGS/$NEXT.log" 2>&1 &
+          else
+            ( cd "$wt" && exec bash "$0" run "$NEXT" ${GO_STOP:+--stop-after "$GO_STOP"} ) \
+              > "$GO_LOGS/$NEXT.log" 2>&1 &
+          fi
+          GO_PID[$NEXT]=$!
+          GO_RAN=$((GO_RAN + 1))
+          printf 'START  %s in %s (pid %s, log %s)\n' "$NEXT" "$wt" "$!" "$GO_LOGS/$NEXT.log"
+          sleep "${FACTORY_GO_STAGGER:-5}"   # let its run cut a branch before the queue is read again
+        done
+        [ "${#GO_PID[@]}" -eq 0 ] && break
+        # Wait for whichever finishes first.
+        wait -n "${GO_PID[@]}" 2>/dev/null
+        for b in "${!GO_PID[@]}"; do
+          p="${GO_PID[$b]}"
+          kill -0 "$p" 2>/dev/null && continue
+          wait "$p" 2>/dev/null; rc=$?
+          unset "GO_PID[$b]"
+          case "$rc" in
+            0)  printf 'DONE   %s\n' "$b"; bash "$PIPE/worktree.sh" prune >/dev/null 2>&1 || true ;;
+            75) printf 'DRAIN  %s (resumable from its record)\n' "$b"; GO_STOPPING="${GO_STOPPING:-a drain}" ;;
+            *)  printf 'HALT   %s (exit %s) — its worktree is kept as evidence; the queue starts nothing new\n' "$b" "$rc"
+                GO_STOPPING="${GO_STOPPING:-a halt in $b}"; GO_HALTED=1 ;;
+          esac
+        done
+      done
+      printf '\n%s bean(s) run%s.\n' "$GO_RAN" "${GO_STOPPING:+; stopped by $GO_STOPPING}"
+      [ "${GO_HALTED:-0}" = 1 ] && exit 1
+      exit 0
+    fi
     while :; do
       if [ -n "$GO_ONE" ]; then
         NEXT="$GO_ONE"
@@ -885,7 +942,7 @@ run from the working tree."
     # doclint on its first try. They are the record. Preflight objects to a dirty
     # TREE, never to an old run, so there was never a reason to remove one.
     require_target
-    runs_root="$TARGET_ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
+    runs_root="$(main_root)/$(jq -r '.runs_root // "factory/runs"' "$CONFIG")"
     [ -d "$runs_root" ] || die "no runs yet under $runs_root"
     # A directory that exists and holds nothing printed a bare header and exited
     # 0, which reads as "this repo has no history" and is indistinguishable from

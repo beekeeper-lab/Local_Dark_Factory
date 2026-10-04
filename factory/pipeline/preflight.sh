@@ -49,8 +49,17 @@ pass "clean-tree" "working tree is clean"
 
 # 2. On main
 branch="$(git branch --show-current)"
-[ "$branch" = "main" ] || fail "on-main" "current branch is '$branch', expected 'main'"
-pass "on-main" "on main"
+if [ "$branch" = "main" ]; then
+  pass "on-main" "on main"
+elif [ -z "$branch" ] \
+     && [ "$(git rev-parse --absolute-git-dir)" != "$(git rev-parse --path-format=absolute --git-common-dir)" ] \
+     && [ "$(git rev-parse HEAD)" = "$(git rev-parse main 2>/dev/null)" ]; then
+  # A bean's own worktree (worktree.sh, Phase 4): main is checked out in the main
+  # checkout, so a linked worktree starts detached at main's tip instead.
+  pass "on-main" "a bean worktree, detached at main's tip"
+else
+  fail "on-main" "current branch is '${branch:-(detached)}', expected 'main'"
+fi
 
 # 3. main not behind origin/main
 if git remote get-url origin >/dev/null 2>&1; then
