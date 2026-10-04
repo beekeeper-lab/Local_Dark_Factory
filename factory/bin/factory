@@ -48,6 +48,7 @@ factory — run the line against the repository you are standing in.
                             the emergency stop (§09): hold at the next step, stop there resumably,
                             or stop now; resume clears pause and drain
   factory clear <bean>      a person clears a blocked (halted) bean back to ready
+  factory telemetry [--json <file>]  quality numbers across this repo's runs (§11)
   factory reconcile [--apply]  after a crash: leases, GitHub, halts and the tree, made consistent
   factory runs              every run this repo has, newest first, and how it
                             ended — the run directories are the record, not
@@ -703,6 +704,16 @@ run from the working tree."
         ;;
     esac
     exit 0
+    ;;
+
+  telemetry)
+    # The quality numbers across every run of this repository (§11): attempts,
+    # revise and stamp rates per stage, judge wall-clock, refusals by rule, swap
+    # overhead, blocked reasons, and false approvals against the review index.
+    require_target
+    runs_root="$(resolve_repo_path "$(jq -r '.runs_root' "$PIPELINE_CONFIG")")"
+    exec "$(factory_python)" "$PIPE/telemetry-summary.py" "$runs_root" \
+      --reviews "$FACTORY_ROOT/../evidence/reviews/index.jsonl" "$@"
     ;;
 
   reconcile)
