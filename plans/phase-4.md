@@ -71,8 +71,16 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       one-line sudo steps, and `check-unit.sh` verifies the install before it is enabled.
       `test-deploy.sh` covers 31 cases.
 
-- [ ] 8. Telemetry: false-approval taxonomy, task attempts, revise rate per stage, swap
+- [x] 8. Telemetry: false-approval taxonomy, task attempts, revise rate per stage, swap
       overhead %, blocked reasons, judge wall-clock per audit.
+      *(2026-10-02/04.) `factory telemetry` (`telemetry-summary.py`) works across every run of a
+      repo. It reports task attempts and first-try rate; revise rate, stamp rate and judge
+      wall-clock per audit stage; refusals by rule; swap overhead as load time over time inside
+      steps; blocked reasons; and false approvals by class, joined against
+      `evidence/reviews/index.jsonl`, which was backfilled with 16 reviews. First real
+      numbers, from 34 runs: 1.38 attempts per task, 84% first try, judge stamp rate 0 on every
+      stage, swap overhead 0.75%.)*
+
 - [ ] 9. **The workload.** Run the seating-planner backlog unattended: repair beans 021–030,
       then 015–020, plus new beans from Phase 3. That makes 25 or more completed beans. Each PR
       still gets the pre-merge Claude review before it merges.

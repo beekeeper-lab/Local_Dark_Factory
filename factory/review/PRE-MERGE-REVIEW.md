@@ -53,6 +53,11 @@ a record someone earned by running it both ways (bean-022's review, 2026-10-02).
   a qualified local judge must catch.
 
 The review record is kept at `evidence/reviews/<run-id>.md`.
+Each review also adds one line to `evidence/reviews/index.jsonl`:
+`{run_id, repo, verdict, defect_class, defect, source}`. `defect_class` is one of
+event.schema.json's `human_rejection_reason` values, or null when nothing was
+found. `factory telemetry` reads this index for the false-approval taxonomy. A
+review missing from it is counted as unindexed, never as clean.
 
 ## The prompt
 
