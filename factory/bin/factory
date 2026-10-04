@@ -39,7 +39,7 @@ factory — run the line against the repository you are standing in.
   factory step <step> <bean-id>
                             one step: spec, build, gate, doc, sync, pr, ci,
                             or audit-{spec,impl,doc,package}
-  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>] [--max-inflight N]
+  factory go [--limit N] [--dry-run] [--bean <id>] [--stop-after <step>] [--max-inflight N] [--only "<ids>"]
                             run the approved beans in order, one at a time,
                             stopping at the first halt
   factory queue [--all]     what is runnable, and what blocks the rest
@@ -758,7 +758,7 @@ run from the working tree."
     # Phase 0 measured why (the Q8 developer and the judge cannot co-reside, so a
     # second concurrent bean would make two beans wait on the same model).
     require_target
-    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""; GO_MAX="${FACTORY_MAX_INFLIGHT:-1}"
+    GO_LIMIT=0; GO_DRY=0; GO_ONE=""; GO_STOP=""; GO_MAX="${FACTORY_MAX_INFLIGHT:-1}"; GO_ONLY=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --limit)
@@ -771,6 +771,10 @@ run from the working tree."
           esac
           shift 2 ;;
         --dry-run) GO_DRY=1; shift ;;
+        # Restrict the parallel queue to these beans, in this order: a run order
+        # a person chose (repairs before the features that build on them) rather
+        # than approval order.
+        --only) GO_ONLY="${2:?--only needs a space-separated list of bean ids}"; shift 2 ;;
         --max-inflight)
           GO_MAX="${2:?--max-inflight needs a number}"
           case "$GO_MAX" in ''|*[!0-9]*|0) die "--max-inflight takes a whole number of 1 or more" ;; esac
@@ -818,7 +822,9 @@ run from the working tree."
         while [ -z "$GO_STOPPING" ] && [ "${#GO_PID[@]}" -lt "$GO_MAX" ]; do
           if [ "$GO_LIMIT" -gt 0 ] && [ "$GO_RAN" -ge "$GO_LIMIT" ]; then GO_STOPPING="--limit $GO_LIMIT"; break; fi
           NEXT=""
-          for cand in $(bash "$PIPE/queue.sh" --json | jq -r '.ready[]'); do
+          GO_READY=" $(bash "$PIPE/queue.sh" --json | jq -r '.ready | join(" ")') "
+          for cand in ${GO_ONLY:-$GO_READY}; do
+            case "$GO_READY" in *" $cand "*) ;; *) continue ;; esac
             [ -n "${GO_PID[$cand]:-}" ] || { NEXT="$cand"; break; }
           done
           [ -n "$NEXT" ] || break
