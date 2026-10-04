@@ -45,7 +45,14 @@ case "${1:-}" in
   run)
     # Remember the name it was given, so the test can assert the container is
     # identifiable at all — an unnamed container cannot be asked about later.
-    while [ $# -gt 0 ]; do [ "$1" = --name ] && { printf '%s\n' "$2" > "$FAKE_NAMEFILE"; }; shift; done
+    while [ $# -gt 0 ]; do
+      [ "$1" = --name ] && { printf '%s\n' "$2" > "$FAKE_NAMEFILE"; }
+      # What the .git mask is: crun cannot mount a directory over a file.
+      if [ "$1" = --volume ] && [[ "$2" == *":/work/.git:"* ]]; then
+        m="${2%%:/work/.git:*}"; { [ -f "$m" ] && echo file; [ -d "$m" ] && echo dir; } > "${FAKE_MASKFILE:-/dev/null}"
+      fi
+      shift
+    done
     # PODMAN_SLEEP so a test can put the container's death on either side of the
     # wall clock, which is the only thing separating a timeout from a kill.
     # PODMAN_IGNORE_TERM makes it survive the TERM `timeout` sends first, so the
@@ -162,6 +169,20 @@ export PODMAN_RC=124
 out="$(ws_t 900)"; rc=$?
 check "the timeout is still reported"    "the session was killed after 900s" "$out"
 nope  "without the 137 explanation"      "escalated to KILL" "$out"
+
+
+printf '\n== the .git mask takes the shape of .git ==\n\n'
+#
+# A bean worktree's .git is a file; crun cannot mount a directory over it, and
+# bean-025 and bean-026's first contained runs died there (Phase 4).
+export FAKE_MASKFILE="$WORK/mask"
+rm -rf "$WORK/tree/.git"; mkdir -p "$WORK/tree/.git"
+ws >/dev/null 2>&1
+check "a .git directory is masked by a directory" "dir" "$(cat "$FAKE_MASKFILE")"
+rm -rf "$WORK/tree/.git"; printf 'gitdir: /somewhere/main/.git/worktrees/bean-001\n' > "$WORK/tree/.git"
+ws >/dev/null 2>&1
+check "a worktree's .git file is masked by a file" "file" "$(cat "$FAKE_MASKFILE")"
+rm -f "$WORK/tree/.git"; unset FAKE_MASKFILE
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
