@@ -27,8 +27,16 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       In the tests, 20 racers produce exactly one lease. A refused edge only warns until
       `FACTORY_STATE_STRICT=1`, which gets switched on after the first real runs come out clean.
       `merged` is not yet written: GitHub knows it, and task 6's reconciliation reads it.)*
-- [ ] 2. Worktree manager (`worktrees/<bean-id>`, `max_inflight`), with evidence kept when a
+- [x] 2. Worktree manager (`worktrees/<bean-id>`, `max_inflight`), with evidence kept when a
       bean blocks.
+      *(2026-10-04.) `worktree.sh` puts each bean's worktree beside the main checkout,
+      detached at main's tip, which preflight accepts in a linked worktree. It brings local
+      main up to date first, keeps a blocked bean's worktree as evidence, and `prune` gives
+      back done beans' worktrees. Run records, the state log and the leases resolve to the
+      main checkout (`lib.sh runs_root_dir`), so the queue and reconciliation see every bean.
+      `factory go --max-inflight N` runs up to N, and 1 is the old loop unchanged. Tested:
+      two beans in flight at once, each in its own worktree, with the main checkout still on
+      main.)*
 - [x] 3. Inference manager: finish `ensure_loaded(role)` and `healthcheck(role)`, and record
       load-time telemetry.
       *(2026-10-02.) `ensure-loaded.sh` now does the §09 contract. In the serial regime it
@@ -38,7 +46,13 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       and the orchestrator (judge, before every audit) call it, and a load or health-check
       failure halts the step and pushes a notification. Real runs only: the suites stay
       uncontained and never touch the GPU.)*
-- [ ] 4. Role-batched scheduler (`swap_policy`). The regime is serial, measured in Phase 0.
+- [x] 4. Role-batched scheduler (`swap_policy`). The regime is serial, measured in Phase 0.
+      *(2026-10-04.) `infergate.py` lets one model step use the GPU at a time across in-flight
+      beans. The step holds the gate from load to exit, in `run-step.sh` for the developer and
+      the orchestrator for the judge. When the gate frees, the resident role goes first, and
+      past `FACTORY_MAX_WAIT_MINUTES` (default 30) the longest waiter goes. A dead holder is
+      dropped. Every grant is logged with its wait and whether it cost a model switch.
+      Tested: batching, the max_wait override, and a holder killed with -9.)*
 - [x] 5. Kill switch: `pause`, `drain` and `stop-now`, each verified.
       *(2026-10-02.) `factory pause|drain|stop-now|resume` write a control file beside the state
       log. Every orchestrator reads it at each step boundary, and `factory go` reads it between

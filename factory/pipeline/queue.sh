@@ -85,7 +85,7 @@ done
 # repo's own config so this cannot drift from what the orchestrator creates.
 CONFIG_FILE="$ROOT/factory/pipeline-config.json"
 BRANCH_PAT="$(jq -r '.branch_pattern // "bean/BEAN-NNN-<slug>"' "$CONFIG_FILE" 2>/dev/null || echo 'bean/BEAN-NNN-<slug>')"
-RUNS_ROOT="$ROOT/$(jq -r '.runs_root // "factory/runs"' "$CONFIG_FILE" 2>/dev/null || echo factory/runs)"
+RUNS_ROOT="$(main_root)/$(jq -r '.runs_root // "factory/runs"' "$CONFIG_FILE" 2>/dev/null || echo factory/runs)"
 
 branch_for() { # branch_for <bean-id> -> the existing branch, or empty
   local id="$1" glob
@@ -234,7 +234,7 @@ halted_run_for() {
 # has cleared it yet. Read once; a repository with no state log reads as {}.
 MACHINE='{}'
 if [ "${FACTORY_STATE:-1}" = 1 ] && { [ -n "${FACTORY_STATE_DIR:-}" ] || [ -f "${CONFIG_PATH:-}" ]; }; then
-  MACHINE="$(FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(resolve_repo_path "$(jq -r '.runs_root' "$CONFIG_PATH")")/.state}" \
+  MACHINE="$(FACTORY_STATE_DIR="${FACTORY_STATE_DIR:-$(runs_root_dir)/.state}" \
     "$(factory_python)" "$PIPELINE_DIR/beanstate.py" state --json 2>/dev/null || echo '{}')"
 fi
 ROWS='[]'

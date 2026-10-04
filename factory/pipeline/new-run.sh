@@ -54,7 +54,7 @@ if [ -z "$sess_file" ]; then
 fi
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-rundir="$(resolve_repo_path "$runs_root")/$BEAN_ID-$stamp"
+rundir="$(runs_root_dir)/$BEAN_ID-$stamp"
 mkdir -p "$rundir"
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
