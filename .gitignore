@@ -33,6 +33,10 @@ bench/results/*
 # cannot produce.
 !bench/results/reaudit-*
 !bench/results/judge-qualify-2*
+# Replays of recorded model requests (bench/inference-replay.sh): a provenance
+# line, then one recorded call per line. The figures the inference changes on
+# the parking lot will be argued from.
+!bench/results/inference-replay-*
 # The ledger that says what each of these measured and whether a claim still
 # rests on it. Without it the directory is twenty timestamps.
 !bench/results/INDEX.md

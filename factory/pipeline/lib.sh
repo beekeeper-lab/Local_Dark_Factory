@@ -141,3 +141,69 @@ verdicts_role() {
     *)                 printf 'stray\n' ;;
   esac
 }
+
+# ---------------------------------------------------------------------------
+# Inference recording (Phase 4 task 13) — opt-in, and identical to before when off.
+#
+# FACTORY_INFERENCE_RECORD=1 puts inference-recorder.py between this run and the
+# model server, so every call's prompt_eval/eval counts and durations land in
+# <run>/inference/calls.jsonl. Unset — the default — none of the functions below
+# does anything, and the two addresses they answer are the addresses the line
+# used before they existed. tests/test-inference-recorder.sh holds both halves.
+#
+# Two routes to the server and one variable for both: judge.sh speaks HTTP to a
+# URL, and the worker's gateway forwards bytes to a host:port. Both read
+# FACTORY_INFERENCE_ADDR, which only inference_record_start sets.
+
+# judge_host — the URL judge.sh asks. Unchanged: OLLAMA_HOST, else :11434.
+judge_host() {
+  if [ -n "${FACTORY_INFERENCE_ADDR:-}" ]; then printf 'http://%s\n' "$FACTORY_INFERENCE_ADDR"
+  else printf '%s\n' "${OLLAMA_HOST:-http://127.0.0.1:11434}"; fi
+}
+
+# gateway_upstream — where model-gateway.sh forwards. Unchanged: its own default.
+gateway_upstream() {
+  printf '%s\n' "${FACTORY_INFERENCE_ADDR:-127.0.0.1:11434}"
+}
+
+# inference_record_start <run_dir> <bean> [<owner_pid>] — start one recorder for
+# this run, once, and export its address. A recorder that will not start is a
+# measurement lost, not a step failed: it says so and the run goes on unrecorded,
+# because the line must not halt on its own instrumentation.
+inference_record_start() {
+  [ "${FACTORY_INFERENCE_RECORD:-0}" = 1 ] || return 0
+  [ -z "${FACTORY_INFERENCE_ADDR:-}" ] || return 0
+  local run="$1" bean="$2" owner="${3:-$$}" d up port _i
+  d="$run/inference"
+  mkdir -p "$d/requests" 2>/dev/null || { printf 'INFER  could not create %s; not recording\n' "$d" >&2; return 0; }
+  up="${FACTORY_INFERENCE_UPSTREAM:-127.0.0.1:11434}"
+  rm -f "$d/port"
+  # FACTORY_BEAN as a prefix on this one command, never exported: run-step.sh
+  # reads FACTORY_ROLE as an override of the step's model, so the tag
+  # environment must not leak into anything but the recorder.
+  FACTORY_BEAN="$bean" "$(factory_python)" "$PIPELINE_DIR/inference-recorder.py" serve \
+    --listen 127.0.0.1:0 --upstream "$up" --log "$d/calls.jsonl" --requests-dir "$d/requests" \
+    --tags-file "$d/tags.json" --port-file "$d/port" --parent-pid "$owner" \
+    >>"$d/recorder.log" 2>&1 </dev/null &
+  for _i in $(seq 1 50); do [ -s "$d/port" ] && break; sleep 0.1; done
+  port="$(cat "$d/port" 2>/dev/null || true)"
+  if [ -z "$port" ]; then
+    printf 'INFER  the recorder did not start (see %s); this run is not recorded\n' "$d/recorder.log" >&2
+    return 0
+  fi
+  export FACTORY_INFERENCE_ADDR="127.0.0.1:$port"
+  export FACTORY_INFERENCE_TAGS="$d/tags.json"
+  printf 'INFER  recording %s -> %s into %s\n' "$FACTORY_INFERENCE_ADDR" "$up" "$d/calls.jsonl" >&2
+}
+
+# inference_tag <role> <step> [<task>] — say what the next calls are for. The
+# worker reaches the server through a byte forwarder and cannot add a header,
+# so the controller writes it down before each step and the recorder reads it
+# on every call. Nothing happens unless a recorder is running.
+inference_tag() {
+  [ -n "${FACTORY_INFERENCE_TAGS:-}" ] || return 0
+  jq -nc --arg r "$1" --arg s "$2" --arg t "${3:-}" \
+    '{role:$r, step:$s} + (if $t == "" then {} else {task:$t} end)' \
+    > "$FACTORY_INFERENCE_TAGS.tmp" 2>/dev/null \
+    && mv "$FACTORY_INFERENCE_TAGS.tmp" "$FACTORY_INFERENCE_TAGS" 2>/dev/null || true
+}

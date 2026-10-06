@@ -58,6 +58,42 @@ field means — did it change anything on a **real** run? It never writes to the
 run directory, because a finished run is evidence, and it repeats, because this
 judge gives different verdicts for byte-identical input.
 
+### Measuring inference: record a run, replay one variable at a time
+
+The run logs say how long a step took, not where the seconds went. To find out,
+record a run. Nothing changes unless you ask for it:
+
+```
+FACTORY_INFERENCE_RECORD=1 factory run bean-001
+bench/inference-report.py <run-dir>/inference/calls.jsonl
+```
+
+With the flag set, `orchestrate.sh` starts one `factory/pipeline/inference-recorder.py`
+per run, between the line and ollama: judge.sh's HOST and the worker gateway's
+`--upstream` point at it, and it forwards every byte unchanged, streams included.
+Each model call adds a line to `<run>/inference/calls.jsonl` with its bean, role,
+step and task, TTFT, prompt and output tokens, and prefill, decode and load
+seconds as ollama reports them. Its request body goes into `inference/requests/`.
+`FACTORY_INFERENCE_UPSTREAM` changes where it forwards to (default
+`127.0.0.1:11434`). The report gives P50/P90 per role, and the share of wall time
+spent in prefill, decode and load.
+
+To test a server change, replay the recorded requests against it. Use the same
+requests each time and change one thing per replay:
+
+```
+bench/inference-replay.sh <run-dir>/inference/requests --label base --passes 3
+bench/inference-replay.sh <run-dir>/inference/requests --label batch1024 --set num_batch=1024 --passes 3
+bench/inference-report.py bench/results/inference-replay-base-*.jsonl bench/results/inference-replay-batch1024-*.jsonl
+```
+
+`--set` changes the request's ollama `options` and nothing else. A request with
+no options to change, such as pi's `/v1` calls, is skipped and counted. The
+replay refuses while the line holds the GPU, by the inference gate or a running
+`orchestrate.sh`; `--force` runs anyway and records that it did. A judge's
+`verdicts/<target>.request.json` is not replayable: it records the size of what
+was sent, not the body itself. To replay judge calls, record the run.
+
 ## What holds the line together
 
 The controller decides; the models write. Anything decidable by running something is decided by running it, and the judge is asked only for what counting cannot reach — see `bench/controller-fitness.sh` for which is which.
