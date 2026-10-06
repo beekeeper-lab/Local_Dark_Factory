@@ -572,6 +572,12 @@ run_dir_manifest() { # run_dir_manifest <attempt-dir> — hash the record, not t
           # task's own step (Phase 4). The controller's write, not the session's:
           # bean-024's first build attempt was failed as "tampered" for it.
           "$RUN_DIR_ABS/model-loads.jsonl") continue ;;
+          # The inference recorder (FACTORY_INFERENCE_RECORD, lib.sh) appends every
+          # model call the session makes to calls.jsonl and saves its request here,
+          # from outside the session, while the task runs. bean-025 run 2's first
+          # build attempt was failed as "tampered" for it (2026-10-06). It is
+          # telemetry, not evidence a verdict rests on.
+          "$RUN_DIR_ABS/inference/"*) continue ;;
         esac
         [ -n "$adir" ] && case "$f" in "$adir"/*|"$adir") continue ;; esac
         printf '%s  %s\n' "$(sha256sum < "$f" | cut -d' ' -f1)" "${f#"$RUN_DIR_ABS"/}"
