@@ -113,6 +113,19 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
 - [ ] 13. **Inference measurement harness** (amendment, 2026-10-04): record prompt_eval/eval
       counts and durations per model call, and replay recorded requests against a server
       configuration, one variable at a time.
+      *(Progress 2026-10-06: built and tested, not yet run on a real bean. A recorded run has
+      not happened yet, because bean-025 held the GPU throughout. `factory/pipeline/inference-recorder.py` is a
+      stdlib reverse proxy. It relays every byte unchanged and as it arrives, and writes one
+      line per model call: bean, role, step and task tags, TTFT, ISL and OSL, and prefill,
+      decode and load seconds from ollama's own nanosecond counters (`usage` counts only, for
+      `/v1`). `FACTORY_INFERENCE_RECORD=1` starts one recorder per run from `orchestrate.sh`
+      and points judge.sh and the worker gateway at it, writing `<run>/inference/`. Unset, the
+      line is unchanged. `bench/inference-replay.sh` re-sends recorded bodies with `--set`
+      touching `options` only, and refuses while the line holds the GPU.
+      `bench/inference-report.py` gives P50/P90 per role and label. A judge's existing
+      `verdicts/*.request.json` turned out to be a size sidecar, not a body, so judge calls
+      can be replayed only from a recorded run. Tests use a fake ollama and never :11434.
+      Each one was checked by breaking the behaviour it covers.)*
 - [ ] 14. **Judge prefill** (amendment, 2026-10-04): reorder judge.sh's request so the shared
       context (bean, spec) comes first and target-specific content last, batch a bean's audits
       while the judge is resident, and measure the effect with task 13's harness.
