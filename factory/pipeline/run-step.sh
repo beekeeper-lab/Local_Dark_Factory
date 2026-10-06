@@ -395,7 +395,9 @@ if [ "$CONTAIN" = 1 ]; then
   GW_DIR="${FACTORY_MODEL_SOCKET_DIR:-}"
   GW_STARTED=0
   if [ -z "$GW_DIR" ]; then
-    GW_DIR="$("$PIPELINE_DIR/model-gateway.sh" start)" || die "could not open a model gateway; refusing to run the worker uncontained"
+    # gateway_upstream is the gateway's own default unless this run is being
+    # recorded (FACTORY_INFERENCE_RECORD, lib.sh), when it is the recorder.
+    GW_DIR="$("$PIPELINE_DIR/model-gateway.sh" start --upstream "$(gateway_upstream)")" || die "could not open a model gateway; refusing to run the worker uncontained"
     GW_STARTED=1
   fi
   # Load after the gateway, not before it. Loading first meant a run whose
@@ -498,6 +500,9 @@ if [ "$CONTAIN" = 1 ]; then
     ''|*[!0-9]*) die "worker_timeout_s must be a whole number of seconds, got '$WORKER_TIMEOUT_S'" ;;
   esac
 
+  # What the recorder should file this session's calls under; a no-op unless
+  # this run is being recorded. build-loop passes the task id as the first extra.
+  inference_tag "$ROLE" "$STEP" "$([ "$STEP" = build-task ] && printf '%s' "${EXTRA[0]:-}")"
   "$PIPELINE_DIR/worker-sandbox.sh" \
     --tree "$ROOT" --agent-dir "$AGENT_DIR" --socket-dir "$GW_DIR" \
     --skills "$FACTORY_SKILLS" --lock "$WORKER_LOCK" --timeout "$WORKER_TIMEOUT_S" \

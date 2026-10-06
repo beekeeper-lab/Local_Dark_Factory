@@ -577,6 +577,10 @@ bean_yaml() {
 
 run_step() { # <step> [-- <extra args carried through to the child>]
   local step="$1"; shift
+  # Opt-in inference recording (FACTORY_INFERENCE_RECORD=1, lib.sh): one
+  # recorder per run, started on the first step that has a run dir to write
+  # into, and ended by this process exiting. Off, this line does nothing.
+  if [ -n "$RUN_DIR" ]; then inference_record_start "$RUN_DIR" "$BEAN_ID" "$$"; fi
   case "$step" in
     preflight) run_script_step "$step" "$PIPELINE_DIR/preflight.sh" "$BEAN_ID" ;;
     ci)
@@ -664,6 +668,7 @@ run_step() { # <step> [-- <extra args carried through to the child>]
           halt "$step" "$el_rc"
         fi
       fi
+      inference_tag judge "$step"
       "$PIPELINE_DIR/judge.sh" "$RUN_DIR" --target "${step#audit-}" --bean "$(bean_yaml)" || rc=$?
       [ "$JUDGE_GATED" = 1 ] && "$(factory_python)" "$PIPELINE_DIR/infergate.py" release --owner "$(hostname):$$" || true
       # The judge's own exit code was being captured and then thrown away by an

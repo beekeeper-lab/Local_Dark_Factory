@@ -86,7 +86,7 @@ case "$TARGET" in spec|impl|doc|package) ;; *) die "--target must be spec|impl|d
 require_cmd jq; require_cmd curl
 
 ROOT="$(repo_root)"
-HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
+HOST="$(judge_host)"  # OLLAMA_HOST, else :11434 — or this run's recorder (lib.sh)
 ROLES_FILE="${ROLES_FILE:-$PIPELINE_DIR/roles.json}"
 
 # The provider allow-list is the "no frontier model at runtime" guarantee, and it
