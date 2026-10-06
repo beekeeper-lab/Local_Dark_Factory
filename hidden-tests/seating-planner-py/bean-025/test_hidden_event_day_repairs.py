@@ -10,6 +10,12 @@ Written from bean-025's criteria, which come from bean-014's pre-merge review:
     and recommends capacity. bean-014's diagnosis probed models without the
     day-lock pins, so every hard rule looked guilty.
 
+  * ac4 (added 2026-10-06, from run 1's pre-merge review) — a stored lock can
+    be what makes an event-day solve infeasible: a new guest locked to a full
+    table, or a chart guest whose lock names another table and who is not
+    unlocked. The report then recommends unlocking that guest, and with no hard
+    rule in the event it does not blame the hard rules.
+
 ac2 is checked as a property, not as one expected list: every rule the report
 names is removed on its own and the solve re-run in event-day mode with the same
 chart; it must then be feasible.
@@ -104,3 +110,37 @@ def test_no_seat_at_all_recommends_capacity_and_blames_no_rule() -> None:
     assert report.conflict_rule_ids == () or list(report.conflict_rule_ids) == []
     kinds = {r.kind for r in report.recommendations}
     assert kinds & {"add_capacity", "add_table"}, f"a full room needs capacity: {kinds}"
+
+
+def _lock_advice(report: Any, guest: str) -> list[Any]:
+    from seating_planner.solver.report import KIND_UNLOCK
+
+    return [r for r in report.recommendations if r.kind == KIND_UNLOCK and guest in r.message]
+
+
+def _blames_rules(report: Any) -> bool:
+    from seating_planner.solver.report import KIND_CHANGE_HARD_RULE
+
+    return any(r.kind == KIND_CHANGE_HARD_RULE for r in report.recommendations)
+
+
+def test_a_lock_that_leaves_a_new_guest_no_seat_is_named() -> None:
+    # g-3 is new and locked to t-1, which the chart already fills; t-2 has a free seat.
+    ev = _event({"t-1": 2, "t-2": 2}, ["g-0", "g-1", "g-2", "g-3"], [], locks={"g-3": "t-1"})
+    result = _solve(ev, {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"})
+    report = result.infeasibility_report
+    assert report is not None, "a guest locked to a full table cannot be seated"
+    assert _lock_advice(report, "g-3"), f"unlocking g-3 is the remedy: {report.recommendations}"
+    assert not report.conflict_rule_ids, "the event has no hard rule to blame"
+    assert not _blames_rules(report), f"no hard rule exists to review: {report.recommendations}"
+
+
+def test_a_lock_that_contradicts_the_chart_is_named() -> None:
+    # g-2 is locked to t-2, the chart seats g-2 at t-1, and g-2 is not unlocked.
+    ev = _event({"t-1": 2, "t-2": 2}, ["g-0", "g-1", "g-2"], [], locks={"g-2": "t-2"})
+    result = _solve(ev, {"g-0": "t-1", "g-2": "t-1"})
+    report = result.infeasibility_report
+    assert report is not None, "a lock and a chart pin that disagree cannot both hold"
+    assert _lock_advice(report, "g-2"), f"unlocking g-2 is the remedy: {report.recommendations}"
+    assert not report.conflict_rule_ids, "the event has no hard rule to blame"
+    assert not _blames_rules(report), f"no hard rule exists to review: {report.recommendations}"

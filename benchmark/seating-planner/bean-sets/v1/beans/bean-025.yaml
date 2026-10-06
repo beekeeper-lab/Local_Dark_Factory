@@ -38,6 +38,15 @@ context:
     help. Measured: a hard different-table rule already satisfied by the chart was named
     beside the rule that actually explains the missing seat. "No seat for the new guest"
     is the most common way this mode fails.
+
+    Run 1 (bean-025-20261006T140110Z, PR #22) fixed both, and its pre-merge review found
+    that the event-day diagnosis it wrote no longer checks locks at all. Its spec assumed
+    that "removing a stored lock can never be what restores feasibility" in event-day.
+    That is false: a new guest locked to a table the chart already fills, or a chart
+    guest whose lock names a different table from the chart and who is not unlocked,
+    makes the solve infeasible because of the lock alone. On main the report says to
+    unlock that guest; run 1's report said only "The enabled hard rules are jointly
+    unsatisfiable", in an event with no hard rule (evidence/reviews/bean-025-20261006T140110Z.md).
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -48,6 +57,9 @@ acceptance_criteria:
   - id: ac2
     text: An event-day solve that cannot seat a new guest names only hard rules whose removal alone makes it solvable with every chart guest in place, and recommends capacity when no rule removal would help.
     verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_no_seat_blames_only_rules_that_explain_it" }
+  - id: ac4
+    text: In event-day mode, when a stored lock is what makes the solve infeasible (a new guest locked to a table the chart fills, or a chart guest locked to a table other than the one the chart gives them and not in unlocked), the report recommends unlocking that guest, and when the event has no hard rule it does not recommend reviewing hard rules.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_a_lock_that_causes_no_seat_is_named" }
   - id: ac3
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
