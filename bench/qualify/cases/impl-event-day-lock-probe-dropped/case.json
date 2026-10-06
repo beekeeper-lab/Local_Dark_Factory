@@ -1,0 +1,49 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-event-day-lock-probe-dropped",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-025-20261006T140110Z",
+    "pr": null,
+    "candidate_sha": "96b09da81e3d2cc76566935f0a5cc44fd753a0db",
+    "bean_at": "9613669b3c1c93f17f4a0f9b5ac4c99ad4a5508d",
+    "bean_path": "factory/beans/bean-025-event-day-unlock-releases-explicit-locks/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The event-day diagnosis replaces the ordinary one and leaves out the lock-removal probe, built from a spec premise that a stored lock can never be what makes an event-day solve infeasible. A new guest locked to a full table, or a chart guest whose lock names another table, gets no unlock advice, only 'The enabled hard rules are jointly unsatisfiable' in an event with no hard rule.",
+  "answer_key": {
+    "why": "Found by bean-025 run 1's pre-merge review (evidence/reviews/bean-025-20261006T140110Z.md, demo.py): on main both cases recommend unlocking the guest; on the candidate neither does. Breaks ac2's 'recommends capacity when no rule removal would help' and regresses main. Naming the missing lock probe, or the false 'a lock cannot cause it' premise, is a catch.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "def _diagnose_event_day("
+      },
+      {
+        "file": "diff.txt",
+        "quote": "when no removal helps the report says capacity, never a rule."
+      }
+    ]
+  },
+  "anchors": [
+    "lock",
+    "unlock",
+    "_probe_lock_removals",
+    "lock probe",
+    "locked to",
+    "jointly unsatisfiable",
+    "never be what restores"
+  ],
+  "key_by": "Claude Opus 5.5 pre-merge reviewer; defect demonstrated in the gate image and re-run by the operator session",
+  "key_checked_at": "2026-10-06",
+  "difficulty": "medium"
+}

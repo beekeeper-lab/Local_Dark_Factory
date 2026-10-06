@@ -1,0 +1,78 @@
+schema_version: bean/2.0.0
+id: bean-025
+repo: beekeeper-lab/seating-planner-py
+title: Event-day unlock releases explicit locks, and a missing seat is not blamed on unrelated rules
+intent: >
+  In event-day mode an explicitly unlocked guest may move even when an explicit lock also
+  names them, and an event-day solve that cannot seat a new guest reports only the hard
+  rules whose removal alone would let it solve with the chart still in place.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-09-28T23:00:00Z"
+  order: 25
+source:
+  kind: manual
+  ref: evidence/reviews/bean-014-20260928T162157Z.md
+  date: "2026-09-28"
+  excerpt: "bean-014 ac4: An explicitly unlocked guest may be moved in Event-day mode."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/domain/
+    - tests/solver/
+  background: >
+    Two defects found by bean-014's pre-merge review, merged on the owner's decision with
+    this bean as the repair.
+
+    First: the event-day solve skips its own day-lock pin for a guest in `unlocked`, but
+    the model it builds still applies every entry in `event.locks`, so a guest who is both
+    explicitly locked and explicitly unlocked cannot move, and nothing says so. Measured on
+    the main branch: g-2 locked to t-2 and unlocked, with a weight-100 reason to join
+    t-1, stays at t-2. bean-014's ac4 test uses no explicit locks.
+
+    Second: when a new guest cannot be seated, the event-day solve hands its infeasibility
+    to the ordinary one-removal diagnosis, whose probe models do not carry the day-lock
+    pins. Without the pins, removing almost any hard rule leaves something solvable, so
+    unrelated rules are named, and a recommendation to relax one is given that would not
+    help. Measured: a hard different-table rule already satisfied by the chart was named
+    beside the rule that actually explains the missing seat. "No seat for the new guest"
+    is the most common way this mode fails.
+
+    Run 1 (bean-025-20261006T140110Z, PR #22) fixed both, and its pre-merge review found
+    that the event-day diagnosis it wrote no longer checks locks at all. Its spec assumed
+    that "removing a stored lock can never be what restores feasibility" in event-day.
+    That is false: a new guest locked to a table the chart already fills, or a chart
+    guest whose lock names a different table from the chart and who is not unlocked,
+    makes the solve infeasible because of the lock alone. On main the report says to
+    unlock that guest; run 1's report said only "The enabled hard rules are jointly
+    unsatisfiable", in an event with no hard rule (evidence/reviews/bean-025-20261006T140110Z.md).
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: In event-day mode, a guest who is explicitly locked and also named in unlocked may be moved to another table when that raises the soft score, and nobody else moves.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_unlock_releases_an_explicit_lock" }
+  - id: ac2
+    text: An event-day solve that cannot seat a new guest names only hard rules whose removal alone makes it solvable with every chart guest in place, and recommends capacity when no rule removal would help.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_no_seat_blames_only_rules_that_explain_it" }
+  - id: ac4
+    text: In event-day mode, when a stored lock is what makes the solve infeasible (a new guest locked to a table the chart fills, or a chart guest locked to a table other than the one the chart gives them and not in unlocked), the report recommends unlocking that guest, and when the event has no hard rule it does not recommend reviewing hard rules.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_a_lock_that_causes_no_seat_is_named" }
+  - id: ac3
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - an explicit lock without an unlock still holds in every mode
+  - the solve_event signature and the result shape are unchanged
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 450 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no change to the planning or low-disruption diagnosis
+  - no mode comparison changes (bean-023)
+dependencies: [bean-014]

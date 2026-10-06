@@ -1,0 +1,247 @@
+schema_version: tasks/1.0.0
+bean_id: bean-025
+tasks:
+  - id: task-1
+    title: Write the red event-day repair tests
+    intent: >-
+      Create tests/solver/test_event_day_repairs.py containing exactly the three
+      acceptance scenarios, one test function each, named exactly
+      test_unlock_releases_an_explicit_lock,
+      test_no_seat_blames_only_rules_that_explain_it and
+      test_a_lock_that_causes_no_seat_is_named, and all three failing against the
+      current solver. Model the file on tests/solver/test_event_day.py: a module
+      docstring, the _table/_guest/_event/_soft/_hard helpers, plain pytest,
+      assertions on solve_event result fields only (never solver internals), and
+      concise scenario comments that state the seat arithmetic. Keep the file as
+      compact as the assertions allow: the bean's diff budget is 350 lines for
+      both the tests and the fix. Do not write or modify anything under src/.
+
+      Import SATISFIED and VIOLATED from seating_planner.solver.result and
+      KIND_UNLOCK and KIND_CHANGE_HARD_RULE from
+      seating_planner.solver.report, as tests/solver/test_locks.py does for
+      KIND_UNLOCK. All three solves in the three tests are mode="event_day" with
+      the current chart passed as current.
+
+      First test, test_unlock_releases_an_explicit_lock: tables t-1 (capacity 3)
+      and t-2 (capacity 1); guests g-0, g-1, g-2 all confirmed; one soft
+      same_table rule r-same weight 100 over (g-0, g-2); event.locks is
+      {"g-2": "t-2"}; current chart is {"g-0": "t-1", "g-1": "t-1",
+      "g-2": "t-2"}. First solve with unlocked={"g-2"}: assert status
+      "feasible", assignments == {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}
+      (g-2 crossed over for the weight 100 and took t-1's one open seat; g-0
+      and g-1 did not move), rule_states["r-same"] == SATISFIED and score == 100.
+      Second solve of the identical event and chart WITHOUT unlocked: assert
+      status "feasible", assignments == current, rule_states["r-same"] ==
+      VIOLATED and score == 0 — a lock nobody released still holds. Pre-fix the
+      first solve keeps g-2 at t-2 because _build_model applies every entry of
+      event.locks regardless of unlocked, so the assignment equality is the red
+      point and the second solve already passes today.
+
+      Second test, test_no_seat_blames_only_rules_that_explain_it, two
+      scenarios in one function, asserted in this order. Scenario A: tables
+      t-1 (capacity 2) and t-2 (capacity 2) — four seats for four guests;
+      guests g-0 to g-3 all confirmed; hard r-bystander same_table over
+      (g-0, g-1), already satisfied by the chart, and hard r-diff
+      different_table over (g-2, g-3); no locks; current chart
+      {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"} so g-3 is the new guest.
+      The arithmetic: every chart guest is pinned, t-1 is at capacity, so g-3's
+      only free seat is t-2 at r-diff's g-2 — infeasible; removing r-diff alone
+      seats g-3, removing r-bystander alone changes nothing. Solve with
+      current only (no unlocked). Assert status "infeasible", the
+      infeasibility_report is not None, capacity_shortfall == 0,
+      conflict_rule_ids == ("r-diff",) and that the change_hard_rule
+      recommendations among report.recommendations name exactly ["r-diff"].
+      Pre-fix the unpinned rule probes make removing either rule look
+      restoring, so conflict_rule_ids is ("r-bystander", "r-diff") and the
+      conflict_rule_ids equality is the red point. Scenario B, the capacity
+      case: same four guests and current chart, tables t-1 (capacity 2) and
+      t-2 (capacity 1) — three seats for four guests — with only the
+      r-bystander rule. Assert status "infeasible", conflict_rule_ids == (),
+      capacity_shortfall == 1, the recommendation kinds include add_capacity
+      (use KIND_ADD_CAPACITY imported from
+      seating_planner.solver.report) and include no change_hard_rule.
+
+      Third test, test_a_lock_that_causes_no_seat_is_named, two scenarios in one
+      function, asserted in this order. Scenario A, the new guest locked into a
+      full table: tables t-1 (capacity 2) and t-2 (capacity 2); guests
+      g-0 to g-3 all confirmed; no rules; locks {"g-3": "t-1"}; current chart
+      {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"} — g-3 is new, locked to the
+      table the chart already fills. Solve with current only. Assert status
+      "infeasible", the report is not None, capacity_shortfall == 0,
+      conflict_rule_ids == (), exactly one recommendation of kind KIND_UNLOCK
+      whose message names "g-3" and "t-1" (as tests/solver/test_locks.py
+      asserts unlock messages), and no recommendation of kind
+      KIND_CHANGE_HARD_RULE — the event has no hard rule, so a hard-rule
+      review is not the advice. Pre-fix the infeasibility report is built by
+      the ordinary diagnosis whose recommendations end with the generic
+      "the enabled hard rules are jointly unsatisfiable" change_hard_rule note
+      even though no hard rule exists, so the no-change_hard_rule assertion is
+      the red point (the unlock recommendation is present pre-fix too, which is
+      why the test does not lean on it for redness). Scenario B, the chart
+      guest whose lock contradicts the chart: tables t-1 (capacity 2) and
+      t-2 (capacity 2); guests g-0, g-1, g-2 all confirmed; no rules; locks
+      {"g-2": "t-1"} while g-2 sits at t-2 in the current chart
+      {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"} and g-2 is not unlocked — the
+      day-lock and the stored lock pin the one guest to two different tables.
+      Same assertion shape: status "infeasible", capacity_shortfall == 0,
+      conflict_rule_ids == (), exactly one KIND_UNLOCK recommendation whose
+      message names "g-2" and "t-1", and no KIND_CHANGE_HARD_RULE
+      recommendation; the red point is again the no-change_hard_rule
+      assertion.
+
+      The setups must be valid exactly as written: soft weights inside the
+      rules model's 1..100 ceiling, every lock naming a present guest and
+      table, every current-chart entry naming a present guest and table. Every
+      assertion reads a solve_event result field or its infeasibility report,
+      never a helper's own bookkeeping.
+    write_paths:
+      - tests/solver/test_event_day_repairs.py
+    depends_on: []
+    satisfies: [ac1, ac2, ac4]
+    verify:
+      - kind: command
+        # Passes only when all three tests fail, and every failure is a
+        # result-reading assertion (or the defect itself raising from the
+        # solver): red for the right reason, per the helper's contract.
+        run: ["python", "factory/tools/red-test.py",
+              "--fixes", "src/seating_planner/solver/hard.py",
+              "--fixes", "src/seating_planner/solver/report.py",
+              "tests/solver/test_event_day_repairs.py"]
+    max_attempts: 3
+    teaching_note: >-
+      Red tests written before the fix and verified with the red-test helper
+      rather than a negated pytest, so red means the two defects (the explicit
+      lock that outlives its unlock; the diagnosis that misses the day-lock
+      pins) plus the run-1 repair's regression (a no-hard-rule event being
+      advised to review hard rules, instead of the lock that actually caused
+      the infeasibility).
+
+  - id: task-2
+    title: Make an explicit unlock release an explicit lock in the event-day model
+    intent: >-
+      Change src/seating_planner/solver/hard.py so the new guest named in the
+      unlocked set is free of a stored lock in the event_day mode, fixing
+      test_unlock_releases_an_explicit_lock in
+      tests/solver/test_event_day_repairs.py, without touching the
+      solve_event signature, the SolveResult shape, or any other file.
+
+      Today _build_model applies every entry of event.locks through
+      _apply_locks (which already takes a skip_guest_id it uses for the
+      one-removal lock probe) and only the day-lock pin loop skips the
+      unlocked set, so a guest both locked and unlocked stays pinned by the
+      lock pin. Thread the unlocked set into the lock application: give
+      _build_model a new optional keyword accepting a set of guest ids with
+      the existing absence-as-default, pass it into _apply_locks, and have
+      _apply_locks skip a lock whose guest is named in that set. The planning
+      and low_disruption call sites — including every diagnosis probe and the
+      low-disruption movement model — keep passing the default, so a lock
+      nobody released still pins the guest in every mode and both of those
+      modes reject unlocked at the validation door anyway. _solve_event_day
+      passes its unlocked set through to the model it builds. Keep the
+      change to this one concern only: do not restructure the event-day model
+      building or the diagnosis in this task (that is the next task). Update
+      the docstrings and comments that describe the event-day model and lock
+      application so they state the unlock precedence. Check your work with
+      ruff check, ruff format --check and mypy on the project before finishing;
+      the gates re-run them in a pinned image.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+    depends_on: [task-1]
+    satisfies: [ac1]
+    verify:
+      - kind: command
+        # Fails before the work: the red test fails on the first solve's
+        # assignment (the lock outlives the unlock). Passes only when the
+        # unlock releases the lock and test_locks.py — which pins lock
+        # behaviour in planning mode — still holds, guarding the bean's
+        # constraint that an explicit lock without an unlock still holds.
+        run: ["pytest", "-q",
+              "tests/solver/test_event_day_repairs.py::test_unlock_releases_an_explicit_lock",
+              "tests/solver/test_locks.py"]
+    max_attempts: 3
+    teaching_note: >-
+      One keyword, one skip: the unlocked set reaches the shared lock pass and
+      nothing else changes, so the fix is structurally invisible to the other
+      two modes, whose call sites never pass it and whose tests trip the
+      verify if lock behaviour drifts.
+
+  - id: task-3
+    title: Give the event-day diagnosis the day-lock pins, including the lock probes
+    intent: >-
+      Change src/seating_planner/solver/hard.py (and one small addition in
+      src/seating_planner/solver/report.py) so the infeasible event-day solve's
+      diagnosis probes models pinned exactly like the solve, and the tests
+      test_no_seat_blames_only_rules_that_explain_it and
+      test_a_lock_that_causes_no_seat_is_named in
+      tests/solver/test_event_day_repairs.py pass while every existing
+      solver test still passes. Do not change the solve_event signature, the
+      SolveResult shape, or the planning and low_disruption diagnoses.
+
+      First, gather the event-day model shape into one builder: a helper that
+      builds the base model (through _build_model, passing the unlocked set so
+      task-2's release applies) plus the day-lock pin of every chart guest who
+      has variables and is not in unlocked — moving that pin loop out of
+      _solve_event_day — and that takes an optional skipped-rule id exactly as
+      _build_model already does for probes. The main solve builds through it.
+
+      Second, write the event-day diagnosis mirroring _diagnose_infeasibility
+      but probing the pinned builder: an enabled hard rule is named only when
+      the pinned model built without just that rule comes back satisfiable
+      under the same seed, single-worker and time-limit pins every probe uses;
+      the capacity shortfall and the recommendations keep the existing
+      computation, so when no single rule removal helps the report falls back
+      to the capacity advice instead of a rule relaxation that would not free
+      a seat. Then the lock side that the run-1 repair dropped and the plain
+      diagnosis lacks the pins for: for each stored lock on an eligible guest,
+      probe the pinned model built with all the other event data and only that
+      one lock removed (rebuild the other event data exactly the way
+      _probe_lock_removals does) and recommend the unlock only when that
+      probe is satisfiable. A lock consistent with the chart is never named —
+      the day-lock still pins the guest, so removing the stored lock changes
+      nothing — and an unlocked guest's released lock is never named either.
+
+      Third, stop the diagnosis from advising a review of hard rules that do
+      not exist: the event has no enabled hard rule exactly when the
+      "the enabled hard rules are jointly unsatisfiable" generic note in
+      report.py's build_recommendations would be false. Add one optional
+      keyword to build_recommendations, defaulted so every existing call site
+      — planning, low disruption, the zero-tables shortcut — keeps its output
+      byte-identical, and have the event-day diagnosis pass the value that
+      suppresses the generic note only when no hard rule is enabled. Leave the
+      note's text and every other recommendation untouched.
+
+      Finally, wire the new diagnosis into _solve_event_day as the diagnose
+      callback of that hand-off only, bound to this run's chart and unlocked
+      set (the callback type is the same
+      Callable[[Event, list[str], int, float], InfeasibilityReport] the
+      existing hand-off uses); planning and low_disruption call sites keep
+      their current diagnoses. Update the docstrings and comments that
+      describe the event-day model, its diagnosis and lock behaviour so they
+      state the pinned probing and the suppress-on-no-rules note. Check ruff
+      check, ruff format --check and mypy on the project before finishing.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+      - src/seating_planner/solver/report.py
+    depends_on: [task-2]
+    satisfies: [ac2, ac4, ac3]
+    verify:
+      - kind: command
+        # Fails before the work: both diagnosis tests are red (the bystander
+        # rule is named beside the true cause; the no-rule events carry the
+        # generic change_hard_rule note). Passes only when all three repair
+        # tests are green and the planning-mode lock tests — including the
+        # lock-versus-rule conflict that must keep naming both sides — still
+        # hold.
+        run: ["pytest", "-q", "tests/solver/test_event_day_repairs.py",
+              "tests/solver/test_locks.py"]
+      - kind: command
+        # ac3 regression: every existing solver test, unchanged.
+        run: ["pytest", "-q", "tests/solver"]
+    max_attempts: 3
+    teaching_note: >-
+      One builder, two users again — the main solve and every diagnosis probe
+      construct the same pinned model: a sat probe proves the removal would
+      have ended this solve's infeasibility with the chart in place, for
+      rules and for stored locks alike. The generic joint-conflict note only
+      fires when the event has enabled hard rules, so a no-rule event-day
+      infeasibility names the lock and nothing else.
