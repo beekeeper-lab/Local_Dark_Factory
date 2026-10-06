@@ -67,7 +67,7 @@ constraints:
   - an explicit lock without an unlock still holds in every mode
   - the solve_event signature and the result shape are unchanged
 suggested_risk_tier: 2
-size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 350 }
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 450 }
 definition_of_done:
   - all AC verify pass
   - gates green

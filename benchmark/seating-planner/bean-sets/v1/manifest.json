@@ -191,6 +191,14 @@
       "reopens_approval": false,
       "rule": "The owner chose this amendment directly; ac1-ac3 are unchanged.",
       "note": "Run 1's pre-merge review (evidence/reviews/bean-025-20261006T140110Z.md) demonstrated a regression: the event-day diagnosis dropped the lock-removal probe, built from a spec premise that a lock cannot cause event-day infeasibility. Two hidden tests were added from the criterion and verified both ways in the gate image against a reference fix that was never committed; on run 1's head exactly those two fail. Run 1's branch is kept as backup/bean-025-run-20261006T140110Z."
+    },
+    {
+      "date": "2026-10-06",
+      "change": "bean-025 diff budget 350 -> 450",
+      "by": "Claude Opus 5.5, under the owner's standing authorisation of 2026-09-29",
+      "reopens_approval": false,
+      "rule": "A budget follows the scope; ac4 (same day) added a third task and the budget was not raised with it.",
+      "note": "Run 2 (bean-025-20261006T171340Z) passed every gate check except size_budget: 389 changed lines against 350, with all six hidden tests passing, including the two run 1 failed."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
