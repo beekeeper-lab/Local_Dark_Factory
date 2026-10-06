@@ -1,12 +1,12 @@
 {
   "schema": "hidden-verify/1.0.0",
   "suite": "seating-planner-py/bean-025",
-  "suite_sha256": "6dff61185426d87b7d96a6dfc073dc5a34ebf91394d31c06cd1b27f93cd1862b",
-  "tests": 4,
+  "suite_sha256": "8c04195672252f1207007c8599982a10ccd8261258a76563e7217ea2df7d564c",
+  "tests": 6,
   "outcome": "ok",
-  "checked_against": "/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/f2802e04-4dd2-4ae0-8517-4a7479e1099a/scratchpad/tree-fix025",
+  "checked_against": "/tmp/claude-1000/-home-gregg-workspace-Local-Dark-Factory/98466938-5ca6-4839-a0d6-bf3e41721ac6/scratchpad/review-025/fix",
   "tree_sha": null,
   "both_directions": true,
-  "verified_at": "2026-09-28T20:25:15Z",
-  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2"
+  "verified_at": "2026-10-06T17:12:00Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914"
 }
