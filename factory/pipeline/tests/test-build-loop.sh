@@ -544,6 +544,18 @@ nope  "task-1's attempt is not recorded as tampered" "result.json says tampered"
       grep -q '"result": *"tampered"' "$RUN_DIR/build/task-1/attempt-1/result.json"
 check "and task-1 verifies"           "PASS   task-1" "$out"
 
+printf "\n-- the inference recorder's files are the controller's, not tampering --\n\n"
+reset_run
+act task-1.1 <<'SH'
+mkdir -p src && printf 'GOOD\n' > src/a.py
+mkdir -p "$ATTEMPT_DIR/../../../inference/requests"
+printf '{"seq":1}\n' >> "$ATTEMPT_DIR/../../../inference/calls.jsonl"
+printf '{}\n' > "$ATTEMPT_DIR/../../../inference/requests/00001-developer.request.json"
+SH
+out="$(run_loop)"; rc=$?
+nope  "inference/ is not called tampering" "a recorded call was called tampering" grep -q "TAMPERED" <<<"$out"
+check "and task-1 verifies"           "PASS   task-1" "$out"
+
 printf '\n== the controller\'s own writes are never tampering, however the path was typed ==\n\n'
 #
 # The run directory is passed to build-loop.sh as whatever the caller typed, and
