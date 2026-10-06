@@ -1,0 +1,48 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-event-day-empty-report",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-025-20261006T171340Z",
+    "pr": null,
+    "candidate_sha": "e321dec871361ebb26902b65c39ab21115f790f3",
+    "bean_at": "a9b5e6438cff44057351cca845dc8484e8869efc",
+    "bean_path": "factory/beans/bean-025-event-day-unlock-releases-explicit-locks/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "With no enabled hard rule the generic note is suppressed, and when there is also no seat shortfall and no single lock whose removal is enough, nothing replaces it: the infeasible event-day report carries no recommendation at all, breaking bean-010's 'at least one corrective action is recommended'.",
+  "answer_key": {
+    "why": "Found by bean-025 run 2's pre-merge review (evidence/reviews/bean-025-20261006T171340Z.md, demo2.py): three new guests locked to one free seat, and a chart that seats three at a two-seat table, give 0 recommendations on the candidate and at least 1 on main. Naming an empty or missing recommendation list in this case is a catch. Repaired by bean-031.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "suppress_generic_note=not rules,"
+      },
+      {
+        "file": "diff.txt",
+        "quote": "if not recommendations and not suppress_generic_note:"
+      }
+    ]
+  },
+  "anchors": [
+    "suppress_generic_note",
+    "no recommendation",
+    "empty",
+    "at least one",
+    "corrective action",
+    "nothing replaces"
+  ],
+  "key_by": "Claude Opus 5.5 pre-merge reviewer; defect demonstrated in the gate image and re-run by the operator session",
+  "key_checked_at": "2026-10-06",
+  "difficulty": "hard"
+}

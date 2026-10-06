@@ -1,0 +1,362 @@
+diff --git a/src/seating_planner/solver/hard.py b/src/seating_planner/solver/hard.py
+index 98552a4..e65480d 100644
+--- a/src/seating_planner/solver/hard.py
++++ b/src/seating_planner/solver/hard.py
+@@ -10,8 +10,12 @@ one with the fewest such moves wins, the tie broken by the soft score. In the
+ event_day mode every guest on the given chart is implicitly locked to their
+ table — an explicit lock is not the exception that pins one guest, being on
+ the chart is the rule that pins everyone — with only genuinely new guests
+-(and any guest explicitly named in the unlocked set) free to seat, and the
+-pinned model is always solved, never short-cut to a re-plan.
++free to seat, and the pinned model is always solved, never short-cut to a
++re-plan. An explicit unlock names the only guests the pin lets go: an unlock
++beats an explicit lock in event_day, while a lock nobody released still pins
++its guest in every mode. When the pinned model is infeasible the diagnosis
++probes the same pinned model, so a named rule is named only when removing it
++actually frees a seat.
+ Either way the result carries the full report: the guest counts, the soft
+ score, the state of every enabled rule and one entry per violated soft rule.
+ """
+@@ -80,8 +84,10 @@ def solve_event(
+     does the same against a given chart under a hard cap on how many guests
+     change tables; event_day pins every guest on the given chart to their
+     table — an implicit lock, whether or not event.locks names them — and
+-    seats only the new guests plus any guest in the unlocked set, always by
+-    solving the pinned model rather than by re-planning.
++    free to seat, always by solving the pinned model rather than by
++    re-planning. An explicit unlock beats an explicit lock: a guest in
++    unlocked is released even if event.locks also names them, and the
++    infeasibility diagnosis probes this same pinned model.
+     """
+     # Reject, never reinterpret: a mode the solver does not implement is an
+     # error before any configuration, model building or search runs, and
+@@ -390,23 +396,18 @@ def _solve_event_day(
+     num_search_workers: int,
+     time_limit_s: float,
+ ) -> SolveResult:
+-    # The single-phase event-day solve: the base model plus a day-lock pin
+-    # per chart guest, then the usual soft objective and hand-off. No
+-    # movement indicators — the mode's promise is that no one in the chart
+-    # moves, a fixed variable, not a minimized count.
+-    model, at, _moves = _build_model(event, eligible)
+-    # The day-lock: a chart guest is a fixed variable at their current table,
+-    # whether or not event.locks names them — that is the whole point of the
+-    # mode. Only an explicit release into unlocked, or a guest without
+-    # variables (not eligible), stays free.
+-    for guest_id, table_id in current.items():
+-        if guest_id in unlocked or guest_id not in at:
+-            continue
+-        model.Add(at[guest_id][table_id] == 1)
++    # The single-phase event-day solve: the pinned event-day model, then the
++    # usual soft objective and hand-off. No movement indicators — the mode's
++    # promise is that no one in the chart moves, a fixed variable, not a
++    # minimized count.
++    model, at = _build_event_day_model(event, eligible, current, unlocked)
+     _add_soft_objective(model, event, at)
+     # Deliberately no re-planning or re-optimization shortcut for the
+     # fully-pinned case: the mode always solves the pinned model, which by
+-    # construction returns the frozen chart plus the new guests' seats.
++    # construction returns the frozen chart plus the new seats. The diagnose
++    # callback is bound to this run's chart and unlocked set so an
++    # infeasibility report probes the pinned model this solve just ran, not
++    # an un-pinned one.
+     return _solve_model(
+         model,
+         event,
+@@ -416,7 +417,89 @@ def _solve_event_day(
+         seed=seed,
+         num_search_workers=num_search_workers,
+         time_limit_s=time_limit_s,
+-        diagnose=_diagnose_infeasibility,
++        diagnose=_pinned_diagnose(event, eligible, current, unlocked, seed, time_limit_s),
++    )
++
++
++def _build_event_day_model(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    unlocked: set[str],
++    skip_rule_id: str | None = None,
++) -> tuple[Any, dict[str, dict[str, Any]]]:
++    """The event-day model in its one shape: the base model (with an
++    unlocked-released lock skipped) plus the day-lock pin of every chart
++    guest not in unlocked, minus one hard rule when a probe names it.
++
++    The main event-day solve and its diagnosis both build through here, so a
++    probe declaring a rule "the cause" means the main solve's infeasibility
++    ends if that rule were removed with the chart in place — nothing the
++    un-pinned model would let through.
++    """
++    model, at, _moves = _build_model(event, eligible, skip_rule_id, unlocked=unlocked)
++    # The day-lock: a chart guest is a fixed variable at their current table,
++    # whether or not event.locks names them — that is the whole point of the
++    # mode. Only an explicit release into unlocked, or a guest without
++    # variables (not eligible), stays free.
++    for guest_id, table_id in current.items():
++        if guest_id in unlocked or guest_id not in at:
++            continue
++        model.Add(at[guest_id][table_id] == 1)
++    return model, at
++
++
++def _pinned_diagnose(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    unlocked: set[str],
++    seed: int,
++    time_limit_s: float,
++) -> Callable[[Event, list[str], int, float], InfeasibilityReport]:
++    # The diagnose callback for the event-day hand-off: bound to this run's
++    # chart and unlocked set so the probes rebuild the pinned model the solve
++    # itself used, matching the Callable shape _solve_model calls with the
++    # run's event, eligible ids, seed and time limit.
++    return lambda ev, elig, s, tl: _diagnose_event_day(ev, elig, current, unlocked, s, tl)
++
++
++def _diagnose_event_day(
++    event: Event,
++    eligible: list[str],
++    current: Mapping[str, str],
++    unlocked: set[str],
++    seed: int,
++    time_limit_s: float,
++) -> InfeasibilityReport:
++    # The event-day one-removal diagnosis: mirrors _diagnose_infeasibility,
++    # but every probe is the pinned model built without one rule, so a hard
++    # rule is named only when removing it alone restores satisfiability of
++    # the chart this mode would seat — the un-pinned probes are what named
++    # rules whose removal frees nothing. Undecided probes name nothing, and
++    # when no removal helps the report says capacity, never a rule.
++    rules = _hard_rules(event)
++    conflict: tuple[str, ...] = tuple(
++        sorted(
++            rule.id
++            for rule in rules
++            if _probe_satisfiable(
++                _build_event_day_model(event, eligible, current, unlocked, rule.id)[0],
++                seed=seed,
++                time_limit_s=time_limit_s,
++            )
++        )
++    )
++    shortfall = max(0, len(eligible) - sum(t.capacity for t in event.tables))
++    return InfeasibilityReport(
++        conflict,
++        shortfall,
++        build_recommendations(
++            {rule.id: rule.rule_type for rule in rules},
++            conflict,
++            capacity_shortfall=shortfall,
++            has_tables=bool(event.tables),
++        ),
+     )
+ 
+ 
+@@ -427,7 +510,12 @@ def _build_model(
+     *,
+     current: Mapping[str, str] | None = None,
+     movement_limit: int | None = None,
++    unlocked: set[str] | None = None,
+ ) -> tuple[Any, dict[str, dict[str, Any]], list[Any]]:
++    # unlocked names the guests whose explicit lock is released: event_day
++    # only. Its mode rejects unlocked at the door, so the other call sites
++    # never pass it and see identical models.
++    released = unlocked or set()
+     model: Any = cp_model.CpModel()
+     # at[guest][table] is the "guest sits at table" boolean; ineligible guests
+     # get no variables, which excludes them from every result by construction.
+@@ -461,22 +549,31 @@ def _build_model(
+     if movement_limit is not None and moves:
+         model.Add(sum(moves, 0) <= movement_limit)
+     # Locks are fixed before the rule constraints: a hard fix the optimizer
+-    # can never trade away.
+-    _apply_locks(model, event, at, skip_guest_id=None)
++    # can never trade away, unless the unlock set explicitly releases them.
++    _apply_locks(model, event, at, skip_guest_id=None, unlocked=released)
+     _add_rule_constraints(model, event, at, skip_rule_id)
+     return model, at, moves
+ 
+ 
+ def _apply_locks(
+-    model: Any, event: Event, at: dict[str, dict[str, Any]], skip_guest_id: str | None
++    model: Any,
++    event: Event,
++    at: dict[str, dict[str, Any]],
++    skip_guest_id: str | None,
++    unlocked: set[str] | None = None,
+ ) -> None:
+     # A lock is a fixed variable: the guest's table is decided before the
+     # search begins, and no soft term can buy their way out. A lock whose
+     # guest has no variable (not eligible) binds nothing the search can
+-    # violate, so it is skipped rather than an error.
++    # violate, so it is skipped rather than an error. An explicit unlock
++    # beats an explicit lock: a guest named in unlocked is released from
++    # their lock, which no mode that rejects unlocked ever asks for.
++    released = unlocked or set()
+     for guest_id, table_id in event.locks.items():
+         if skip_guest_id is not None and guest_id == skip_guest_id:
+             continue
++        if guest_id in released:
++            continue
+         if guest_id not in at:
+             continue
+         model.Add(at[guest_id][table_id] == 1)
+diff --git a/tests/solver/test_event_day_repairs.py b/tests/solver/test_event_day_repairs.py
+new file mode 100644
+index 0000000..e8353d9
+--- /dev/null
++++ b/tests/solver/test_event_day_repairs.py
+@@ -0,0 +1,151 @@
++"""Event-day repair acceptance tests (bean-025). Two measured defects, each a
++single test: an explicit unlock must beat a stored lock when seating the day,
++and a "can't seat the new guest" report must name only the hard rules whose
++removal alone frees a seat, recommending capacity instead of rule relaxation
++when no removal would help. Asserts only on solve_event result fields and the
++infeasibility report that rides on the result, never on solver internals."""
++
++from __future__ import annotations
++
++from seating_planner.domain import Event, Guest, RsvpStatus, Table
++from seating_planner.rules import Hardness, Rule, RuleType
++from seating_planner.solver import solve_event
++from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_CHANGE_HARD_RULE
++from seating_planner.solver.result import SATISFIED
++
++
++def _table(table_id: str, capacity: int = 4) -> Table:
++    return Table(
++        id=table_id,
++        name=f"Table {table_id}",
++        capacity=capacity,
++        shape="round",
++        position=(0.0, 0.0),
++    )
++
++
++def _guest(
++    guest_id: str,
++    status: RsvpStatus = RsvpStatus.CONFIRMED,
++    reserved_seat: bool = False,
++) -> Guest:
++    return Guest(id=guest_id, name=f"Guest {guest_id}", status=status, reserved_seat=reserved_seat)
++
++
++def _event(
++    tables: list[Table],
++    guests: list[Guest],
++    rules: list[object] | None = None,
++    locks: dict[str, str] | None = None,
++) -> Event:
++    return Event(
++        id="e-1",
++        name="Event",
++        tables=tables,
++        guests=guests,
++        groups=[],
++        rules=rules or [],
++        locks=locks or {},
++    )
++
++
++def _soft(
++    rule_id: str,
++    rule_type: RuleType,
++    weight: int,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.SOFT,
++        weight=weight,
++        guest_ids=guest_ids,
++    )
++
++
++def _hard(
++    rule_id: str,
++    rule_type: RuleType,
++    guest_ids: tuple[str, ...],
++) -> Rule:
++    return Rule(
++        id=rule_id,
++        rule_type=rule_type,
++        hardness=Hardness.HARD,
++        weight=None,
++        guest_ids=guest_ids,
++    )
++
++
++def test_unlock_releases_an_explicit_lock() -> None:
++    # g-2 holds an explicit lock to t-2 and is also named in unlocked: the
++    # unlock must win. t-1 has one open seat and the weight-100 same-table
++    # rule pulls g-2 into it, so exactly g-2 moves and only g-2 moves. The
++    # same event and chart solved a second time WITHOUT unlocked must hold
++    # the lock: an explicit lock without an unlock still binds, and the pull
++    # comes back violated at zero score.
++    tables = [_table("t-1", capacity=3), _table("t-2", capacity=1)]
++    guests = [_guest("g-0"), _guest("g-1"), _guest("g-2")]
++    rules = [_soft("r-same", RuleType.SAME_TABLE, 100, ("g-0", "g-2"))]
++    event = _event(tables, guests, rules=rules, locks={"g-2": "t-2"})
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"}
++    result = solve_event(event, mode="event_day", current=current, unlocked={"g-2"})
++    assert result.status == "feasible"
++    assert result.assignments == {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}
++    assert result.rule_states["r-same"] == SATISFIED
++    assert result.score == 100
++
++    held = solve_event(event, mode="event_day", current=current)
++    assert held.status == "feasible"
++    assert held.assignments == current
++    assert held.score == 0
++
++
++def test_no_seat_blames_only_rules_that_explain_it() -> None:
++    # Scenario A: four eligible guests, four seats. t-1 is at capacity with
++    # g-0 and g-1, g-2 sits at t-2, and the new guest g-3's only free seat
++    # is the one left at t-2 beside g-2. The hard r-diff rule between g-2
++    # and g-3 is what blocks that seat, so it is the only rule whose removal
++    # alone rescues the solve; the hard r-bystander rule between g-0 and g-1
++    # is already satisfied by the chart and removing it changes nothing, so
++    # naming it would recommend a relaxation that would not free a seat.
++    tables = [_table("t-1", capacity=2), _table("t-2", capacity=2)]
++    guests = [_guest(f"g-{i}") for i in range(4)]
++    rules = [
++        _hard("r-bystander", RuleType.SAME_TABLE, ("g-0", "g-1")),
++        _hard("r-diff", RuleType.DIFFERENT_TABLE, ("g-2", "g-3")),
++    ]
++    event = _event(tables, guests, rules=rules)
++    current = {"g-0": "t-1", "g-1": "t-1", "g-2": "t-2"}
++    # Scenario guard: 4 eligible guests against 4 seats — the shortfall is
++    # zero, whatever the solve concludes.
++    assert len(guests) == 4
++    assert sum(table.capacity for table in tables) == 4
++    result = solve_event(event, mode="event_day", current=current)
++    assert result.status == "infeasible"
++    report = result.infeasibility_report
++    assert report is not None
++    assert report.capacity_shortfall == 0
++    assert report.conflict_rule_ids == ("r-diff",)
++    assert [rec.rule_id for rec in report.recommendations if rec.kind == KIND_CHANGE_HARD_RULE] == [
++        "r-diff"
++    ]
++
++    # Scenario B, the capacity case: the same four guests and the same chart
++    # on one seat less. No rule explains the missing seat, so no rule may be
++    # named — the report counts the shortfall and recommends relief, never
++    # a rule relaxation that would not free a seat.
++    tight_tables = [_table("t-1", capacity=2), _table("t-2", capacity=1)]
++    tight_rules = [_hard("r-bystander", RuleType.SAME_TABLE, ("g-0", "g-1"))]
++    tight_event = _event(tight_tables, guests, rules=tight_rules)
++    assert sum(table.capacity for table in tight_tables) == len(guests) - 1
++    tight_result = solve_event(tight_event, mode="event_day", current=current)
++    assert tight_result.status == "infeasible"
++    tight_report = tight_result.infeasibility_report
++    assert tight_report is not None
++    assert tight_report.conflict_rule_ids == ()
++    assert tight_report.capacity_shortfall == 1
++    kinds = [rec.kind for rec in tight_report.recommendations]
++    assert KIND_ADD_CAPACITY in kinds
++    assert KIND_CHANGE_HARD_RULE not in kinds

@@ -1,0 +1,268 @@
+{
+  "schema": "gate-run/1.0.0",
+  "bean": "bean-025",
+  "base": "a9b5e6438cff44057351cca845dc8484e8869efc",
+  "started_at": "2026-10-06T18:58:28Z",
+  "finished_at": "2026-10-06T18:58:38Z",
+  "gate_manifest": {
+    "ref": "factory/gates.lock.yaml",
+    "image": "ghcr.io/beekeeper-lab/factory-gate-python:20260914@sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2",
+    "digest": "sha256:77f23eb0d12c55050df64278bfbaa08a4040722d8202506555bcbd3afddd27c2"
+  },
+  "diff": {
+    "files": [
+      "src/seating_planner/solver/hard.py",
+      "src/seating_planner/solver/report.py",
+      "tests/solver/test_event_day_repairs.py"
+    ],
+    "file_count": 3,
+    "changed_lines": 389
+  },
+  "containment": {
+    "violations": [],
+    "contained": true
+  },
+  "tier": {
+    "final_tier": 2,
+    "terms": {
+      "policy": 2,
+      "bean_suggested": 2,
+      "judge_suggested": null
+    },
+    "binding_term": [
+      "policy",
+      "bean_suggested"
+    ],
+    "policy_version": "risk/2026-09-14",
+    "paths": [
+      {
+        "path": "src/seating_planner/solver/hard.py",
+        "tier": 2,
+        "rule": "src/**/solver/**",
+        "reason": "constraint solving — wrong answers are silent, not loud"
+      },
+      {
+        "path": "src/seating_planner/solver/report.py",
+        "tier": 2,
+        "rule": "src/**/solver/**",
+        "reason": "constraint solving — wrong answers are silent, not loud"
+      },
+      {
+        "path": "tests/solver/test_event_day_repairs.py",
+        "tier": 1,
+        "rule": null,
+        "reason": "no rule matched; default_tier 1"
+      }
+    ],
+    "never_auto_merged": false
+  },
+  "secret_scan": {
+    "suspicious_lines": []
+  },
+  "gates": [
+    {
+      "id": "lint",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "ruff check .",
+      "ran_in": "sandbox",
+      "duration_s": 0.251,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/gate-lint.log",
+      "output_tail": [
+        "All checks passed!"
+      ],
+      "reason": null
+    },
+    {
+      "id": "format",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "ruff format --check .",
+      "ran_in": "sandbox",
+      "duration_s": 0.248,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/gate-format.log",
+      "output_tail": [
+        "40 files already formatted"
+      ],
+      "reason": null
+    },
+    {
+      "id": "types",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "mypy src",
+      "ran_in": "sandbox",
+      "duration_s": 0.729,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/gate-types.log",
+      "output_tail": [
+        "Success: no issues found in 14 source files"
+      ],
+      "reason": null
+    },
+    {
+      "id": "unit",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60",
+      "ran_in": "sandbox",
+      "duration_s": 1.394,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/gate-unit.log",
+      "output_tail": [
+        "........................................................................ [ 90%]",
+        "........                                                                 [100%]",
+        "================================ tests coverage ================================",
+        "_______________ coverage: platform linux, python 3.12.14-final-0 _______________",
+        "",
+        "Name                                           Stmts   Miss  Cover   Missing",
+        "----------------------------------------------------------------------------",
+        "src/seating_planner/__init__.py                    1      0   100%",
+        "src/seating_planner/domain/__init__.py           121      4    97%   120-121, 189, 193",
+        "src/seating_planner/feasibility/__init__.py        2      0   100%",
+        "src/seating_planner/feasibility/preflight.py      83      2    98%   112, 161",
+        "src/seating_planner/invariant_api.py             115     29    75%   80, 83, 90-93, 98, 102, 109, 112, 118, 121, 145, 148, 161-162, 166-167, 171, 174, 179, 193-196, 202-205",
+        "src/seating_planner/rules/__init__.py             86      8    91%   38-39, 49-50, 83, 88, 117, 121",
+        "src/seating_planner/rules/template.py             11      0   100%",
+        "src/seating_planner/solver/__init__.py             4      0   100%",
+        "src/seating_planner/solver/config.py              17      2    88%   30, 32",
+        "src/seating_planner/solver/hard.py               298     30    90%   112, 120, 122, 130, 137, 142, 146, 151, 153, 191, 206, 311-312, 355, 383-388, 481, 515, 519, 591, 596, 630, 680, 796, 836, 872, 876, 892, 896",
+        "src/seating_planner/solver/report.py              43      4    91%   56, 78, 136, 140",
+        "src/seating_planner/solver/result.py              32      1    97%   40",
+        "src/seating_planner/store/__init__.py             72      0   100%",
+        "src/seating_planner/store/audit.py                25      0   100%",
+        "----------------------------------------------------------------------------",
+        "TOTAL                                            910     80    91%",
+        "Required test coverage of 60% reached. Total coverage: 91.21%",
+        "80 passed in 0.93s"
+      ],
+      "reason": null
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac1",
+      "kind": "test",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q tests/solver/test_event_day_repairs.py::test_unlock_releases_an_explicit_lock",
+      "ran_in": "sandbox",
+      "duration_s": 0.758,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/ac-ac1.log",
+      "output_tail": [
+        ".                                                                        [100%]",
+        "1 passed in 0.34s"
+      ],
+      "reason": null
+    },
+    {
+      "id": "ac2",
+      "kind": "test",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q tests/solver/test_event_day_repairs.py::test_no_seat_blames_only_rules_that_explain_it",
+      "ran_in": "sandbox",
+      "duration_s": 0.689,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/ac-ac2.log",
+      "output_tail": [
+        ".                                                                        [100%]",
+        "1 passed in 0.27s"
+      ],
+      "reason": null
+    },
+    {
+      "id": "ac4",
+      "kind": "test",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q tests/solver/test_event_day_repairs.py::test_a_lock_that_causes_no_seat_is_named",
+      "ran_in": "sandbox",
+      "duration_s": 0.699,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/ac-ac4.log",
+      "output_tail": [
+        ".                                                                        [100%]",
+        "1 passed in 0.28s"
+      ],
+      "reason": null
+    },
+    {
+      "id": "ac3",
+      "kind": "command",
+      "status": "pass",
+      "exit_code": 0,
+      "command": "pytest -q tests/solver",
+      "ran_in": "sandbox",
+      "duration_s": 0.897,
+      "output_file": "factory/runs/bean-025-20261006T171340Z/ac-ac3.log",
+      "output_tail": [
+        ".................................................                        [100%]",
+        "49 passed in 0.48s"
+      ],
+      "reason": null
+    }
+  ],
+  "invariants": null,
+  "test_integrity": {
+    "schema": "test-integrity/1.0.0",
+    "base": "a9b5e6438cff44057351cca845dc8484e8869efc",
+    "test_files": [
+      "tests/solver/test_event_day_repairs.py"
+    ],
+    "source_files": [
+      "src/seating_planner/solver/hard.py",
+      "src/seating_planner/solver/report.py"
+    ],
+    "prose_files": [],
+    "fails_on_revert": {
+      "result": "yes",
+      "why": "the tests pass with the change and fail without it, so something in them depends on it",
+      "command": "pytest -q --cov=src --cov-report=term-missing --cov-fail-under=60",
+      "exit_code": 1,
+      "control_exit_code": 0,
+      "passed_with_the_change_reverted": [],
+      "caveat": "The same command is run twice: once on the tree as it is, once with the source reverted. It must pass the first and fail the second. A test that fails on revert because of an import error still counts as pinning — weaker than proving the assertion tests the behaviour, and the strongest thing that can be decided by running something. passed_with_the_change_reverted is the finer answer where the runner gives one: tests in the CHANGED test files that pass anyway, which is the whole suite result telling you yes while some of the new tests assert what was already true. It is empty both when every new test pins the change and when the module would not import without it — the printed line says which."
+    },
+    "test_integrity": {
+      "deleted_tests": 0,
+      "new_skips": 0,
+      "removed_asserts": 0,
+      "added_asserts": 35,
+      "files_that_lost_assertions": [],
+      "caveat": "Counted from the diff text. Catches a test deleted or a skip added; will not catch an assertion hollowed out in place. removed_asserts and added_asserts are totals across the diff, and a total is a net: files_that_lost_assertions names each file that removed more than it added, because six added in a new file and five stripped from an existing one is a true total and a gutted test file."
+    }
+  },
+  "hidden_tests": {
+    "schema_version": "hidden-tests/2.0.0",
+    "status": "passed",
+    "exit_code": 0,
+    "why": "1 hidden test file(s) passed against the built tree",
+    "dir": "/home/gregg/workspace/Local_Dark_Factory/hidden-tests/seating-planner-py/bean-025",
+    "dir_sha256": "0b2bf91c543362ac68ab7797fe9251f044695f4b90c7528affdfe2ca54214606",
+    "test_files": 1,
+    "failed_count": 0,
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "control": "failed against an empty tree, as it must",
+    "output_path": "/home/gregg/workspace/Local_Dark_Factory/hidden-tests/results/bean-025-20261006T171340Z.log",
+    "worker_feedback": "",
+    "consumer_note": "worker_feedback has no consumer today. A gate failure halts the run for a human rather than re-opening tasks, so nothing hands this string to a worker; it is the contract for what one MAY be told, written down before there is something to tell. gate-summary.sh is what a human sees.",
+    "caveat": "This file lives in the run directory, which is inside the repository, which the worker mounts whole. So it carries counts and never test text: no names, no assertions, no output. The full output is at output_path, outside the repository. That also bounds what the judge can quote into feedback_to_worker, which is the other way a hidden test reaches the worker."
+  },
+  "bean_forbids": {
+    "schema": "bean-forbids/1.0.0",
+    "bean": "bean-025",
+    "checkable_rules": 0,
+    "violations": [],
+    "note": "No non_goal or constraint carried forbidden_paths or forbidden_imports. Nothing was checked; that is not the same as nothing being wrong."
+  },
+  "overall": "pass",
+  "note": "gate_manifest names the image these gates ran in. Every \"the gates passed\" is a claim about a specific toolchain, and until 2026-09-15 this record did not say which one — the manifest pinned it and the result forgot it."
+}
