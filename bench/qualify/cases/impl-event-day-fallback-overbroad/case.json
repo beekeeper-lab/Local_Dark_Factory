@@ -1,0 +1,46 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-event-day-fallback-overbroad",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-031-20261007T111233Z",
+    "pr": null,
+    "candidate_sha": "199cad17b7ae5a3fec0544991e1fc0050a673663",
+    "bean_at": "31dc05bd12c63303536809d76cb3fde27f946392",
+    "bean_path": "factory/beans/bean-031-an-infeasible-event-day-report-always-sa/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The probed fallback names every stored lock on an eligible, non-unlocked guest, so a planner is told to release locks that agree with the chart (8 named where 2 suffice); and when locks and chart overfill combine, the unlock and capacity advice are given unprobed and only work together.",
+  "answer_key": {
+    "why": "Found by bean-031 run 2's pre-merge review (evidence/reviews/bean-031-20261007T111233Z.md, probe2.py, probe3.py). The owner merged it anyway as an improvement over no advice and parked the precision (plans/PARKING-LOT.md). Naming over-broad unlock advice or unprobed mixed advice is a catch.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "named = [g for g in sorted(event.locks) if g in eligible_ids and g not in unlocked]"
+      }
+    ]
+  },
+  "anchors": [
+    "every lock",
+    "all locks",
+    "minimal",
+    "agree with the chart",
+    "unprobed",
+    "mixed",
+    "together",
+    "over-broad"
+  ],
+  "key_by": "Claude Opus 5.5 pre-merge reviewer; defects demonstrated in the gate image and re-run by the operator session",
+  "key_checked_at": "2026-10-07",
+  "difficulty": "hard"
+}

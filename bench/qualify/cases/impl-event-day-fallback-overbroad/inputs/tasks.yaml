@@ -1,0 +1,162 @@
+# Bean bean-031 — an infeasible event-day report always says what to do.
+# Task 1 writes the red tests; task 2 implements the probe-checked fallback
+# in the solver. Every scenario's arithmetic is worked out in the spec's
+# "Proposed change" section before being written down.
+schema_version: tasks/1.0.0
+bean_id: bean-031
+tasks:
+  - id: task-1
+    title: "Red tests: an infeasible event-day report always carries probed advice"
+    intent: >
+      Create one new file, tests/solver/test_event_day_advice.py, asserting the
+      bean-031 advice property before the fix exists. Write it exactly as the
+      code block in the "Proposed change / Task 1" section of
+      /work/factory/runs/bean-031-20261007T111233Z/spec.md: that block is the
+      whole file. It follows the conventions of
+      tests/solver/test_event_day_repairs.py (same private _table/_guest/_event/
+      _hard helpers; a module docstring saying the file asserts only on
+      solve_event result fields, never on solver internals). Four scenario
+      helpers with this exact arithmetic: _locked_scenario gives tables t-1
+      (capacity 3) and t-2 (capacity 3), pins g-0 and g-1 at t-1 and g-4 at
+      t-2 on the chart, and gives new guests n-1, n-2, n-3 each a stored lock
+      to t-1, no rules — six guests, six seats, so capacity_shortfall is 0,
+      and removing any one lock still leaves two locked guests for one seat.
+      _overfull_chart_scenario gives t-1 (capacity 2) and t-2 (capacity 2)
+      with the chart pinning g-0, g-1, g-2 at t-1 and g-3 at t-2, no rules,
+      no locks. _rule_conflict_scenario gives two capacity-2 tables, chart
+      pins g-0, g-1 at t-1 and g-2 at t-2, one hard different_table rule
+      r-diff on (g-2, g-3), new guest g-3. _shortfall_scenario gives t-1
+      (capacity 2) and t-2 (capacity 1) with four guests, chart pins g-0,
+      g-1 at t-1 and g-2 at t-2. Four test functions, one per bean
+      acceptance criterion, named
+      test_infeasible_event_day_always_advises,
+      test_locks_that_overfill_a_table_are_named,
+      test_a_chart_that_overfills_a_table_asks_for_capacity and
+      test_fallback_advice_is_probed, each behaving as the spec block says:
+      the always-advises test runs all four scenarios through
+      solve_event(event, mode="event_day", current=...) and asserts status
+      "infeasible" and at least one recommendation in each; the locks test
+      asserts capacity_shortfall 0, conflict_rule_ids (), exactly three
+      KIND_UNLOCK recommendations, the guest ids n-1, n-2, n-3 and the table
+      id t-1 present in the unlock messages, and no KIND_CHANGE_HARD_RULE
+      recommendation; the chart test asserts conflict_rule_ids (), exactly
+      one KIND_ADD_CAPACITY recommendation naming t-1, and no KIND_UNLOCK or
+      KIND_CHANGE_HARD_RULE recommendation; the probed test has four parts —
+      the locked scenario names exactly the three unlock guests and no
+      capacity kind, and the same event rebuilt with an empty locks dict
+      solves feasible; the overfull chart scenario yields one capacity
+      recommendation naming t-1 and t-1 raised alone to 3 seats solves
+      feasible; a new scenario (t-1 capacity 2 chart-guest-seated with g-0,
+      g-1, g-2; t-2 capacity 3 chart-guest-seated with g-3; new guest n-1
+      stored-locked to t-2) asserts infeasible, no KIND_UNLOCK
+      recommendations (rebuilding it with an empty locks dict is still
+      infeasible, so unlocking n-1 is not a cure) and one KIND_ADD_CAPACITY
+      recommendation naming t-1, raised alone to 3 seats solving feasible;
+      and with t-1 capacity 1 and t-2 capacity 3, chart pinning g-0, g-1,
+      g-2 at t-1 and g-3 at t-2, solved with unlocked={"g-2"}, one capacity
+      recommendation names t-1 and raising only t-1 to 2 seats (the
+      released g-2 needs no seat there) solves feasible under the same
+      unlocked set. The tests must be red today purely on those assertion
+      values (today the two new scenarios return a report whose
+      recommendations is the empty tuple); they must not fail in setup. Do
+      not change any other file. Run ruff check on the file and ruff format
+      on it until both are clean; keep the annotations honest (tests are not
+      type-checked by the gate).
+    write_paths:
+      - tests/solver/test_event_day_advice.py
+    depends_on: []
+    satisfies:
+      - ac1
+      - ac2
+      - ac3
+      - ac5
+    verify:
+      - { kind: command, run: ["python", "factory/tools/red-test.py", "--fixes", "src/seating_planner/solver/hard.py", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["ruff", "check", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["ruff", "format", "--check", "tests/solver/test_event_day_advice.py"] }
+    max_attempts: 3
+    teaching_note: >
+      These tests pin the two measured empty-report cases (locks crowding a
+      table whose single free seat no one unlock frees; a chart seating a
+      table past its capacity) plus the two infeasible shapes that already
+      advised before this bean, and they pin the probed nature of the new
+      advice: every guest a recommendation names, unlocked, restores
+      feasibility; every table a recommendation names, re-seated, restores
+      feasibility; and no capacity advice rides beside unlocks that alone
+      suffice. Written first, verified red by the red-test helper so a
+      broken scenario cannot masquerade as a passing red test.
+  - id: task-2
+    title: "Fill the empty event-day report with advice checked by a probe solve"
+    intent: >
+      Modify src/seating_planner/solver/hard.py only. In _diagnose_event_day,
+      capture the recommendation tuple currently built inline
+      (build_recommendations(...) plus the single-lock-removal probes) into a
+      local named recommendation, and only when that tuple is empty call one
+      new private module-level function
+      _event_day_fallback_advice(event, eligible, current, unlocked, seed,
+      time_limit_s) to fill it. Write that function exactly as the code block
+      in the "Proposed change / Task 2" section of
+      /work/factory/runs/bean-031-20261007T111233Z/spec.md. Its contract, in
+      one breath: advice is checked by solving, never predicted from seat
+      counts. Let named be the stored-lock guests that are eligible and not
+      released through unlocked, in sorted order. If named is non-empty,
+      probe the pinned event-day model built from an Event that is identical
+      except those locks are dropped (_build_event_day_model on the relaxed
+      event, checked by _probe_satisfiable with the same seed and time-limit
+      pins as every other probe); if satisfiable, return one KIND_UNLOCK
+      recommendation per named guest whose message names the guest id and the
+      locked table, claiming that unlocking every one restores feasibility,
+      and nothing else — because those unlocks alone suffice, no capacity
+      recommendation may ride with them. Otherwise, count pinned demand per
+      table: each eligible, unreleased guest counts once toward each
+      distinct table their chart pin and stored lock name, and a released
+      guest pins nothing; for every table whose pinned demand exceeds its
+      capacity, probe a model in which exactly those tables' capacities are
+      raised to their pinned count and nothing else changes; if
+      satisfiable, return one KIND_ADD_CAPACITY recommendation per such
+      table whose message names the table id and its seated count and
+      capacity. Only when neither probe is satisfiable (for example a lock
+      that contradicts the chart beside an overfull table) are both
+      structural facts named: one unlock per named guest whose chart pin
+      differs from their locked table, one capacity per overfull table, each
+      message claiming its own single fact. As a last resort, if that names
+      nothing but named is non-empty, return one unlock recommendation per
+      named guest — removing a lock frees exactly one pin — so an infeasible
+      event-day report can never come back empty. Add KIND_ADD_CAPACITY to
+      the existing import from seating_planner.solver.report and Table to the
+      domain import. Extend the event-day paragraph of the module docstring
+      so it names the fallback. Do not change solve_event's signature or the
+      result and report shapes, build_recommendations, _probe_satisfiable,
+      _build_event_day_model, the single-removal probes, or any other mode;
+      a report that already carries a recommendation must remain
+      byte-identical. Run ruff check, ruff format --check and mypy src until
+      all three are clean.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+    depends_on:
+      - task-1
+    satisfies:
+      - ac1
+      - ac2
+      - ac3
+      - ac4
+      - ac5
+    verify:
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver"] }
+      - { kind: command, run: ["ruff", "check", "src/seating_planner/solver/hard.py"] }
+      - { kind: command, run: ["ruff", "format", "--check", "src/seating_planner/solver/hard.py"] }
+      - { kind: command, run: ["mypy", "src"] }
+    max_attempts: 3
+    teaching_note: >
+      The repair for the hole bean-025 opened correctly. Run 1 of this bean
+      (PR #24) filled it with seat-counting arithmetic, and its pre-merge
+      review showed the counting wrong three ways: it told an overfull
+      chart's locked new guest only to be unlocked (still infeasible
+      after), told a table holding no chart guest to add capacity it could
+      not use, and counted a released chart guest as pinned. Because the
+      solver answers "would this help" exactly, the same way the rule and
+      lock probes already do, each advice here is issued only after a probe
+      solve proves it; the structural corner names facts it can state
+      without a sufficiency claim, and the last resort guarantees the
+      report is never empty on an infeasible solve.
