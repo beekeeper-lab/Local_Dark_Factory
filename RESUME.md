@@ -5,6 +5,31 @@
 Phase 0 closed 2026-09-14 (tag `phase-0-complete`). Both pull requests merged 2026-09-17;
 the working branch is `main` again, and new work opens small pull requests off it.
 
+## 2026-10-07 (00:30 EDT): Phase 4, task 13 built and measured; bean-025 merged; bean-031 re-running
+
+**Plan:** `plans/phase-4.md`. Task 13 (inference harness) merged (PR #69) and used on two real runs;
+not ticked yet (the report needs two fixes below). Task 14 is unstarted; the measurements argue it
+should target developer decode, not judge prefill (owner has not decided).
+
+**Measured (memory `inference-measurements`):** developer decode is ~85% of a bean's GPU time at
+~15 tok/s (qwen3.8:27b Q8, thinking=medium); spec and doc steps are ~70% of a small bean; the
+judge is ~3%. Prefix caching works within a session (first call ~21 s TTFT, later 2–4 s).
+Report gaps: /v1 calls carry no durations (estimate from ttft/wall), and ollama sometimes reports
+`prompt_eval_duration` ~0.035 s for 10–15k tokens (fall back to total − eval − load).
+
+**seating-planner:** bean-025 merged (PR #23) after two runs, both reviewed (evidence/reviews):
+run 1 dropped the event-day lock probe (PR #22 closed, `backup/bean-025-run-20261006T140110Z`);
+run 2 left an empty report in rare shapes, repaired by new bean-031. bean-031 run 1 (PR #24) gave
+seat-counting advice that would not help; owner chose ac5 (advice probed before it is given);
+run 2 is `bean-031-20261007T*`. Qualify cases added for both bean-025 defects (PR #76).
+
+**Line fixes:** build containment exempts `<run>/inference/` (PR #72). Do not delete a bean branch
+after merging: the queue proves a merge from the branch ref (restored bean-025's).
+Unreproduced: a stray `.state/` at the target repo root halted one preflight on 2026-10-06.
+
+**Next:** review bean-031 run 2 → merge; then 026 (blocked; check its halted run), 027–029,
+015–020, all with `FACTORY_INFERENCE_RECORD=1 FACTORY_ADVISORY_AUDITS=1`.
+
 ## 2026-10-04 (11:15 EDT): Phase 4 mid-flight; pick up here
 
 **Plan:** `plans/phase-4.md`. Done: tasks 1–8 code (7 built, install waits on the owner's sudo:
