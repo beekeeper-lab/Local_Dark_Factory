@@ -126,6 +126,12 @@ beans as PRs only. It can be stopped three ways and recovers from a crash.
       `verdicts/*.request.json` turned out to be a size sidecar, not a body, so judge calls
       can be replayed only from a recorded run. Tests use a fake ollama and never :11434.
       Each one was checked by breaking the behaviour it covers.)*
+      *(2026-10-07: used on three real runs, bean-025 run 2 and bean-031 runs 1-2. The report
+      now fills in what ollama under-reports and what the /v1 route never sends, marked
+      `timing_source`. First numbers: developer decode ~85-88% of a bean's GPU time at ~17
+      tok/s; judge ~3%, 73% of it prefill. Open before ticking: one real replay against the
+      server, which needs the line idle.)*
+
 - [ ] 14. **Judge prefill** (amendment, 2026-10-04): reorder judge.sh's request so the shared
       context (bean, spec) comes first and target-specific content last, batch a bean's audits
       while the judge is resident, and measure the effect with task 13's harness.

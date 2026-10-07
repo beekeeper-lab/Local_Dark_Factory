@@ -149,6 +149,20 @@ out="$(bash "$REPLAY" "$REQ/00002-developer.request.json" --label y --server "$S
         --out-dir "$WORK/out2" 2>&1)"; rc=$?
 rc_is "a holder whose process is gone does not block" "$rc" 0
 
+echo "report: timings ollama under-reported or the /v1 route never sent"
+COR="$WORK/corrections.jsonl"
+cat > "$COR" <<'J'
+{"path":"/api/chat","tags":{"role":"judge"},"wall_s":50.0,"prompt_eval_count":13762,"prompt_eval_duration_s":0.035,"eval_count":588,"eval_duration_s":19.3,"load_duration_s":0.2,"total_duration_s":49.5,"prefill_tok_s":393200.0,"decode_tok_s":30.5}
+{"path":"/v1/chat/completions","tags":{"role":"developer"},"stream":true,"wall_s":30.0,"ttft_s":10.0,"prompt_eval_count":5000,"eval_count":400,"prompt_eval_duration_s":null,"eval_duration_s":null}
+J
+J="$("$PY" "$REPORT" "$COR" --json)"
+pre="$(jq -r '.rows[] | select(.role=="judge") | .prefill_tok_s.p50' <<<"$J" 2>/dev/null)"
+check "an implausible judge prefill is taken from the residual (13762 / 30.0 s)" "458.7" "$pre"
+dec="$(jq -r '.rows[] | select(.role=="developer") | .decode_tok_s.p50' <<<"$J" 2>/dev/null)"
+check "a /v1 call's decode is estimated from wall - TTFT (400 / 20 s)" "20" "$dec"
+share="$(jq -r '.rows[] | select(.role=="developer") | .wall_share.decode' <<<"$J" 2>/dev/null)"
+check "and its wall share is counted, not left out" "0.66" "$share"
+
 echo "replay: refusals before anything is sent"
 out="$(bash "$REPLAY" "$REQ" --server "$SERVER" --state-dir "$NOGATE" 2>&1)"; rc=$?
 rc_is "no --label" "$rc" 2
