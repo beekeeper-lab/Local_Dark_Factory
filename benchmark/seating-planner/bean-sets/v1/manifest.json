@@ -207,6 +207,14 @@
       "reopens_approval": false,
       "rule": "A new bean; nothing already approved changes.",
       "note": "Found by bean-025 run 2's pre-merge review (evidence/reviews/bean-025-20261006T171340Z.md): with no enabled hard rule, no shortfall and no single lock whose removal is enough, the event-day report carried no recommendation. Hidden tests written from the criteria and verified both ways in the gate image against a reference fix that was never committed; all three fail on main at 0442878. Budget 300."
+    },
+    {
+      "date": "2026-10-07",
+      "change": "bean-031 gains ac5 (fallback advice is checked by a probe solve before it is given); budget 300 -> 450, 2 -> 3 tasks",
+      "by": "Claude Opus 5.5, on the owner's decision of 2026-10-07 to re-run bean-031 with probed advice rather than merge PR #24",
+      "reopens_approval": false,
+      "rule": "The owner chose this amendment directly; ac1-ac4 are unchanged.",
+      "note": "Run 1's pre-merge review (evidence/reviews/bean-031-20261006T210423Z.md) demonstrated advice that would not help in three shapes. Three property tests were added to the hidden suite (apply the advice, solve again) and verified both ways in the gate image against a probe-based reference fix that was never committed; on run 1's head exactly those three fail. Run 1's branch is kept as backup/bean-031-run-20261006T210423Z."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",

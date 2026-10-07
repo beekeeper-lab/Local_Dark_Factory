@@ -31,6 +31,16 @@ context:
     with one free seat (removing any one lock still leaves two for one seat), and a chart
     that seats three guests at a two-seat table (chart capacity is not checked on input).
     Before bean-025 both reports carried at least one recommendation, as bean-010 requires.
+
+    Run 1 (bean-031-20261006T210423Z, PR #24) filled the gap with advice chosen by
+    counting seats, and its pre-merge review showed the counting was wrong three ways: a
+    chart that overfills a table with a new guest also locked there was told only to
+    unlock that guest (still infeasible after), a table holding no chart guest was told to
+    add capacity it could not use, and an unlocked chart guest was counted as pinned, so
+    capacity was advised where the unlocks alone were enough
+    (evidence/reviews/bean-031-20261006T210423Z.md). The solver can answer "would this
+    help" exactly, the same way the rule and lock probes already do, so the advice is
+    checked by solving again before it is given rather than predicted by arithmetic.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -44,6 +54,9 @@ acceptance_criteria:
   - id: ac3
     text: When the chart itself seats more guests at a table than its capacity, the report recommends capacity for that table, and does not recommend reviewing hard rules when the event has none.
     verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_a_chart_that_overfills_a_table_asks_for_capacity" }
+  - id: ac5
+    text: Advice added because no single rule or lock removal helps is checked by a probe solve before it is given. Unlocking every guest an unlock recommendation names restores feasibility; adding seats at every table a capacity recommendation names restores feasibility; and capacity is not recommended when the recommended unlocks alone restore it. Unlock recommendations name the guest id, capacity recommendations the table id.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_fallback_advice_is_probed" }
   - id: ac4
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
@@ -51,7 +64,7 @@ constraints:
   - the solve_event signature and the result and report shapes are unchanged
   - a report that already carries a recommendation is unchanged (bean-025's unlock and capacity advice stay as they are)
 suggested_risk_tier: 2
-size_budget: { max_tasks: 2, max_files: 3, max_diff_lines: 300 }
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 450 }
 definition_of_done:
   - all AC verify pass
   - gates green

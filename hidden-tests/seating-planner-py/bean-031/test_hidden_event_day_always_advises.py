@@ -88,3 +88,84 @@ def test_a_chart_that_overfills_a_table_asks_for_capacity() -> None:
     capacity = [r for r in report.recommendations if r.kind in (KIND_ADD_CAPACITY, KIND_ADD_TABLE)]
     assert any("t-1" in r.message for r in capacity), f"name the overfilled table: {capacity}"
     assert KIND_CHANGE_HARD_RULE not in kinds, "the event has no hard rule"
+
+
+# ac5 (added 2026-10-06, from run 1's pre-merge review): fallback advice is checked
+# before it is given. Run 1 advised unlocking a guest when the chart itself overfilled
+# the table, capacity at a table no extra seat could help, and capacity where the
+# unlocks alone were enough. Each case below is solved again with the advice applied.
+
+import re  # noqa: E402
+
+_CASES: dict[str, tuple[dict[str, int], int, dict[str, str], dict[str, str], set[str]]] = {
+    # chart puts 3 at a 2-seat t-1 and a new guest is locked there too
+    "chart-overfill-plus-lock": ({"t-1": 2, "t-2": 4}, 4, {"g-3": "t-1"},
+                                 {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1"}, set()),
+    # two chart guests at t-1 are locked to an empty one-seat t-2
+    "locks-contradict-chart": ({"t-1": 2, "t-2": 1, "t-3": 2}, 2, {"g-0": "t-2", "g-1": "t-2"},
+                               {"g-0": "t-1", "g-1": "t-1"}, set()),
+    # t-1 is overfilled only if g-2 is counted, and g-2 is unlocked; two contradictions elsewhere
+    "unlocked-guest-is-free": ({"t-1": 2, "t-2": 4, "t-3": 4}, 5, {"g-3": "t-3", "g-4": "t-3"},
+                               {"g-0": "t-1", "g-1": "t-1", "g-2": "t-1", "g-3": "t-2", "g-4": "t-2"},
+                               {"g-2"}),
+    # locks overfill two tables at once
+    "locks-overfill-two-tables": ({"t-1": 1, "t-2": 1, "t-3": 6}, 6,
+                                  {"g-2": "t-1", "g-3": "t-1", "g-4": "t-2", "g-5": "t-2"},
+                                  {"g-0": "t-1", "g-1": "t-2"}, set()),
+}
+
+
+def _build(caps: dict[str, int], n: int, locks: dict[str, str]) -> Any:
+    return _event(caps, [f"g-{i}" for i in range(n)], locks)
+
+
+def _solve_case(caps: dict[str, int], n: int, locks: dict[str, str], current: dict[str, str],
+                unlocked: set[str]) -> Any:
+    from seating_planner.solver import solve_event
+
+    return solve_event(_build(caps, n, locks), mode="event_day", current=current, unlocked=unlocked)
+
+
+def _named(pattern: str, recs: list[Any]) -> set[str]:
+    return {m for r in recs for m in re.findall(pattern, r.message)}
+
+
+def test_every_fallback_recommendation_restores_feasibility() -> None:
+    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE, KIND_UNLOCK
+
+    for name, (caps, n, locks, current, unlocked) in _CASES.items():
+        report = _solve_case(caps, n, locks, current, unlocked).infeasibility_report
+        assert report is not None, f"{name}: the case must be infeasible as given"
+        assert report.recommendations, f"{name}: an infeasible report must say what to do"
+        unlocks = [r for r in report.recommendations if r.kind == KIND_UNLOCK]
+        if unlocks:
+            guests = _named(r"\bg-\d+\b", unlocks)
+            freed = {g: t for g, t in locks.items() if g not in guests}
+            after = _solve_case(caps, n, freed, current, unlocked)
+            assert after.infeasibility_report is None, (
+                f"{name}: unlocking {sorted(guests)} as advised leaves it infeasible: {unlocks}")
+        capacity = [r for r in report.recommendations if r.kind in (KIND_ADD_CAPACITY, KIND_ADD_TABLE)]
+        tables = _named(r"\bt-\d+\b", capacity)
+        if tables:
+            roomier = {t: c + 10 if t in tables else c for t, c in caps.items()}
+            after = _solve_case(roomier, n, locks, current, unlocked)
+            assert after.infeasibility_report is None, (
+                f"{name}: more seats at {sorted(tables)} as advised leaves it infeasible: {capacity}")
+
+
+def test_a_chart_overfill_with_a_lock_still_asks_for_capacity() -> None:
+    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE
+
+    report = _solve_case(*_CASES["chart-overfill-plus-lock"]).infeasibility_report
+    capacity = [r for r in report.recommendations if r.kind in (KIND_ADD_CAPACITY, KIND_ADD_TABLE)]
+    assert "t-1" in _named(r"\bt-\d+\b", capacity), f"the chart overfills t-1: {report.recommendations}"
+
+
+def test_capacity_is_not_advised_when_the_unlocks_alone_suffice() -> None:
+    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE
+
+    for name in ("locks-contradict-chart", "unlocked-guest-is-free"):
+        report = _solve_case(*_CASES[name]).infeasibility_report
+        kinds = {r.kind for r in report.recommendations}
+        assert not kinds & {KIND_ADD_CAPACITY, KIND_ADD_TABLE}, (
+            f"{name}: unlocking alone restores it, so capacity is not the remedy: {report.recommendations}")
