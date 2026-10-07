@@ -1,0 +1,116 @@
+schema_version: tasks/1.0.0
+bean_id: bean-031
+tasks:
+  - id: task-1
+    title: "Red tests: an infeasible event-day report always advises"
+    intent: >
+      Create one new file, tests/solver/test_event_day_advice.py, asserting
+      the bean-031 property before the fix exists. Follow the conventions of
+      tests/solver/test_event_day_repairs.py exactly: the same private
+      _table/_guest/_event/_hard helpers, a module docstring saying the file
+      asserts only on solve_event result fields, and one test function per
+      acceptance criterion as sketched in the "Proposed change / Task 1"
+      section of /work/factory/runs/bean-031-20261006T210423Z/spec.md.
+      Three tests: test_infeasible_event_day_always_advises,
+      test_locks_that_overfill_a_table_are_named, and
+      test_a_chart_that_overfills_a_table_asks_for_capacity. Back them with
+      four scenario helpers with this exact arithmetic: _locked_scenario
+      gives tables t-1 (capacity 3) and t-2 (capacity 3), chart pins g-0 and
+      g-1 at t-1 and g-4 at t-2, and new guests n-1, n-2, n-3 each carry a
+      stored lock to t-1, no rules (six guests, six seats, so
+      capacity_shortfall is 0, and no single lock removal helps because two
+      locked guests still crowd one seat); _overfull_chart_scenario gives
+      tables t-1 (capacity 2) and t-2 (capacity 2) with the chart pinning
+      g-0, g-1, g-2 at t-1 and g-3 at t-2, no rules, no locks (four guests,
+      four seats); _rule_conflict_scenario gives two capacity-2 tables,
+      chart pins g-0, g-1 at t-1 and g-2 at t-2, one hard different_table
+      rule r-diff on (g-2, g-3), new guest g-3; _shortfall_scenario gives
+      t-1 (capacity 2) and t-2 (capacity 1) with four guests, chart pins
+      g-0, g-1 at t-1 and g-2 at t-2. The always-advises test runs all four
+      scenarios through solve_event(mode="event_day", current=...) and
+      asserts status "infeasible" and at least one recommendation in each.
+      The locks test asserts exactly: capacity_shortfall 0,
+      conflict_rule_ids (), exactly three KIND_UNLOCK recommendations, the
+      guest ids n-1, n-2, n-3 and the table id t-1 present in the unlock
+      messages, and no KIND_CHANGE_HARD_RULE recommendation. The chart test
+      asserts: conflict_rule_ids (), exactly one KIND_ADD_CAPACITY
+      recommendation whose message names t-1, and no KIND_UNLOCK or
+      KIND_CHANGE_HARD_RULE recommendation. The tests must be red today
+      purely on those assertion values (the reports exist with empty
+      recommendation tuples); they must not fail in setup. Do not change any
+      other file. Run ruff check on the file and ruff format on it until
+      both are clean; run mypy on nothing new (tests/ is not type-checked by
+      the gate, but keep the annotations honest).
+    write_paths:
+      - tests/solver/test_event_day_advice.py
+    depends_on: []
+    satisfies:
+      - ac1
+      - ac2
+      - ac3
+    verify:
+      - { kind: command, run: ["python", "factory/tools/red-test.py", "--fixes", "src/seating_planner/solver/hard.py", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["ruff", "check", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["ruff", "format", "--check", "tests/solver/test_event_day_advice.py"] }
+    max_attempts: 3
+    teaching_note: >
+      These tests are the definition of the two measured empty-report cases
+      plus regression pins on the two shapes that already advised
+      (single hard rule, seat shortfall). They are written first so the fix
+      is measured against them, and the red-test verify exists so a broken
+      scenario cannot masquerade as a passing red test.
+  - id: task-2
+    title: Fall back to naming what fills the table when the diagnosis is empty
+    intent: >
+      Modify src/seating_planner/solver/hard.py only. In
+      _diagnose_event_day, capture the recommendation tuple currently built
+      inline (build_recommendations(..., suppress_generic_note=not rules)
+      plus the single-lock-removal probes) into a local, and only when that
+      tuple is empty, fill it from one new private module-level function
+      _event_day_fallback_advice(event, eligible, current, unlocked) ->
+      tuple[Recommendation, ...], whose body is given in the "Proposed
+      change / Task 2" section of
+      /work/factory/runs/bean-031-20261006T210423Z/spec.md: count per-table
+      day-pinned eligible chart guests (day_pinned), walk
+      event.locks in sorted order skipping ineligible and unlocked guests
+      and locks consistent with the chart (a chart guest locked to their
+      current table pins to the same place the day lock already does),
+      record the remaining locks per table (lockers), and separately
+      record locks that contradict the chart. Then emit, in order: one
+      KIND_UNLOCK recommendation per contradiction lock naming the guest and
+      both tables; for each table whose day_pinned plus locker count exceeds
+      its capacity, one KIND_UNLOCK recommendation per locker not already
+      named as a contradiction (naming the guest, the table, and the pinned
+      chart-guest count, worded as needed to clear the table, not as
+      restoring feasibility), or, when the table has no such locker, one
+      KIND_ADD_CAPACITY recommendation naming the table, the seated count
+      and the capacity. Pure arithmetic: no new solver calls. Add
+      KIND_ADD_CAPACITY to the existing import from
+      seating_planner.solver.report. Do not change solve_event's signature,
+      report or result shapes, build_recommendations, the probes, or any
+      other mode. Reports that already carry a recommendation must be
+      byte-identical to today. Run ruff check and ruff format on the file
+      and mypy src until all three are clean.
+    write_paths:
+      - src/seating_planner/solver/hard.py
+    depends_on:
+      - task-1
+    satisfies:
+      - ac1
+      - ac2
+      - ac3
+      - ac4
+    verify:
+      - { kind: command, run: ["pytest", "-q", "tests/solver/test_event_day_advice.py"] }
+      - { kind: command, run: ["pytest", "-q", "tests/solver"] }
+      - { kind: command, run: ["mypy", "src"] }
+    max_attempts: 3
+    teaching_note: >
+      The fallback is the repair for the hole bean-025 opened correctly:
+      no enabled hard rule (so the generic note is withheld), no seat
+      shortfall, and no single lock or rule removal that restores
+      feasibility leave the report empty. Because the empty corner
+      arithmetic-wise means either a contradiction lock or an overfull
+      table, naming those guarantees a non-empty report without ever
+      claiming a single removal proves feasible — that claim stays with the
+      probed case.

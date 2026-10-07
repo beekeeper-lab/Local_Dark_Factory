@@ -1,0 +1,50 @@
+{
+  "schema": "qualify-case/1.0.0",
+  "id": "impl-event-day-fallback-false-advice",
+  "target": "impl",
+  "expect": "reject",
+  "source": {
+    "repo": "beekeeper-lab/seating-planner-py",
+    "run_id": "bean-031-20261006T210423Z",
+    "pr": null,
+    "candidate_sha": "27972c98148683f4ae842f35ce0856fa9f2aeedf",
+    "bean_at": "76d3a2cf60811f28c2003c1d1088f786c39c6da9",
+    "bean_path": "factory/beans/bean-031-an-infeasible-event-day-report-always-sa/bean.yaml"
+  },
+  "inputs": [
+    "bean",
+    "diff.txt",
+    "gate.json",
+    "run.json",
+    "spec.md",
+    "tasks.yaml",
+    "test-integrity.json"
+  ],
+  "defect": "The event-day fallback picks its advice by counting seats, and the count is wrong three ways: a chart that overfills a table with a new guest also locked there is told only to unlock that guest; capacity is advised for a table holding no chart guest; and an unlocked chart guest is counted as pinned. In each case following the advice does not restore feasibility, or is not needed.",
+  "answer_key": {
+    "why": "Found by bean-031 run 1's pre-merge review (evidence/reviews/bean-031-20261006T210423Z.md, probe.py, check.py). P1 breaks ac3. Naming advice that would not help, or the seat arithmetic that ignores unlocked or contradicting guests, is a catch.",
+    "evidence": [
+      {
+        "file": "diff.txt",
+        "quote": "def _event_day_fallback_advice("
+      },
+      {
+        "file": "diff.txt",
+        "quote": "day_pinned: dict[str, int] = {}"
+      }
+    ]
+  },
+  "anchors": [
+    "fallback",
+    "would not help",
+    "still infeasible",
+    "day_pinned",
+    "unlocked",
+    "capacity",
+    "add capacity",
+    "counted"
+  ],
+  "key_by": "Claude Opus 5.5 pre-merge reviewer; defects demonstrated in the gate image and re-run by the operator session",
+  "key_checked_at": "2026-10-07",
+  "difficulty": "hard"
+}

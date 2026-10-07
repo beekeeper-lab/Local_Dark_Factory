@@ -1,0 +1,76 @@
+schema_version: bean/2.0.0
+id: bean-031
+repo: beekeeper-lab/seating-planner-py
+title: An infeasible event-day report always says what to do
+intent: >
+  Every infeasible event-day solve reports at least one corrective action. When no single
+  change restores feasibility, the report still names what fills the table: the stored
+  locks that pin guests to it, or the chart that seats more guests there than it holds.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-10-06T21:00:00Z"
+  order: 31
+source:
+  kind: manual
+  ref: evidence/reviews/bean-025-20261006T171340Z.md
+  date: "2026-10-06"
+  excerpt: "bean-010: at least one corrective action is recommended."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/domain/
+    - tests/solver/
+  background: >
+    bean-025 run 2 was merged with this bean as its repair, on the owner's decision. Its
+    pre-merge review demonstrated that an infeasible event-day report can now carry no
+    recommendation at all. With no enabled hard rule the generic "review the hard rules"
+    note is withheld (bean-025 ac4, correctly: there is no rule to review), and when no
+    single lock removal restores feasibility and there is no seat shortfall, nothing takes
+    its place. Two measured cases on the merged main: three new guests locked to a table
+    with one free seat (removing any one lock still leaves two for one seat), and a chart
+    that seats three guests at a two-seat table (chart capacity is not checked on input).
+    Before bean-025 both reports carried at least one recommendation, as bean-010 requires.
+
+    Run 1 (bean-031-20261006T210423Z, PR #24) filled the gap with advice chosen by
+    counting seats, and its pre-merge review showed the counting was wrong three ways: a
+    chart that overfills a table with a new guest also locked there was told only to
+    unlock that guest (still infeasible after), a table holding no chart guest was told to
+    add capacity it could not use, and an unlocked chart guest was counted as pinned, so
+    capacity was advised where the unlocks alone were enough
+    (evidence/reviews/bean-031-20261006T210423Z.md). The solver can answer "would this
+    help" exactly, the same way the rule and lock probes already do, so the advice is
+    checked by solving again before it is given rather than predicted by arithmetic.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: An event-day solve that returns infeasible always carries at least one recommendation.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_infeasible_event_day_always_advises" }
+  - id: ac2
+    text: When stored locks pin more guests to a table than it can hold beside its chart guests, and no single unlock is enough, the report recommends unlocking and names each locked guest at that table, and does not recommend reviewing hard rules when the event has none.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_locks_that_overfill_a_table_are_named" }
+  - id: ac3
+    text: When the chart itself seats more guests at a table than its capacity, the report recommends capacity for that table, and does not recommend reviewing hard rules when the event has none.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_a_chart_that_overfills_a_table_asks_for_capacity" }
+  - id: ac5
+    text: Advice added because no single rule or lock removal helps is checked by a probe solve before it is given. Unlocking every guest an unlock recommendation names restores feasibility; adding seats at every table a capacity recommendation names restores feasibility; and capacity is not recommended when the recommended unlocks alone restore it. Unlock recommendations name the guest id, capacity recommendations the table id.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_fallback_advice_is_probed" }
+  - id: ac4
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - the solve_event signature and the result and report shapes are unchanged
+  - a report that already carries a recommendation is unchanged (bean-025's unlock and capacity advice stay as they are)
+suggested_risk_tier: 2
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 450 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no change to the planning or low-disruption diagnosis
+  - no validation of chart capacity on input (bean-030's territory)
+  - no change to which single lock or rule removals are named
+dependencies: [bean-025]
