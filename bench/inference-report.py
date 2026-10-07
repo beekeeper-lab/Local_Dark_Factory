@@ -22,6 +22,20 @@ value that is null in a record — a /v1 call has counts and no durations, a
 non-streamed call has no TTFT — is left out of that column rather than counted
 as zero, and `n` beside each column says how many there were.
 
+Two corrections are applied when a record is loaded, and each is marked in the record's
+`timing_source` so a number is never silently a guess:
+
+  residual   ollama sometimes reports a prompt_eval_duration of ~0.035 s for 10-15k
+             tokens (seen on 3 of 4 judge calls, 2026-10-06) while the call's total
+             leaves ~30-46 s unaccounted. When the reported prefill rate is over
+             10,000 tok/s and more than a second of total_duration is unexplained,
+             prefill is taken as total - eval - load.
+  estimated  an OpenAI-compatible /v1 call carries token counts and no durations. For
+             a streamed one, prefill is taken as its TTFT and decode as wall - TTFT.
+             With prefix caching the TTFT covers only the uncached part of the prompt,
+             so its prefill tok/s overstates; its decode tok/s and its wall shares are
+             the useful numbers.
+
 Label is the record's tags.label (replays set it); a live run has none and shows
 as `-`. A replay's provenance line, and any line without a `path`, is skipped.
 
@@ -61,8 +75,35 @@ def load(paths: list[str]) -> list[dict]:
                     print(f"inference-report: skipped an unreadable line in {p}", file=sys.stderr)
                     continue
                 if isinstance(r, dict) and r.get("path") and r.get("kind") != "provenance":
-                    out.append(r)
+                    out.append(correct(r))
     return out
+
+
+IMPLAUSIBLE_PREFILL_TOK_S = 10_000
+
+
+def correct(r: dict) -> dict:
+    """Fill in timings ollama under-reported or the /v1 route never sent (see the module doc)."""
+    r = dict(r)
+    pc, pd = r.get("prompt_eval_count"), r.get("prompt_eval_duration_s")
+    ec, ed = r.get("eval_count"), r.get("eval_duration_s")
+    total, load_s = r.get("total_duration_s"), r.get("load_duration_s") or 0.0
+    if pc and pd and total and pc / pd > IMPLAUSIBLE_PREFILL_TOK_S:
+        residual = total - (ed or 0.0) - load_s
+        if residual - pd > 1.0:
+            r["prompt_eval_duration_s"] = round(residual, 6)
+            r["prefill_tok_s"] = round(pc / residual, 3) if residual > 0 else None
+            r["timing_source"] = "residual"
+    elif pd is None and ed is None and r.get("ttft_s") is not None and r.get("wall_s"):
+        ttft, wall = r["ttft_s"], r["wall_s"]
+        r["prompt_eval_duration_s"] = round(ttft, 6)
+        r["eval_duration_s"] = round(max(0.0, wall - ttft), 6)
+        if pc and ttft > 0:
+            r["prefill_tok_s"] = round(pc / ttft, 3)
+        if ec and wall - ttft > 0:
+            r["decode_tok_s"] = round(ec / (wall - ttft), 3)
+        r["timing_source"] = "estimated"
+    return r
 
 
 COLS = (("ttft_s", "ttft"), ("prefill_tok_s", "prefill_tok_s"), ("decode_tok_s", "decode_tok_s"),
