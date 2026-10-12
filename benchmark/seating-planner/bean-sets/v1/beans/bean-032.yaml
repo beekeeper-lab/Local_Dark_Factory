@@ -1,0 +1,84 @@
+schema_version: bean/2.0.0
+id: bean-032
+repo: beekeeper-lab/seating-planner-py
+title: An infeasibility report names every hard-rule and shortage cause, together
+intent: >
+  When a planning or low-disruption solve is infeasible because of more than one
+  independent hard-rule conflict, or a hard-rule conflict together with a seat shortage,
+  the report names a rule set whose removal (and, for a shortage, whose added capacity)
+  makes the event solvable, and names no rule that is not part of some conflict.
+status: approved
+approval:
+  approved_by: "Gregg Reed (owner, directly)"
+  approved_at: "2026-10-08T08:00:00Z"
+  order: 32
+source:
+  kind: manual
+  ref: evidence/reviews/retroactive-20260928.md
+  date: "2026-10-08"
+  excerpt: "bean-028: The one-removal diagnosis has blind spots. With two independent conflicts, no rule is named. A seat shortage plus a rule conflict gives only capacity advice."
+context:
+  read_paths:
+    - src/seating_planner/solver/
+    - src/seating_planner/domain/
+    - tests/solver/
+  background: >
+    bean-028 asked one spec session to design multi-cause diagnosis across hard rules,
+    locks, seat shortage and movement limit, in planning and low-disruption modes, in one
+    pass. Both of its runs (bean-028-20261008T024921Z) hit the worker's wall-clock limit
+    mid-generation, at 2 hours and again at 3 hours, each time partway through a session
+    that had already produced two turns of 21,000-22,000 tokens; the owner chose to split
+    the scope on 2026-10-08 rather than raise the timeout a third time.
+
+    This half is the narrower, more foundational one: a search over which SUBSET of the
+    event's enabled hard rules (and, separately, whether a seat shortage is also present)
+    must be changed to restore feasibility, replacing the one-removal probe that tries
+    rules one at a time and reports nothing when two are jointly necessary.
+
+    Measured on the main branch, planning mode unless stated: two independent
+    contradictory pairs of hard rules (same-table and different-table on g-0/g-1, and
+    again on g-2/g-3) give no rule ids and the generic "the enabled hard rules are jointly
+    unsatisfiable" advice. Five guests at two tables of two, plus one contradictory pair,
+    give capacity advice only; after adding the counted seats it is still unsolvable,
+    because the rule conflict was never named alongside the shortage. A seat shortage
+    alone, and a movement limit too small to allow any chart, are already reported
+    correctly today and are out of scope here.
+
+    Locks and the movement limit stay out of this bean's search space entirely (bean-033's
+    territory, which depends on this one): a lock is still reported however it is today,
+    and a diagnosis here never recommends unlocking anyone or raising the movement limit.
+allowed_write_paths:
+  - src/seating_planner/solver/**
+  - tests/solver/**
+acceptance_criteria:
+  - id: ac1
+    text: An event with two independent hard-rule conflicts gets a report that names rules from both, and removing every named rule makes it solvable.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_two_conflicts_are_both_named" }
+  - id: ac2
+    text: An event with a seat shortage and a hard-rule conflict gets a report that counts the shortfall, recommends add_capacity, and names the conflicting rules.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_shortage_and_rule_conflict_are_both_named" }
+  - id: ac3
+    text: In planning and low-disruption modes, every named hard rule is part of some conflict, and removing all named rules (and, if a shortfall is counted, adding that many seats) makes the event solvable in the same mode; no lock recommendation and no movement-limit recommendation is added by this diagnosis.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_named_rules_are_real_and_enough" }
+  - id: ac4
+    text: Every existing solver test still passes unchanged.
+    verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+constraints:
+  - '"part of some conflict" means there is a set of the event''s enabled hard rules (and, if present, the seat limit) that cannot all hold, and can once the named ones are removed or raised'
+  - conflict_rule_ids stays a sorted tuple of rule ids; capacity_shortfall keeps its meaning
+  - the solve_event signature is unchanged, and the report stays frozen and serializable through to_dict
+  - a diagnosis probe that runs out of time names nothing it has not proved
+  - diagnosis solves run with one search worker whatever the caller asked for, because an infeasible core is only reliable with one; the worker count recorded for the chart solve is unaffected
+  - locks and the movement limit are read but never named or changed by this diagnosis; their own recommendations (today's one-removal unlock advice, and raise_movement_limit) pass through exactly as they do on main
+suggested_risk_tier: 2
+size_budget: { max_tasks: 2, max_files: 4, max_diff_lines: 400 }
+definition_of_done:
+  - all AC verify pass
+  - gates green
+  - spec and impl-detail docs accepted
+non_goals:
+  - no change to the event-day diagnosis (bean-025)
+  - no guarantee that the named set is the smallest one
+  - no new recommendation kinds
+  - no change to how locks or the movement limit are diagnosed (bean-033)
+dependencies: [bean-010, bean-011, bean-013]

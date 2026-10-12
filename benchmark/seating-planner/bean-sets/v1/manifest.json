@@ -215,6 +215,14 @@
       "reopens_approval": false,
       "rule": "The owner chose this amendment directly; ac1-ac4 are unchanged.",
       "note": "Run 1's pre-merge review (evidence/reviews/bean-031-20261006T210423Z.md) demonstrated advice that would not help in three shapes. Three property tests were added to the hidden suite (apply the advice, solve again) and verified both ways in the gate image against a probe-based reference fix that was never committed; on run 1's head exactly those three fail. Run 1's branch is kept as backup/bean-031-run-20261006T210423Z."
+    },
+    {
+      "date": "2026-10-08",
+      "change": "bean-028 retired and split into bean-032 (multi-rule and shortage diagnosis) and bean-033 (locks folded into the same search, and named as locks), bean-033 depends on bean-032",
+      "by": "Claude Sonnet 5, on the owner's decision of 2026-10-08",
+      "reopens_approval": false,
+      "rule": "The owner chose this split directly; nothing already merged changes. bean-028's own scope (ac1-ac5) is unchanged in substance, divided across the two new beans.",
+      "note": "bean-028's spec step hit the worker-sandbox wall-clock limit twice in one run (bean-028-20261008T024921Z): 2 hours, then 3 hours after a resume, each time partway through a session that had already produced two turns of 21,000-22,000 output tokens (consistent with the ~15-20 tok/s developer decode measured this session, memory inference-measurements) and one context compaction. Asking one spec session to design a combined subset search over hard rules, locks, the seat limit and the movement limit, across two solve modes, in one pass was too large a task for one attempt. bean-032 is the narrower half: the subset search over hard rules and the seat limit alone (bean-028's ac1, ac2, most of ac4). bean-033 depends on it and folds locks into the same search, reporting them as typed unlock recommendations (bean-028's ac3, the rest of ac4). bean-028-20261008T024921Z's two halted attempts are archived with a note in the target repo's factory/runs/.archive/."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
