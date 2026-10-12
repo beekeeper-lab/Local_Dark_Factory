@@ -231,6 +231,14 @@
       "reopens_approval": false,
       "rule": "A budget follows the scope; the narrower half of the bean-028 split still needed more room than first estimated.",
       "note": "Run 2 (bean-032-20261012T143638Z) passed every gate check except size_budget: 439 changed lines against 400, with lint, format, types and the secret scan all clean."
+    },
+    {
+      "date": "2026-10-12",
+      "change": "bean-032 gains ac5: rule-conflict probing uses the event's own capacities, never the shortage-probe's enlarged model (repairs a regression found in run 1)",
+      "by": "Claude Sonnet 5, on the owner's decision of 2026-10-12 to re-run bean-032 rather than merge PR #28",
+      "reopens_approval": false,
+      "rule": "The owner chose this amendment directly; ac1-ac4 are unchanged.",
+      "note": "Run 1's pre-merge review (evidence/reviews/bean-032-20261012T143638Z.md) demonstrated that a plain seat shortage with an unrelated hard rule present named that rule as a conflict too, because rule probes ran against the same capacity-inflated model used to test for the shortage. Two hidden tests added from ac5 and verified both ways in the gate image against a reference fix (a two-step check: is the event satisfiable once the shortfall alone is cured with every rule intact? if yes, no rule is named; if no, probe rule removals against that same capacity-fixed model) that was never committed; on run 1's head exactly the new regression test fails, and the full 59-test suite plus the existing ac1/ac2/ac3 fixtures all still pass against the reference fix. Also made explicit as a non-goal: naming three or more simultaneous independent hard-rule conflicts is out of scope (ac1 only ever asked for two; main cannot do this either, so it is a documented boundary, not a fresh gap). Run 1's branch is kept as backup/bean-032-run-20261012T143638Z."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",

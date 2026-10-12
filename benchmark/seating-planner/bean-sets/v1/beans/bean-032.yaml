@@ -47,6 +47,24 @@ context:
     Locks and the movement limit stay out of this bean's search space entirely (bean-033's
     territory, which depends on this one): a lock is still reported however it is today,
     and a diagnosis here never recommends unlocking anyone or raising the movement limit.
+
+    Run 1 (bean-032-20261012T143638Z, PR #28) was built and reviewed; the pre-merge review
+    found a regression the owner chose to fix before merging rather than ship. The rule
+    search decided whether a shortage alone explained the infeasibility by solving on a
+    model with every table enlarged to hold all eligible guests, and then ran every rule
+    probe on that SAME enlarged model -- so with every table able to seat everyone, removing
+    any rule at all trivially succeeded, and a rule with no real conflict was named anyway.
+    Measured: 5 guests, two 2-seat tables, one harmless same-table rule on two guests never
+    near capacity -- main correctly reports only the shortage; run 1 also named the harmless
+    rule (evidence/reviews/bean-032-20261012T143638Z.md). Rule-conflict detection and
+    shortage detection are two different questions and must be answered on two different
+    models: whether enough seats exist at all (the enlarged model), and which of the real,
+    as-declared table capacities a rule's removal would need (the event's own capacities).
+
+    Run 1 also could not name three or more simultaneous independent hard-rule conflicts
+    (its search tries single rules, then pairs, and stops). That is not a regression -- main
+    cannot either -- and ac1 only ever asked for the two-conflict case. It is accepted as a
+    known boundary of this bean, not a fresh gap to fix here; see the non-goal below.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -60,6 +78,9 @@ acceptance_criteria:
   - id: ac3
     text: In planning and low-disruption modes, every named hard rule is part of some conflict, and removing all named rules (and, if a shortfall is counted, adding that many seats) makes the event solvable in the same mode; no lock recommendation and no movement-limit recommendation is added by this diagnosis.
     verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_named_rules_are_real_and_enough" }
+  - id: ac5
+    text: Whether a rule is named as a conflict is decided against the event's own table capacities, never against a model enlarged to test for a seat shortage. A rule that has no real conflict is not named, whether or not the event also has a shortage.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_harmless_rule_is_not_named_alongside_a_shortage" }
   - id: ac4
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
@@ -67,6 +88,7 @@ constraints:
   - '"part of some conflict" means there is a set of the event''s enabled hard rules (and, if present, the seat limit) that cannot all hold, and can once the named ones are removed or raised'
   - conflict_rule_ids stays a sorted tuple of rule ids; capacity_shortfall keeps its meaning
   - the solve_event signature is unchanged, and the report stays frozen and serializable through to_dict
+  - rule-conflict probing and seat-shortage detection are independent checks, each over its own model; a capacity used only to decide whether a shortfall exists is never the capacity a rule-removal probe runs against
   - a diagnosis probe that runs out of time names nothing it has not proved
   - diagnosis solves run with one search worker whatever the caller asked for, because an infeasible core is only reliable with one; the worker count recorded for the chart solve is unaffected
   - locks and the movement limit are read but never named or changed by this diagnosis; their own recommendations (today's one-removal unlock advice, and raise_movement_limit) pass through exactly as they do on main
@@ -81,4 +103,5 @@ non_goals:
   - no guarantee that the named set is the smallest one
   - no new recommendation kinds
   - no change to how locks or the movement limit are diagnosed (bean-033)
+  - naming three or more simultaneous independent hard-rule conflicts at once is out of scope; ac1 covers exactly two, matching run 1's demonstrated boundary
 dependencies: [bean-010, bean-011, bean-013]
