@@ -71,7 +71,7 @@ constraints:
   - diagnosis solves run with one search worker whatever the caller asked for, because an infeasible core is only reliable with one; the worker count recorded for the chart solve is unaffected
   - locks and the movement limit are read but never named or changed by this diagnosis; their own recommendations (today's one-removal unlock advice, and raise_movement_limit) pass through exactly as they do on main
 suggested_risk_tier: 2
-size_budget: { max_tasks: 2, max_files: 4, max_diff_lines: 400 }
+size_budget: { max_tasks: 2, max_files: 4, max_diff_lines: 500 }
 definition_of_done:
   - all AC verify pass
   - gates green
