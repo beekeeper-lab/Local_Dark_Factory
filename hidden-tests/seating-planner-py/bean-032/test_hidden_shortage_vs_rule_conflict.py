@@ -73,3 +73,42 @@ def test_dropping_the_harmless_rule_alone_does_not_help() -> None:
     )
     result = solve_event(ev, mode="planning", time_limit_s=10.0, seed=0, num_search_workers=1)
     assert result.infeasibility_report is not None, "still short a seat with r-ok already gone"
+
+
+def test_a_group_rule_naming_depends_on_where_the_seat_goes_not_which_table() -> None:
+    """Run 2's pre-merge review (evidence/reviews/bean-032-20261012T213344Z.md):
+    curing the shortfall was tested on one specific placement of the extra seats
+    (split evenly, or piled on one table), so a same-table group that only fits once
+    a SPECIFIC table gains room was told the shortage alone did not explain it, and
+    the group's own rule was blamed. Every table must get the full shortfall as
+    slack when asking whether a placement exists at all -- not a share of it.
+    """
+    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner.solver import solve_event
+
+    # 5 guests, t1 holds 3, t2 holds 1 (shortfall 1). A needs 3 seats together,
+    # B needs 2 together. One more seat AT T2 (not t1) solves it with both rules
+    # kept, so neither rule may be named.
+    ev = Event(
+        id="e", name="e",
+        tables=[Table(id="t1", name="t1", capacity=3, shape="round", position=(0.0, 0.0)),
+                Table(id="t2", name="t2", capacity=1, shape="round", position=(0.0, 1.0))],
+        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        groups=[],
+        rules=[
+            Rule(id="A", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
+                 weight=None, guest_ids=("g0", "g1", "g2")),
+            Rule(id="B", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
+                 weight=None, guest_ids=("g3", "g4")),
+        ],
+    )
+    for mode, kwargs in (("planning", {}), ("low_disruption", {"current": {"g0": "t1"}, "movement_limit": 100})):
+        result = solve_event(ev, mode=mode, time_limit_s=10.0, seed=0, num_search_workers=1, **kwargs)
+        report = result.infeasibility_report
+        assert report is not None, f"{mode}: 5 guests at 4 seats is infeasible"
+        assert report.capacity_shortfall == 1, f"{mode}: expected a 1-seat shortfall"
+        assert not report.conflict_rule_ids, (
+            f"{mode}: neither A nor B conflicts with anything once the right table "
+            f"gains a seat, so neither may be named: {report.conflict_rule_ids}"
+        )

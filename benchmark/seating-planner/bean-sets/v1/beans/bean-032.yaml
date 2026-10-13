@@ -61,6 +61,22 @@ context:
     models: whether enough seats exist at all (the enlarged model), and which of the real,
     as-declared table capacities a rule's removal would need (the event's own capacities).
 
+    Run 2 (bean-032-20261012T213344Z, PR #29) fixed run 1's regression but split the extra
+    capacity that cures a shortfall round-robin across tables (or, in an earlier hand-built
+    reference fix, piled it all on one table) before asking whether curing the shortfall
+    alone restores feasibility. Either way, that commits to ONE placement of the extra seats
+    before asking whether a placement exists at all: a same-table group that only fits once
+    a SPECIFIC table gains room was told the shortage did not explain it on its own, and the
+    group's own rule was blamed for a shortage a different placement of the same seats would
+    have cured (evidence/reviews/bean-032-20261012T213344Z.md). Measured: tables of 3 and 1
+    seats, 5 guests, a 3-guest same-table rule and a 2-guest same-table rule, one seat short
+    -- the extra seat belongs at the 1-seat table and nowhere else works, but the round-robin
+    split put it at the 3-seat table instead and named both rules. No single table can ever
+    need more than the WHOLE shortfall to absorb any one real placement of it, so giving
+    every table that much slack -- not a split share, not all of it on one table -- is the
+    least capacity that proves whether a placement exists anywhere, without reintroducing
+    run 1's bug of enlarging every table past what the real shortfall could ever require.
+
     Run 1 also could not name three or more simultaneous independent hard-rule conflicts
     (its search tries single rules, then pairs, and stops). That is not a regression -- main
     cannot either -- and ac1 only ever asked for the two-conflict case. It is accepted as a
@@ -81,6 +97,9 @@ acceptance_criteria:
   - id: ac5
     text: Whether a rule is named as a conflict is decided against the event's own table capacities, never against a model enlarged to test for a seat shortage. A rule that has no real conflict is not named, whether or not the event also has a shortage.
     verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_harmless_rule_is_not_named_alongside_a_shortage" }
+  - id: ac6
+    text: Whether curing a seat shortage alone restores feasibility is checked with every table free to take up to the full shortfall, not a split share of it and not all of it on one table, so a rule whose own group only fits once a specific table gains room is not named just because a different placement of the same extra seats was tried first.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_group_rule_is_not_named_when_some_placement_of_the_shortfall_cures_it" }
   - id: ac4
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
