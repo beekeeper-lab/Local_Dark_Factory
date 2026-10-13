@@ -239,6 +239,14 @@
       "reopens_approval": false,
       "rule": "The owner chose this amendment directly; ac1-ac4 are unchanged.",
       "note": "Run 1's pre-merge review (evidence/reviews/bean-032-20261012T143638Z.md) demonstrated that a plain seat shortage with an unrelated hard rule present named that rule as a conflict too, because rule probes ran against the same capacity-inflated model used to test for the shortage. Two hidden tests added from ac5 and verified both ways in the gate image against a reference fix (a two-step check: is the event satisfiable once the shortfall alone is cured with every rule intact? if yes, no rule is named; if no, probe rule removals against that same capacity-fixed model) that was never committed; on run 1's head exactly the new regression test fails, and the full 59-test suite plus the existing ac1/ac2/ac3 fixtures all still pass against the reference fix. Also made explicit as a non-goal: naming three or more simultaneous independent hard-rule conflicts is out of scope (ac1 only ever asked for two; main cannot do this either, so it is a documented boundary, not a fresh gap). Run 1's branch is kept as backup/bean-032-run-20261012T143638Z."
+    },
+    {
+      "date": "2026-10-12",
+      "change": "bean-032 gains ac6: curing a shortfall is checked with every table free to take the full shortfall, not a round-robin split or a single table (repairs a second regression found in run 2)",
+      "by": "Claude Sonnet 5, acting on the owner's standing authorisation and the amend-and-rerun approach already approved twice for this bean",
+      "reopens_approval": false,
+      "rule": "Same decision class the owner already approved for this bean's run 1 defect; ac1-ac5 are unchanged.",
+      "note": "Run 2's pre-merge review (evidence/reviews/bean-032-20261012T213344Z.md) demonstrated that splitting the shortfall round-robin across tables committed to one placement of the extra seats before asking whether a placement exists at all: a same-table group that only fit once a specific table gained room was told the shortage alone did not explain it, and the group's rule was blamed. A hand-built reference fix (every table gets the FULL shortfall as slack, not a split share) was verified against every adversarial case the review found (a plain shortage, a shortage plus a real conflict plus a harmless rule, a 2-seat shortage, and two group-placement cases), the full 60-test solver suite, and the three hidden tests, with no measurable performance cost. A third hidden test was added from ac6 and verified both ways; run 2's actual head fails exactly that one. Run 2's branch is kept as backup/bean-032-run2-20261012T213344Z."
     }
   ],
   "approval_order": "bean id order (001..020), which is a valid topological order: every bean's dependencies carry a lower order. Checked, not assumed.",
