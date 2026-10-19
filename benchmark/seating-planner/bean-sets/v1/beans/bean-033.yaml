@@ -26,21 +26,134 @@ context:
     - tests/solver/
   background: >
     The second half of bean-028, split out on 2026-10-08 after both of bean-028's runs hit
-    the worker's wall-clock limit mid-generation (see bean-032's background for the
-    measurements and the timeline). bean-032 builds the subset search over hard rules and
-    the seat limit; this bean extends that same search's removable set to include the
-    event's stored locks, so a lock is tried for release alongside rules rather than being
-    diagnosed by a separate one-removal probe, and reported through an unlock
-    recommendation (guest_id, table_id) rather than through a change_hard_rule note.
+    the worker's wall-clock limit (see bean-032's background for that timeline). bean-032
+    builds the subset search over hard rules and the seat limit; this bean extends that
+    same search's removable set to include the event's stored locks, reported through a
+    typed unlock recommendation (guest_id, table_id) rather than a change_hard_rule note.
 
-    Measured on the main branch, planning mode: three guests locked to a one-seat table,
-    with room elsewhere and no hard rules at all, are told the hard rules are jointly
-    unsatisfiable and no lock is named. Two guests locked to a one-seat table plus a
-    contradictory pair of hard rules name nothing. In low-disruption mode, a movement
-    limit of 0 that a lock forces past, plus a contradictory pair, names only the two
-    rules; removing them leaves it unsolvable, because the lock was never part of the
-    search. A lock is already named by an unlock recommendation when it is the one single
-    cause; today the guest and the table are only in its message, not in typed fields.
+    Measured on main: locks alone, or beside a contradictory rule pair, name nothing;
+    low-disruption with a movement limit a lock forces past names only the rules, and
+    removing them leaves it unsolvable because the lock was never part of the search.
+
+    This bean has gone through five build-review-repair rounds (ac4 through ac8 below);
+    each full evidence trail lives in its own review file in evidence/reviews/, named by
+    the run's own run-id. What follows is the one-line cause and fix of each round --
+    read the cited review file for the measured numbers and demonstration transcripts if
+    more detail is needed; do not re-derive it here.
+
+    - Run 1 (PR #32, evidence/reviews/bean-033-20261013T082950Z.md): added a "keep-set"
+      probe (hold a combo, remove everything else, name it if still proven infeasible)
+      because a removal-probe-only search couldn't satisfy its own red tests. Two bugs:
+      no minimality check, so one item infeasible-alone dragged in every unrelated
+      partner (fixed by ac4); and the shortage-only branch kept probing lock removal even
+      with nothing to remove, naming every lock (fixed by ac5). Two of run 1's own test
+      assertions encoded these bugs as "expected" and needed correcting, not preserving.
+    - Run 2 (PR #33, evidence/reviews/bean-033-20261013T151028Z.md): fixed both run-1
+      bugs, but the keep-set probe never applied the shortfall's slack bound, so an
+      uncured shortfall or a chart that itself violates capacity made EVERY item fail
+      "kept alone" and get named (fixed by ac6: same slack bound as removal, and skip the
+      whole keep-set phase when keeping nothing is itself infeasible).
+    - Run 3 (PR #34, evidence/reviews/bean-033-20261013T184336Z.md): implemented ac6
+      correctly (plus a mid-run test-fixture arithmetic bug the operator fixed directly).
+      The review then found the PRE-EXISTING low-disruption movement-limit probe had
+      picked up the slack bound too, so a plain shortage got blamed on the movement limit
+      with no add_capacity advice (fixed by ac7: that one probe stays at real capacities,
+      never the bounded-slack model).
+    - Run 4 (PR #35, evidence/reviews/bean-033-20261014T023159Z.md): implemented ac7
+      correctly. The review found the movement limit was never itself searchable, so when
+      the chart or limit was infeasible on its own, every probe failed and the empty-
+      keep-set gate (ac6) skipped the whole keep-set search, dropping a genuine, unrelated
+      rule conflict to the generic note. A first fix (limit as a plain item inside the
+      existing search) introduced NEW over-naming -- every solo-item check implicitly
+      relaxed the limit too, letting an already-fixed same/different pair get BOTH members
+      named via an unrelated keep-set pair. The corrected fix (ac8): run the existing
+      rule/lock search once at the real limit; only if THAT finds nothing at all, run it
+      again with the limit fully relaxed, and name the limit only if the second pass is
+      what found something. This keeps the first pass's own minimality completely intact.
+    - Run 5 (PR #36, evidence/reviews/bean-033-20261014T113644Z.md): built ac8's two-pass
+      search correctly, verified clean against 3,900 fuzzed events. The review found a
+      narrower, unrelated defect: the keep-set direction's helper collapsed INFEASIBLE and
+      UNKNOWN (a timed-out solve) to the same "not satisfiable" value, so a keep-set probe
+      that simply ran out of time got treated as proof and named the item anyway -- a
+      violation of the bean's own "never name on a timeout" constraint, reliably reproduced
+      on a large, tightly-packed event (150 guests, 30 tables of 5, several guests locked
+      exactly at one table's capacity) where the keep-set sub-probes are genuinely slow to
+      decide. Fixed (ac9) by giving the keep-set direction its own check against the exact
+      INFEASIBLE status, leaving the removal direction's existing "proven satisfiable?"
+      check untouched (it was already safe: UNKNOWN there already means "no").
+
+    A reliable repro for ac9's own test, so it does not need rediscovering by trial and
+    error: locks must be packed tightly onto one table, at or near its exact capacity, not
+    spread one-per-table across many -- spreading them makes every keep-set sub-probe trivially
+    fast regardless of time budget and will never surface a timeout. A working shape: tens of
+    tables of capacity 5, a block of 5-6 guests locked onto one specific table, a handful of
+    harmless same-table pairs elsewhere for bulk, and one genuine same/different rule
+    contradiction on two other guests; solved at time_limit_s around 0.2 (much lower and even
+    main's older code starts over-naming too; much higher and the packed-lock probes resolve
+    before timing out, on either implementation). Confirm a candidate fixture reproduces by
+    running it 2-3 times, since timing-dependent tests are inherently a little noisy.
+
+    - Run 6 (PR #37, evidence/reviews/bean-033-20261016T032049Z.md): built ac9 correctly and
+      kept runs 1-5 fixed. Two new defects in code written fresh this round: the low-disruption
+      shortage short-circuit probed with the movement limit RELAXED instead of the real one, so
+      it fired (and reported only add_capacity) whenever relaxing the limit would help, even
+      though the real limit forbids exactly that and the reported fix does not restore
+      feasibility (fixed by ac10: that short-circuit must use the real movement_limit, exactly
+      like every other probe in this mode); and the caller's own time_limit_s was silently
+      replaced by a hard-coded 2.0-second budget for every internal probe, so a request for a
+      much smaller budget had no effect on how long the diagnosis actually took (fixed by ac11:
+      thread the real time_limit_s through every probe, as every round before this one already
+      did). Separately, this round's own freshly-written test for ac7
+      (test_a_plain_shortage_is_never_blamed_on_the_movement_limit) locked a guest to a table
+      other than its current one while also freezing movement_limit=0, which is not a "plain
+      shortage" at all -- it forces that guest's lock-vs-chart move regardless of capacity,
+      making the scenario a genuine lock conflict that the shortage-only short-circuit should
+      correctly NOT cure alone. The scenario needs no lock (run 5's own version of this same
+      test has none); a lock included in a "plain shortage" fixture must already match the
+      guest's current table, or not force any move the frozen limit would block.
+
+    Ready-made fixtures for ac10's and ac11's own tests, verified both ways (fail on run 6's
+    head, pass on the fix) so the test-writing task does not need to work them out by tracing
+    the diagnosis code by hand -- this task's own container has no solver runtime to check a
+    candidate fixture empirically, only static reading, so a wrong guess here is expensive.
+    ac10: 2 one-seat tables, 3 guests, one hard same-table rule on two of them, chart seating
+    the third guest onto the same table as one of the ruled pair, movement_limit=0. Infeasible;
+    capacity_shortfall 1; the named rule is the one the hard rule is on, alongside add_capacity.
+    Property checks: adding the one extra seat to EITHER table, real limit held, the rule still
+    in force, never restores feasibility (every placement still fails); dropping the rule AND
+    adding the seat together does. ac11: the exact ac9 fixture (150 guests, 30 tables of 5, the
+    packed lock block, the one real rule contradiction), solved at time_limit_s=0.02 instead of
+    0.2, asserting the whole call completes well under the ~22 seconds a hard-coded per-probe
+    budget always takes regardless of what was requested (a generous threshold like 15 seconds
+    leaves comfortable margin either way) -- no need to also assert exact scaling ratios between
+    multiple time limits, one tight budget finishing quickly is enough to prove the fix.
+
+    - Run 7 (PR #38, evidence/reviews/bean-033-20261017T154346Z.md): built ac10 and ac11
+      correctly, and rewrote the diagnosis as one pooled rule-and-lock search shared by both
+      passes of the low-disruption two-pass movement-limit search -- a real simplification,
+      not just a fix. But the rewrite moved the shortage-only short-circuit from a single
+      top-level check (ac10's own fix) into something each pass runs on its own, and the
+      caller lost the ability to tell "this pass's own shortage check succeeded" apart from
+      "this pass found nothing at all" -- both return the same empty result. When a plain
+      shortfall is curable only by relaxing the real limit (no rule or lock involved), pass
+      1's shortage check correctly fails at the real limit, pass 2 runs with the limit
+      relaxed, pass 2's OWN shortage check now succeeds and returns immediately, and the
+      caller -- seeing "pass 2 found nothing to name" -- never sets the flag that names the
+      limit, so the report recommends add_capacity alone, which does not restore feasibility
+      at the real limit. Fixed (ac12) by having the pooled search report back, alongside its
+      named rules and locks, whether ITS OWN shortage-only short-circuit is what matched --
+      the caller treats that flag exactly like a named rule or lock when deciding whether
+      pass 2 found something worth naming the limit for.
+
+    Ready-made fixture for ac12's own test, verified both ways (fails on run 7's head, passes
+    on the fix): 3 tables of capacity 2 (6 real seats), 7 guests, no rules, no locks, a chart
+    packing 4 guests onto one table (overfull by 2) and the rest spread over the other two,
+    movement_limit=0 -- a global shortfall of 1 that is curable only once the real limit is
+    relaxed enough to let someone move into the new seat. Infeasible; capacity_shortfall 1; no
+    rule or lock named; both add_capacity and raise_movement_limit recommended. Property
+    checks: adding the one extra seat anywhere, real limit held, never restores feasibility;
+    raising the limit alone, no extra seat, is a genuine shortfall too and also fails; only
+    the limit and the seat together cure it.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -52,16 +165,54 @@ acceptance_criteria:
     text: In planning and low-disruption modes, every named rule and lock is part of some conflict, and removing all named rules, releasing all named locks, lifting the movement limit if raise_movement_limit is recommended, and removing the seat limit if a shortfall is counted makes the event solvable in the same mode.
     verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_named_causes_are_real_and_enough" }
   - id: ac3
-    text: Every existing solver test still passes unchanged, including bean-032's.
+    text: Every existing solver test still passes, including bean-032's, EXCEPT the assertions the background identifies as encoding an earlier run's bug rather than its fix -- run 1's test_locks_are_named_as_locks scenario 3 and test_named_causes_are_real_and_enough fixture (b)'s conflict_rule_ids/unlock_recs lines (ac4/ac5), and test_a_bystander_is_never_named_when_keeping_nothing_is_already_infeasible's conflict_rule_ids/kinds lines once ac8 lands (the chart-overfill-plus-rule-conflict case genuinely names both rules and the limit, not nothing). Each is corrected to match the fix, verified by the same guard-solve technique the rest of the file already uses, not just asserted. A test for "a plain shortage" in low-disruption mode never locks a guest away from their current table while freezing the movement limit -- that forces a lock-vs-chart move the frozen limit blocks, which is a genuine lock conflict, not a plain shortage, and the diagnosis naming more than add_capacity for it is correct, not a bug to preserve.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+  - id: ac4
+    text: A cause is named via a keep-set probe only when its combo is a minimal infeasible keep-set -- no proper subset of a named combo is itself an infeasible keep-set. An item that is infeasible kept entirely alone is named for that reason by itself, and is never the reason a different, otherwise-harmless partner gets named at a larger combo size.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_keep_set_cause_is_never_named_through_a_partner_that_already_fails_alone" }
+  - id: ac5
+    text: When curing a seat shortage alone, with every enabled hard rule and every lock kept, already restores feasibility, no lock is probed for removal and none is named; a lock is not named just because releasing it is also, trivially, sufficient when releasing nothing already was.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_lock_is_not_named_when_the_shortfall_alone_already_cures_it" }
+  - id: ac6
+    text: The keep-set probe is built on the same bounded-slack model the removal probe uses (every table free to take up to the full shortfall, summed across tables capped at the shortfall), never real capacities alone; and the whole keep-set search is skipped when keeping nothing at all -- every rule removed, every lock released, the shortfall slack included -- is itself still infeasible, so an item is never named just because the baseline it is being tested against had already failed before it was added.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_bystander_is_never_named_when_keeping_nothing_is_already_infeasible" }
+  - id: ac7
+    text: The low-disruption movement-limit probe (does removing the limit alone restore feasibility?) runs at the event's real capacities, never the bounded-slack model -- a plain seat shortage is never reported as a movement-limit cause, and add_capacity (or add_table) is still recommended whenever a shortfall is counted, whether or not the movement limit is also named.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_plain_shortage_is_never_blamed_on_the_movement_limit" }
+  - id: ac8
+    text: In low-disruption mode, the rule/lock search (ac4-ac6) runs first with the movement limit held fixed at its real value, exactly as it already does. Only when that first pass proves nothing at all -- no removal restores feasibility and the empty-keep-set check is itself infeasible -- does a second, independent run of the identical search proceed with the movement limit relaxed to unlimited throughout; a rule or lock found only in that second pass is named alongside the movement limit, never alongside it inside the SAME search pass as an ordinary removable item (which would let it leak into every solo-infeasibility check and weaken ac4's minimality for rules and locks that were never affected by the limit at all).
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_rule_contradiction_is_still_named_when_the_chart_alone_is_also_infeasible" }
+  - id: ac9
+    text: A keep-set probe names a combo only when its solve is proven INFEASIBLE by exact status, never merely "not satisfiable" -- an UNKNOWN result (the probe ran out of time) is treated identically to a SATISFIABLE one for naming purposes, proving nothing, and the combo is not named. This applies independently of how large or slow the event is to solve; a probe that cannot finish in the time given is silent, not a name.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_timed_out_keep_set_probe_never_gets_named" }
+  - id: ac10
+    text: In low-disruption mode, the shortage-only short-circuit (does curing the shortfall alone, everything else kept, restore feasibility?) probes at the event's REAL movement limit, never a relaxed or unlimited one -- it answers "does adding capacity alone, with the real limit still in force, fix this?", not the easier question of whether adding capacity AND lifting the limit together would fix it. A rule or lock that genuinely conflicts at the real limit is still named (alongside add_capacity when a shortfall is also counted), never silently dropped behind a shortage-only report whose own recommended fix does not actually restore feasibility.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_rule_is_still_named_when_only_relaxing_the_limit_would_cure_the_shortage" }
+  - id: ac11
+    text: Every internal diagnosis probe (the shortage short-circuits, the limit-lift probe, and every removal and keep-set probe in the pooled search) is bounded by the caller's own time_limit_s, in both planning and low-disruption modes -- never a budget invented independently of what solve_event was actually asked for. Requesting a smaller time_limit_s measurably shortens how long the whole diagnosis takes on an event whose probes are slow enough for the difference to show.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_the_diagnosis_honours_a_tight_requested_time_budget" }
+  - id: ac12
+    text: In low-disruption mode, when a plain capacity shortfall is curable only by relaxing the real movement limit (no rule or lock change needed at all), the report still names raise_movement_limit alongside add_capacity -- never add_capacity alone. If the pooled rule/lock search's own shortage-only short-circuit is what makes a pass (pass 1 at the real limit, or pass 2 at the relaxed limit) report nothing further to name, the caller treats that success itself as "this pass found something" for the purpose of deciding whether pass 2 ran and, if it did, whether the limit belongs in the report -- never conflating "this pass's shortage check succeeded" with "this pass found nothing at all", since both look identical (empty named rules and locks) from the outside.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it" }
 constraints:
   - '"part of some conflict" means there is a set of the event''s hard rules, locks, seat limit and movement limit that cannot all hold, and can once that one is removed'
   - conflict_rule_ids stays a sorted tuple of rule ids; capacity_shortfall keeps its meaning
   - the solve_event signature is unchanged, and the report stays frozen and serializable through to_dict
-  - a diagnosis probe that runs out of time names nothing it has not proved
+  - 'a diagnosis probe that runs out of time names nothing it has not proved -- this applies separately in each direction: the removal direction''s own question is "proven satisfiable?" and an undecided (UNKNOWN) probe there already means no, but the keep-set direction''s question is the INVERSE ("proven infeasible?"), so it must check the solve status for exact equality to INFEASIBLE rather than reusing a "not satisfiable" helper built for the removal direction''s question, where UNKNOWN and SATISFIABLE answer "no" the same way but UNKNOWN and INFEASIBLE must never be conflated'
   - diagnosis solves run with one search worker whatever the caller asked for, because an infeasible core is only reliable with one; the worker count recorded for the chart solve is unaffected
+  - a keep-set probe's result names a combo only after confirming no proper subset of it is independently an infeasible keep-set; checking larger combos stops being necessary once every item not yet named has been shown satisfiable alone
+  - shortage-only (no rule or lock removal needed to cure the shortfall with everything kept) short-circuits the whole removal and keep-set search for locks exactly as bean-032's ac5 already requires for rules
+  - the movement limit is never one more item inside the single ac4-ac6 rule/lock search; it is relaxed only as a second, whole, separate pass of that same search, run only once the first pass (real limit) proves nothing, so a rule or lock that pass 1 already proves minimal is never widened by a limit-relief side effect that pass 1 itself never needed
+  - every keep-set probe, including the empty one, runs on the bounded-slack model (slack_bound equal to the shortfall); the keep-set search runs at all only once the empty keep-set has itself been confirmed satisfiable on that same model
+  - a task's own verify command for a pytest-run check names only the specific new test node ids it is responsible for turning green, never the containing directory (e.g. tests/solver) in the same invocation -- in this gate image's pytest, naming a directory alongside a node id for a test function that does not exist yet in an already-collected module silently drops the missing one instead of failing, which defeats the verify-can-fail precheck; the full-suite regression guard belongs to ac3's own separate verify, not duplicated inside a task's
+  - the low-disruption limit-lift probe (the one answering "does lifting the movement limit alone fix it?") is never given slack_bound; it is the one probe in this diagnosis that must stay at real capacities exactly as it always has, because folding it into the shared bounded-slack search conflates "the limit is the cause" with "a shortage is the cause" and silently drops add_capacity advice
+  - no module-level or otherwise independently-invented time budget constant stands in for the caller's own time_limit_s anywhere in the diagnosis; every probe receives time_limit_s itself (or a value derived from it), never a fixed literal unrelated to what solve_event was called with
+  - the generic "the enabled hard rules are jointly unsatisfiable" note is withheld whenever the event has no enabled hard rule at all, or whenever a lock is already named -- it is only ever sensible alongside a named rule, exactly as bean-032's note-suppression already behaves
+  - a task's own inline python verify command's run list must pass its script to the interpreter with a -c flag ([python, -c, "<script>"]), never as a bare positional argument ([python, "<script>"]) -- without -c the gate image's python treats the script text as a file PATH, not code, and fails every attempt with a "file name too long" or "no such file" error regardless of what the script itself says, which no code change inside write_paths can fix
+  - the gate image pins Python 3.12: a verify script (or any production code) must never call a stdlib API introduced in a later version -- dataclasses.is_frozen, for one, does not exist until 3.13, and checking frozen-ness in this image means reading cls.__dataclass_params__.frozen (or catching the dataclasses.FrozenInstanceError a mutation attempt raises) instead
+  - whatever function runs one whole pass of the low-disruption rule/lock search (whether it is a single pooled search over rules and locks together, or separate searches) must report back, alongside its named rules and locks, whether its OWN shortage-only short-circuit is what matched for that pass -- a caller comparing two passes (the real-limit pass and the relaxed-limit pass) cannot otherwise tell "this pass's shortage check alone succeeded" apart from "this pass found nothing at all", since both return empty rule and lock sets; conflating the two silently drops raise_movement_limit from a report whose only real fix is the limit plus capacity together
 suggested_risk_tier: 2
-size_budget: { max_tasks: 3, max_files: 4, max_diff_lines: 450 }
+size_budget: { max_tasks: 3, max_files: 4, max_diff_lines: 1100 }
 definition_of_done:
   - all AC verify pass
   - gates green

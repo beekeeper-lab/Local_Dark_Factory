@@ -81,6 +81,23 @@ context:
     (its search tries single rules, then pairs, and stops). That is not a regression -- main
     cannot either -- and ac1 only ever asked for the two-conflict case. It is accepted as a
     known boundary of this bean, not a fresh gap to fix here; see the non-goal below.
+
+    Run 3 (bean-032-20261013T002611Z, PR #30) fixed run 2's bug, but giving every table up
+    to the full shortfall as slack -- with nothing bounding the SUM of slack actually used
+    across tables -- let the model accept up to n times the shortfall in total across n
+    tables, not one real placement of it. Two groups that each needed a DIFFERENT table to
+    grow were both judged seatable by capacity alone, because each table separately got its
+    own full allowance (evidence/reviews/bean-032-20261013T002611Z.md). Measured: tables of
+    2, 2 and 1 seats, 6 guests, a 3-guest same-table rule on each of two disjoint groups, a
+    1-seat shortfall -- the probe reports only the shortage and no rule, yet no single real
+    placement of that one extra seat restores feasibility with both groups kept; a rule from
+    one of the two groups must still be named. This is not a regression against main, which
+    has the identical gap in its own shortage-only path (never checked against a real
+    placement either); it is a hole in ac3's coverage that ac6, taken alone, does not close.
+    The fix keeps each table's own slack bounded at the shortfall (so run 1's bug does not
+    return) and adds one more constraint: the EXTRA seats actually used, summed across every
+    table together, are also capped at the shortfall. The two bounds together are what make
+    the probe test one real placement of the shortfall, rather than many placements added up.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -103,11 +120,15 @@ acceptance_criteria:
   - id: ac4
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
+  - id: ac7
+    text: Whether curing a seat shortage alone restores feasibility is checked against seats that total the shortfall across every table together, never the full shortfall allowed at each table independently, so a diagnosis never claims a shortage-only cure that no real placement of the shortfall could deliver, and removing every named rule plus adding exactly the shortfall still restores feasibility in the same mode.
+    verify: { kind: test, test_id: "tests/solver/test_complete_diagnosis.py::test_the_shortfall_cure_is_checked_against_one_real_placement_of_it" }
 constraints:
   - '"part of some conflict" means there is a set of the event''s enabled hard rules (and, if present, the seat limit) that cannot all hold, and can once the named ones are removed or raised'
   - conflict_rule_ids stays a sorted tuple of rule ids; capacity_shortfall keeps its meaning
   - the solve_event signature is unchanged, and the report stays frozen and serializable through to_dict
   - rule-conflict probing and seat-shortage detection are independent checks, each over its own model; a capacity used only to decide whether a shortfall exists is never the capacity a rule-removal probe runs against
+  - a probe that asks whether curing the shortage alone restores feasibility bounds each table's own slack at the shortfall AND bounds the sum of slack actually used across every table at the shortfall -- both together, so the probe tests one real placement of the shortfall rather than many placements added up
   - a diagnosis probe that runs out of time names nothing it has not proved
   - diagnosis solves run with one search worker whatever the caller asked for, because an infeasible core is only reliable with one; the worker count recorded for the chart solve is unaffected
   - locks and the movement limit are read but never named or changed by this diagnosis; their own recommendations (today's one-removal unlock advice, and raise_movement_limit) pass through exactly as they do on main

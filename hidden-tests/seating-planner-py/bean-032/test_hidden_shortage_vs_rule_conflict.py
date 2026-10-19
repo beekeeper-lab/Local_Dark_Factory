@@ -112,3 +112,93 @@ def test_a_group_rule_naming_depends_on_where_the_seat_goes_not_which_table() ->
             f"{mode}: neither A nor B conflicts with anything once the right table "
             f"gains a seat, so neither may be named: {report.conflict_rule_ids}"
         )
+
+
+def _any_placement_restores_feasibility(
+    event: Any, drop_ids: set, extra_total: int, mode: str, **kwargs: Any
+) -> bool:
+    """True if SOME way to add `extra_total` seats across the event's tables, after
+    dropping the named rules, makes it solvable. This is ac3's own property check: a
+    diagnosis's advice only counts if some real placement of it actually works, not
+    just a model that was more generous than any one placement could ever be.
+    """
+    from itertools import combinations_with_replacement
+
+    from seating_planner.domain import Event, Table
+    from seating_planner.solver import solve_event
+
+    table_ids = [t.id for t in event.tables]
+    for combo in combinations_with_replacement(table_ids, extra_total):
+        bump = {tid: combo.count(tid) for tid in table_ids}
+        new_tables = [
+            Table(id=t.id, name=t.name, capacity=t.capacity + bump[t.id],
+                  shape=t.shape, position=t.position)
+            for t in event.tables
+        ]
+        new_rules = [r for r in event.rules if r.id not in drop_ids]
+        new_event = Event(
+            id=event.id, name=event.name, tables=new_tables,
+            guests=event.guests, groups=event.groups, rules=new_rules,
+        )
+        result = solve_event(new_event, mode=mode, time_limit_s=10.0, seed=0,
+                              num_search_workers=1, **kwargs)
+        if result.infeasibility_report is None:
+            return True
+    return False
+
+
+def test_the_shortfall_cure_is_checked_against_one_real_placement_of_it() -> None:
+    """Run 3's pre-merge review (evidence/reviews/bean-032-20261013T002611Z.md):
+    bounding each table's slack at the shortfall, without also bounding the SUM used
+    across tables, let a probe accept up to n times the shortfall in total across n
+    tables -- not one real placement of it. Two groups that each needed a DIFFERENT
+    table to grow were both judged seatable by capacity alone, though no single real
+    placement of the shortfall restores feasibility with both rules kept.
+    """
+    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner.solver import solve_event
+
+    # 6 guests, t1 holds 2, t2 holds 2, t3 holds 1 (shortfall 1). A needs 3 seats
+    # together, B needs 3 seats together -- in different, disjoint groups. No single
+    # extra seat placed anywhere lets both 3-seat groups each reach a 3-capacity table,
+    # so the shortfall alone cannot cure this and a rule must be named.
+    ev = Event(
+        id="e", name="e",
+        tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
+                Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
+                Table(id="t3", name="t3", capacity=1, shape="round", position=(0.0, 2.0))],
+        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        groups=[],
+        rules=[
+            Rule(id="A", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
+                 weight=None, guest_ids=("g0", "g1", "g2")),
+            Rule(id="B", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
+                 weight=None, guest_ids=("g3", "g4", "g5")),
+        ],
+    )
+    for mode, kwargs in (("planning", {}), ("low_disruption", {"current": {"g0": "t1"}, "movement_limit": 100})):
+        result = solve_event(ev, mode=mode, time_limit_s=10.0, seed=0, num_search_workers=1, **kwargs)
+        report = result.infeasibility_report
+        assert report is not None, f"{mode}: 6 guests at 5 seats is infeasible"
+        assert report.capacity_shortfall == 1, f"{mode}: expected a 1-seat shortfall"
+
+        # Sanity: the shortfall alone, by any real placement, truly cannot cure this.
+        assert not _any_placement_restores_feasibility(ev, set(), 1, mode, **kwargs), (
+            f"{mode}: sanity check failed -- some placement of 1 seat cured it with "
+            "both groups' rules kept, so the test fixture itself is wrong"
+        )
+        # So a rule must be named -- capacity alone is not a valid diagnosis here.
+        assert report.conflict_rule_ids, (
+            f"{mode}: a rule must be named; no real placement of the 1-seat shortfall "
+            f"seats both 3-guest groups, so capacity alone is not enough: "
+            f"{report.conflict_rule_ids}"
+        )
+        # And dropping exactly the named rules, plus some real placement of the
+        # shortfall, must actually restore feasibility (ac3).
+        assert _any_placement_restores_feasibility(
+            ev, set(report.conflict_rule_ids), report.capacity_shortfall, mode, **kwargs
+        ), (
+            f"{mode}: dropping the named rules {report.conflict_rule_ids} plus the "
+            "shortfall, by some real placement, must restore feasibility"
+        )
