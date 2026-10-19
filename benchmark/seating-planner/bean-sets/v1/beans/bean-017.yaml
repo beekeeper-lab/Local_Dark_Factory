@@ -29,6 +29,31 @@ context:
     same household is enough, and the preview should say that is what it did. Cancelling
     must leave the event untouched, which is easiest to guarantee by doing the whole
     preview without opening a write transaction at all.
+
+    Run 1 built a clean preview/apply split but picked up a real defect only apply-time
+    sequencing could expose: a no-id create row is assigned an auto-generated
+    "imported-N" id by scanning the existing guests at the moment that row is applied,
+    but nothing reserves that id against an id a LATER row in the same file carries
+    literally. A file where row 1 has no id (so it is assigned "imported-1") and a
+    later row happens to carry the literal id "imported-1" (matching no existing guest,
+    so the preview classifies it as an ordinary create, not a file-duplicate) passes
+    preview as entirely clean, then crashes apply with an uncaught ValueError from the
+    domain's own id-uniqueness check — the row ordering inside one file decides whether
+    a preview-clean import can even complete. The fix is to reserve every id, up front,
+    before generating any auto id: compute the full set of ids this apply will use —
+    every existing guest id, plus every literal id any row in the file carries — once,
+    before applying any row, and have auto-id generation skip anything in that set, not
+    just what currently happens to be in `event.guests`.
+
+    Ready-made fixture for ac6's own test: a two-row CSV, `name,status,id` header,
+    row 1 `Alice,confirmed,` (no id — would be auto-assigned "imported-1" under the
+    old, buggy sequencing), row 2 `Bob,confirmed,imported-1` (an explicit, literal id
+    that matches no existing guest). Against an empty event, preview_import reports
+    `would_create == 2`, `invalid == ()`, `missing == ()`, `duplicates == ()` — a
+    preview-clean file. The old code raises an uncaught ValueError from apply(); the
+    fix applies both rows without error, ending with two guests whose ids are distinct
+    (row 2 keeps its literal "imported-1"; row 1 is auto-assigned a different id, e.g.
+    "imported-2", since "imported-1" is now reserved before any auto-id is chosen).
 allowed_write_paths:
   - src/seating_planner/importer/**
   - tests/importer/**
@@ -48,9 +73,13 @@ acceptance_criteria:
   - id: ac5
     text: A file with some invalid rows imports the valid ones only when the organizer opts in, never silently.
     verify: { kind: test, test_id: "tests/importer/test_apply.py::test_partial_import_requires_opt_in" }
+  - id: ac6
+    text: A later row's explicit id never collides with an id the import auto-generated for an earlier no-id row — a preview-clean file always applies without error, regardless of row order.
+    verify: { kind: test, test_id: "tests/importer/test_apply.py::test_an_explicit_id_never_collides_with_an_earlier_auto_generated_one" }
 constraints:
   - duplicate detection uses a stated, testable rule
   - preview opens no write transaction
+  - auto-generated ids are reserved against every id the whole file will use, computed before any row is applied, not just the ids already present on the event at that moment
 suggested_risk_tier: 2
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 700 }
 definition_of_done:
