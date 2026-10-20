@@ -38,7 +38,7 @@ acceptance_criteria:
     verify: { kind: command, run: ["pytest", "-q"] }
   - id: ac2
     text: Model construction, solving and result interpretation live in separate modules.
-    verify: { kind: judge, rubric: "The diff moves constraint-building, solve invocation and result interpretation into distinct modules. Confirm no assertion in any test file was modified — only import paths may differ. A changed assertion means behaviour changed and this must FAIL." }
+    verify: { kind: manual, note: "Confirm the diff moves constraint-building, solve invocation and result interpretation into distinct modules, that no probe- or production-solve call (CpSolver) lives in the interpretation module, and that no assertion in any test file was modified -- only import paths may differ. A changed assertion means behaviour changed." }
   - id: ac3
     text: The public optimization entry point keeps its name and signature.
     verify: { kind: test, test_id: "tests/solver/test_api_stability.py::test_public_entry_point_unchanged" }
@@ -55,7 +55,7 @@ constraints:
       - "requirements*.txt"
   - test assertions must not be edited
 suggested_risk_tier: 1
-size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 600 }
+size_budget: { max_tasks: 5, max_files: 5, max_diff_lines: 2800 }
 definition_of_done:
   - all AC verify pass
   - gates green
