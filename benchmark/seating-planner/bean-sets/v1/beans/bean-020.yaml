@@ -34,6 +34,31 @@ context:
     organizer has no reason to doubt it. bean-008 already established unevaluable as a
     third state; this bean makes adjacent-seat rules use it, and makes an adjacent-seat
     rule that was *asked to matter* refuse to pass silently.
+
+    Run 1 reported the state correctly (rule_states[rule.id] = UNEVALUABLE, a code
+    distinct from VIOLATED and SATISFIED) but attached no explanation anywhere
+    reachable on the result. A bare state code still leaves the organizer exactly
+    where Guardrail #6 says not to leave them: looking at "r-next: unevaluable" with
+    no way to tell, from the result alone, that the reason is "seat positions are not
+    configured" rather than some other unexplained internal refusal. ac5's own text
+    says the result "distinguishes" the two cases, and a distinct code is a minimal
+    reading of that, but the background's "no reason to doubt it" is about being
+    legible to the organizer, not merely machine-distinguishable.
+
+    Ready-made fixture for ac6's own test: the one already in this file's own
+    test_unevaluable_reason_is_stated, reused as-is. Two one-seat tables, two
+    guests, two soft rules on the same pair — same_table weight 40, adjacent_seat
+    weight 20. Capacity alone (two one-seat tables, two guests) forces the pair
+    apart in the only feasible chart, so the same_table rule is genuinely
+    violated with nothing else needed to force it; the adjacent_seat rule is
+    unevaluable, no seat positions configured. The solve is feasible;
+    rule_states names the same_table rule VIOLATED and the adjacent_seat rule
+    UNEVALUABLE; the violation list names only the same_table rule. Somewhere
+    reachable from the result (its repr, its to_dict() output, or a field a caller
+    would plausibly read) must contain a human-readable mention of seats,
+    positions, configuration or layout — the actual reason — not only the state
+    code and not only the word "adjacent" (which already appears via the rule's own
+    type name and proves nothing about whether a reason was ever stated).
 allowed_write_paths:
   - src/seating_planner/solver/**
   - src/seating_planner/rules/**
@@ -55,9 +80,13 @@ acceptance_criteria:
   - id: ac5
     text: The result distinguishes unevaluable-because-unconfigured from violated.
     verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_unevaluable_reason_is_stated" }
+  - id: ac6
+    text: An unevaluable rule's reason is discoverable from the result in words, not only as a state code -- it says that seat positions are not configured, not merely that the rule is unevaluable.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_unevaluable_rule_states_why_in_words" }
 constraints:
   - no seat-level layout implementation in this bean
   - a hard rule that cannot be evaluated is never treated as satisfied
+  - the unevaluable reason is a real, human-readable explanation of what is missing (seat positions), not the word "adjacent" or the rule's own type name standing in for one
 suggested_risk_tier: 2
 size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 550 }
 definition_of_done:
