@@ -55,6 +55,32 @@ pending with a reserved seat (eligible), p pending, d declined, x cancelled.
 The structural checks ask only what ac2 says — three jobs, separate modules —
 and never a module or function name, because the bean fixes none. The pinned
 test ids are the gate's to run and are not restated here.
+
+2026-10-20 UPDATE, four cases marked "ac2 UPDATE" above. bean-032 and
+bean-033 — both landed on main after these answers were frozen (2026-09-28,
+commit 87450c2) but before bean-019 ran — legitimately rebuilt infeasibility
+diagnosis from a one-removal definition into a pooled multi-cause and
+keep-set search: every rule or lock independently provable as part of SOME
+minimal conflict is now named, not only one arbitrarily-chosen minimal fix,
+and a keep-set proof can name a rule-level contradiction (e.g. a same_table
+and a different_table rule directly disagreeing on one pair) even where no
+single- or small-combo removal alone restores the whole scenario's
+feasibility (a shortfall or a second, independent contradiction can still
+block it). The four marked cases' old frozen conflict_rule_ids were correct
+under the one-removal definition this suite's own comment above describes,
+but are no longer what today's correct, independently-verified diagnosis
+returns — not a bean-019 regression. Re-verified directly against the real
+solver before updating, by removal/release necessity-and-sufficiency
+probing of every rule and lock in each fixture (up to size-3 combinations,
+and movement-limit relaxation for the low_disruption cases): one case
+resolves to two independent pairwise rule contradictions; two cases resolve
+to a rule-pair plus a lock release, all three jointly necessary; one case's
+old two-rule answer is pruned to the one rule that is actually necessary
+and sufficient alone (the old answer over-named a rule that no single- or
+paired-removal, with or without releasing the lock, ever needed). See
+evidence/reviews/ for the related pre-merge review and
+benchmark/.../manifest.json's 2026-10-20 bean-019 amendment for the full
+account.
 """
 
 from __future__ import annotations
@@ -116,16 +142,16 @@ CASES: list[dict[str, Any]] = [
     {'mode': 'event_day', 'tables': (('t0', 2), ('t1', 1), ('t2', 1)), 'guests': (('g0', 'x'), ('g1', 'c'), ('g2', 'r'), ('g3', 'x')), 'rules': [('r0', 'diff', 'hard', None, ('g3', 'g2')), ('r1', 'same', 'hard', None, ('g2', 'g3', 'g1'))], 'locks': (), 'current': {'g1': 't0'}, 'expected': {'status': 'feasible', 'assignments': {'g1': 't0', 'g2': 't0'}, 'score': 0, 'violated_rule_ids': []}},
     {'mode': 'event_day', 'tables': (('t0', 3), ('t1', 1)), 'guests': (('g0', 'x'), ('g1', 'p'), ('g2', 'c'), ('g3', 'c')), 'rules': [('r0', 'same', 'soft', 61, ('g2', 'g1', 'g3')), ('r1', 'same', 'soft', 82, ('g1', 'g2')), ('r2', 'diff', 'hard', None, ('g1', 'g2')), ('r3', 'diff', 'hard', None, ('g0', 'g2')), ('r4', 'same', 'hard', None, ('g0', 'g3'))], 'locks': (), 'current': {'g3': 't0'}, 'expected': {'status': 'feasible', 'assignments': {'g2': 't0', 'g3': 't0'}, 'score': 61, 'violated_rule_ids': []}},
     {'mode': 'event_day', 'tables': (('t0', 2), ('t1', 3), ('t2', 3)), 'guests': (('g0', 'c'), ('g1', 'r'), ('g2', 'c'), ('g3', 'x')), 'rules': [('r0', 'same', 'soft', 96, ('g3', 'g0', 'g2')), ('r1', 'same', 'soft', 66, ('g3', 'g0'))], 'locks': (), 'current': {'g0': 't1', 'g1': 't1', 'g2': 't2'}, 'expected': {'status': 'feasible', 'assignments': {'g0': 't1', 'g1': 't1', 'g2': 't2'}, 'score': 0, 'violated_rule_ids': ['r0']}},
-    {'mode': 'planning', 'tables': (('t0', 3), ('t1', 2)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c'), ('g3', 'd')), 'rules': [('r0', 'same', 'hard', None, ('g3', 'g0', 'g1')), ('r1', 'same', 'hard', None, ('g2', 'g0')), ('r2', 'same', 'soft', 58, ('g1', 'g3')), ('r3', 'diff', 'hard', None, ('g1', 'g0')), ('r4', 'same', 'hard', None, ('g1', 'g3', 'g0'))], 'locks': (), 'seed': 77, 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r3']}},
+    {'mode': 'planning', 'tables': (('t0', 3), ('t1', 2)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c'), ('g3', 'd')), 'rules': [('r0', 'same', 'hard', None, ('g3', 'g0', 'g1')), ('r1', 'same', 'hard', None, ('g2', 'g0')), ('r2', 'same', 'soft', 58, ('g1', 'g3')), ('r3', 'diff', 'hard', None, ('g1', 'g0')), ('r4', 'same', 'hard', None, ('g1', 'g3', 'g0'))], 'locks': (), 'seed': 77, 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r0', 'r3', 'r4']}},  # ac2 UPDATE: see note below
     {'mode': 'planning', 'tables': (('t0', 1), ('t1', 2)), 'guests': (('g0', 'd'), ('g1', 'c'), ('g2', 'c'), ('g3', 'c'), ('g4', 'c'), ('g5', 'd')), 'rules': [('r0', 'diff', 'hard', None, ('g1', 'g5', 'g0')), ('r1', 'same', 'soft', 3, ('g2', 'g4')), ('r2', 'diff', 'hard', None, ('g5', 'g4')), ('r3', 'diff', 'hard', None, ('g1', 'g5')), ('r4', 'same', 'hard', None, ('g3', 'g5'))], 'locks': (('g4', 't0'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
     {'mode': 'planning', 'tables': (('t0', 1), ('t1', 1)), 'guests': (('g0', 'r'), ('g1', 'c'), ('g2', 'c'), ('g3', 'p'), ('g4', 'c')), 'rules': [('r0', 'same', 'soft', 89, ('g3', 'g2', 'g4')), ('r1', 'same', 'hard', None, ('g2', 'g3')), ('r2', 'diff', 'hard', None, ('g0', 'g4', 'g3'))], 'locks': (('g4', 't0'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
     {'mode': 'planning', 'tables': (('t0', 1), ('t1', 2)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c')), 'rules': [('r0', 'same', 'soft', 80, ('g2', 'g1', 'g0')), ('r1', 'diff', 'hard', None, ('g2', 'g1', 'g0')), ('r2', 'same', 'soft', 81, ('g2', 'g1', 'g0')), ('r3', 'diff', 'hard', None, ('g2', 'g1'))], 'locks': (('g2', 't0'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r1']}},
     {'mode': 'planning', 'tables': (('t0', 1), ('t1', 1), ('t2', 1)), 'guests': (('g0', 'x'), ('g1', 'd'), ('g2', 'c'), ('g3', 'd'), ('g4', 'c')), 'rules': [('r0', 'same', 'soft', 66, ('g2', 'g0')), ('r1', 'same', 'hard', None, ('g3', 'g4')), ('r2', 'same', 'soft', 47, ('g4', 'g0')), ('r3', 'same', 'soft', 89, ('g3', 'g1')), ('r4', 'same', 'hard', None, ('g4', 'g2'))], 'locks': (('g2', 't2'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r4']}},
-    {'mode': 'planning', 'tables': (('t0', 1), ('t1', 1)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c')), 'rules': [('r0', 'same', 'hard', None, ('g2', 'g1')), ('r1', 'same', 'soft', 9, ('g0', 'g1', 'g2')), ('r2', 'diff', 'hard', None, ('g1', 'g0', 'g2')), ('r3', 'same', 'hard', None, ('g1', 'g0', 'g2')), ('r4', 'diff', 'hard', None, ('g1', 'g2'))], 'locks': (('g2', 't0'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
+    {'mode': 'planning', 'tables': (('t0', 1), ('t1', 1)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c')), 'rules': [('r0', 'same', 'hard', None, ('g2', 'g1')), ('r1', 'same', 'soft', 9, ('g0', 'g1', 'g2')), ('r2', 'diff', 'hard', None, ('g1', 'g0', 'g2')), ('r3', 'same', 'hard', None, ('g1', 'g0', 'g2')), ('r4', 'diff', 'hard', None, ('g1', 'g2'))], 'locks': (('g2', 't0'),), 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r0', 'r2', 'r3', 'r4']}},  # ac2 UPDATE: see note below
     {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 1)), 'guests': (('g0', 'c'), ('g1', 'r'), ('g2', 'c'), ('g3', 'r'), ('g4', 'x'), ('g5', 'c')), 'rules': [('r0', 'same', 'soft', 4, ('g5', 'g3'))], 'locks': (('g3', 't1'),), 'current': {'g0': 't1', 'g1': 't0', 'g3': 't0', 'g5': 't0'}, 'movement_limit': 0, 'seed': 91, 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
-    {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 2)), 'guests': (('g0', 'p'), ('g1', 'c'), ('g2', 'd'), ('g3', 'c'), ('g4', 'c')), 'rules': [('r0', 'diff', 'hard', None, ('g4', 'g0', 'g1')), ('r1', 'same', 'soft', 92, ('g0', 'g3')), ('r2', 'same', 'hard', None, ('g0', 'g3')), ('r3', 'same', 'soft', 11, ('g2', 'g0')), ('r4', 'diff', 'hard', None, ('g3', 'g4'))], 'locks': (('g4', 't1'),), 'current': {'g3': 't1', 'g4': 't0'}, 'movement_limit': 1, 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r0', 'r4']}},
+    {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 2)), 'guests': (('g0', 'p'), ('g1', 'c'), ('g2', 'd'), ('g3', 'c'), ('g4', 'c')), 'rules': [('r0', 'diff', 'hard', None, ('g4', 'g0', 'g1')), ('r1', 'same', 'soft', 92, ('g0', 'g3')), ('r2', 'same', 'hard', None, ('g0', 'g3')), ('r3', 'same', 'soft', 11, ('g2', 'g0')), ('r4', 'diff', 'hard', None, ('g3', 'g4'))], 'locks': (('g4', 't1'),), 'current': {'g3': 't1', 'g4': 't0'}, 'movement_limit': 1, 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r4']}},  # ac2 UPDATE: see note below
     {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 1), ('t2', 3)), 'guests': (('g0', 'c'), ('g1', 'd'), ('g2', 'c'), ('g3', 'p'), ('g4', 'x'), ('g5', 'c')), 'rules': [('r0', 'same', 'soft', 50, ('g0', 'g4', 'g3')), ('r1', 'same', 'soft', 20, ('g4', 'g5')), ('r2', 'same', 'soft', 94, ('g3', 'g2'))], 'locks': (('g2', 't0'),), 'current': {'g0': 't1', 'g2': 't1', 'g5': 't2'}, 'movement_limit': 0, 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
-    {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 3)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'x'), ('g3', 'c'), ('g4', 'x'), ('g5', 'r')), 'rules': [('r0', 'same', 'hard', None, ('g1', 'g0', 'g5')), ('r1', 'same', 'hard', None, ('g5', 'g4')), ('r2', 'same', 'hard', None, ('g2', 'g1')), ('r3', 'same', 'hard', None, ('g1', 'g3')), ('r4', 'diff', 'hard', None, ('g5', 'g1', 'g3'))], 'locks': (('g1', 't0'),), 'current': {'g5': 't0'}, 'movement_limit': 0, 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
+    {'mode': 'low_disruption', 'tables': (('t0', 1), ('t1', 3)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'x'), ('g3', 'c'), ('g4', 'x'), ('g5', 'r')), 'rules': [('r0', 'same', 'hard', None, ('g1', 'g0', 'g5')), ('r1', 'same', 'hard', None, ('g5', 'g4')), ('r2', 'same', 'hard', None, ('g2', 'g1')), ('r3', 'same', 'hard', None, ('g1', 'g3')), ('r4', 'diff', 'hard', None, ('g5', 'g1', 'g3'))], 'locks': (('g1', 't0'),), 'current': {'g5': 't0'}, 'movement_limit': 0, 'expected': {'status': 'infeasible', 'conflict_rule_ids': ['r0', 'r4']}},  # ac2 UPDATE: see note below
     {'mode': 'low_disruption', 'tables': (('t0', 2), ('t1', 2)), 'guests': (('g0', 'c'), ('g1', 'c'), ('g2', 'c'), ('g3', 'd')), 'rules': [('r0', 'same', 'soft', 46, ('g0', 'g2')), ('r1', 'same', 'hard', None, ('g1', 'g0')), ('r2', 'same', 'soft', 41, ('g0', 'g1')), ('r3', 'same', 'soft', 61, ('g1', 'g3'))], 'locks': (), 'current': {'g1': 't1', 'g2': 't1'}, 'movement_limit': 0, 'expected': {'status': 'infeasible', 'conflict_rule_ids': []}},
 ]
 # fmt: on
