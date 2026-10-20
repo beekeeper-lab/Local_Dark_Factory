@@ -88,7 +88,7 @@ constraints:
   - a hard rule that cannot be evaluated is never treated as satisfied
   - the unevaluable reason is a real, human-readable explanation of what is missing (seat positions), not the word "adjacent" or the rule's own type name standing in for one
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 550 }
+size_budget: { max_tasks: 6, max_files: 7, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green
