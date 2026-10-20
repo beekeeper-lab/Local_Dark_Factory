@@ -86,7 +86,7 @@ constraints:
   - the solve_event and save_event signatures and the result shape are unchanged
   - a valid event solves and saves exactly as before
 suggested_risk_tier: 2
-size_budget: { max_tasks: 5, max_files: 8, max_diff_lines: 600 }
+size_budget: { max_tasks: 5, max_files: 8, max_diff_lines: 1100 }
 definition_of_done:
   - all AC verify pass
   - gates green
