@@ -1,0 +1,1 @@
+{"run_id": "bean-001-20261027T192159Z", "repo": "beekeeper-lab/seating-planner-py-v2", "verdict": "merge", "defect_class": null, "defect": null, "ci_bypassed": "GHCR package-visibility propagation; local gate independently verified against the pinned image", "source": "evidence/rebuild-v2/reviews/bean-001-20261027T225626Z.md"}
