@@ -408,13 +408,13 @@ jq -n \
   test_command: ["pytest", "-q"],
   verify_timeout_s: 900,
   # Raised from 7200 on 2026-10-28, during the seating-planner-py-v2 rebuild:
-  # bean-008's spec step exhausted the full 7200s twice (once compacting
-  # first, once not — the num_ctx fix above removed the compaction but not
+  # the bean-008 spec step exhausted the full 7200s twice (once compacting
+  # first, once not -- the num_ctx fix above removed the compaction but not
   # the wall-clock ceiling) without ever writing spec.md/tasks.yaml. The
   # transcript shows genuine, non-looping deliberation (a verbose per-task
-  # risk/blast-radius review) the whole way through, not a stuck process —
-  # "whether the task is too big for one attempt" (this file's own worker-
-  # sandbox.sh wording) was the real question, and for this draw it was.
+  # risk/blast-radius review) the whole way through, not a stuck process --
+  # "whether the task is too big for one attempt" (worker-sandbox.sh own
+  # wording) was the real question, and for this draw it was.
   worker_timeout_s: 14400,
   sandbox_env: {
     PYTHONPATH: "/work/src"
