@@ -4,8 +4,9 @@
   "suite_sha256": "b17cd082bcd4ee3119a0ff2e7bb9ab0be9d603d8b44f8cc7f9b20fa661c11795",
   "tests": 11,
   "outcome": "ok",
-  "checked_against": "bean/bean-001-project-scaffold-with-linting-typing-and",
-  "tree_sha": "ca950efaec565e821fe1bf6ad294f7fac86c14de",
+  "checked_against": "/home/gregg/workspace/seating-planner-py-v2",
+  "tree_sha": null,
   "both_directions": true,
-  "verified_at": "2026-09-18T01:08:28Z"
+  "verified_at": "2026-10-27T22:55:18Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914"
 }

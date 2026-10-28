@@ -4,8 +4,9 @@
   "suite_sha256": "fd3873ad6f378b9fcab750e3c870d8c6cef1002a8761830c5c0bcc5e1a95c6c6",
   "tests": 10,
   "outcome": "ok",
-  "checked_against": "bean/bean-003-structured-seating-rules-with-hardness-w",
-  "tree_sha": "59df9458acd11e0f1968b31951f48b51c2451717",
+  "checked_against": "/home/gregg/workspace/seating-planner-py-v2",
+  "tree_sha": null,
   "both_directions": true,
-  "verified_at": "2026-09-21T23:56:34Z"
+  "verified_at": "2026-10-28T02:46:54Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914"
 }

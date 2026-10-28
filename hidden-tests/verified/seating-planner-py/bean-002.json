@@ -4,8 +4,9 @@
   "suite_sha256": "c085695508bb78ad2bbb224ea7f64168247706884a3562b968b75557d991edce",
   "tests": 9,
   "outcome": "ok",
-  "checked_against": "bean/bean-002-core-domain-models-for-events-tables-gue",
-  "tree_sha": "736f234acbb050756a5d9599c02e4e398454b7aa",
+  "checked_against": "/home/gregg/workspace/seating-planner-py-v2",
+  "tree_sha": null,
   "both_directions": true,
-  "verified_at": "2026-09-18T01:08:43Z"
+  "verified_at": "2026-10-28T00:40:37Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914"
 }

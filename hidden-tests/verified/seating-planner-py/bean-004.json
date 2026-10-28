@@ -1,11 +1,12 @@
 {
   "schema": "hidden-verify/1.0.0",
   "suite": "seating-planner-py/bean-004",
-  "suite_sha256": "39681ff89f36132b6491b658d74677bfdbf92e4c969cc33a3aa47693eec50d44",
-  "tests": 6,
-  "outcome": "half_checked",
-  "checked_against": null,
+  "suite_sha256": "7ffd0bbee07921f064f8a568ab6f57391eeab7254160728061c557afc53ba195",
+  "tests": 7,
+  "outcome": "ok",
+  "checked_against": "/home/gregg/workspace/seating-planner-py-v2",
   "tree_sha": null,
-  "both_directions": false,
-  "verified_at": "2026-09-18T02:47:16Z"
+  "both_directions": true,
+  "verified_at": "2026-10-28T04:45:04Z",
+  "ran_in": "ghcr.io/beekeeper-lab/factory-gate-python:20260914"
 }
