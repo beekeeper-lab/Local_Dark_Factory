@@ -33,6 +33,8 @@ hard-rule exception ranks against a numeric one.
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 import os
 import sys
 from collections.abc import Iterator, Mapping
@@ -50,20 +52,45 @@ if _SRC not in sys.path:
 NEW = "g-new"
 
 
+def _first_field(cls: type, candidates: tuple[str, ...]) -> str:
+    """The first of ``candidates`` that is an actual field of ``cls``."""
+    names = {f.name for f in dataclasses.fields(cls)}
+    for candidate in candidates:
+        if candidate in names:
+            return candidate
+    raise AssertionError(f"none of {candidates} is a field of {cls.__name__} (has {sorted(names)})")
+
+
+def _first_attr(module: Any, candidates: tuple[str, ...]) -> Any:
+    """The first attribute of ``module`` named one of ``candidates``."""
+    for candidate in candidates:
+        found = getattr(module, candidate, None)
+        if found is not None:
+            return found
+    raise AssertionError(f"none of {candidates} is an attribute of {module.__name__}")
+
+
 def _event(caps: dict[str, int], guests: list[str], rules: list[tuple[str, str, str, int | None, tuple[str, ...]]],
            locks: dict[str, str] | None = None) -> Any:
+    from seating_planner import rules as rules_mod
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner.rules import Hardness, Rule
 
-    kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE}
+    # Names differ between builds: RuleType/RuleKind, status/rsvp_status,
+    # rule_type/kind, guest_ids/guests. Take whichever this build has.
+    kind_enum = _first_attr(rules_mod, ("RuleType", "RuleKind"))
+    status_field = _first_field(Guest, ("status", "rsvp_status"))
+    rule_kind_field = _first_field(Rule, ("rule_type", "kind", "type"))
+    rule_guests_field = _first_field(Rule, ("guest_ids", "guests"))
+    kinds = {"same": kind_enum.SAME_TABLE, "diff": kind_enum.DIFFERENT_TABLE}
     hard = {"hard": Hardness.HARD, "soft": Hardness.SOFT}
     ev = Event(
         id="e", name="E",
         tables=[Table(id=t, name=t, capacity=c, shape="round", position=(0.0, float(i)))
                 for i, (t, c) in enumerate(caps.items())],
-        guests=[Guest(id=g, name=g, status=RsvpStatus.CONFIRMED) for g in guests],
+        guests=[Guest(id=g, name=g, **{status_field: RsvpStatus.CONFIRMED}) for g in guests],
         groups=[],
-        rules=[Rule(id=rid, rule_type=kinds[k], hardness=hard[h], weight=w, guest_ids=gids)
+        rules=[Rule(id=rid, hardness=hard[h], weight=w, **{rule_kind_field: kinds[k], rule_guests_field: gids})
                for rid, k, h, w, gids in rules],
     )
     for g, t in (locks or {}).items():
@@ -102,9 +129,13 @@ def _build(shape: str) -> tuple[Any, dict[str, str]]:
 
 
 def _solve(ev: Any, current: Mapping[str, str]) -> Any:
-    from seating_planner.solver import solve_event
+    from seating_planner import solver as solver_mod
 
-    return solve_event(ev, mode="event_day", current=current)
+    # The entry point and the baseline argument are named differently by build.
+    solve_fn = _first_attr(solver_mod, ("solve_event", "solve_hard"))
+    params = inspect.signature(solve_fn).parameters
+    baseline = "current" if "current" in params else "current_assignments"
+    return solve_fn(ev, mode="event_day", **{baseline: current})
 
 
 def _snapshot(ev: Any) -> tuple[Any, ...]:
@@ -114,10 +145,11 @@ def _snapshot(ev: Any) -> tuple[Any, ...]:
 
     return (
         [(t.id, t.name, t.capacity, t.shape, tuple(t.position)) for t in ev.tables],
-        [(g.id, g.name, str(g.status)) for g in ev.guests],
+        [(g.id, g.name, str(getattr(g, "status", None) or getattr(g, "rsvp_status", None))) for g in ev.guests],
         [repr(g) for g in ev.groups],
         [rule(r) for r in ev.rules],
-        sorted(dict(ev.locks).items()),
+        sorted(dict(ev.locks).items()) if hasattr(ev, "locks")
+        else sorted((g.id, g.locked_to_table) for g in ev.guests),
     )
 
 
