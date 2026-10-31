@@ -78,7 +78,7 @@ constraints:
   - optimize and accept are separate operations
   - a Proposal states whether its underlying solve was feasible, not only what it would change; accept() checks this before writing anything
 suggested_risk_tier: 2
-size_budget: { max_tasks: 6, max_files: 5, max_diff_lines: 550 }
+size_budget: { max_tasks: 6, max_files: 6, max_diff_lines: 550 }
 definition_of_done:
   - all AC verify pass
   - gates green

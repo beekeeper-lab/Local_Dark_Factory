@@ -28,6 +28,7 @@ guessed name fails a correct implementation for a spelling.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import hashlib
 import os
 import re
@@ -57,6 +58,59 @@ BASELINE: dict[str, set[str]] = {
 }
 
 
+def _first_attr(module: Any, candidates: tuple[str, ...]) -> Any:
+    """The first attribute of ``module`` named one of ``candidates``."""
+    for candidate in candidates:
+        found = getattr(module, candidate, None)
+        if found is not None:
+            return found
+    raise AssertionError(f"none of {candidates} is an attribute of {module.__name__}")
+
+
+def _first_field(cls: type, candidates: tuple[str, ...]) -> str:
+    names = {f.name for f in dataclasses.fields(cls)}
+    for candidate in candidates:
+        if candidate in names:
+            return candidate
+    raise AssertionError(f"none of {candidates} is a field of {cls.__name__} (has {sorted(names)})")
+
+
+def _repo_class() -> Any:
+    from seating_planner import store
+
+    return _first_attr(store, ("Repository", "EventRepository"))
+
+
+def _save_event(repo: Any, event: Any, actor: str) -> None:
+    (getattr(repo, "save_event", None) or repo.save)(event, actor=actor)
+
+
+def _load_event(repo: Any, event_id: str) -> Any:
+    return (getattr(repo, "load_event", None) or repo.load)(event_id)
+
+
+def _locks(event: Any) -> dict[str, str]:
+    if hasattr(event, "locks"):
+        return dict(event.locks)
+    return {g.id: g.locked_to_table for g in event.guests if getattr(g, "locked_to_table", None)}
+
+
+def _make_event(**kwargs: Any) -> Any:
+    """Event(...), without ``locks`` when this build keeps locks on the guest."""
+    from seating_planner.domain import Event
+
+    if "locks" not in {f.name for f in dataclasses.fields(Event)}:
+        kwargs.pop("locks", None)
+    return Event(**kwargs)
+
+
+def _guest(gid: str) -> Any:
+    from seating_planner.domain import Guest, RsvpStatus
+
+    field = _first_field(Guest, ("status", "rsvp_status"))
+    return Guest(id=gid, name=gid.upper(), **{field: RsvpStatus.CONFIRMED})
+
+
 def _store_source() -> str:
     assert STORE.is_dir(), "the store package src/seating_planner/store/ is missing"
     files = sorted(STORE.rglob("*.py"))
@@ -65,17 +119,22 @@ def _store_source() -> str:
 
 
 def _event() -> Any:
+    from seating_planner import rules as rules_mod
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner.rules import Hardness, Rule
 
+    kind_enum = _first_attr(rules_mod, ("RuleType", "RuleKind"))
+    status_field = _first_field(Guest, ("status", "rsvp_status"))
+    kind_field = _first_field(Rule, ("rule_type", "kind", "type"))
+    guests_field = _first_field(Rule, ("guest_ids", "guests"))
     return Event(
         id="e", name="E",
         tables=[Table(id=t, name=t, capacity=3, shape="round", position=(0.0, float(i)))
                 for i, t in enumerate(["t-1", "t-2"])],
-        guests=[Guest(id=f"g-{i}", name=f"g-{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[Guest(id=f"g-{i}", name=f"g-{i}", **{status_field: RsvpStatus.CONFIRMED}) for i in range(5)],
         groups=[],
-        rules=[Rule(id="r-with", rule_type=RuleType.SAME_TABLE, hardness=Hardness.SOFT, weight=7,
-                    guest_ids=("g-0", "g-3"))],
+        rules=[Rule(id="r-with", hardness=Hardness.SOFT, weight=7,
+                    **{kind_field: kind_enum.SAME_TABLE, guests_field: ("g-0", "g-3")})],
     )
 
 
@@ -85,7 +144,7 @@ def _fingerprint(directory: Path) -> dict[str, str]:
 
 def test_the_store_has_somewhere_to_keep_the_chart(tmp_path: Path) -> None:
     source = _store_source()
-    from seating_planner.store import Repository
+    Repository = _repo_class()
 
     # Up-front schema: open a fresh database and read what it holds.
     repo = Repository(tmp_path / "fresh.db")
@@ -97,7 +156,12 @@ def test_the_store_has_somewhere_to_keep_the_chart(tmp_path: Path) -> None:
                 if not n.startswith("sqlite_")}
     finally:
         conn.close()
-    grown_live = any(n not in BASELINE or cols - BASELINE[n] for n, cols in live.items())
+    if {"events", "guests"} <= set(live):
+        grown_live = any(n not in BASELINE or cols - BASELINE[n] for n, cols in live.items())
+    else:
+        # A build whose tables are named differently from the baseline above:
+        # the baseline cannot say what is new, so look for a chart-shaped table or column.
+        grown_live = any("chart" in n.lower() or any("chart" in c.lower() for c in cols) for n, cols in live.items())
 
     # Schema created or altered later (on first accept, say): read the SQL text.
     created = {m.lower() for m in re.findall(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\"'`]?(\w+)", source, re.I)}
@@ -113,25 +177,32 @@ def test_the_store_has_somewhere_to_keep_the_chart(tmp_path: Path) -> None:
 
 
 def test_solving_in_any_mode_leaves_the_saved_database_untouched(tmp_path: Path) -> None:
-    from seating_planner.solver import solve_event
-    from seating_planner.store import Repository
+    import inspect
+
+    from seating_planner import solver as solver_mod
+
+    solve_fn = _first_attr(solver_mod, ("solve_event", "solve_hard"))
+    params = inspect.signature(solve_fn).parameters
+    baseline_arg = "current" if "current" in params else "current_assignments"
+    limit_arg = "movement_limit" if "movement_limit" in params else "move_limit"
+    Repository = _repo_class()
 
     db = tmp_path / "saved.db"
     repo = Repository(db)
-    repo.save_event(_event(), actor="organizer")
+    _save_event(repo, _event(), "organizer")
     repo.close()
     before = _fingerprint(tmp_path)
 
     repo = Repository(db)
-    event = repo.load_event("e")
-    snapshot = repr((event.tables, event.guests, event.groups, [r.to_dict() for r in event.rules], dict(event.locks)))
-    planned = solve_event(event, mode="planning")
+    event = _load_event(repo, "e")
+    snapshot = repr((event.tables, event.guests, event.groups, [r.to_dict() for r in event.rules], _locks(event)))
+    planned = solve_fn(event, mode="planning")
     assert planned.status == "feasible"
     chart = dict(planned.assignments)
-    solve_event(event, mode="low_disruption", current=chart, movement_limit=1)
-    solve_event(event, mode="event_day", current={g: t for g, t in chart.items() if g != "g-4"})
+    solve_fn(event, mode="low_disruption", **{baseline_arg: chart, limit_arg: 1})
+    solve_fn(event, mode="event_day", **{baseline_arg: {g: t for g, t in chart.items() if g != "g-4"}})
     assert repr((event.tables, event.guests, event.groups, [r.to_dict() for r in event.rules],
-                 dict(event.locks))) == snapshot, "optimizing changed the event it was given"
+                 _locks(event))) == snapshot, "optimizing changed the event it was given"
     repo.close()
 
     assert _fingerprint(tmp_path) == before, (

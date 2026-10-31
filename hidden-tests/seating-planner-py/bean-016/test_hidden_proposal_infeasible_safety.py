@@ -27,6 +27,8 @@ every accept to pass this test)."""
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 import os
 import sys
 from pathlib import Path
@@ -41,16 +43,96 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 
-def _infeasible_event() -> Any:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+def _first_attr(module: Any, candidates: tuple[str, ...]) -> Any:
+    """The first attribute of ``module`` named one of ``candidates``."""
+    for candidate in candidates:
+        found = getattr(module, candidate, None)
+        if found is not None:
+            return found
+    raise AssertionError(f"none of {candidates} is an attribute of {module.__name__}")
 
-    return Event(
+
+def _first_field(cls: type, candidates: tuple[str, ...]) -> str:
+    names = {f.name for f in dataclasses.fields(cls)}
+    for candidate in candidates:
+        if candidate in names:
+            return candidate
+    raise AssertionError(f"none of {candidates} is a field of {cls.__name__} (has {sorted(names)})")
+
+
+def _repo_class() -> Any:
+    from seating_planner import store
+
+    return _first_attr(store, ("Repository", "EventRepository"))
+
+
+def _save_event(repo: Any, event: Any, actor: str) -> None:
+    (getattr(repo, "save_event", None) or repo.save)(event, actor=actor)
+
+
+def _load_event(repo: Any, event_id: str) -> Any:
+    return (getattr(repo, "load_event", None) or repo.load)(event_id)
+
+
+def _locks(event: Any) -> dict[str, str]:
+    if hasattr(event, "locks"):
+        return dict(event.locks)
+    return {g.id: g.locked_to_table for g in event.guests if getattr(g, "locked_to_table", None)}
+
+
+def _make_event(**kwargs: Any) -> Any:
+    """Event(...), without ``locks`` when this build keeps locks on the guest."""
+    from seating_planner.domain import Event
+
+    if "locks" not in {f.name for f in dataclasses.fields(Event)}:
+        kwargs.pop("locks", None)
+    return Event(**kwargs)
+
+
+def _guest(gid: str) -> Any:
+    from seating_planner.domain import Guest, RsvpStatus
+
+    field = _first_field(Guest, ("status", "rsvp_status"))
+    return Guest(id=gid, name=gid.upper(), **{field: RsvpStatus.CONFIRMED})
+
+
+def _accept_and_optimize() -> tuple[Any, Any]:
+    """(accept, optimize) as functions of (repo, proposal, actor) and the original call shape."""
+    try:
+        from seating_planner.solver.proposal import accept, optimize as opt
+    except ImportError:
+        from seating_planner.solver import proposals as pm
+
+        def accept(repo: Any, proposal: Any, actor: str) -> None:
+            repo.accept(proposal, actor)
+
+        opt = pm.optimize
+
+    def optimize(event: Any, saved: Any, mode: str, time_limit_s: float, seed: int) -> Any:
+        params = inspect.signature(opt).parameters
+        kwargs: dict[str, Any] = {"mode": mode}
+        kwargs["saved" if "saved" in params else "saved_chart"] = saved
+        if "time_limit_s" in params:
+            kwargs.update(time_limit_s=time_limit_s, seed=seed)
+        elif "config" in params:
+            from seating_planner.solver import SolverConfig
+
+            kwargs["config"] = SolverConfig(time_limit_s=time_limit_s, seed=seed)
+        return opt(event, **kwargs)
+
+    return accept, optimize
+
+
+def _infeasible_event() -> Any:
+    from seating_planner.domain import Table
+
+    return _make_event(
         id="e1",
         name="Test Event",
         tables=[Table(id="t1", name="T1", capacity=1, shape="round", position=(0.0, 0.0))],
         guests=[
-            Guest(id="g1", name="G1", status=RsvpStatus.CONFIRMED),
-            Guest(id="g2", name="G2", status=RsvpStatus.CONFIRMED),
+            _guest("g1"),
+            _guest("g2"),
         ],
         groups=[],
         rules=[],
@@ -59,15 +141,15 @@ def _infeasible_event() -> Any:
 
 
 def _feasible_event() -> Any:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+    from seating_planner.domain import Table
 
-    return Event(
+    return _make_event(
         id="e2",
         name="Test Event 2",
         tables=[Table(id="t1", name="T1", capacity=2, shape="round", position=(0.0, 0.0))],
         guests=[
-            Guest(id="g1", name="G1", status=RsvpStatus.CONFIRMED),
-            Guest(id="g2", name="G2", status=RsvpStatus.CONFIRMED),
+            _guest("g1"),
+            _guest("g2"),
         ],
         groups=[],
         rules=[],
@@ -76,12 +158,12 @@ def _feasible_event() -> Any:
 
 
 def test_accepting_an_infeasible_proposal_never_wipes_the_saved_chart(tmp_path: Path) -> None:
-    from seating_planner.solver.proposal import accept, optimize
-    from seating_planner.store import Repository
+    accept, optimize = _accept_and_optimize()
+    Repository = _repo_class()
 
     repo = Repository(tmp_path / "db.sqlite3")
     event = _infeasible_event()
-    repo.save_event(event, actor="setup")
+    _save_event(repo, event, "setup")
 
     saved_chart = {"g1": "t1", "g2": "t1"}
     repo.save_chart(event.id, saved_chart, actor="setup")
@@ -102,12 +184,12 @@ def test_accepting_an_infeasible_proposal_never_wipes_the_saved_chart(tmp_path: 
 
 
 def test_accepting_a_genuinely_feasible_no_change_proposal_still_works(tmp_path: Path) -> None:
-    from seating_planner.solver.proposal import accept, optimize
-    from seating_planner.store import Repository
+    accept, optimize = _accept_and_optimize()
+    Repository = _repo_class()
 
     repo = Repository(tmp_path / "db.sqlite3")
     event = _feasible_event()
-    repo.save_event(event, actor="setup")
+    _save_event(repo, event, "setup")
 
     saved_chart = {"g1": "t1", "g2": "t1"}
     repo.save_chart(event.id, saved_chart, actor="setup")
