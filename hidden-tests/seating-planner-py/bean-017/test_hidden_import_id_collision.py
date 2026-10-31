@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import dataclasses
 import io
 import os
 import pkgutil
@@ -56,20 +57,42 @@ _CSV_NOID_FIRST = "name,status,id\nAlice,confirmed,\nBob,confirmed,imported-1\n"
 _CSV_LITERAL_FIRST = "name,status,id\nBob,confirmed,imported-1\nAlice,confirmed,\n"
 
 
+def _repo_class() -> Any:
+    """The store class: Repository in the original build, EventRepository since."""
+    from seating_planner import store
+
+    for name in ("Repository", "EventRepository"):
+        found = getattr(store, name, None)
+        if found is not None:
+            return found
+    raise ImportError("seating_planner.store has neither Repository nor EventRepository")
+
+
+def _save_event(repo: Any, event: Any, actor: str) -> None:
+    (getattr(repo, "save_event", None) or repo.save)(event, actor=actor)
+
+
+def _audit_len(repo: Any) -> int:
+    return len((getattr(repo, "audit_log", None) or repo.audit_entries)())
+
+
 def _fresh_event() -> Any:
     from seating_planner.domain import Event
 
-    return Event(id="ev-017", name="Import", tables=[], guests=[], groups=[], rules=[], locks={})
+    kwargs: dict[str, Any] = dict(id="ev-017", name="Import", tables=[], guests=[], groups=[], rules=[])
+    if "locks" in {f.name for f in dataclasses.fields(Event)}:
+        kwargs["locks"] = {}
+    return Event(**kwargs)
 
 
 def _fresh_repo(tmp_path: Path, tag: str, event: Any) -> Any | None:
     try:
-        from seating_planner.store import Repository
+        Repository = _repo_class()
     except ImportError:
         return None
     try:
         repo = Repository(tmp_path / f"db-{tag}.sqlite3")
-        repo.save_event(event, actor="hidden-test")
+        _save_event(repo, event, "hidden-test")
         return repo
     except Exception:  # noqa: BLE001 - repo construction failing just means "no repo path"
         return None

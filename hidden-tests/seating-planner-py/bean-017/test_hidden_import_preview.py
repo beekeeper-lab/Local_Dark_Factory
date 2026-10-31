@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import dataclasses
 import hashlib
 import importlib
 import inspect
@@ -156,15 +157,37 @@ _CSV = (
 )
 
 
+def _repo_class() -> Any:
+    """The store class: Repository in the original build, EventRepository since."""
+    from seating_planner import store
+
+    for name in ("Repository", "EventRepository"):
+        found = getattr(store, name, None)
+        if found is not None:
+            return found
+    raise ImportError("seating_planner.store has neither Repository nor EventRepository")
+
+
+def _save_event(repo: Any, event: Any, actor: str) -> None:
+    (getattr(repo, "save_event", None) or repo.save)(event, actor=actor)
+
+
+def _audit_len(repo: Any) -> int:
+    return len((getattr(repo, "audit_log", None) or repo.audit_entries)())
+
+
 def _event() -> Any:
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
 
+    names = {f.name for f in dataclasses.fields(Guest)}
+    status_field = "status" if "status" in names else "rsvp_status"
+    household_field = "household_id" if "household_id" in names else "household"
     return Event(
         id="ev-017", name="Import",
         tables=[Table(id="t-1", name="One", capacity=4, shape="round", position=(0.0, 0.0))],
         guests=[
-            Guest(id="g-ada", name="Ada Quill", status=RsvpStatus.CONFIRMED, household_id="h-1"),
-            Guest(id="g-bo", name="Bo Brandt", status=RsvpStatus.PENDING, household_id="h-2"),
+            Guest(id="g-ada", name="Ada Quill", **{status_field: RsvpStatus.CONFIRMED, household_field: "h-1"}),
+            Guest(id="g-bo", name="Bo Brandt", **{status_field: RsvpStatus.PENDING, household_field: "h-2"}),
         ],
     )
 
@@ -238,7 +261,7 @@ def _digest(path: Path) -> str:
 
 
 def test_a_preview_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from seating_planner.store import Repository
+    Repository = _repo_class()
 
     _files()
     candidates = _previewers()
@@ -251,12 +274,12 @@ def test_a_preview_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     for label, owner, fn in candidates:
         repo = Repository(db)
         event = _event()
-        repo.save_event(_event(), actor="setup")
+        _save_event(repo, _event(), "setup")
         repo.close()
         before_db = _digest(db)
         before_files = sorted(p.name for p in tmp_path.iterdir())
         repo = Repository(db)
-        audit_before = len(repo.audit_log())
+        audit_before = _audit_len(repo)
         snapshot = copy.deepcopy(event)
         ctx = {"event": event, "repo": repo, "csv_path": csv_path}
 
@@ -280,7 +303,7 @@ def test_a_preview_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
                 continue
             ran = True
             break
-        audit_after = len(repo.audit_log())
+        audit_after = _audit_len(repo)
         repo.close()
         if not ran:
             continue
