@@ -134,7 +134,17 @@ def test_including_private_fields_warns_and_is_audited() -> None:
 
 def _event() -> tuple[Any, dict[str, str], list[str]]:
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner import rules as _rules
+    from seating_planner.rules import Hardness, Rule
+
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind
+
+    def _f(cls: type, *names: str) -> str:
+        have = {f.name for f in dataclasses.fields(cls)}
+        return next(n for n in names if n in have)
+
+    st, hh = _f(Guest, "status", "rsvp_status"), _f(Guest, "household_id", "household")
+    rk, rg = _f(Rule, "rule_type", "kind"), _f(Rule, "guest_ids", "guests")
 
     @dataclass
     class NosyGuest(Guest):
@@ -146,21 +156,18 @@ def _event() -> tuple[Any, dict[str, str], list[str]]:
 
     note = f'not speaking, "since the wedding"\n{NOTE_TOKEN}, keep apart'
     guests = [
-        NosyGuest(id="g-1", name="Ada Quill", status=RsvpStatus.CONFIRMED,
-                  household_id="h-1", whispered_aside=note),
-        NosyGuest(id="g-2", name="Bo Brandt", status=RsvpStatus.CONFIRMED,
-                  household_id="h-2", whispered_aside=note),
-        NosyGuest(id="g-3", name="Cy Dorn", status=RsvpStatus.CONFIRMED,
-                  whispered_aside=note),
+        NosyGuest(id="g-1", name="Ada Quill", whispered_aside=note, **{st: RsvpStatus.CONFIRMED, hh: "h-1"}),
+        NosyGuest(id="g-2", name="Bo Brandt", whispered_aside=note, **{st: RsvpStatus.CONFIRMED, hh: "h-2"}),
+        NosyGuest(id="g-3", name="Cy Dorn", whispered_aside=note, **{st: RsvpStatus.CONFIRMED}),
     ]
     tables = [
         Table(id="t-1", name="Oak", capacity=4, shape="round", position=(0.0, 0.0)),
         Table(id="t-2", name="Elm", capacity=4, shape="round", position=(1.0, 0.0)),
     ]
     rules = [
-        ExplainedRule(id=f"apart-{RULE_TOKEN}", rule_type=RuleType.DIFFERENT_TABLE,
-                      hardness=Hardness.HARD, weight=None, guest_ids=("g-1", "g-2"),
-                      explanation=f"override: {RULE_TOKEN} they fought"),
+        ExplainedRule(id=f"apart-{RULE_TOKEN}", hardness=Hardness.HARD, weight=None,
+                      explanation=f"override: {RULE_TOKEN} they fought",
+                      **{rk: RuleType.DIFFERENT_TABLE, rg: ("g-1", "g-2")}),
     ]
     event = Event(id="ev-018", name="Privacy", tables=tables, guests=guests, rules=rules)
     chart = {"g-1": "t-1", "g-2": "t-2", "g-3": "t-1"}
