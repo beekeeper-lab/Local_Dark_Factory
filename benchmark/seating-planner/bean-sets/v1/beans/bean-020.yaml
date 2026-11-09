@@ -59,6 +59,31 @@ context:
     positions, configuration or layout — the actual reason — not only the state
     code and not only the word "adjacent" (which already appears via the rule's own
     type name and proves nothing about whether a reason was ever stated).
+
+    Run 2 (v2 rebuild, PR #21, closed on its pre-merge review) refused too much: its
+    new check in solve_hard rejected EVERY enabled hard rule that is not
+    same_table or different_table. That includes hard min_distance, and the shipped
+    default_wedding_rules() template carries exactly one: the group-bound
+    accessible_seating rule. Measured: a 4-guest, 2-table event built from
+    default_wedding_rules() solves (feasible) on main and raised ValueError ("rule
+    'template-accessible_seating' is 'min_distance' and hard, but no seat
+    position...") on the PR -- the product's own default became unsolvable, even
+    with the accessible_seating group empty. This bean is about adjacent_seat only;
+    how a hard min_distance rule is handled is a different question and stays
+    exactly as on main.
+
+    Ready-made fixture for ac7's own test: rules=default_wedding_rules() on a
+    4-guest, 2-table (capacity 2) event; solve_hard in planning mode returns
+    status "feasible", and so do low_disruption and event_day with a baseline. A
+    second case: a lone hard min_distance rule taken from that template is not
+    refused either. The ac4 refusal (a hard adjacent_seat rule raises) must still
+    hold.
+
+    Task ordering note: a red test that only a LATER task turns green must not be
+    inside an EARLIER task's whole-suite verify. Run 1 of this bean halted because
+    task-2 ran `pytest -q` while task-1's reason tests stayed red until task-3.
+    Give each task a targeted verify (its own tests plus lint/types), and run the
+    whole suite only in the last task, or deselect the tests a later task owns.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - src/seating_planner/rules/**
@@ -83,8 +108,12 @@ acceptance_criteria:
   - id: ac6
     text: An unevaluable rule's reason is discoverable from the result in words, not only as a state code -- it says that seat positions are not configured, not merely that the rule is unevaluable.
     verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_unevaluable_rule_states_why_in_words" }
+  - id: ac7
+    text: The refusal is for adjacent-seat rules only -- an event built from default_wedding_rules() (whose accessible_seating rule is a hard min_distance rule) still solves in every mode, exactly as before this bean.
+    verify: { kind: test, test_id: "tests/solver/test_unevaluable.py::test_default_wedding_template_still_solves" }
 constraints:
   - no seat-level layout implementation in this bean
+  - only adjacent_seat rules are refused or reported unevaluable by this bean; hard rules of any other kind (min_distance) behave exactly as on main
   - a hard rule that cannot be evaluated is never treated as satisfied
   - the unevaluable reason is a real, human-readable explanation of what is missing (seat positions), not the word "adjacent" or the rule's own type name standing in for one
 suggested_risk_tier: 2

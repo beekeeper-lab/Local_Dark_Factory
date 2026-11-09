@@ -49,32 +49,49 @@ if _SRC not in sys.path:
 REASON_WORDS = ("seat", "position", "configur", "layout")
 
 
-def _adjacent_type() -> Any:
-    from seating_planner.rules import RuleType
+def _rule_type_enum() -> Any:
+    """RuleType in the original build, RuleKind in the v2 rebuild."""
+    from seating_planner import rules
 
+    return getattr(rules, "RuleType", None) or rules.RuleKind
+
+
+def _adjacent_type() -> Any:
+    RuleType = _rule_type_enum()
     found = [m for m in RuleType if "adjacent" in str(m.value).lower()]
-    assert found, "bean-003 makes an adjacent-seat rule constructible; RuleType has none"
+    assert found, "bean-003 makes an adjacent-seat rule constructible; the rule-kind enum has none"
     return found[0]
 
 
 def _rule(rid: str, kind: str, hardness: str, weight: int | None, guests: tuple[str, ...]) -> Any:
-    from seating_planner.rules import Hardness, Rule, RuleType
+    import dataclasses
 
+    from seating_planner.rules import Hardness, Rule
+
+    RuleType = _rule_type_enum()
+    names = {f.name for f in dataclasses.fields(Rule)}
     kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE}
     rule_type = _adjacent_type() if kind == "adjacent" else kinds[kind]
     hard = Hardness.HARD if hardness == "hard" else Hardness.SOFT
-    return Rule(id=rid, rule_type=rule_type, hardness=hard, weight=weight, guest_ids=guests)
+    kw: dict[str, Any] = {
+        ("rule_type" if "rule_type" in names else "kind"): rule_type,
+        ("guest_ids" if "guest_ids" in names else "guests"): guests,
+    }
+    return Rule(id=rid, hardness=hard, weight=weight, **kw)
 
 
 def _event(caps: list[int], n_guests: int, rules: list[Any]) -> Any:
+    import dataclasses
+
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
 
+    status_field = "status" if "status" in {f.name for f in dataclasses.fields(Guest)} else "rsvp_status"
     return Event(
         id="e",
         name="E",
         tables=[Table(id=f"t{i}", name=f"T{i}", capacity=c, shape="round", position=(0.0, float(i)))
                 for i, c in enumerate(caps)],
-        guests=[Guest(id=f"g{i}", name=f"G{i}", status=RsvpStatus.CONFIRMED) for i in range(n_guests)],
+        guests=[Guest(id=f"g{i}", name=f"G{i}", **{status_field: RsvpStatus.CONFIRMED}) for i in range(n_guests)],
         groups=[],
         rules=rules,
     )
@@ -91,9 +108,15 @@ MODES = {
 
 
 def _solve(event: Any, mode: str = "planning") -> Any:
-    from seating_planner.solver import solve_event
+    import inspect
 
-    return solve_event(event, **MODES[mode])
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit"}
+    kw = {(k if k in params else aliases.get(k, k)): v for k, v in MODES[mode].items()}
+    return fn(event, **kw)
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -104,7 +127,17 @@ def _field(obj: Any, name: str) -> Any:
     return obj.to_dict()[name]
 
 
+def _score(result: Any) -> Any:
+    """The soft score: `score` in the original build, `soft_score` in v2."""
+    try:
+        return _field(result, "score")
+    except (KeyError, AttributeError):
+        return _field(result, "soft_score")
+
+
 def _word(state: Any) -> str:
+    if not isinstance(state, (dict, str)) and hasattr(state, "status"):
+        state = state.status  # a RuleAssessment (v2): its state is its status
     if isinstance(state, dict):
         state = state.get("state", state.get("status", json.dumps(state, default=str)))
     state = getattr(state, "value", state)
@@ -119,7 +152,11 @@ def _word(state: Any) -> str:
 
 
 def _states(result: Any) -> dict[str, str]:
-    return {rid: _word(s) for rid, s in dict(_field(result, "rule_states")).items()}
+    raw = _field(result, "rule_states")
+    if isinstance(raw, dict):
+        return {rid: _word(s) for rid, s in raw.items()}
+    # v2: a sequence of per-rule assessments, each carrying its own rule_id
+    return {_field(a, "rule_id"): _word(a) for a in raw}
 
 
 def _violated_ids(result: Any) -> set[str]:
@@ -188,14 +225,14 @@ def test_unevaluable_rule_contributes_nothing_to_the_score(weights: tuple[int, .
     extra = [_rule(f"r-next{i}", "adjacent", "soft", w, ("g0", "g2")) for i, w in enumerate(weights)]
     without = _solve(_event([2, 2], 4, base))
     with_adj = _solve(_event([2, 2], 4, base + extra))
-    assert _field(without, "score") == 50
-    assert _field(with_adj, "score") == _field(without, "score"), (
+    assert _score(without) == 50
+    assert _score(with_adj) == _score(without), (
         f"adding unevaluable rules of weight {weights} changed the score"
     )
     weight = {r.id: r.weight for r in base + extra}
     states = _states(with_adj)
     counted = sum(weight[rid] for rid, s in states.items() if s == "satisfied")
-    assert _field(with_adj, "score") == counted, "the score is the weight of the satisfied rules"
+    assert _score(with_adj) == counted, "the score is the weight of the satisfied rules"
 
 
 # --- ac3: the three states account for every active rule --------------------
