@@ -28,6 +28,22 @@ context:
     The defence is to build exports from an explicit allow-list of fields rather than by
     serializing the guest object, so a new private field is excluded by default rather
     than included by default. AC-008 in the PRD is the scenario this must satisfy.
+
+    Run 1 built the allow-list, warning and audit entry correctly but ordered the write
+    wrong: the export's write() put the CSV on disk and only then opened the audit log
+    to append the record. When the audit path cannot be opened (missing directory, a
+    directory where the file should be, read-only, full disk) it raised after the
+    private CSV already existed -- private data on disk with no audit record, the exact
+    case the audit exists to catch. Measured: write(csv_path, "<tmp>/no-such-dir/audit.jsonl")
+    on a private export raised FileNotFoundError and left the CSV behind.
+
+    Ready-made fixture for ac6's own test: a private export (include_private naming a
+    private field) written with an audit path whose parent directory does not exist. A
+    correct implementation raises and leaves NOTHING at the CSV path -- by appending the
+    audit record first, or by writing the CSV to a temporary file and renaming it into
+    place only after the audit append succeeded. A second case in the same test: a
+    writable audit path still produces both the CSV and exactly one audit line, so the
+    fix cannot simply refuse every private write.
 allowed_write_paths:
   - src/seating_planner/export/**
   - tests/export/**
@@ -47,8 +63,12 @@ acceptance_criteria:
   - id: ac5
     text: The table-by-table CSV export lists every assigned guest exactly once.
     verify: { kind: test, test_id: "tests/export/test_csv.py::test_table_by_table_export_complete" }
+  - id: ac6
+    text: A private export is never left on disk without its audit record -- when the audit record cannot be written, write() raises and no CSV exists at the target path.
+    verify: { kind: test, test_id: "tests/export/test_privacy.py::test_unwritable_audit_path_leaves_no_private_csv" }
 constraints:
   - exports are built from an explicit field allow-list
+  - the audit record is written before, or atomically with, the private CSV becoming visible at its target path
   - text: CSV only in this bean
     # The other formats, by the library each needs. PDF is the non-goal above.
     forbidden_imports: [openpyxl, xlsxwriter, xlwt]
