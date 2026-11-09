@@ -39,6 +39,20 @@ context:
 
     The result reporting from bean-008 recomputes satisfaction from the chart and is
     right; the defect is only in what the solver optimizes.
+
+    v2 rebuild note (2026-11-09): the defect above is the ORIGINAL build's. Run 1 of this
+    bean on the v2 rebuild stopped at the spec step because it could not find it, and
+    measured why: v2's encoding of soft different-table rules bounds the indicator from
+    ABOVE (the pair sharing any table forces it to 0, and the rule's indicator may be 1
+    only when every pair is separated), so the objective rewards a chart exactly when
+    the keep-apart holds. Measured on v2 main: the scenario above seats the guests at
+    different tables with soft_score 100 (weight-100 rule satisfied, weight-1 rule
+    violated), and 400 of 400 random small events return a chart no enumerated valid
+    chart beats. So here this bean is REGRESSION-PINNING: add
+    tests/solver/test_soft_keep_apart.py with the two tests named in ac1 and ac2,
+    which pass immediately against the existing code, and leave the source alone. If,
+    and only if, one of those tests fails, fix the encoding in how soft rules enter the
+    objective. Do not invent a source change to match the description above.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -53,7 +67,8 @@ acceptance_criteria:
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
 constraints:
-  - the fix is in how soft rules enter the objective; hard constraints and their encoding are unchanged
+  - if a source change is needed at all, it is in how soft rules enter the objective; hard constraints and their encoding are unchanged
+  - on a tree where the behaviour is already correct, the change is tests only and touches no source file
   - the solve_event signature and the result shape are unchanged
 suggested_risk_tier: 2
 size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 300 }

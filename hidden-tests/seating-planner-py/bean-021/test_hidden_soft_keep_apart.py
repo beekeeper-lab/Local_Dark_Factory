@@ -38,11 +38,14 @@ if _SRC not in sys.path:
 
 
 def _api() -> tuple[Any, ...]:
+    from seating_planner import rules as _rules
+    from seating_planner import solver as _solver
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
 
-    return Event, Guest, RsvpStatus, Table, Hardness, Rule, RuleType, solve_event
+    # RuleType / solve_event in the original build; RuleKind / solve_hard in v2.
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind
+    solve_event = getattr(_solver, "solve_event", None) or _solver.solve_hard
+    return Event, Guest, RsvpStatus, Table, _rules.Hardness, _rules.Rule, RuleType, solve_event
 
 
 def _solve(event: Any) -> dict[str, str]:
@@ -61,10 +64,17 @@ def _event(capacities: list[int], n_guests: int, rules: list[tuple[str, str, int
         Table(id=f"t{i}", name=f"T{i}", capacity=c, shape="round", position=(0.0, float(i)))
         for i, c in enumerate(capacities)
     ]
-    guests = [Guest(id=f"g{i}", name=f"G{i}", status=RsvpStatus.CONFIRMED) for i in range(n_guests)]
+    import dataclasses
+
+    gnames = {f.name for f in dataclasses.fields(Guest)}
+    rnames = {f.name for f in dataclasses.fields(Rule)}
+    status_field = "status" if "status" in gnames else "rsvp_status"
+    kind_field = "rule_type" if "rule_type" in rnames else "kind"
+    ids_field = "guest_ids" if "guest_ids" in rnames else "guests"
+    guests = [Guest(id=f"g{i}", name=f"G{i}", **{status_field: RsvpStatus.CONFIRMED}) for i in range(n_guests)]
     kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE}
     built = [
-        Rule(id=rid, rule_type=kinds[kind], hardness=Hardness.SOFT, weight=w, guest_ids=gids)
+        Rule(id=rid, hardness=Hardness.SOFT, weight=w, **{kind_field: kinds[kind], ids_field: gids})
         for rid, kind, w, gids in rules
     ]
     return Event(id="e", name="E", tables=tables, guests=guests, groups=[], rules=built)
