@@ -157,42 +157,105 @@ CASES: list[dict[str, Any]] = [
 # fmt: on
 
 
+# Baselines for the v2 rebuild where its pre-refactor main differs from the
+# original build's (conflict lists of infeasible cases only; every feasible
+# case and every status is identical). Case 35 diagnoses NO conflicting rule
+# for an infeasible chart on v2 main -- frozen as it is, because a refactor
+# must not change behaviour, but worth a look as a defect in its own right.
+V2_EXPECTED: dict[int, dict[str, Any]] = {
+    30: {"status": "infeasible", "conflict_rule_ids": ["r3", "r4"]},
+    35: {"status": "infeasible", "conflict_rule_ids": []},
+    37: {"status": "infeasible", "conflict_rule_ids": ["r0", "r4"]},
+    39: {"status": "infeasible", "conflict_rule_ids": ["r4"]},
+    40: {"status": "infeasible", "conflict_rule_ids": ["r1"]},
+}
+
+
+def _entry() -> Any:
+    """The public optimization entry point: solve_event in the original build,
+    solve_hard in the v2 rebuild."""
+    from seating_planner import solver
+
+    for name in ("solve_event", "solve_hard"):
+        found = getattr(solver, name, None)
+        if found is not None:
+            return found
+    raise ImportError("seating_planner.solver has neither solve_event nor solve_hard")
+
+
 def _event(case: dict[str, Any]) -> Any:
-    from seating_planner.domain import Event, Guest, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+    import dataclasses
+
+    from seating_planner import rules as _rules
+    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+
+    Hardness, Rule = _rules.Hardness, _rules.Rule
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind
+    gnames = {f.name for f in dataclasses.fields(Guest)}
+    enames = {f.name for f in dataclasses.fields(Event)}
+    rnames = {f.name for f in dataclasses.fields(Rule)}
+    g_status = "status" if "status" in gnames else "rsvp_status"
+    g_reserved = "reserved_seat" if "reserved_seat" in gnames else "seat_reserved"
+    r_kind = "rule_type" if "rule_type" in rnames else "kind"
+    r_guests = "guest_ids" if "guest_ids" in rnames else "guests"
 
     kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE}
     hard = {"hard": Hardness.HARD, "soft": Hardness.SOFT}
-    return Event(
+    guests = [
+        Guest(id=g, name=g, **{g_status: RsvpStatus[_STATUS[s][0].upper()], g_reserved: _STATUS[s][1]})
+        for g, s in case["guests"]
+    ]
+    kwargs: dict[str, Any] = dict(
         id="e",
         name="E",
         tables=[
             Table(id=t, name=t, capacity=c, shape="round", position=(0.0, float(i)))
             for i, (t, c) in enumerate(case["tables"])
         ],
-        guests=[
-            Guest(id=g, name=g, status=_STATUS[s][0], reserved_seat=_STATUS[s][1])
-            for g, s in case["guests"]
-        ],
+        guests=guests,
         groups=[],
         rules=[
-            Rule(id=rid, rule_type=kinds[k], hardness=hard[h], weight=w, guest_ids=tuple(gs))
+            Rule(id=rid, hardness=hard[h], weight=w, **{r_kind: kinds[k], r_guests: tuple(gs)})
             for rid, k, h, w, gs in case["rules"]
         ],
-        locks=dict(case["locks"]),
     )
+    locks = dict(case["locks"])
+    if "locks" in enames:
+        kwargs["locks"] = locks
+    event = Event(**kwargs)
+    if "locks" not in enames:
+        # v2: a lock is the guest's own locked_to_table.
+        by_id = {g.id: g for g in event.guests}
+        for guest_id, table_id in locks.items():
+            by_id[guest_id].locked_to_table = table_id
+    return event
 
 
 def _solve(case: dict[str, Any]) -> Any:
-    from seating_planner.solver import solve_event
+    import inspect
 
+    fn = _entry()
+    params = inspect.signature(fn).parameters
+    aliases = {
+        "current": ("current", "current_assignments"),
+        "movement_limit": ("movement_limit", "move_limit"),
+        "unlocked": ("unlocked", "unlocked_guest_ids"),
+    }
     kw: dict[str, Any] = {"mode": case["mode"]}
-    for key in ("current", "movement_limit", "seed"):
+    for key, names in aliases.items():
         if key in case:
-            kw[key] = case[key]
-    if "unlocked" in case:
-        kw["unlocked"] = set(case["unlocked"])
-    return solve_event(_event(case), **kw)
+            name = next(n for n in names if n in params)
+            kw[name] = set(case[key]) if key == "unlocked" else case[key]
+            if key == "unlocked" and name == "unlocked_guest_ids":
+                kw[name] = frozenset(kw[name])
+    if "seed" in case:
+        if "seed" in params:
+            kw["seed"] = case["seed"]
+        else:
+            from seating_planner.solver import SolverConfig
+
+            kw["config"] = SolverConfig(seed=case["seed"])
+    return fn(_event(case), **kw)
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -208,7 +271,10 @@ def _observed(result: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"status": status}
     if status == "feasible":
         out["assignments"] = dict(_field(result, "assignments"))
-        out["score"] = _field(result, "score")
+        try:
+            out["score"] = _field(result, "score")
+        except (KeyError, AttributeError):
+            out["score"] = _field(result, "soft_score")
         out["violated_rule_ids"] = sorted(_field(v, "rule_id") for v in _field(result, "violations"))
     else:
         report = _field(result, "infeasibility_report")
@@ -226,10 +292,16 @@ def test_behaviour_is_preserved(case: dict[str, Any]) -> None:
     # ac4 and the constraint "no behaviour change of any kind": each fixed
     # scenario gives exactly what it gave before the refactor, and gives it
     # again on a second run.
+    expected = case["expected"]
+    if _entry().__name__ != "solve_event":
+        # v2 rebuild: its own main (before this bean) is the baseline. Five
+        # infeasible scenarios diagnose a different conflict list there than
+        # in the original build, frozen 2026-11-09 from v2 main, run twice.
+        expected = V2_EXPECTED.get(CASES.index(case), expected)
     first = _observed(_solve(case))
-    assert first == case["expected"], (
+    assert first == expected, (
         f"the refactor changed what this scenario produces: expected "
-        f"{case['expected']}, got {first}"
+        f"{expected}, got {first}"
     )
     assert _observed(_solve(case)) == first, "a repeat run of the same scenario differs"
 
@@ -264,22 +336,34 @@ SIGNATURE = [
 ]
 
 
-def test_entry_point_keeps_its_name_and_signature() -> None:
-    from seating_planner.solver import solve_event
+# The v2 rebuild's entry point, as its main had it before this bean ran.
+SIGNATURE_V2 = [
+    ("event", _POS, _EMPTY),
+    ("config", _POS, None),
+    ("mode", _KW, _EMPTY),
+    ("current_assignments", _KW, None),
+    ("move_limit", _KW, None),
+    ("unlocked_guest_ids", _KW, None),
+]
 
-    params = inspect.signature(solve_event).parameters
+
+def test_entry_point_keeps_its_name_and_signature() -> None:
+    fn = _entry()
+    label = fn.__name__
+    expected = SIGNATURE if label == "solve_event" else SIGNATURE_V2
+    params = inspect.signature(fn).parameters
     names = list(params)
-    for name, kind, default in SIGNATURE:
-        assert name in params, f"solve_event lost its {name!r} parameter"
-        assert params[name].kind == kind, f"solve_event's {name!r} changed kind"
+    for name, kind, default in expected:
+        assert name in params, f"{label} lost its {name!r} parameter"
+        assert params[name].kind == kind, f"{label}'s {name!r} changed kind"
         assert params[name].default == default, (
-            f"solve_event's {name!r} default changed from {default!r} to {params[name].default!r}"
+            f"{label}'s {name!r} default changed from {default!r} to {params[name].default!r}"
         )
-    kept = [n for n in names if n in {s[0] for s in SIGNATURE}]
-    assert kept == [s[0] for s in SIGNATURE], f"solve_event's parameters were reordered: {names}"
+    kept = [n for n in names if n in {s[0] for s in expected}]
+    assert kept == [s[0] for s in expected], f"{label}'s parameters were reordered: {names}"
     extra = [n for n in names if n not in kept]
     assert all(params[n].default is not _EMPTY for n in extra), (
-        f"solve_event gained a required parameter, which breaks every existing call: {extra}"
+        f"{label} gained a required parameter, which breaks every existing call: {extra}"
     )
 
 
