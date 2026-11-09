@@ -30,6 +30,16 @@ context:
 
     Determinism across runs still holds for any fixed worker count, which is what
     bean-009's replay guarantee needs: the configuration recorded is the one to replay.
+
+    v2 rebuild note (2026-11-09): the defect above is the ORIGINAL build's. On the v2
+    rebuild, the requested worker count already reaches the CP-SAT solve and is recorded
+    on every result path (SolverConfig.num_workers, including infeasible and
+    low-disruption solves), and the hidden suite for this bean passes on v2 main. So
+    here this bean is REGRESSION-PINNING: add tests/solver/test_worker_count.py with
+    the two tests named in ac1 and ac2, which pass immediately against the existing
+    code, and leave the source alone. If, and only if, either test fails, fix the
+    worker count so the request is applied and recorded on every path. Do not invent a
+    source change to match the description above.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -44,6 +54,7 @@ acceptance_criteria:
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
 constraints:
+  - on a tree where the behaviour is already correct, the change is tests only and touches no source file
   - the default stays one worker
   - the solve_event signature is unchanged
   - the solves that diagnose an infeasible event may stay at one worker, because an infeasible core is only reliable with one; the result still records the request
