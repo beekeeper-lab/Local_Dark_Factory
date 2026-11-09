@@ -23,18 +23,32 @@ if _SRC not in sys.path:
 
 
 def _event(statuses: list[str], capacity: int) -> Any:
+    import dataclasses
+
+    from seating_planner import rules as _rules
     from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+
+    Hardness, Rule = _rules.Hardness, _rules.Rule
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind  # RuleKind in the v2 rebuild
+    gnames = {f.name for f in dataclasses.fields(Guest)}
+    rnames = {f.name for f in dataclasses.fields(Rule)}
+    g_status = "status" if "status" in gnames else "rsvp_status"
+    g_reserved = "reserved_seat" if "reserved_seat" in gnames else "seat_reserved"
 
     guests = []
     for i, s in enumerate(statuses):
         if s == "reserved":
-            guests.append(Guest(id=f"g{i}", name=f"G{i}", status=RsvpStatus.PENDING, reserved_seat=True))
+            guests.append(Guest(id=f"g{i}", name=f"G{i}", **{g_status: RsvpStatus.PENDING, g_reserved: True}))
         else:
-            guests.append(Guest(id=f"g{i}", name=f"G{i}", status=RsvpStatus(s)))
+            guests.append(Guest(id=f"g{i}", name=f"G{i}", **{g_status: RsvpStatus[s.upper()]}))
     tables = [Table(id="t1", name="T1", capacity=capacity, shape="round", position=(0.0, 0.0))]
     group = Group(id="fam", name="Family", member_ids=tuple(g.id for g in guests))
-    rule = Rule(id="keep", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD, weight=None, group_ids=("fam",))
+    kw: dict[str, Any] = {("rule_type" if "rule_type" in rnames else "kind"): RuleType.SAME_TABLE}
+    if "group_ids" in rnames:
+        kw["group_ids"] = ("fam",)
+    else:
+        kw["group_id"] = "fam"
+    rule = Rule(id="keep", hardness=Hardness.HARD, weight=None, **kw)
     return Event(id="e", name="E", tables=tables, guests=guests, groups=[group], rules=[rule])
 
 
