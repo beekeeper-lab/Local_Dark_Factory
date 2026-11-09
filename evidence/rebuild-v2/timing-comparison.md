@@ -1,4 +1,4 @@
-# Rebuild timing comparison — generated 2026-11-01T06:39:08+00:00
+# Rebuild timing comparison — generated 2026-11-09T05:00:01+00:00
 
 v1 = seating-planner-py (original build, finished). v2 = seating-planner-py-v2 
 (rebuild in progress, same bean set v1 current state, same hidden tests).
@@ -28,7 +28,7 @@ see `factory state <bean>` for the authoritative status.
 | bean-015 | completed | 454.3 | halted@ci | 169.9 | -284.3 | -63% |
 | bean-016 | completed | 137.5 | halted@ci | 320.4 | +182.9 | +133% |
 | bean-017 | completed | 109.8 | halted@ci | 120.2 | +10.4 | +10% |
-| bean-018 | completed | 123.4 | not started | — | — | — |
+| bean-018 | completed | 123.4 | halted@ci | 98.2 | -25.1 | -20% |
 | bean-019 | completed | 233.2 | not started | — | — | — |
 | bean-020 | completed | 141.4 | not started | — | — | — |
 | bean-021 | completed | 79.9 | not started | — | — | — |
@@ -45,18 +45,18 @@ see `factory state <bean>` for the authoritative status.
 | bean-033 | completed | 2027.0 | not started | — | — | — |
 
 **v1 total (all 32 beans): 121.3 hours**
-**v2 total so far (17 beans with at least one run): 47.4 hours**
+**v2 total so far (18 beans with at least one run): 49.0 hours**
 
 ## Per-step totals, beans v2 has run so far (minutes)
 
 | step | v1 (same beans) | v2 | delta |
 |---|---|---|---|
-| spec | 1012.8 | 1527.2 | +514.4 |
-| build | 808.6 | 594.0 | -214.6 |
-| gate | 6.4 | 4.6 | -1.8 |
-| audit-spec | 96.4 | 72.5 | -23.9 |
-| audit-impl | 100.2 | 51.8 | -48.4 |
-| audit-doc | 161.5 | 42.2 | -119.3 |
-| audit-package | 41.2 | 23.2 | -18.0 |
-| doc | 854.8 | 522.9 | -331.9 |
-| ci | 19.3 | 4.9 | -14.3 |
+| spec | 1074.2 | 1565.8 | +491.6 |
+| build | 835.9 | 610.5 | -225.5 |
+| gate | 7.7 | 4.8 | -2.9 |
+| audit-spec | 105.7 | 73.4 | -32.3 |
+| audit-impl | 100.8 | 55.9 | -45.0 |
+| audit-doc | 162.3 | 43.1 | -119.2 |
+| audit-package | 43.9 | 24.7 | -19.2 |
+| doc | 873.7 | 558.0 | -315.7 |
+| ci | 20.3 | 5.5 | -14.8 |
