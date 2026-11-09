@@ -36,25 +36,41 @@ if _SRC not in sys.path:
 
 def _rule(rid: str, kind: str, hardness: str, weight: int | None, guests: tuple[str, ...] = (),
           groups: tuple[str, ...] = (), **kw: Any) -> Any:
-    from seating_planner.rules import Hardness, Rule, RuleType
+    import dataclasses
 
+    from seating_planner import rules as _rules
+
+    Hardness, Rule = _rules.Hardness, _rules.Rule
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind  # RuleKind in the v2 rebuild
+    rnames = {f.name for f in dataclasses.fields(Rule)}
     kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE, "dist": RuleType.MIN_DISTANCE}
     hard = {"hard": Hardness.HARD, "soft": Hardness.SOFT}
-    return Rule(id=rid, rule_type=kinds[kind], hardness=hard[hardness], weight=weight,
-                guest_ids=guests, group_ids=groups, **kw)
+    args: dict[str, Any] = {
+        ("rule_type" if "rule_type" in rnames else "kind"): kinds[kind],
+        ("guest_ids" if "guest_ids" in rnames else "guests"): guests,
+    }
+    if "group_ids" in rnames:
+        args["group_ids"] = groups
+    elif groups:
+        assert len(groups) == 1, "this build's Rule names a single group"
+        args["group_id"] = groups[0]
+    return Rule(id=rid, hardness=hard[hardness], weight=weight, **args, **kw)
 
 
 def _event(rules: list[Any], *, caps: tuple[int, ...] = (2, 2), groups: dict[str, tuple[str, ...]] | None = None) -> Any:
     # g-1, g-3 and g-4 are seated; g-2 declined and g-5 is pending without a
     # reserved seat, so neither is ever eligible.
+    import dataclasses
+
     from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
 
+    g_status = "status" if "status" in {f.name for f in dataclasses.fields(Guest)} else "rsvp_status"
     guests = [
-        Guest(id="g-1", name="g-1", status=RsvpStatus.CONFIRMED),
-        Guest(id="g-2", name="g-2", status=RsvpStatus.DECLINED),
-        Guest(id="g-3", name="g-3", status=RsvpStatus.CONFIRMED),
-        Guest(id="g-4", name="g-4", status=RsvpStatus.CONFIRMED),
-        Guest(id="g-5", name="g-5", status=RsvpStatus.PENDING),
+        Guest(id="g-1", name="g-1", **{g_status: RsvpStatus.CONFIRMED}),
+        Guest(id="g-2", name="g-2", **{g_status: RsvpStatus.DECLINED}),
+        Guest(id="g-3", name="g-3", **{g_status: RsvpStatus.CONFIRMED}),
+        Guest(id="g-4", name="g-4", **{g_status: RsvpStatus.CONFIRMED}),
+        Guest(id="g-5", name="g-5", **{g_status: RsvpStatus.PENDING}),
     ]
     return Event(
         id="e", name="E",
@@ -72,13 +88,33 @@ MODES = ("planning", "low_disruption", "event_day")
 
 
 def _solve(ev: Any, mode: str = "planning") -> Any:
-    from seating_planner.solver import solve_event
+    import inspect
 
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit"}
     if mode == "low_disruption":
-        return solve_event(ev, mode=mode, current={"g-1": "t-1"}, movement_limit=5)
-    if mode == "event_day":
-        return solve_event(ev, mode=mode, current={"g-1": "t-1"})
-    return solve_event(ev, mode=mode)
+        args: dict[str, Any] = {"mode": mode, "current": {"g-1": "t-1"}, "movement_limit": 5}
+    elif mode == "event_day":
+        args = {"mode": mode, "current": {"g-1": "t-1"}}
+    else:
+        args = {"mode": mode}
+    return fn(ev, **{(k if k in params else aliases.get(k, k)): v for k, v in args.items()})
+
+
+def _states(result: Any) -> dict[str, str]:
+    """rule id -> state word. A dict in the original build; RuleAssessment objects in v2."""
+    rs = result.rule_states
+    if isinstance(rs, dict):
+        return dict(rs)
+    return {a.rule_id: a.status for a in rs}
+
+
+def _score(result: Any) -> Any:
+    """`score` in the original build, `soft_score` in v2."""
+    return result.score if hasattr(result, "score") else result.soft_score
 
 
 # --- ac1 and the constraint ------------------------------------------------
@@ -95,7 +131,7 @@ def test_hard_rule_with_one_eligible_guest_is_unevaluable_like_its_soft_twin() -
     for mode in MODES:
         result = _solve(_event(rules), mode)
         assert result.status == "feasible", mode
-        states = dict(result.rule_states)
+        states = _states(result)
         assert states["soft-same"] == UNEVALUABLE and states["soft-diff"] == UNEVALUABLE, mode
         assert states["hard-same"] == UNEVALUABLE, f"{mode}: one seated guest cannot be evaluated: {states}"
         assert states["hard-diff"] == UNEVALUABLE, f"{mode}: one seated guest cannot be evaluated: {states}"
@@ -106,7 +142,7 @@ def test_hard_rule_with_no_eligible_guest_is_unevaluable() -> None:
 
     result = _solve(_event([_rule("hard-none", "same", "hard", None, ("g-2", "g-5"))]))
     assert result.status == "feasible"
-    assert result.rule_states["hard-none"] == UNEVALUABLE
+    assert _states(result)["hard-none"] == UNEVALUABLE
 
 
 def test_hard_rule_on_a_group_with_one_eligible_member_is_unevaluable() -> None:
@@ -115,8 +151,8 @@ def test_hard_rule_on_a_group_with_one_eligible_member_is_unevaluable() -> None:
     rules = [_rule("hard-fam", "same", "hard", None, groups=("fam",))]
     result = _solve(_event(rules, groups={"fam": ("g-1", "g-2", "g-5")}))
     assert result.status == "feasible"
-    assert result.rule_states["hard-fam"] == UNEVALUABLE
-    assert result.rule_states["hard-fam"] != SATISFIED
+    assert _states(result)["hard-fam"] == UNEVALUABLE
+    assert _states(result)["hard-fam"] != SATISFIED
 
 
 def test_hard_rule_with_two_eligible_guests_is_still_satisfied() -> None:
@@ -129,8 +165,8 @@ def test_hard_rule_with_two_eligible_guests_is_still_satisfied() -> None:
     result = _solve(_event(rules))
     assert result.status == "feasible"
     assert result.assignments["g-1"] == result.assignments["g-3"]
-    assert result.rule_states["hard-same"] == SATISFIED
-    assert result.rule_states["hard-diff"] == SATISFIED
+    assert _states(result)["hard-same"] == SATISFIED
+    assert _states(result)["hard-diff"] == SATISFIED
 
 
 # --- ac2 ------------------------------------------------------------------
@@ -186,14 +222,14 @@ def _check_agreement(rules: list[Any], result: Any) -> None:
     from seating_planner.solver.result import SATISFIED, VIOLATED
 
     enabled = [r for r in rules if r.enabled]
-    assert sorted(result.rule_states) == sorted(r.id for r in enabled), "one state per enabled rule"
+    assert sorted(_states(result)) == sorted(r.id for r in enabled), "one state per enabled rule"
     by_id = {r.id: r for r in enabled}
     satisfied_weight = sum(
-        by_id[rid].weight for rid, state in result.rule_states.items()
+        by_id[rid].weight for rid, state in _states(result).items()
         if state == SATISFIED and by_id[rid].hardness is Hardness.SOFT
     )
-    assert result.score == satisfied_weight, f"score {result.score} vs states {dict(result.rule_states)}"
-    violated = sorted(rid for rid, state in result.rule_states.items() if state == VIOLATED)
+    assert _score(result) == satisfied_weight, f"score {_score(result)} vs states {_states(result)}"
+    violated = sorted(rid for rid, state in _states(result).items() if state == VIOLATED)
     assert sorted(v.rule_id for v in result.violations) == violated
     for v in result.violations:
         assert v.weight == by_id[v.rule_id].weight
@@ -215,8 +251,8 @@ def test_states_score_and_violations_agree() -> None:
         result = _solve(_event(rules, caps=(1, 1, 1)), mode)
         assert result.status == "feasible", mode
         _check_agreement(rules, result)
-        assert result.rule_states["soft-with"] == "violated", mode
-        assert result.score == 7, mode
+        assert _states(result)["soft-with"] == "violated", mode
+        assert _score(result) == 7, mode
 
 
 def test_states_agree_on_an_infeasible_result() -> None:
@@ -230,4 +266,4 @@ def test_states_agree_on_an_infeasible_result() -> None:
     result = _solve(_event(rules))
     assert result.status == "infeasible"
     _check_agreement(rules, result)
-    assert SATISFIED not in result.rule_states.values()
+    assert SATISFIED not in _states(result).values()

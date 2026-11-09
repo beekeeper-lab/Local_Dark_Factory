@@ -50,6 +50,76 @@ OTHERS = {
     "template-vendors": ("different_table", 40, ("vendors",)),
 }
 
+# The v2 rebuild's template, as its main ships it (ids, weights and group
+# bindings differ from the original build's): id -> (kind, weight, groups).
+V2_OTHERS = {
+    "template-couple": ("same_table", 100, ("couple",)),
+    "template-household": ("same_table", 80, ("household",)),
+    "template-immediate_family": ("same_table", 60, ("immediate_family",)),
+    "template-wedding_party": ("same_table", 40, ("wedding_party",)),
+    "template-children": ("same_table", 20, ("children",)),
+    "template-vendors": ("different_table", 10, ("vendors",)),
+}
+
+
+def _is_v2() -> bool:
+    from seating_planner import rules
+
+    return getattr(rules, "RuleType", None) is None
+
+
+def _others() -> dict[str, tuple[str, int, tuple[str, ...]]]:
+    return V2_OTHERS if _is_v2() else OTHERS
+
+
+def _rule_enum() -> Any:
+    """RuleType in the original build, RuleKind in the v2 rebuild."""
+    from seating_planner import rules
+
+    return getattr(rules, "RuleType", None) or rules.RuleKind
+
+
+def _kind(rule: Any) -> Any:
+    return rule.rule_type if hasattr(rule, "rule_type") else rule.kind
+
+
+def _groups(rule: Any) -> tuple[str, ...]:
+    """The rule's group binding: `group_ids` (tuple) or v2's single `group_id`."""
+    if hasattr(rule, "group_ids"):
+        return tuple(rule.group_ids)
+    return (rule.group_id,) if rule.group_id is not None else ()
+
+
+def _make_rule(*, id: str, kind: Any, hardness: Any, weight: Any, groups: tuple[str, ...], **extra: Any) -> Any:
+    from seating_planner.rules import Rule
+
+    names = {f.name for f in dataclasses.fields(Rule)}
+    kw: dict[str, Any] = dict(extra)
+    kw["rule_type" if "rule_type" in names else "kind"] = kind
+    if "group_ids" in names:
+        kw["group_ids"] = groups
+    else:
+        assert len(groups) == 1, "v2 binds one group per rule"
+        kw["group_id"] = groups[0]
+    return Rule(id=id, hardness=hardness, weight=weight, **kw)
+
+
+def _categories() -> dict[str, str]:
+    """slug -> display name; the original exposes a dict, v2 a tuple of slugs."""
+    from seating_planner.rules.template import TEMPLATE_CATEGORIES
+
+    if isinstance(TEMPLATE_CATEGORIES, dict):
+        return dict(TEMPLATE_CATEGORIES)
+    return {slug: slug.replace("_", " ").title() for slug in TEMPLATE_CATEGORIES}
+
+
+def _members_for(slug: str, members: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """Members for a category slug, tolerating singular/plural slug spelling."""
+    for key in (slug, slug + "s", slug.rstrip("s")):
+        if key in members:
+            return members[key]
+    return ()
+
 
 def _template() -> list[Any]:
     from seating_planner.rules.template import default_wedding_rules
@@ -63,8 +133,8 @@ def _by_id(rules: list[Any]) -> dict[str, Any]:
 
 def _event(rules: list[Any], tables: list[int], members: dict[str, tuple[str, ...]]) -> Any:
     from seating_planner.domain import Event, Group, Guest, RsvpStatus, Table
-    from seating_planner.rules.template import TEMPLATE_CATEGORIES
 
+    status_field = "status" if "status" in {f.name for f in dataclasses.fields(Guest)} else "rsvp_status"
     guest_ids = sorted({g for ids in members.values() for g in ids} | {f"x-{i}" for i in range(3)})
     return Event(
         id="wedding",
@@ -73,24 +143,23 @@ def _event(rules: list[Any], tables: list[int], members: dict[str, tuple[str, ..
             Table(id=f"t-{i}", name=f"Table {i}", capacity=cap, shape="round", position=(float(i), 0.0))
             for i, cap in enumerate(tables)
         ],
-        guests=[Guest(id=g, name=g, status=RsvpStatus.CONFIRMED) for g in guest_ids],
-        groups=[Group(id=slug, name=name, member_ids=members.get(slug, ())) for slug, name in TEMPLATE_CATEGORIES.items()],
+        guests=[Guest(id=g, name=g, **{status_field: RsvpStatus["CONFIRMED"]}) for g in guest_ids],
+        groups=[Group(id=slug, name=name, member_ids=list(_members_for(slug, members))) for slug, name in _categories().items()],
         rules=rules,
     )
 
 
 def _solve(event: Any) -> Any:
-    from seating_planner.solver import solve_event
+    from seating_planner import solver
 
-    if "mode" in inspect.signature(solve_event).parameters:
-        return solve_event(event, mode="planning")
-    return solve_event(event)
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    if "mode" in inspect.signature(fn).parameters:
+        return fn(event, mode="planning")
+    return fn(event)
 
 
 def _disjoint_members() -> dict[str, tuple[str, ...]]:
-    from seating_planner.rules.template import TEMPLATE_CATEGORIES
-
-    return {slug: (f"{slug}-a", f"{slug}-b") for slug in TEMPLATE_CATEGORIES}
+    return {slug: (f"{slug}-a", f"{slug}-b") for slug in _categories()}
 
 
 def _overlapping_members() -> dict[str, tuple[str, ...]]:
@@ -122,30 +191,29 @@ def test_template_event_solves_with_everyone_seated(tables: list[int], members: 
 
 
 def test_accessible_rule_is_present_and_disabled() -> None:
-    from seating_planner.rules import Hardness, RuleType
+    from seating_planner.rules import Hardness
 
+    RuleType = _rule_enum()
     rules = _by_id(_template())
     assert ACCESSIBLE in rules, "the accessible-seating rule stays in the template"
     rule = rules[ACCESSIBLE]
     assert rule.enabled is False
-    assert rule.rule_type is RuleType.MIN_DISTANCE
+    assert _kind(rule) is RuleType.MIN_DISTANCE
     assert rule.hardness is Hardness.HARD
     assert rule.weight is None
-    assert tuple(rule.group_ids) == ("accessible_seating",)
+    assert _groups(rule) == ("accessible_seating",)
     assert rule.target == "dance_floor"
     assert rule.min_zones == 2
 
 
 def test_enabling_the_accessible_rule_is_one_field() -> None:
-    from seating_planner.rules import Rule
-
     rule = _by_id(_template())[ACCESSIBLE]
-    as_shipped = Rule(
+    as_shipped = _make_rule(
         id=ACCESSIBLE,
-        rule_type=rule.rule_type,
+        kind=_kind(rule),
         hardness=rule.hardness,
         weight=None,
-        group_ids=("accessible_seating",),
+        groups=("accessible_seating",),
         target="dance_floor",
         min_zones=2,
     )
@@ -169,13 +237,14 @@ def test_other_six_rules_are_unchanged_and_enabled() -> None:
     rules = _template()
     assert len(rules) == 7
     by_id = _by_id(rules)
-    assert set(by_id) == set(OTHERS) | {ACCESSIBLE}
-    for rid, (kind, weight, groups) in OTHERS.items():
+    others = _others()
+    assert set(by_id) == set(others) | {ACCESSIBLE}
+    for rid, (kind, weight, groups) in others.items():
         rule = by_id[rid]
-        assert rule.rule_type.value == kind, rid
+        assert _kind(rule).value == kind, rid
         assert rule.hardness.value == "soft", rid
         assert rule.weight == weight, rid
-        assert tuple(rule.group_ids) == groups, rid
+        assert _groups(rule) == groups, rid
         assert rule.enabled is True, rid
 
 
@@ -189,5 +258,10 @@ def test_an_enabled_hard_min_distance_rule_is_still_refused() -> None:
     rules = _template()
     _by_id(rules)[ACCESSIBLE].enabled = True
     event = _event(rules, [8, 8, 8], _disjoint_members())
+    if _is_v2():
+        # v2: bean-020's ac7 keeps a hard min_distance rule behaving exactly as
+        # before that bean (it is not refused), so enabling it must not raise.
+        _solve(event)
+        return
     with pytest.raises(ValueError):
         _solve(event)

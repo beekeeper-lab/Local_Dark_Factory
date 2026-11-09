@@ -35,19 +35,34 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 
+def _rule_enum() -> Any:
+    """RuleType in the original build, RuleKind in the v2 rebuild."""
+    from seating_planner import rules
+
+    return getattr(rules, "RuleType", None) or rules.RuleKind
+
+
 def _event(caps: dict[str, int], guests: list[str], rules: list[tuple[str, str, str, int | None, tuple[str, ...]]],
            locks: dict[str, str] | None = None) -> Any:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+    import dataclasses
 
+    from seating_planner.domain import Event, Guest, RsvpStatus, Table
+    from seating_planner.rules import Hardness, Rule
+
+    RuleType = _rule_enum()
+    gnames = {f.name for f in dataclasses.fields(Guest)}
+    rnames = {f.name for f in dataclasses.fields(Rule)}
+    g_status = "status" if "status" in gnames else "rsvp_status"
+    r_kind = "rule_type" if "rule_type" in rnames else "kind"
+    r_guests = "guest_ids" if "guest_ids" in rnames else "guests"
     kinds = {"same": RuleType.SAME_TABLE, "diff": RuleType.DIFFERENT_TABLE}
     hard = {"hard": Hardness.HARD, "soft": Hardness.SOFT}
     ev = Event(
         id="e", name="E",
         tables=[Table(id=t, name=t, capacity=c, shape="round", position=(0.0, float(i))) for i, (t, c) in enumerate(caps.items())],
-        guests=[Guest(id=g, name=g, status=RsvpStatus.CONFIRMED) for g in guests],
+        guests=[Guest(id=g, name=g, **{g_status: RsvpStatus.CONFIRMED}) for g in guests],
         groups=[],
-        rules=[Rule(id=rid, rule_type=kinds[k], hardness=hard[h], weight=w, guest_ids=gids) for rid, k, h, w, gids in rules],
+        rules=[Rule(id=rid, hardness=hard[h], weight=w, **{r_kind: kinds[k], r_guests: gids}) for rid, k, h, w, gids in rules],
     )
     for g, t in (locks or {}).items():
         ev.lock_guest(g, t)
@@ -55,9 +70,24 @@ def _event(caps: dict[str, int], guests: list[str], rules: list[tuple[str, str, 
 
 
 def _solve(ev: Any, current: dict[str, str], **kw: Any) -> Any:
-    from seating_planner.solver import solve_event
+    import inspect
 
-    return solve_event(ev, mode="event_day", current=current, **kw)
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit", "unlocked": "unlocked_guest_ids"}
+    args: dict[str, Any] = {"mode": "event_day", "current": current, **kw}
+    out: dict[str, Any] = {}
+    for k, v in args.items():
+        name = k if k in params else aliases.get(k, k)
+        if name == "unlocked_guest_ids" and v is not None:
+            v = frozenset(v)
+        if name == "seed" and name not in params and "config" in params:
+            out["config"] = solver.SolverConfig(seed=v)
+            continue
+        out[name] = v
+    return fn(ev, **out)
 
 
 def test_unlock_releases_a_guest_who_is_also_explicitly_locked() -> None:
@@ -112,16 +142,26 @@ def test_no_seat_at_all_recommends_capacity_and_blames_no_rule() -> None:
     assert kinds & {"add_capacity", "add_table"}, f"a full room needs capacity: {kinds}"
 
 
-def _lock_advice(report: Any, guest: str) -> list[Any]:
-    from seating_planner.solver.report import KIND_UNLOCK
+def _rec_text(rec: Any) -> str:
+    """A recommendation's prose: `message` in the original build, `detail` in v2."""
+    for name in ("message", "detail"):
+        if hasattr(rec, name):
+            return str(getattr(rec, name))
+    return str(rec)
 
-    return [r for r in report.recommendations if r.kind == KIND_UNLOCK and guest in r.message]
+
+def _lock_advice(report: Any, guest: str) -> list[Any]:
+    from seating_planner.solver import report as _report
+
+    kind_unlock = getattr(_report, "KIND_UNLOCK", "unlock")
+    return [r for r in report.recommendations if r.kind == kind_unlock and guest in _rec_text(r)]
 
 
 def _blames_rules(report: Any) -> bool:
-    from seating_planner.solver.report import KIND_CHANGE_HARD_RULE
+    from seating_planner.solver import report as _report
 
-    return any(r.kind == KIND_CHANGE_HARD_RULE for r in report.recommendations)
+    kind_change = getattr(_report, "KIND_CHANGE_HARD_RULE", "change_hard_rule")
+    return any(r.kind == kind_change for r in report.recommendations)
 
 
 def test_a_lock_that_leaves_a_new_guest_no_seat_is_named() -> None:

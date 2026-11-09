@@ -31,23 +31,45 @@ def _fresh(s: str) -> str:
 
 
 def _event() -> Any:
+    import dataclasses
+
+    from seating_planner import rules as _rules
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
+
+    Hardness, Rule = _rules.Hardness, _rules.Rule
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind  # RuleKind in the v2 rebuild
+    gnames = {f.name for f in dataclasses.fields(Guest)}
+    rnames = {f.name for f in dataclasses.fields(Rule)}
+    g_status = "status" if "status" in gnames else "rsvp_status"
 
     tables = [Table(id=f"t{i}", name=f"T{i}", capacity=2, shape="round", position=(0.0, float(i))) for i in range(2)]
-    guests = [Guest(id=f"g{i}", name=f"G{i}", status=RsvpStatus.CONFIRMED) for i in range(4)]
+    guests = [Guest(id=f"g{i}", name=f"G{i}", **{g_status: RsvpStatus["CONFIRMED"]}) for i in range(4)]
     # A strong reason to move g0 next to g2, which a movement limit of 0 forbids.
-    rules = [Rule(id="pair", rule_type=RuleType.SAME_TABLE, hardness=Hardness.SOFT, weight=100, guest_ids=("g0", "g2"))]
-    return Event(id="e", name="E", tables=tables, guests=guests, groups=[], rules=rules)
+    rule = Rule(
+        id="pair",
+        hardness=Hardness.SOFT,
+        weight=100,
+        **{
+            ("rule_type" if "rule_type" in rnames else "kind"): RuleType.SAME_TABLE,
+            ("guest_ids" if "guest_ids" in rnames else "guests"): ("g0", "g2"),
+        },
+    )
+    return Event(id="e", name="E", tables=tables, guests=guests, groups=[], rules=[rule])
 
 
 CURRENT = {"g0": "t0", "g1": "t0", "g2": "t1", "g3": "t1"}
 
 
 def _solve(**kw: Any) -> Any:
-    from seating_planner.solver import solve_event
+    import inspect
 
-    return solve_event(_event(), **kw)
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit"}
+    kw = {(k if k in params else aliases.get(k, k)): v for k, v in kw.items()}
+    return fn(_event(), **kw)
 
 
 @pytest.mark.parametrize("make", [_fresh, lambda s: json.loads(json.dumps(s))], ids=["joined", "json"])

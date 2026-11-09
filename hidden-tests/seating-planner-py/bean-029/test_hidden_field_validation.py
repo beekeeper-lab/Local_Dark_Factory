@@ -20,6 +20,7 @@ bean-030's, and the two must not disagree about it.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 from pathlib import Path
@@ -34,10 +35,30 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 
-def _guest(status: Any, reserved_seat: Any) -> Any:
+def _names() -> tuple[str, str]:
+    """(status field, reserved-seat field): original `status`/`reserved_seat`, v2 `rsvp_status`/`seat_reserved`."""
     from seating_planner.domain import Guest
 
-    return Guest(id="g-1", name="Guest One", status=status, reserved_seat=reserved_seat)
+    fields = {f.name for f in dataclasses.fields(Guest)}
+    return (
+        "status" if "status" in fields else "rsvp_status",
+        "reserved_seat" if "reserved_seat" in fields else "seat_reserved",
+    )
+
+
+def _guest(status: Any, reserved_seat: Any, id: str = "g-1", name: str = "Guest One") -> Any:
+    from seating_planner.domain import Guest
+
+    status_field, seat_field = _names()
+    return Guest(id=id, name=name, **{status_field: status, seat_field: reserved_seat})
+
+
+def _seat(guest: Any) -> Any:
+    return getattr(guest, _names()[1])
+
+
+def _set_seat(guest: Any, value: Any) -> None:
+    setattr(guest, _names()[1], value)
 
 
 # --- ac1 ---------------------------------------------------------------------
@@ -54,12 +75,13 @@ def test_a_reserved_seat_that_is_not_a_bool_is_refused(value: Any) -> None:
 def test_a_reserved_seat_of_true_or_false_is_accepted() -> None:
     from seating_planner.domain import RsvpStatus
 
-    assert _guest(RsvpStatus.PENDING, True).reserved_seat is True
-    assert _guest(RsvpStatus.PENDING, False).reserved_seat is False
+    assert _seat(_guest(RsvpStatus.PENDING, True)) is True
+    assert _seat(_guest(RsvpStatus.PENDING, False)) is False
     # And the default still builds: no caller is made to pass one.
     from seating_planner.domain import Guest
 
-    assert Guest(id="g-2", name="Two", status=RsvpStatus.CONFIRMED).reserved_seat is False
+    status_field, _ = _names()
+    assert _seat(Guest(id="g-2", name="Two", **{status_field: RsvpStatus["CONFIRMED"]})) is False
     with pytest.raises(ValueError):
         _guest(RsvpStatus.CONFIRMED, "no")
 
@@ -81,15 +103,15 @@ def test_a_seat_set_after_construction_never_makes_a_pending_guest_eligible(valu
     from seating_planner.domain import RsvpStatus
 
     pending = _guest(RsvpStatus.PENDING, False)
-    pending.reserved_seat = value
+    _set_seat(pending, value)
     assert pending.eligible is False, f"reserved_seat={value!r} is not a reserved seat"
 
     declined = _guest(RsvpStatus.DECLINED, False)
-    declined.reserved_seat = value
+    _set_seat(declined, value)
     assert declined.eligible is False
 
     confirmed = _guest(RsvpStatus.CONFIRMED, False)
-    confirmed.reserved_seat = value
+    _set_seat(confirmed, value)
     assert confirmed.eligible is True
 
 
@@ -97,16 +119,22 @@ def test_a_seat_set_after_construction_never_makes_a_pending_guest_eligible(valu
 
 
 def _distance_rule(distance_m: Any, min_zones: Any, hard: bool = False) -> Any:
-    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner import rules
+    from seating_planner.rules import Hardness, Rule
 
+    RuleType = getattr(rules, "RuleType", None) or rules.RuleKind
+    names = {f.name for f in dataclasses.fields(Rule)}
+    kw: dict[str, Any] = {
+        ("rule_type" if "rule_type" in names else "kind"): RuleType.MIN_DISTANCE,
+        ("guest_ids" if "guest_ids" in names else "guests"): ("g-1", "g-2"),
+    }
     return Rule(
         id="r-far",
-        rule_type=RuleType.MIN_DISTANCE,
         hardness=Hardness.HARD if hard else Hardness.SOFT,
         weight=None if hard else 10,
-        guest_ids=("g-1", "g-2"),
         distance_m=distance_m,
         min_zones=min_zones,
+        **kw,
     )
 
 

@@ -24,22 +24,118 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 
+# --- API-name adapters: the original build (RuleType, status, solve_event, locks on the
+# --- event) and the v2 rebuild (RuleKind, rsvp_status, solve_hard, Guest.locked_to_table).
+def _rule(rid: str, kind: str, guest_ids: tuple, hard: bool = True) -> Any:
+    import dataclasses
+
+    from seating_planner import rules as _rules
+
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind
+    names = {f.name for f in dataclasses.fields(_rules.Rule)}
+    kw: dict = {
+        ("rule_type" if "rule_type" in names else "kind"): getattr(RuleType, kind),
+        ("guest_ids" if "guest_ids" in names else "guests"): tuple(guest_ids),
+    }
+    return _rules.Rule(id=rid, hardness=_rules.Hardness.HARD if hard else _rules.Hardness.SOFT,
+                       weight=None, **kw)
+
+
+def _guest(gid: str, locked_to: str | None = None) -> Any:
+    import dataclasses
+
+    from seating_planner.domain import Guest, RsvpStatus
+
+    names = {f.name for f in dataclasses.fields(Guest)}
+    kw: dict = {("status" if "status" in names else "rsvp_status"): RsvpStatus["CONFIRMED"]}
+    if locked_to is not None:
+        kw["locked_to_table"] = locked_to
+    return Guest(id=gid, name=gid, **kw)
+
+
+def _has_event_locks() -> bool:
+    import dataclasses
+
+    from seating_planner.domain import Event
+
+    return "locks" in {f.name for f in dataclasses.fields(Event)}
+
+
+def _event(*, locks: Any = None, guests: Any = (), **kw: Any) -> Any:
+    """Event(...) with `locks` as an Event field (original) or Guest.locked_to_table (v2)."""
+    import dataclasses
+
+    from seating_planner.domain import Event
+
+    locks = dict(locks or {})
+    if _has_event_locks():
+        return Event(guests=list(guests), locks=locks, **kw)
+    guests = [dataclasses.replace(g, locked_to_table=locks[g.id]) if g.id in locks else g
+              for g in guests]
+    return Event(guests=guests, **kw)
+
+
+def _locks_of(event: Any) -> dict:
+    if _has_event_locks():
+        return dict(event.locks)
+    return {g.id: g.locked_to_table for g in event.guests if g.locked_to_table}
+
+
+def _unlock_ids(report: Any) -> set:
+    import re
+
+    found = set()
+    for rec in report.recommendations:
+        if rec.kind != "unlock":
+            continue
+        gid = getattr(rec, "guest_id", None)
+        if gid is None:
+            m = re.search(r"guest (\S+)", rec.detail)
+            gid = m.group(1) if m else rec.detail
+        found.add(gid)
+    return found
+
+
+def solve_event(event: Any, *, mode: str, time_limit_s: float = 10.0, seed: int = 0,
+                num_search_workers: int = 1, current: Any = None, movement_limit: Any = None,
+                unlocked: Any = None) -> Any:
+    """solve_event in the original build; solve_hard (config=SolverConfig) in v2."""
+    import dataclasses
+    import inspect
+
+    from seating_planner import solver
+
+    if hasattr(solver, "solve_event"):
+        return solver.solve_event(
+            event, mode=mode, current=current, movement_limit=movement_limit,
+            unlocked=unlocked, time_limit_s=time_limit_s, seed=seed,
+            num_search_workers=num_search_workers)
+    params = inspect.signature(solver.solve_hard).parameters
+    cfg_names = {f.name for f in dataclasses.fields(solver.SolverConfig)}
+    cfg_kw = {"time_limit_s": time_limit_s, "seed": seed}
+    cfg_kw["num_workers" if "num_workers" in cfg_names else "num_search_workers"] = num_search_workers
+    kw: dict = {"mode": mode, "config": solver.SolverConfig(**cfg_kw)}
+    for key, val, alias in (("current", current, "current_assignments"),
+                            ("movement_limit", movement_limit, "move_limit"),
+                            ("unlocked", unlocked, "unlocked_guest_ids")):
+        if val is not None:
+            kw[key if key in params else alias] = frozenset(val) if key == "unlocked" else val
+    return solver.solve_hard(event, **kw)
+
+
 def _report(mode: str = "planning") -> Any:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 5 guests, two 2-seat tables (one short of a seat), one hard rule that holds two
     # guests already seated together on every chart worth considering -- it never
     # conflicts with anything, whether or not the shortage is also present.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[],
-        rules=[Rule(id="r-ok", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                    weight=None, guest_ids=("g0", "g1"))],
+        rules=[_rule("r-ok", "SAME_TABLE", ("g0", "g1"))],
     )
     kwargs = {"current": {"g0": "t1"}, "movement_limit": 100} if mode == "low_disruption" else {}
     result = solve_event(ev, mode=mode, time_limit_s=10.0, seed=0, num_search_workers=1, **kwargs)
@@ -61,14 +157,13 @@ def test_a_harmless_rule_is_not_named_alongside_a_shortage() -> None:
 def test_dropping_the_harmless_rule_alone_does_not_help() -> None:
     # The property check: if r-ok really were part of a conflict, removing it (with no
     # extra seat) would restore feasibility. It does not -- proving it was never the cause.
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[], rules=[],
     )
     result = solve_event(ev, mode="planning", time_limit_s=10.0, seed=0, num_search_workers=1)
@@ -83,24 +178,20 @@ def test_a_group_rule_naming_depends_on_where_the_seat_goes_not_which_table() ->
     the group's own rule was blamed. Every table must get the full shortfall as
     slack when asking whether a placement exists at all -- not a share of it.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 5 guests, t1 holds 3, t2 holds 1 (shortfall 1). A needs 3 seats together,
     # B needs 2 together. One more seat AT T2 (not t1) solves it with both rules
     # kept, so neither rule may be named.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=3, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=1, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[],
         rules=[
-            Rule(id="A", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1", "g2")),
-            Rule(id="B", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
+            _rule("A", "SAME_TABLE", ("g0", "g1", "g2")),
+            _rule("B", "SAME_TABLE", ("g3", "g4")),
         ],
     )
     for mode, kwargs in (("planning", {}), ("low_disruption", {"current": {"g0": "t1"}, "movement_limit": 100})):
@@ -124,8 +215,7 @@ def _any_placement_restores_feasibility(
     """
     from itertools import combinations_with_replacement
 
-    from seating_planner.domain import Event, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     table_ids = [t.id for t in event.tables]
     for combo in combinations_with_replacement(table_ids, extra_total):
@@ -136,7 +226,7 @@ def _any_placement_restores_feasibility(
             for t in event.tables
         ]
         new_rules = [r for r in event.rules if r.id not in drop_ids]
-        new_event = Event(
+        new_event = _event(
             id=event.id, name=event.name, tables=new_tables,
             guests=event.guests, groups=event.groups, rules=new_rules,
         )
@@ -155,26 +245,22 @@ def test_the_shortfall_cure_is_checked_against_one_real_placement_of_it() -> Non
     table to grow were both judged seatable by capacity alone, though no single real
     placement of the shortfall restores feasibility with both rules kept.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 6 guests, t1 holds 2, t2 holds 2, t3 holds 1 (shortfall 1). A needs 3 seats
     # together, B needs 3 seats together -- in different, disjoint groups. No single
     # extra seat placed anywhere lets both 3-seat groups each reach a 3-capacity table,
     # so the shortfall alone cannot cure this and a rule must be named.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=1, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        guests=[_guest(f"g{i}") for i in range(6)],
         groups=[],
         rules=[
-            Rule(id="A", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1", "g2")),
-            Rule(id="B", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4", "g5")),
+            _rule("A", "SAME_TABLE", ("g0", "g1", "g2")),
+            _rule("B", "SAME_TABLE", ("g3", "g4", "g5")),
         ],
     )
     for mode, kwargs in (("planning", {}), ("low_disruption", {"current": {"g0": "t1"}, "movement_limit": 100})):

@@ -28,10 +28,107 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 
+# --- API-name adapters: the original build (RuleType, status, solve_event, locks on the
+# --- event) and the v2 rebuild (RuleKind, rsvp_status, solve_hard, Guest.locked_to_table).
+def _rule(rid: str, kind: str, guest_ids: tuple, hard: bool = True) -> Any:
+    import dataclasses
+
+    from seating_planner import rules as _rules
+
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind
+    names = {f.name for f in dataclasses.fields(_rules.Rule)}
+    kw: dict = {
+        ("rule_type" if "rule_type" in names else "kind"): getattr(RuleType, kind),
+        ("guest_ids" if "guest_ids" in names else "guests"): tuple(guest_ids),
+    }
+    return _rules.Rule(id=rid, hardness=_rules.Hardness.HARD if hard else _rules.Hardness.SOFT,
+                       weight=None, **kw)
+
+
+def _guest(gid: str, locked_to: str | None = None) -> Any:
+    import dataclasses
+
+    from seating_planner.domain import Guest, RsvpStatus
+
+    names = {f.name for f in dataclasses.fields(Guest)}
+    kw: dict = {("status" if "status" in names else "rsvp_status"): RsvpStatus["CONFIRMED"]}
+    if locked_to is not None:
+        kw["locked_to_table"] = locked_to
+    return Guest(id=gid, name=gid, **kw)
+
+
+def _has_event_locks() -> bool:
+    import dataclasses
+
+    from seating_planner.domain import Event
+
+    return "locks" in {f.name for f in dataclasses.fields(Event)}
+
+
+def _event(*, locks: Any = None, guests: Any = (), **kw: Any) -> Any:
+    """Event(...) with `locks` as an Event field (original) or Guest.locked_to_table (v2)."""
+    import dataclasses
+
+    from seating_planner.domain import Event
+
+    locks = dict(locks or {})
+    if _has_event_locks():
+        return Event(guests=list(guests), locks=locks, **kw)
+    guests = [dataclasses.replace(g, locked_to_table=locks[g.id]) if g.id in locks else g
+              for g in guests]
+    return Event(guests=guests, **kw)
+
+
+def _locks_of(event: Any) -> dict:
+    if _has_event_locks():
+        return dict(event.locks)
+    return {g.id: g.locked_to_table for g in event.guests if g.locked_to_table}
+
+
+def _unlock_ids(report: Any) -> set:
+    import re
+
+    found = set()
+    for rec in report.recommendations:
+        if rec.kind != "unlock":
+            continue
+        gid = getattr(rec, "guest_id", None)
+        if gid is None:
+            m = re.search(r"guest (\S+)", rec.detail)
+            gid = m.group(1) if m else rec.detail
+        found.add(gid)
+    return found
+
+
+def solve_event(event: Any, *, mode: str, time_limit_s: float = 10.0, seed: int = 0,
+                num_search_workers: int = 1, current: Any = None, movement_limit: Any = None,
+                unlocked: Any = None) -> Any:
+    """solve_event in the original build; solve_hard (config=SolverConfig) in v2."""
+    import dataclasses
+    import inspect
+
+    from seating_planner import solver
+
+    if hasattr(solver, "solve_event"):
+        return solver.solve_event(
+            event, mode=mode, current=current, movement_limit=movement_limit,
+            unlocked=unlocked, time_limit_s=time_limit_s, seed=seed,
+            num_search_workers=num_search_workers)
+    params = inspect.signature(solver.solve_hard).parameters
+    cfg_names = {f.name for f in dataclasses.fields(solver.SolverConfig)}
+    cfg_kw = {"time_limit_s": time_limit_s, "seed": seed}
+    cfg_kw["num_workers" if "num_workers" in cfg_names else "num_search_workers"] = num_search_workers
+    kw: dict = {"mode": mode, "config": solver.SolverConfig(**cfg_kw)}
+    for key, val, alias in (("current", current, "current_assignments"),
+                            ("movement_limit", movement_limit, "move_limit"),
+                            ("unlocked", unlocked, "unlocked_guest_ids")):
+        if val is not None:
+            kw[key if key in params else alias] = frozenset(val) if key == "unlocked" else val
+    return solver.solve_hard(event, **kw)
+
+
 def test_a_keep_set_cause_is_never_named_through_a_partner_that_already_fails_alone() -> None:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 3 tables of 2 seats each (6 seats), 6 guests, no shortfall.
     #
@@ -44,18 +141,16 @@ def test_a_keep_set_cause_is_never_named_through_a_partner_that_already_fails_al
     #
     # r-ok (2 guests, same table) and the lock on g5 are both harmless: either
     # one, alone or together, fits trivially once r-big is out of the way.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        guests=[_guest(f"g{i}") for i in range(6)],
         groups=[],
         rules=[
-            Rule(id="r-big", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1", "g2")),
-            Rule(id="r-ok", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
+            _rule("r-big", "SAME_TABLE", ("g0", "g1", "g2")),
+            _rule("r-ok", "SAME_TABLE", ("g3", "g4")),
         ],
         locks={"g5": "t3"},
     )
@@ -68,9 +163,7 @@ def test_a_keep_set_cause_is_never_named_through_a_partner_that_already_fails_al
             f"{mode}: only r-big conflicts with anything; r-ok is harmless and must not "
             f"be named: {report.conflict_rule_ids}"
         )
-        unlocked_guests = {
-            rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-        }
+        unlocked_guests = _unlock_ids(report)
         assert not unlocked_guests, (
             f"{mode}: g5's lock conflicts with nothing and must not be named: {unlocked_guests}"
         )
@@ -79,20 +172,17 @@ def test_a_keep_set_cause_is_never_named_through_a_partner_that_already_fails_al
 def test_dropping_only_r_big_restores_feasibility() -> None:
     # The property check: r-big really is the whole cause. Removing it (with
     # r-ok and the lock still in place) restores feasibility in both modes.
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        guests=[_guest(f"g{i}") for i in range(6)],
         groups=[],
         rules=[
-            Rule(id="r-ok", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
+            _rule("r-ok", "SAME_TABLE", ("g3", "g4")),
         ],
         locks={"g5": "t3"},
     )
@@ -104,18 +194,17 @@ def test_dropping_only_r_big_restores_feasibility() -> None:
 
 
 def test_a_lock_is_not_named_when_the_shortfall_alone_already_cures_it() -> None:
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 2 tables of 2 seats (4 seats), 5 guests, shortfall 1, no rules. The lock
     # on g0 does not block anything -- curing the shortfall alone (any extra
     # seat, anywhere) already restores feasibility with the lock kept, so no
     # lock should be probed for removal or named.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[],
         rules=[],
         locks={"g0": "t1"},
@@ -125,9 +214,7 @@ def test_a_lock_is_not_named_when_the_shortfall_alone_already_cures_it() -> None
         report = result.infeasibility_report
         assert report is not None, f"{mode}: 5 guests at 4 seats is infeasible"
         assert report.capacity_shortfall == 1, f"{mode}: expected a 1-seat shortfall"
-        unlocked_guests = {
-            rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-        }
+        unlocked_guests = _unlock_ids(report)
         assert not unlocked_guests, (
             f"{mode}: g0's lock does not need releasing -- the shortfall alone cures "
             f"this, and a lock must not be named just because releasing it is also, "
@@ -139,14 +226,13 @@ def test_releasing_the_lock_alone_does_not_help() -> None:
     # The property check: if g0's lock really were part of a conflict,
     # releasing it (with no extra seat) would restore feasibility. It does
     # not -- proving it was never the cause, only the seat shortage was.
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[], rules=[], locks={},
     )
     result = solve_event(ev, mode="planning", time_limit_s=10.0, seed=0, num_search_workers=1)
@@ -162,8 +248,7 @@ def _any_placement_restores_feasibility(
     """
     from itertools import combinations_with_replacement
 
-    from seating_planner.domain import Event, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     table_ids = [t.id for t in event.tables]
     for combo in combinations_with_replacement(table_ids, extra_total):
@@ -174,10 +259,10 @@ def _any_placement_restores_feasibility(
             for t in event.tables
         ]
         new_rules = [r for r in event.rules if r.id not in drop_ids]
-        new_event = Event(
+        new_event = _event(
             id=event.id, name=event.name, tables=new_tables,
             guests=event.guests, groups=event.groups, rules=new_rules,
-            locks=dict(event.locks),
+            locks=_locks_of(event),
         )
         result = solve_event(new_event, mode=mode, time_limit_s=10.0, seed=0,
                               num_search_workers=1, **kwargs)
@@ -194,28 +279,23 @@ def test_a_bystander_is_never_named_when_the_shortfall_needs_slack_the_keep_set_
     infeasible instead, every item fails "kept alone" too and gets named, whether or
     not it is really a cause.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 7 guests, three 2-seat tables (6 seats, shortfall 1). r-a/r-b are a real,
     # capacity-independent contradiction (same-table vs different-table on the
     # same pair). r-ok is a harmless same-table pair, and g6 is harmlessly
     # locked. Only r-a and r-b may be named; r-ok and the lock must not be.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(7)],
+        guests=[_guest(f"g{i}") for i in range(7)],
         groups=[],
         rules=[
-            Rule(id="r-a", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1")),
-            Rule(id="r-b", rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1")),
-            Rule(id="r-ok", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g2", "g3")),
+            _rule("r-a", "SAME_TABLE", ("g0", "g1")),
+            _rule("r-b", "DIFFERENT_TABLE", ("g0", "g1")),
+            _rule("r-ok", "SAME_TABLE", ("g2", "g3")),
         ],
         locks={"g6": "t3"},
     )
@@ -228,9 +308,7 @@ def test_a_bystander_is_never_named_when_the_shortfall_needs_slack_the_keep_set_
             f"{mode}: only the real contradiction may be named; r-ok is harmless: "
             f"{report.conflict_rule_ids}"
         )
-        unlocked_guests = {
-            rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-        }
+        unlocked_guests = _unlock_ids(report)
         assert not unlocked_guests, (
             f"{mode}: g6's lock conflicts with nothing and must not be named: {unlocked_guests}"
         )
@@ -246,20 +324,17 @@ def test_a_bystander_is_never_named_when_keeping_nothing_is_already_infeasible()
     locks are kept -- the keep-set search must not run at all here, or every
     harmless rule and lock in the event gets swept in as a false "cause."
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        guests=[_guest(f"g{i}") for i in range(6)],
         groups=[],
         rules=[
-            Rule(id="r-ok", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
+            _rule("r-ok", "SAME_TABLE", ("g3", "g4")),
         ],
         locks={"g5": "t3"},
     )
@@ -277,9 +352,7 @@ def test_a_bystander_is_never_named_when_keeping_nothing_is_already_infeasible()
         f"r-ok is already satisfied by the chart and changes nothing: "
         f"{report.conflict_rule_ids}"
     )
-    unlocked_guests = {
-        rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-    }
+    unlocked_guests = _unlock_ids(report)
     assert not unlocked_guests, (
         f"g5's lock already matches the chart and changes nothing: {unlocked_guests}"
     )
@@ -292,18 +365,17 @@ def test_a_plain_shortage_is_never_blamed_on_the_movement_limit() -> None:
     movement limit instead of recommending add_capacity -- even with a generous
     limit that raising would not actually help.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 5 guests, two 2-seat tables (shortfall 1), no rules, no locks. A generous
     # movement limit (100) is nowhere near the actual cause -- the real capacities
     # are one seat short, full stop. Raising the limit to any value never helps:
     # there is nowhere to put the fifth guest.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[], rules=[], locks={},
     )
     result = solve_event(
@@ -327,14 +399,13 @@ def test_raising_the_movement_limit_alone_does_not_help_the_plain_shortage() -> 
     # The property check: if the movement limit really were part of the cause,
     # lifting it entirely (no limit at all) would restore feasibility. It does
     # not -- proving the shortage, not the limit, is the whole story.
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(5)],
+        guests=[_guest(f"g{i}") for i in range(5)],
         groups=[], rules=[], locks={},
     )
     result = solve_event(
@@ -354,25 +425,21 @@ def test_a_rule_contradiction_is_still_named_when_the_chart_alone_is_also_infeas
     a genuine, unrelated rule contradiction elsewhere must still be found and named (ac8),
     not dropped to the generic note.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # t1 charted with 3 guests (cap 2) -- infeasible on its own at limit=0,
     # regardless of rules. r-a/r-b (a direct same/different contradiction on
     # two OTHER guests) is a second, independent cause that must still surface.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(6)],
+        guests=[_guest(f"g{i}") for i in range(6)],
         groups=[],
         rules=[
-            Rule(id="r-a", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
-            Rule(id="r-b", rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g3", "g4")),
+            _rule("r-a", "SAME_TABLE", ("g3", "g4")),
+            _rule("r-b", "DIFFERENT_TABLE", ("g3", "g4")),
         ],
         locks={},
     )
@@ -395,7 +462,7 @@ def test_a_rule_contradiction_is_still_named_when_the_chart_alone_is_also_infeas
     )
     # Property check: dropping the named rules and raising the limit together
     # restores feasibility; raising the limit alone (rules kept) does not.
-    cured = Event(
+    cured = _event(
         id="e", name="e", tables=ev.tables, guests=ev.guests, groups=[],
         rules=[r for r in ev.rules if r.id not in report.conflict_rule_ids], locks={},
     )
@@ -417,9 +484,7 @@ def test_a_timed_out_keep_set_probe_never_gets_named() -> None:
     undecided probe into a false name, no matter how large the event: nothing may be
     named here but the one real contradictory pair.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 30 tables of 5 (150 real seats, no shortfall). Ten harmless same-table
     # pairs (b00-b09) on the first 20 guests, trivially satisfiable two at a
@@ -435,22 +500,19 @@ def test_a_timed_out_keep_set_probe_never_gets_named() -> None:
         Table(id=f"t{i + 1}", name=f"t{i + 1}", capacity=5, shape="round", position=(0.0, float(i)))
         for i in range(n_tables)
     ]
-    guests = [Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(n_guests)]
+    guests = [_guest(f"g{i}") for i in range(n_guests)]
     rules = [
-        Rule(id=f"b{i:02d}", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{2 * i}", f"g{2 * i + 1}"))
+        _rule(f"b{i:02d}", "SAME_TABLE", (f"g{2 * i}", f"g{2 * i + 1}"))
         for i in range(10)
     ]
     rules.append(
-        Rule(id="ra", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{n_guests - 2}", f"g{n_guests - 1}"))
+        _rule("ra", "SAME_TABLE", (f"g{n_guests - 2}", f"g{n_guests - 1}"))
     )
     rules.append(
-        Rule(id="rb", rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{n_guests - 2}", f"g{n_guests - 1}"))
+        _rule("rb", "DIFFERENT_TABLE", (f"g{n_guests - 2}", f"g{n_guests - 1}"))
     )
     locks = {f"g{i}": f"t{i // 5 + 1}" for i in range(40, 46)}
-    ev = Event(id="e", name="e", tables=tables, guests=guests, groups=[], rules=rules, locks=locks)
+    ev = _event(id="e", name="e", tables=tables, guests=guests, groups=[], rules=rules, locks=locks)
 
     # A tight time budget: large enough that the top-level solve proves the
     # event infeasible, small enough that the many keep-set sub-probes over
@@ -464,9 +526,7 @@ def test_a_timed_out_keep_set_probe_never_gets_named() -> None:
         f"only the real contradictory pair may be named, time pressure or not: "
         f"{report.conflict_rule_ids}"
     )
-    unlocked_guests = {
-        rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-    }
+    unlocked_guests = _unlock_ids(report)
     assert not unlocked_guests, (
         f"none of the six harmless locks may be named just because their probe "
         f"could not finish in time: {unlocked_guests}"
@@ -482,24 +542,21 @@ def test_a_rule_is_still_named_when_only_relaxing_the_limit_would_cure_the_short
     not actually restore feasibility at the real limit: a real rule conflict got
     silently dropped behind a shortage-only report.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 2 one-seat tables, 3 guests, one hard rule forcing g0 and g1 together --
     # impossible at either one-seat table. Chart: g0@t1, g1@t2, g2@t1 (3 guests
     # on 2 seats, shortfall 1). movement_limit=0 freezes every guest in place.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=1, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=1, shape="round", position=(0.0, 1.0))],
-        guests=[Guest(id="g0", name="g0", status=RsvpStatus.CONFIRMED),
-                Guest(id="g1", name="g1", status=RsvpStatus.CONFIRMED),
-                Guest(id="g2", name="g2", status=RsvpStatus.CONFIRMED)],
+        guests=[_guest("g0"),
+                _guest("g1"),
+                _guest("g2")],
         groups=[],
         rules=[
-            Rule(id="r0", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-                 weight=None, guest_ids=("g0", "g1")),
+            _rule("r0", "SAME_TABLE", ("g0", "g1")),
         ],
         locks={},
     )
@@ -529,7 +586,7 @@ def test_a_rule_is_still_named_when_only_relaxing_the_limit_would_cure_the_short
                   shape=t.shape, position=t.position)
             for t in ev.tables
         ]
-        grown = Event(id="e", name="e", tables=grown_tables, guests=ev.guests,
+        grown = _event(id="e", name="e", tables=grown_tables, guests=ev.guests,
                        groups=[], rules=ev.rules, locks={})
         assert solve_event(
             grown, mode="low_disruption", current=chart, movement_limit=0,
@@ -544,7 +601,7 @@ def test_a_rule_is_still_named_when_only_relaxing_the_limit_would_cure_the_short
               shape=t.shape, position=t.position)
         for t in ev.tables
     ]
-    cured = Event(id="e", name="e", tables=cured_tables, guests=ev.guests, groups=[], rules=[], locks={})
+    cured = _event(id="e", name="e", tables=cured_tables, guests=ev.guests, groups=[], rules=[], locks={})
     assert solve_event(
         cured, mode="low_disruption", current=chart, movement_limit=0,
         time_limit_s=10.0, seed=0, num_search_workers=1,
@@ -561,9 +618,7 @@ def test_the_diagnosis_honours_a_tight_requested_time_budget() -> None:
     """
     import time
 
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.rules import Hardness, Rule, RuleType
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # The same large, tightly-packed event as the timed-out-keep-set-probe test:
     # enough rules and locks that the many internal probes add up to real time,
@@ -575,22 +630,19 @@ def test_the_diagnosis_honours_a_tight_requested_time_budget() -> None:
         Table(id=f"t{i + 1}", name=f"t{i + 1}", capacity=5, shape="round", position=(0.0, float(i)))
         for i in range(n_tables)
     ]
-    guests = [Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(n_guests)]
+    guests = [_guest(f"g{i}") for i in range(n_guests)]
     rules = [
-        Rule(id=f"b{i:02d}", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{2 * i}", f"g{2 * i + 1}"))
+        _rule(f"b{i:02d}", "SAME_TABLE", (f"g{2 * i}", f"g{2 * i + 1}"))
         for i in range(10)
     ]
     rules.append(
-        Rule(id="ra", rule_type=RuleType.SAME_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{n_guests - 2}", f"g{n_guests - 1}"))
+        _rule("ra", "SAME_TABLE", (f"g{n_guests - 2}", f"g{n_guests - 1}"))
     )
     rules.append(
-        Rule(id="rb", rule_type=RuleType.DIFFERENT_TABLE, hardness=Hardness.HARD,
-             weight=None, guest_ids=(f"g{n_guests - 2}", f"g{n_guests - 1}"))
+        _rule("rb", "DIFFERENT_TABLE", (f"g{n_guests - 2}", f"g{n_guests - 1}"))
     )
     locks = {f"g{i}": f"t{i // 5 + 1}" for i in range(40, 46)}
-    ev = Event(id="e", name="e", tables=tables, guests=guests, groups=[], rules=rules, locks=locks)
+    ev = _event(id="e", name="e", tables=tables, guests=guests, groups=[], rules=rules, locks=locks)
 
     t0 = time.time()
     result = solve_event(ev, mode="planning", time_limit_s=0.02, seed=0, num_search_workers=1)
@@ -615,8 +667,7 @@ def test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it() ->
     something" flag can ever be set -- so the report recommends add_capacity alone,
     which does not actually restore feasibility at the real limit.
     """
-    from seating_planner.domain import Event, Guest, RsvpStatus, Table
-    from seating_planner.solver import solve_event
+    from seating_planner.domain import Table
 
     # 3 tables of capacity 2 (6 real seats), 7 guests, no rules, no locks. The chart
     # packs 4 guests onto t1 (overfull by 2) and 2 onto t2, 1 onto t3 -- a global
@@ -625,12 +676,12 @@ def test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it() ->
     # into it. Capacity alone, at the real (zero) limit, can never cure a chart this
     # frozen, and raising the limit alone (no capacity change) is a genuine shortfall
     # too -- only both together restore feasibility.
-    ev = Event(
+    ev = _event(
         id="e", name="e",
         tables=[Table(id="t1", name="t1", capacity=2, shape="round", position=(0.0, 0.0)),
                 Table(id="t2", name="t2", capacity=2, shape="round", position=(0.0, 1.0)),
                 Table(id="t3", name="t3", capacity=2, shape="round", position=(0.0, 2.0))],
-        guests=[Guest(id=f"g{i}", name=f"g{i}", status=RsvpStatus.CONFIRMED) for i in range(7)],
+        guests=[_guest(f"g{i}") for i in range(7)],
         groups=[], rules=[], locks={},
     )
     chart = {"g0": "t1", "g1": "t1", "g2": "t1", "g3": "t1", "g4": "t2", "g5": "t2", "g6": "t3"}
@@ -642,9 +693,7 @@ def test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it() ->
     assert report is not None, "4 guests frozen onto a 2-seat table, real limit zero, is infeasible"
     assert report.capacity_shortfall == 1, "7 guests at 6 real seats: expected a 1-seat shortfall"
     assert report.conflict_rule_ids == (), "no rules in this event; none may be named"
-    unlocked_guests = {
-        rec.guest_id for rec in report.recommendations if rec.kind == "unlock"
-    }
+    unlocked_guests = _unlock_ids(report)
     assert not unlocked_guests, f"no locks in this event; none may be named: {unlocked_guests}"
     kinds = {rec.kind for rec in report.recommendations}
     assert "add_capacity" in kinds, f"the real shortfall must still be reported: {kinds}"
@@ -663,7 +712,7 @@ def test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it() ->
                   shape=t.shape, position=t.position)
             for t in ev.tables
         ]
-        grown = Event(id="e", name="e", tables=grown_tables, guests=ev.guests, groups=[], rules=[], locks={})
+        grown = _event(id="e", name="e", tables=grown_tables, guests=ev.guests, groups=[], rules=[], locks={})
         assert solve_event(
             grown, mode="low_disruption", current=chart, movement_limit=0,
             time_limit_s=10.0, seed=0, num_search_workers=1,
@@ -683,7 +732,7 @@ def test_a_plain_shortage_curable_only_by_relaxing_the_limit_still_names_it() ->
               shape=t.shape, position=t.position)
         for t in ev.tables
     ]
-    cured = Event(id="e", name="e", tables=cured_tables, guests=ev.guests, groups=[], rules=[], locks={})
+    cured = _event(id="e", name="e", tables=cured_tables, guests=ev.guests, groups=[], rules=[], locks={})
     assert solve_event(
         cured, mode="low_disruption", current=chart, movement_limit=99,
         time_limit_s=10.0, seed=0, num_search_workers=1,
