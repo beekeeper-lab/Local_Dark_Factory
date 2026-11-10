@@ -47,6 +47,25 @@ context:
     makes the solve infeasible because of the lock alone. On main the report says to
     unlock that guest; run 1's report said only "The enabled hard rules are jointly
     unsatisfiable", in an event with no hard rule (evidence/reviews/bean-025-20261006T140110Z.md).
+
+    Run 1 on the v2 rebuild built ac1, ac2 and the first half of ac4 (a NEW guest locked
+    to a table the chart fills) but not the second half: a CHART guest whose lock names a
+    different table than the chart gives them, and who is not in unlocked. There the
+    build returns a FEASIBLE chart and silently moves that guest to their locked table,
+    so the explicit lock overrides the event-day pin that holds every chart guest at
+    their current table until the caller names an exception. That is the opposite of
+    ac4: the two pins disagree, they cannot both hold, so the solve must be infeasible
+    and the report must recommend unlocking that guest.
+
+    Ready-made fixture for ac5's own test: two tables of capacity 2 ("t-1", "t-2"), three
+    confirmed guests ("g-0", "g-1", "g-2"), no rules, the stored lock "g-2" -> "t-2", and
+    the event-day baseline chart {"g-0": "t-1", "g-2": "t-1"} with nobody in unlocked.
+    A correct solve is infeasible (g-2 is pinned at t-1 by the chart and at t-2 by the
+    lock); its infeasibility report recommends unlocking g-2, names no hard rule
+    (conflict_rule_ids empty, the event has none) and does not recommend adding
+    capacity as the remedy. A second case in the same test: the same event with
+    unlocked = {"g-2"} is feasible and g-2 may move to t-2, so the new check cannot
+    simply refuse every lock that disagrees with the chart.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -60,10 +79,14 @@ acceptance_criteria:
   - id: ac4
     text: In event-day mode, when a stored lock is what makes the solve infeasible (a new guest locked to a table the chart fills, or a chart guest locked to a table other than the one the chart gives them and not in unlocked), the report recommends unlocking that guest, and when the event has no hard rule it does not recommend reviewing hard rules.
     verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_a_lock_that_causes_no_seat_is_named" }
+  - id: ac5
+    text: In event-day mode, a chart guest who is locked to a table other than the one the chart gives them, and who is not in unlocked, makes the solve infeasible rather than being silently moved to the locked table; the report recommends unlocking that guest, and the same event with that guest in unlocked is feasible.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_repairs.py::test_a_lock_contradicting_the_chart_is_infeasible_and_named" }
   - id: ac3
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
 constraints:
+  - an explicit lock never silently overrides the event-day chart pin: when they disagree and the guest is not unlocked, the solve is infeasible
   - an explicit lock without an unlock still holds in every mode
   - the solve_event signature and the result shape are unchanged
 suggested_risk_tier: 2
