@@ -40,15 +40,25 @@ context:
     code, and leave the source alone. If, and only if, either test fails, fix the
     worker count so the request is applied and recorded on every path. Do not invent a
     source change to match the description above.
+
+    Run 2 (v2 rebuild, PR #26, closed on its pre-merge review) pinned this only for the
+    planning mode: its spy that reads the worker count each solve actually ran with was
+    exercised in planning alone, and the low_disruption and event_day cases checked only
+    the recorded field. The reviewer re-introduced the original defect for those two
+    modes (the production solve ignores the request but the result still records it) and
+    both tests still passed. So the pin must cover all three modes: with a requested
+    count above 1, spy on the num_search_workers each production solve actually sets in
+    planning, low_disruption and event_day, and also check the recorded count on an
+    infeasible low_disruption and an infeasible event_day result.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
 acceptance_criteria:
   - id: ac1
-    text: A feasible solve asked for two workers records two workers in its solver configuration.
+    text: A feasible solve asked for two workers records two workers in its solver configuration, and the CP-SAT solve itself runs with two workers, in each of the planning, low_disruption and event_day modes.
     verify: { kind: test, test_id: "tests/solver/test_worker_count.py::test_requested_workers_are_used" }
   - id: ac2
-    text: Every result, whichever path produced it, records the worker count that was requested.
+    text: Every result, whichever path produced it (including an infeasible low_disruption and an infeasible event_day result), records the worker count that was requested.
     verify: { kind: test, test_id: "tests/solver/test_worker_count.py::test_every_path_records_the_request" }
   - id: ac3
     text: Every existing solver test still passes unchanged.
