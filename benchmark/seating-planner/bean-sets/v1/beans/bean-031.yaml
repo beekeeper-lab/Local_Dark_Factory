@@ -84,7 +84,7 @@ constraints:
   - the solve_event signature and the result and report shapes are unchanged
   - a report that already carries a recommendation is unchanged (bean-025's unlock and capacity advice stay as they are)
 suggested_risk_tier: 2
-size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 450 }
+size_budget: { max_tasks: 3, max_files: 3, max_diff_lines: 700 }
 definition_of_done:
   - all AC verify pass
   - gates green
