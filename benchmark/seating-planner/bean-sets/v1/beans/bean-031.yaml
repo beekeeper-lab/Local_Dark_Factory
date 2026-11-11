@@ -41,6 +41,23 @@ context:
     (evidence/reviews/bean-031-20261006T210423Z.md). The solver can answer "would this
     help" exactly, the same way the rule and lock probes already do, so the advice is
     checked by solving again before it is given rather than predicted by arithmetic.
+
+    Run 1 on the v2 rebuild built ac1 to ac5 and passed every gate, but its fallback advice
+    for several simultaneous lock contradictions was incomplete. When two or more CHART
+    guests are each locked to a table other than the one the chart gives them, and none of
+    them is unlocked, the report named only ONE of them: unlocking that one guest, as
+    advised, left the event infeasible, and the next report named the next guest. ac5 says
+    the opposite: unlocking every guest an unlock recommendation names restores
+    feasibility, in one step.
+
+    Ready-made fixture for ac6's own test: tables t-1 (capacity 2), t-2 (capacity 4) and
+    t-3 (capacity 4), five confirmed guests g-0 to g-4, stored locks g-3 -> t-3 and
+    g-4 -> t-3, the event-day baseline chart {g-0: t-1, g-1: t-1, g-2: t-1, g-3: t-2,
+    g-4: t-2} and unlocked = {g-2}. The solve is infeasible: g-3 and g-4 are each pinned
+    to t-2 by the chart and to t-3 by their lock. A correct report recommends unlocking
+    BOTH g-3 and g-4 (in one recommendation or in two), recommends no capacity (unlocking
+    alone suffices), and names no hard rule (the event has none). Re-running the same
+    event with those two guests' locks removed is feasible.
 allowed_write_paths:
   - src/seating_planner/solver/**
   - tests/solver/**
@@ -57,6 +74,9 @@ acceptance_criteria:
   - id: ac5
     text: Advice added because no single rule or lock removal helps is checked by a probe solve before it is given. Unlocking every guest an unlock recommendation names restores feasibility; adding seats at every table a capacity recommendation names restores feasibility; and capacity is not recommended when the recommended unlocks alone restore it. Unlock recommendations name the guest id, capacity recommendations the table id.
     verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_fallback_advice_is_probed" }
+  - id: ac6
+    text: When two or more chart guests are each locked to a table other than their chart table and none is unlocked, the report's unlock advice names every such guest, so unlocking all of them restores feasibility in one step, and recommends no capacity.
+    verify: { kind: test, test_id: "tests/solver/test_event_day_advice.py::test_every_contradicted_guest_is_named_at_once" }
   - id: ac4
     text: Every existing solver test still passes unchanged.
     verify: { kind: command, run: ["pytest", "-q", "tests/solver"] }
