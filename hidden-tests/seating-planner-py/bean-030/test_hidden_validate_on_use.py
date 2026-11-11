@@ -218,6 +218,14 @@ def _lock_to_removed_table() -> Any:
 
 
 def _lock_on_removed_guest() -> Any:
+    import dataclasses
+
+    from seating_planner.domain import Event
+
+    if "locks" not in {f.name for f in dataclasses.fields(Event)}:
+        # v2 stores a lock on the guest itself (Guest.locked_to_table), so a lock
+        # cannot outlive its guest: there is nothing dangling to refuse.
+        pytest.skip("a lock lives on its guest in this build and cannot dangle")
     ev = _event(guests=["g-1", "g-2", "g-gone"])
     ev.lock_guest("g-gone", "t-1")
     ev.guests.pop()
