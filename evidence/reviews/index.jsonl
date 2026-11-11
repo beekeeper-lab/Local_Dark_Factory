@@ -57,3 +57,4 @@
 {"run_id": "bean-026-20261111T001215Z", "repo": "beekeeper-lab/seating-planner-py-v2", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-026-20261111T001215Z.md"}
 {"run_id": "bean-027-20261111T020710Z", "repo": "beekeeper-lab/seating-planner-py-v2", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-027-20261111T020710Z.md"}
 {"run_id": "bean-029-20261111T055638Z", "repo": "beekeeper-lab/seating-planner-py-v2", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-029-20261111T055638Z.md"}
+{"run_id": "bean-030-20261111T070410Z", "repo": "beekeeper-lab/seating-planner-py-v2", "verdict": "merge", "defect_class": null, "defect": null, "source": "evidence/reviews/bean-030-20261111T070410Z.md"}
