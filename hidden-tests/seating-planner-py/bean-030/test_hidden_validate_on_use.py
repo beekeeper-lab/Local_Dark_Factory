@@ -39,9 +39,47 @@ if _SRC not in sys.path:
 
 
 def _error() -> type[Exception]:
-    from seating_planner.domain import EventValidationError
+    # The v2 rebuild's domain raises plain ValueError for invalid input and has
+    # no EventValidationError until this bean introduces one; the original
+    # build names it. ValueError is what the bean's constraint says it
+    # subclasses, so it is the honest fallback.
+    from seating_planner import domain
 
-    return EventValidationError
+    return getattr(domain, "EventValidationError", ValueError)
+
+
+def _fields(cls: type) -> set[str]:
+    import dataclasses
+
+    return {f.name for f in dataclasses.fields(cls)}
+
+
+def _solve_event(ev: Any, *, time_limit_s: float | None = None, **kw: Any) -> Any:
+    """solve_event in the original build, solve_hard in v2 (names mapped by signature)."""
+    import inspect
+
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit"}
+    args = {(k if k in params else aliases.get(k, k)): v for k, v in kw.items()}
+    if time_limit_s is not None:
+        if "time_limit_s" in params:
+            args["time_limit_s"] = time_limit_s
+        elif "config" in params:
+            args["config"] = solver.SolverConfig(time_limit_s=time_limit_s)
+    return fn(ev, **args)
+
+
+def _save(repo: Any, ev: Any, actor: str) -> None:
+    fn = getattr(repo, "save_event", None) or repo.save  # save in v2
+    fn(ev, actor=actor)
+
+
+def _load(repo: Any, event_id: str) -> Any:
+    fn = getattr(repo, "load_event", None) or repo.load  # load in v2
+    return fn(event_id)
 
 
 def _table(tid: str, capacity: int = 4) -> Any:
@@ -53,15 +91,27 @@ def _table(tid: str, capacity: int = 4) -> Any:
 def _guest(gid: str, status: str = "confirmed") -> Any:
     from seating_planner.domain import Guest, RsvpStatus
 
-    return Guest(id=gid, name=gid, status=RsvpStatus(status))
+    key = "status" if "status" in _fields(Guest) else "rsvp_status"  # rsvp_status in v2
+    return Guest(id=gid, name=gid, **{key: RsvpStatus[status.upper()]})
 
 
 def _rule(rid: str, kind: str, hardness: str, weight: int | None, guests: tuple[str, ...] = (),
           groups: tuple[str, ...] = (), **kw: Any) -> Any:
-    from seating_planner.rules import Hardness, Rule, RuleType
+    from seating_planner import rules as _rules
 
-    return Rule(id=rid, rule_type=RuleType(kind), hardness=Hardness(hardness), weight=weight,
-                guest_ids=guests, group_ids=groups, **kw)
+    Hardness, Rule = _rules.Hardness, _rules.Rule
+    RuleType = getattr(_rules, "RuleType", None) or _rules.RuleKind  # RuleKind in v2
+    names = _fields(Rule)
+    args: dict[str, Any] = {
+        ("rule_type" if "rule_type" in names else "kind"): RuleType(kind),
+        ("guest_ids" if "guest_ids" in names else "guests"): guests,
+    }
+    if "group_ids" in names:
+        args["group_ids"] = groups
+    elif groups:
+        assert len(groups) == 1, "this build's Rule names a single group"
+        args["group_id"] = groups[0]
+    return Rule(id=rid, hardness=Hardness(hardness), weight=weight, **args, **kw)
 
 
 def _event(tables: list[str] | None = None, guests: list[str] | None = None,
@@ -86,11 +136,9 @@ def _modes() -> list[dict[str, Any]]:
 
 
 def _refused_everywhere(build: Callable[[], Any], names: str) -> None:
-    from seating_planner.solver import solve_event
-
     for kw in _modes():
         with pytest.raises(_error()) as caught:
-            solve_event(build(), time_limit_s=5.0, **kw)
+            _solve_event(build(), time_limit_s=5.0, **kw)
         assert names in str(caught.value), f"{kw['mode']}: the refusal must name {names!r}: {caught.value}"
 
 
@@ -139,7 +187,8 @@ def _guest_id_repeated() -> Any:
 
 def _seat_made_a_string() -> Any:
     ev = _event(guests=["g-1", "g-late"], status="pending")
-    ev.guests[1].reserved_seat = "no"
+    seat = "reserved_seat" if "reserved_seat" in _fields(type(ev.guests[1])) else "seat_reserved"
+    setattr(ev.guests[1], seat, "no")
     return ev
 
 
@@ -215,22 +264,18 @@ def _degenerate(rules: list[Any], groups: list[Any] | None = None) -> list[tuple
     ],
 )
 def test_rule_references_are_checked_with_nothing_to_seat(rules: Callable[[], list[Any]], names: str) -> None:
-    from seating_planner.solver import solve_event
-
     # The rule is named, not the reference: with no guests at all, every guest
     # it names is unknown, and naming any of them is right.
     for label, ev in _degenerate(rules()):
         with pytest.raises(_error()) as caught:
-            solve_event(ev, mode="planning", time_limit_s=5.0)
+            _solve_event(ev, mode="planning", time_limit_s=5.0)
         assert names in str(caught.value), f"{label}: {caught.value}"
 
 
 def test_a_hard_rule_refused_with_guests_and_tables_is_refused_without_them() -> None:
-    from seating_planner.solver import solve_event
-
     rules = [_rule("r-zones", "min_distance", "hard", None, ("g-1", "g-2"), min_zones=1)]
     try:
-        solve_event(_event(rules=rules), mode="planning", time_limit_s=5.0)
+        _solve_event(_event(rules=rules), mode="planning", time_limit_s=5.0)
         refused_normally = None
     except Exception as exc:  # noqa: BLE001 - the comparison is the point
         refused_normally = exc
@@ -242,37 +287,46 @@ def test_a_hard_rule_refused_with_guests_and_tables_is_refused_without_them() ->
     assert isinstance(refused_normally, _error()), f"refused, but not with the typed error: {refused_normally!r}"
     for label, ev in _degenerate(rules):
         with pytest.raises(_error()) as caught:
-            solve_event(ev, mode="planning", time_limit_s=5.0)
+            _solve_event(ev, mode="planning", time_limit_s=5.0)
         assert "r-zones" in str(caught.value), f"{label}: {caught.value}"
 
 
 def test_a_valid_event_with_nothing_to_seat_is_still_answered() -> None:
-    from seating_planner.solver import solve_event
-
     rules = [_rule("r-pair", "same_table", "hard", None, ("g-1", "g-2"))]
-    assert solve_event(_event(status="declined", rules=rules), mode="planning").status == "feasible"
-    assert solve_event(_event(tables=[], rules=rules), mode="planning").status == "infeasible"
+    assert _solve_event(_event(status="declined", rules=rules), mode="planning").status == "feasible"
+    assert _solve_event(_event(tables=[], rules=rules), mode="planning").status == "infeasible"
     # And one refusal in the same test, so it cannot pass on a tree that
     # never validates anything.
     ghost = [_rule("r-ghost", "same_table", "hard", None, ("g-1", "g-ghost"))]
     with pytest.raises(_error()):
-        solve_event(_event(tables=[], rules=ghost), mode="planning")
+        _solve_event(_event(tables=[], rules=ghost), mode="planning")
 
 
 # --- ac4 ---------------------------------------------------------------------
 
 
 def _repo(tmp_path: Path) -> Any:
-    from seating_planner.store import Repository
+    from seating_planner import store
 
-    return Repository(tmp_path / "events.db")
+    cls = getattr(store, "Repository", None) or store.EventRepository  # EventRepository in v2
+    return cls(tmp_path / "events.db")
 
 
 def _saved_shape(ev: Any) -> tuple[Any, ...]:
+    def _status(g: Any) -> Any:
+        return (g.status if hasattr(g, "status") else g.rsvp_status).value.lower()
+
+    def _seat(g: Any) -> Any:
+        return g.reserved_seat if hasattr(g, "reserved_seat") else g.seat_reserved
+
+    # The original keeps locks on the event; v2 keeps one on each guest.
+    locks = dict(ev.locks) if hasattr(ev, "locks") else {
+        g.id: g.locked_to_table for g in ev.guests if g.locked_to_table is not None
+    }
     return (
         [(t.id, t.capacity) for t in ev.tables],
-        [(g.id, g.status.value, g.reserved_seat) for g in ev.guests],
-        dict(ev.locks),
+        [(g.id, _status(g), _seat(g)) for g in ev.guests],
+        locks,
         sorted(r.id for r in ev.rules),
     )
 
@@ -296,13 +350,13 @@ def test_save_refuses_what_could_not_be_loaded_and_keeps_the_saved_event(
     repo = _repo(tmp_path)
     good = _event(rules=[_rule("r-keep", "same_table", "soft", 4, ("g-1", "g-2"))])
     good.lock_guest("g-1", "t-1")
-    repo.save_event(good, actor="setup")
-    before = _saved_shape(repo.load_event("ev-030"))
+    _save(repo, good, actor="setup")
+    before = _saved_shape(_load(repo, "ev-030"))
 
     with pytest.raises(_error()) as caught:
-        repo.save_event(build(), actor="editor")
+        _save(repo, build(), actor="editor")
     assert names in str(caught.value), caught.value
-    assert _saved_shape(repo.load_event("ev-030")) == before, "a refused save must leave the saved event as it was"
+    assert _saved_shape(_load(repo, "ev-030")) == before, "a refused save must leave the saved event as it was"
 
 
 def test_save_does_not_refuse_what_load_can_load(tmp_path: Path) -> None:
@@ -320,11 +374,11 @@ def test_save_does_not_refuse_what_load_can_load(tmp_path: Path) -> None:
         groups=[Group(id="grp-fam", name="Family", member_ids=("g-1", "g-stranger"))],
     )
     ev.lock_guest("g-2", "t-2")
-    repo.save_event(ev, actor="setup")
-    loaded = repo.load_event("ev-030")
+    _save(repo, ev, actor="setup")
+    loaded = _load(repo, "ev-030")
     assert _saved_shape(loaded) == _saved_shape(ev)
 
     # The one change that could not load back is refused, in the same test.
     ev.tables.pop()
     with pytest.raises(_error()):
-        repo.save_event(ev, actor="editor")
+        _save(repo, ev, actor="editor")

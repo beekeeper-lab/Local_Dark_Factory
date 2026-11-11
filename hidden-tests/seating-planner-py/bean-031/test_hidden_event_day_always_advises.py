@@ -20,12 +20,16 @@ if _SRC not in sys.path:
 
 
 def _event(caps: dict[str, int], guests: list[str], locks: dict[str, str] | None = None) -> Any:
+    import dataclasses
+
     from seating_planner.domain import Event, Guest, RsvpStatus, Table
 
+    g_status = "status" if "status" in {f.name for f in dataclasses.fields(Guest)} else "rsvp_status"
+    confirmed = RsvpStatus["CONFIRMED"]
     ev = Event(
         id="e", name="E",
         tables=[Table(id=t, name=t, capacity=c, shape="round", position=(0.0, float(i))) for i, (t, c) in enumerate(caps.items())],
-        guests=[Guest(id=g, name=g, status=RsvpStatus.CONFIRMED) for g in guests],
+        guests=[Guest(id=g, name=g, **{g_status: confirmed}) for g in guests],
         groups=[],
         rules=[],
     )
@@ -34,10 +38,44 @@ def _event(caps: dict[str, int], guests: list[str], locks: dict[str, str] | None
     return ev
 
 
-def _report(ev: Any, current: dict[str, str]) -> Any:
-    from seating_planner.solver import solve_event
+def _kind(name: str, fallback: str) -> str:
+    """A recommendation-kind constant from solver.report, or its plain string value."""
+    from seating_planner.solver import report as _rep
 
-    result = solve_event(ev, mode="event_day", current=current)
+    return getattr(_rep, name, fallback)
+
+
+def _msg(rec: Any) -> str:
+    """A recommendation's prose: `message` in the original build, `detail` in v2."""
+    for name in ("message", "detail"):
+        if hasattr(rec, name):
+            return str(getattr(rec, name))
+    return str(rec)
+
+
+def _solve(ev: Any, current: dict[str, str], **kw: Any) -> Any:
+    import inspect
+
+    from seating_planner import solver
+
+    fn = getattr(solver, "solve_event", None) or solver.solve_hard
+    params = inspect.signature(fn).parameters
+    aliases = {"current": "current_assignments", "movement_limit": "move_limit", "unlocked": "unlocked_guest_ids"}
+    args: dict[str, Any] = {"mode": "event_day", "current": current, **kw}
+    out: dict[str, Any] = {}
+    for k, v in args.items():
+        name = k if k in params else aliases.get(k, k)
+        if name == "unlocked_guest_ids" and v is not None:
+            v = frozenset(v)
+        if name == "seed" and name not in params and "config" in params:
+            out["config"] = solver.SolverConfig(seed=v)
+            continue
+        out[name] = v
+    return fn(ev, **out)
+
+
+def _report(ev: Any, current: dict[str, str]) -> Any:
+    result = _solve(ev, current)
     report = result.infeasibility_report
     assert report is not None, "this event cannot be seated as pinned"
     return report
@@ -68,25 +106,28 @@ def test_infeasible_event_day_always_advises() -> None:
 
 
 def test_locks_that_overfill_a_table_are_named() -> None:
-    from seating_planner.solver.report import KIND_CHANGE_HARD_RULE, KIND_UNLOCK
+    KIND_CHANGE_HARD_RULE = _kind("KIND_CHANGE_HARD_RULE", "change_hard_rule")
+    KIND_UNLOCK = _kind("KIND_UNLOCK", "unlock")
 
     report = _report(*_three_locked_to_one_free_seat())
     unlocks = [r for r in report.recommendations if r.kind == KIND_UNLOCK]
     assert unlocks, f"unlocking is the remedy: {report.recommendations}"
-    text = " ".join(r.message for r in unlocks)
+    text = " ".join(_msg(r) for r in unlocks)
     for guest in ("g-1", "g-2", "g-3"):
         assert guest in text, f"{guest} is one of the locks filling t-1: {text}"
     assert KIND_CHANGE_HARD_RULE not in _kinds(report), "the event has no hard rule"
 
 
 def test_a_chart_that_overfills_a_table_asks_for_capacity() -> None:
-    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE, KIND_CHANGE_HARD_RULE
+    KIND_ADD_CAPACITY = _kind("KIND_ADD_CAPACITY", "add_capacity")
+    KIND_ADD_TABLE = _kind("KIND_ADD_TABLE", "add_table")
+    KIND_CHANGE_HARD_RULE = _kind("KIND_CHANGE_HARD_RULE", "change_hard_rule")
 
     report = _report(*_chart_overfills_a_table())
     kinds = _kinds(report)
     assert kinds & {KIND_ADD_CAPACITY, KIND_ADD_TABLE}, f"the table needs room: {report.recommendations}"
     capacity = [r for r in report.recommendations if r.kind in (KIND_ADD_CAPACITY, KIND_ADD_TABLE)]
-    assert any("t-1" in r.message for r in capacity), f"name the overfilled table: {capacity}"
+    assert any("t-1" in _msg(r) for r in capacity), f"name the overfilled table: {capacity}"
     assert KIND_CHANGE_HARD_RULE not in kinds, "the event has no hard rule"
 
 
@@ -121,17 +162,17 @@ def _build(caps: dict[str, int], n: int, locks: dict[str, str]) -> Any:
 
 def _solve_case(caps: dict[str, int], n: int, locks: dict[str, str], current: dict[str, str],
                 unlocked: set[str]) -> Any:
-    from seating_planner.solver import solve_event
-
-    return solve_event(_build(caps, n, locks), mode="event_day", current=current, unlocked=unlocked)
+    return _solve(_build(caps, n, locks), current, unlocked=unlocked)
 
 
 def _named(pattern: str, recs: list[Any]) -> set[str]:
-    return {m for r in recs for m in re.findall(pattern, r.message)}
+    return {m for r in recs for m in re.findall(pattern, _msg(r))}
 
 
 def test_every_fallback_recommendation_restores_feasibility() -> None:
-    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE, KIND_UNLOCK
+    KIND_ADD_CAPACITY = _kind("KIND_ADD_CAPACITY", "add_capacity")
+    KIND_ADD_TABLE = _kind("KIND_ADD_TABLE", "add_table")
+    KIND_UNLOCK = _kind("KIND_UNLOCK", "unlock")
 
     for name, (caps, n, locks, current, unlocked) in _CASES.items():
         report = _solve_case(caps, n, locks, current, unlocked).infeasibility_report
@@ -154,7 +195,8 @@ def test_every_fallback_recommendation_restores_feasibility() -> None:
 
 
 def test_a_chart_overfill_with_a_lock_still_asks_for_capacity() -> None:
-    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE
+    KIND_ADD_CAPACITY = _kind("KIND_ADD_CAPACITY", "add_capacity")
+    KIND_ADD_TABLE = _kind("KIND_ADD_TABLE", "add_table")
 
     report = _solve_case(*_CASES["chart-overfill-plus-lock"]).infeasibility_report
     capacity = [r for r in report.recommendations if r.kind in (KIND_ADD_CAPACITY, KIND_ADD_TABLE)]
@@ -162,7 +204,8 @@ def test_a_chart_overfill_with_a_lock_still_asks_for_capacity() -> None:
 
 
 def test_capacity_is_not_advised_when_the_unlocks_alone_suffice() -> None:
-    from seating_planner.solver.report import KIND_ADD_CAPACITY, KIND_ADD_TABLE
+    KIND_ADD_CAPACITY = _kind("KIND_ADD_CAPACITY", "add_capacity")
+    KIND_ADD_TABLE = _kind("KIND_ADD_TABLE", "add_table")
 
     for name in ("locks-contradict-chart", "unlocked-guest-is-free"):
         report = _solve_case(*_CASES[name]).infeasibility_report
